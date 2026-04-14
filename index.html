@@ -768,37 +768,19 @@ const load = (k,d) => { try{ const v=localStorage.getItem(k); return v?JSON.pars
 function init() {
   records = JSON.parse(JSON.stringify(SEED.records));
 
-  // Migrate data from older storage key versions so upgrades don't lose data
-  const OLD_INV_KEYS = ['sp_inventory', 'sp_inv_v1'];
-  const OLD_LT_KEYS  = ['sp_lt_overrides', 'sp_lt_v1'];
-  function migrateOldKeys(currentKey, oldKeys) {
-    const current = load(currentKey, {});
-    let merged = { ...current };
-    let migrated = false;
-    oldKeys.forEach(k => {
-      const old = load(k, null);
-      if (old && Object.keys(old).length > 0) {
-        merged = { ...old, ...merged }; // current wins over old
-        migrated = true;
-      }
-    });
-    if (migrated) save(currentKey, merged);
-    return merged;
-  }
-
-  // Apply stored inventory (with migration from old keys)
-  const inv = migrateOldKeys(LS_INV, OLD_INV_KEYS);
+  // Inventory comes from Google Sheet (warehouse) + Restock CSV upload (FBA)
+  // Only restore FBA from localStorage if a restock CSV was previously uploaded this session
+  const inv = load(LS_INV, {});
   let invCount = 0;
   records.forEach(r => {
-    const k = r.asin + (r.region||'US');
-    const s = inv[k] || inv[r.asin] || {};
+    const s = inv[r.asin] || {};
     r.fba_available = s.fba != null ? s.fba : 0;
     r.fba_inbound   = s.inbound != null ? s.inbound : 0;
-    r.warehouse     = s.wh != null ? s.wh : 0;
-    r.total_onhand  = r.fba_available + r.fba_inbound + r.warehouse;
-    if (r.total_onhand > 0) invCount++;
+    r.warehouse     = 0; // always comes fresh from Google Sheet
+    r.total_onhand  = r.fba_available + r.fba_inbound;
+    if (r.fba_available > 0 || r.fba_inbound > 0) invCount++;
   });
-  console.log(`Restored inventory for ${invCount} SKUs from localStorage`);
+  if (invCount > 0) console.log(`Restored FBA data for ${invCount} SKUs from last restock upload`);
 
   // Apply stored lead times
   const lt = load(LS_LT, {});
@@ -851,58 +833,83 @@ async function connectSheets(showErrors) {
   statusEl.innerHTML = '<span class="spin"></span>';
   statusEl.className = 'sheets-status ss-loading';
 
-  // Try multiple tab name variants (the tab could be named slightly differently)
-  const tabNames = ['5_Forecast_Engine', 'Forecast_Engine', '5_Forecast Engine', 'Forecast Engine'];
-  let success = false;
+  // Read warehouse inventory from 2_Warehouse_Inventory tab
+  const whUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('2_Warehouse_Inventory')}`;
 
+  try {
+    const resp = await fetch(whUrl, { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const text = await resp.text();
+    if (!text || text.trim().startsWith('<') || text.length < 50) throw new Error('Sheet not readable');
+
+    const updated = parseWarehouseSheet(text);
+    if (updated >= 0) {
+      statusEl.textContent = `✓ Warehouse inventory loaded — ${updated} SKUs`;
+      statusEl.className = 'sheets-status ss-ok';
+      setFreshBadge('Live · ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), true);
+      document.getElementById('refreshLabel').textContent = 'Warehouse from Sheet · ' + new Date().toLocaleDateString();
+      localStorage.setItem('lastSheetId', sheetId);
+      renderAll();
+      return;
+    }
+  } catch(e) {
+    console.log('Warehouse tab error:', e.message);
+  }
+
+  // Fallback: try Forecast Engine tab
+  const tabNames = ['5_Forecast_Engine', '2_Inventory_Snapshot'];
   for (const tab of tabNames) {
     const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
     try {
-      const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      const resp = await fetch(url, { signal: AbortSignal.timeout(6000) });
       if (!resp.ok) continue;
       const text = await resp.text();
-      if (!text || text.trim().startsWith('<') || text.length < 200) continue;
-      // Got valid CSV
+      if (!text || text.trim().startsWith('<') || text.length < 100) continue;
       const updated = parseSheetCSV(text);
       if (updated > 0) {
-        statusEl.textContent = `✓ Sheet connected — ${updated} SKUs live`;
+        statusEl.textContent = `✓ Connected (${tab}) — ${updated} SKUs`;
         statusEl.className = 'sheets-status ss-ok';
         setFreshBadge('Live · ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), true);
-        document.getElementById('refreshLabel').textContent = 'Live from Google Sheets · ' + new Date().toLocaleDateString();
-        success = true;
-        break;
+        renderAll();
+        return;
       }
-    } catch(e) { /* try next tab */ }
+    } catch(e) { continue; }
   }
 
-  if (!success) {
-    // Try Inventory Snapshot tab as fallback
-    const invUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('2_Inventory_Snapshot')}`;
-    try {
-      const resp = await fetch(invUrl, { signal: AbortSignal.timeout(8000) });
-      if (resp.ok) {
-        const text = await resp.text();
-        if (text && !text.trim().startsWith('<') && text.length > 100) {
-          const updated = parseInventorySnapshotCSV(text);
-          if (updated > 0) {
-            statusEl.textContent = `✓ Inventory Snapshot loaded — ${updated} SKUs`;
-            statusEl.className = 'sheets-status ss-ok';
-            setFreshBadge('Live · ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), true);
-            success = true;
-          }
-        }
-      }
-    } catch(e) {}
-  }
-
-  if (!success) {
-    statusEl.textContent = showErrors
-      ? '✗ Could not reach sheet — check sharing settings (Anyone on internet → Viewer)'
-      : 'Using cached/seed data';
-    statusEl.className = showErrors ? 'sheets-status ss-err' : 'sheets-status ss-loading';
-  }
-
+  statusEl.textContent = showErrors
+    ? '✗ Could not reach sheet — check sharing settings (Anyone on internet → Viewer)'
+    : 'Sheet not connected — FBA data via CSV upload';
+  statusEl.className = showErrors ? 'sheets-status ss-err' : 'sheets-status';
   renderAll();
+}
+
+// ── Parse Warehouse Inventory tab (simple: ASIN + Qty) ──
+function parseWarehouseSheet(csv) {
+  const lines = csv.split('\n').filter(l => l.trim());
+  if (lines.length < 3) return 0;
+
+  // Row 1 = title banner, Row 2 = headers
+  const headers = parseCSV(lines[1] || lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g,'_'));
+  const ci = n => headers.findIndex(h => h.includes(n));
+  const asinCol = ci('asin');
+  const qtyCol  = ci('warehouse') !== -1 ? ci('warehouse') : ci('qty') !== -1 ? ci('qty') : 2; // col C default
+
+  if (asinCol < 0) return 0;
+
+  let updated = 0;
+  for (let i = 2; i < lines.length; i++) {
+    const row = parseCSV(lines[i]);
+    const asin = clean(row[asinCol]);
+    if (!asin || asin.length < 8) continue;
+    const qty = pNum(row[qtyCol]);
+    const rec = records.find(r => r.asin === asin);
+    if (rec) {
+      rec.warehouse   = qty;
+      rec.total_onhand = (rec.fba_available || 0) + (rec.fba_inbound || 0) + qty;
+      updated++;
+    }
+  }
+  return updated;
 }
 
 // ── Parse Forecast Engine tab ──
