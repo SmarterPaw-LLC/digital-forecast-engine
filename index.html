@@ -583,6 +583,9 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
           <button class="btn-ghost" onclick="document.getElementById('f-newsku').click()">+ Add SKUs via CSV</button>
           <input type="file" id="f-newsku" accept=".csv" style="display:none" onchange="handleUpload('newsku',this)">
           <button class="btn-ghost" onclick="openBulkLT()">⚙ Bulk Lead Times</button>
+          <button class="btn-ghost" onclick="exportStorageBackup()" title="Download all your saved inventory & lead times as a backup JSON">↓ Backup Data</button>
+          <button class="btn-ghost" onclick="document.getElementById('f-restore').click()" title="Restore from a backup JSON file">↑ Restore Backup</button>
+          <input type="file" id="f-restore" accept=".json" style="display:none" onchange="restoreStorageBackup(this)">
         </div>
       </div>
       <div style="padding:9px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center">
@@ -765,16 +768,37 @@ const load = (k,d) => { try{ const v=localStorage.getItem(k); return v?JSON.pars
 function init() {
   records = JSON.parse(JSON.stringify(SEED.records));
 
-  // Apply stored inventory
-  const inv = load(LS_INV, {});
+  // Migrate data from older storage key versions so upgrades don't lose data
+  const OLD_INV_KEYS = ['sp_inventory', 'sp_inv_v1'];
+  const OLD_LT_KEYS  = ['sp_lt_overrides', 'sp_lt_v1'];
+  function migrateOldKeys(currentKey, oldKeys) {
+    const current = load(currentKey, {});
+    let merged = { ...current };
+    let migrated = false;
+    oldKeys.forEach(k => {
+      const old = load(k, null);
+      if (old && Object.keys(old).length > 0) {
+        merged = { ...old, ...merged }; // current wins over old
+        migrated = true;
+      }
+    });
+    if (migrated) save(currentKey, merged);
+    return merged;
+  }
+
+  // Apply stored inventory (with migration from old keys)
+  const inv = migrateOldKeys(LS_INV, OLD_INV_KEYS);
+  let invCount = 0;
   records.forEach(r => {
     const k = r.asin + (r.region||'US');
     const s = inv[k] || inv[r.asin] || {};
-    r.fba_available = s.fba || 0;
-    r.fba_inbound   = s.inbound || 0;
-    r.warehouse     = s.wh || 0;
-    r.total_onhand  = (s.fba||0) + (s.inbound||0) + (s.wh||0);
+    r.fba_available = s.fba != null ? s.fba : 0;
+    r.fba_inbound   = s.inbound != null ? s.inbound : 0;
+    r.warehouse     = s.wh != null ? s.wh : 0;
+    r.total_onhand  = r.fba_available + r.fba_inbound + r.warehouse;
+    if (r.total_onhand > 0) invCount++;
   });
+  console.log(`Restored inventory for ${invCount} SKUs from localStorage`);
 
   // Apply stored lead times
   const lt = load(LS_LT, {});
@@ -1550,6 +1574,44 @@ document.getElementById('editOverlay').addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { closeEditModal(); closeModal(); }
 });
+
+// ══════════════════════════════════════════════════════
+// DATA BACKUP & RESTORE
+// ══════════════════════════════════════════════════════
+function exportStorageBackup() {
+  const backup = {
+    version: 3,
+    exported: new Date().toISOString(),
+    inv: load(LS_INV, {}),
+    lt:  load(LS_LT, {}),
+    lr:  load(LS_LR, {}),
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `smarterpaw-data-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+
+function restoreStorageBackup(input) {
+  const file = (input.files||[])[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const backup = JSON.parse(e.target.result);
+      if (!backup.inv && !backup.lt) throw new Error('Invalid backup file');
+      if (backup.inv) save(LS_INV, backup.inv);
+      if (backup.lt)  save(LS_LT,  backup.lt);
+      if (backup.lr)  save(LS_LR,  backup.lr);
+      alert(`✓ Backup restored — ${Object.keys(backup.inv||{}).length} inventory records, ${Object.keys(backup.lt||{}).length} lead time records.`);
+      init(); // re-init to apply restored data
+    } catch(err) {
+      alert('✗ Could not restore: ' + err.message);
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
 
 // ══════════════════════════════════════════════════════
 // PASSWORD GATE
