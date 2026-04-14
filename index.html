@@ -490,6 +490,17 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
       <option value="US">US only</option>
       <option value="CA">CA only</option>
     </select>
+    <span class="fl">Category</span>
+    <select id="fCategory" onchange="applyFilters()">
+      <option value="">All Categories</option>
+      <option value="spray">Spray</option>
+      <option value="consumables">Consumables</option>
+      <option value="treats">Treats</option>
+      <option value="toys">Toys</option>
+      <option value="bundles">Bundles</option>
+      <option value="seasonal_limited">Seasonal</option>
+      <option value="bubbles">Bubbles</option>
+    </select>
     <span class="fl">Status</span>
     <select id="fStatus" onchange="applyFilters()">
       <option value="">All</option>
@@ -755,7 +766,7 @@ const LS_LR  = 'sp_lr_v2';
 
 let records = [];
 let sortKey = 'adj_daily', sortDir = -1;
-let fBrand='', fRegion='', fStatus='', fHorizon=90, srchTerm='';
+let fBrand='', fRegion='', fCategory='', fStatus='', fHorizon=90, srchTerm='';
 
 // ══════════════════════════════════════════════════════
 // STORAGE HELPERS
@@ -1256,9 +1267,10 @@ function initQ4() {
 // RENDER
 // ══════════════════════════════════════════════════════
 function applyFilters() {
-  fBrand  = document.getElementById('fBrand').value;
-  fRegion = document.getElementById('fRegion').value;
-  fStatus = document.getElementById('fStatus').value;
+  fBrand    = document.getElementById('fBrand').value;
+  fRegion   = document.getElementById('fRegion').value;
+  fCategory = document.getElementById('fCategory').value;
+  fStatus   = document.getElementById('fStatus').value;
   fHorizon= parseInt(document.getElementById('fHorizon').value);
   srchTerm= document.getElementById('srchInput').value.toLowerCase();
   renderAll();
@@ -1268,9 +1280,10 @@ function renderAll() { renderScorecards(); renderTable(); }
 
 function getVisible() {
   return records.filter(r => {
-    if (fBrand  && r.brand!==fBrand)              return false;
-    if (fRegion && (r.region||'US')!==fRegion)    return false;
-    if (fStatus && getStatus(r)!==fStatus)        return false;
+    if (fBrand    && r.brand!==fBrand)           return false;
+    if (fRegion   && (r.region||'US')!==fRegion) return false;
+    if (fCategory && r.category!==fCategory)     return false;
+    if (fStatus   && getStatus(r)!==fStatus)     return false;
     if (srchTerm && !(r.title+r.asin+(r.supplier||'')).toLowerCase().includes(srchTerm)) return false;
     return true;
   }).sort((a,b) => {
@@ -1323,19 +1336,31 @@ function renderTable() {
   const vis=getVisible();
   document.getElementById('recCount').textContent=`${vis.length} of ${records.length} SKUs`;
   const cols=[
-    {k:'brand',l:'Brand',cls:'tl',w:'76px'},{k:'region',l:'Rgn',cls:'tl',w:'46px'},
-    {k:'title',l:'Product',cls:'tl',w:'220px'},{k:'asin',l:'ASIN',cls:'tl',w:'100px'},
-    {k:'adj_daily',l:'Adj /day',w:'62px'},{k:'trend',l:'Trend',w:'108px'},{k:'sea_idx',l:'Sea ×',w:'50px'},
-    {k:'need30',l:'30d',w:'62px'},{k:'sea30',l:'Sea 30d',w:'52px'},
-    {k:'need60',l:'60d',w:'62px'},{k:'sea60',l:'Sea 60d',w:'52px'},
-    {k:'need90',l:'90d',w:'62px'},{k:'sea90',l:'Sea 90d',w:'52px'},
-    {k:'need120',l:'120d',w:'62px'},{k:'sea120',l:'Sea 120d',w:'52px'},
-    {k:'total_onhand',l:'On Hand',w:'68px'},{k:'fba_available',l:'FBA Avail',w:'68px'},
-    {k:'gapActive',l:fHorizon+'d Gap',w:'74px'},{k:'gap30',l:'30d Gap',w:'68px'},
-    {k:'lead_time',l:'Lead (d)',w:'62px'},{k:'poActive',l:'PO By ('+fHorizon+'d)',w:'110px'},{k:'status',l:'Status',w:'104px'},
+    {k:'brand',     l:'Brand',   cls:'tl',w:'76px',  tip:'Product brand (Meowijuana, Doggijuana, Kitty Ka-Zoom)'},
+    {k:'region',    l:'Rgn',     cls:'tl',w:'46px',  tip:'Sales region — US or CA'},
+    {k:'title',     l:'Product', cls:'tl',w:'220px', tip:'Product name. Click row to edit inventory & lead time details.'},
+    {k:'asin',      l:'ASIN',    cls:'tl',w:'100px', tip:'Amazon Standard Identification Number'},
+    {k:'adj_daily', l:'Vel/day', w:'62px', tip:'Seasonally adjusted velocity: blended daily sales rate x current week seasonal index. The core planning number.'},
+    {k:'trend',     l:'Trend',   w:'108px',tip:'Recent 30-day velocity vs 2-year baseline. Accelerating means selling faster than historical average.'},
+    {k:'sea_idx',   l:'Sea Now', w:'54px', tip:'Seasonal multiplier for the current week. 1.0 = average. Above 1 = stronger than average demand, below 1 = slower period.'},
+    {k:'need30',    l:'30d',     w:'62px', tip:'Units needed to cover the next 30 days at current adjusted velocity.'},
+    {k:'sea30',     l:'30d Sea', w:'52px', tip:'Seasonal index at the 30-day forward point — what multiplier applies when that stock is needed.'},
+    {k:'need60',    l:'60d',     w:'62px', tip:'Units needed to cover the next 60 days at current adjusted velocity.'},
+    {k:'sea60',     l:'60d Sea', w:'52px', tip:'Seasonal index at the 60-day forward point.'},
+    {k:'need90',    l:'90d',     w:'62px', tip:'Units needed to cover the next 90 days at current adjusted velocity.'},
+    {k:'sea90',     l:'90d Sea', w:'52px', tip:'Seasonal index at the 90-day forward point. Watch for Q4 ramp here.'},
+    {k:'need120',   l:'120d',    w:'62px', tip:'Units needed to cover the next 120 days at current adjusted velocity.'},
+    {k:'sea120',    l:'120d Sea',w:'52px', tip:'Seasonal index at the 120-day forward point. Key for Q4 planning — if this is 2x+, order aggressively now.'},
+    {k:'total_onhand',   l:'On Hand',  w:'68px', tip:'Total inventory: FBA Available + FBA Inbound + Warehouse stock. Updated via Restock CSV upload or Google Sheet.'},
+    {k:'fba_available',  l:'FBA Avail',w:'68px', tip:'Units currently available at Amazon fulfillment centers, ready to ship.'},
+    {k:'gapActive', l:fHorizon+'d Gap', w:'74px', tip:'Gap at your selected horizon: units needed minus on hand. Positive = you will run short. Negative = surplus.'},
+    {k:'gap30',     l:'30d Gap', w:'68px', tip:'Gap at 30 days — how short you are in the next 30 days. Always shown regardless of horizon selection.'},
+    {k:'lead_time', l:'Lead (d)', w:'62px',tip:'Supplier lead time in days from PO placed to stock in your warehouse. Edit inline or click row to set.'},
+    {k:'poActive',  l:'PO By ('+fHorizon+'d)', w:'110px', tip:'Latest date to place a PO so stock arrives before you run out at the selected horizon. Red = overdue, orange = urgent.'},
+    {k:'status',    l:'Status',  w:'104px',tip:'Order Now = stock runs out within 30 days. Order Soon = 30-60 days. Plan Ahead = beyond 60 days. Based on selected horizon.'},
   ];
   document.getElementById('colRow').innerHTML=cols.map(c=>
-    `<th class="${c.cls||''} ${sortKey===c.k?'sorted':''}" onclick="setSort('${c.k}')" style="min-width:${c.w}">
+    `<th class="${c.cls||''} ${sortKey===c.k?'sorted':''}" onclick="setSort('${c.k}')" style="min-width:${c.w}" title="${c.tip||''}">
       ${c.l}<span class="si">${sortKey===c.k?(sortDir>0?'↑':'↓'):'↕'}</span></th>`).join('');
   if (!vis.length){
     document.getElementById('tBody').innerHTML=`<tr><td colspan="18" class="empty"><h3>No matching SKUs</h3>Adjust filters.</td></tr>`;
