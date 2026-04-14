@@ -515,7 +515,7 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
         <tr>
           <th class="thg tl" colspan="4" style="border-right:1px solid var(--border2)">SKU</th>
           <th class="thg" colspan="3" style="border-right:1px solid var(--border2)">VELOCITY</th>
-          <th class="thg thg-forecast" colspan="4" style="border-right:1px solid var(--border2)">DEMAND FORECAST (units needed)</th>
+          <th class="thg thg-forecast" colspan="8" style="border-right:1px solid var(--border2)">DEMAND FORECAST (units needed) — with forward seasonal index</th>
           <th class="thg" colspan="2" style="border-right:1px solid var(--border2)">INVENTORY</th>
           <th class="thg thg-gap" colspan="2" style="border-right:1px solid var(--border2)">GAP</th>
           <th class="thg thg-po" colspan="3">PO PLANNING</th>
@@ -1280,6 +1280,31 @@ function getVisible() {
   });
 }
 
+
+// ── Forward seasonal index at a given horizon ──
+function getForwardSea(r, horizonDays) {
+  const curves = SEED.curves || {};
+  const curve = curves[r.category] || curves['consumables'] || {};
+  const today = new Date();
+  const futureDate = new Date(today);
+  futureDate.setDate(futureDate.getDate() + horizonDays);
+  // Get ISO week of future date
+  const d = new Date(Date.UTC(futureDate.getFullYear(), futureDate.getMonth(), futureDate.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const futureWk = Math.ceil((((d - yearStart) / 864e5) + 1) / 7);
+  const wk = Math.min(Math.max(futureWk, 1), 52);
+  return parseFloat((curve[String(wk)] || curve[wk] || 1.0).toFixed(2));
+}
+
+// ── Forward-adjusted need at horizon ──
+function getForwardNeed(r, horizonDays) {
+  const seaFwd = getForwardSea(r, horizonDays);
+  // Re-derive need using forward sea index instead of current
+  return Math.round(r.blended_daily * seaFwd * horizonDays);
+}
+
 function renderScorecards() {
   const vis=getVisible();
   let n=0,s=0,p=0,ok=0,nd=0,vel=0;
@@ -1300,7 +1325,14 @@ function renderTable() {
     {k:'brand',l:'Brand',cls:'tl',w:'76px'},{k:'region',l:'Rgn',cls:'tl',w:'46px'},
     {k:'title',l:'Product',cls:'tl',w:'220px'},{k:'asin',l:'ASIN',cls:'tl',w:'100px'},
     {k:'adj_daily',l:'Adj /day',w:'62px'},{k:'trend',l:'Trend',w:'108px'},{k:'sea_idx',l:'Sea ×',w:'50px'},
-    {k:'need30',l:'30d',w:'60px'},{k:'need60',l:'60d',w:'60px'},{k:'need90',l:'90d',w:'60px'},{k:'need120',l:'120d',w:'60px'},
+    {k:'need30',l:'30d',w:'62px'},{k:'sea30',l:'Sea×
+30d',w:'52px'},
+    {k:'need60',l:'60d',w:'62px'},{k:'sea60',l:'Sea×
+60d',w:'52px'},
+    {k:'need90',l:'90d',w:'62px'},{k:'sea90',l:'Sea×
+90d',w:'52px'},
+    {k:'need120',l:'120d',w:'62px'},{k:'sea120',l:'Sea×
+120d',w:'52px'},
     {k:'total_onhand',l:'On Hand',w:'68px'},{k:'fba_available',l:'FBA Avail',w:'68px'},
     {k:'gap30',l:'30d Gap',w:'68px'},{k:'gap90',l:'90d Gap',w:'68px'},
     {k:'lead_time',l:'Lead (d)',w:'62px'},{k:'po90',l:'PO By',w:'98px'},{k:'status',l:'Status',w:'104px'},
@@ -1314,8 +1346,8 @@ function renderTable() {
   }
   document.getElementById('tBody').innerHTML=vis.map(r=>{
     const st=getStatus(r);
-    const g30=r.total_onhand>0?r.need30-r.total_onhand:null;
-    const g90=r.total_onhand>0?r.need90-r.total_onhand:null;
+    const g30=r.total_onhand>0?getForwardNeed(r,30)-r.total_onhand:null;
+    const g90=r.total_onhand>0?getForwardNeed(r,90)-r.total_onhand:null;
     const po90=poDL(r,90), po90d=dUntil(po90);
     const cc=r.brand==='Meowijuana'?'c-meow':r.brand==='Doggijuana'?'c-doggi':'c-kkz';
     const bl=r.brand==='Kitty Ka-Zoom'?'KKZ':r.brand.slice(0,6);
@@ -1343,10 +1375,14 @@ function renderTable() {
       <td><span class="num num-hi">${r.adj_daily}</span></td>
       <td><span class="tc ${tc}">${r.trend}</span></td>
       <td><span class="${sc2}">${r.sea_idx}×</span></td>
-      <td class="num">${r.need30.toLocaleString()}</td>
-      <td class="num">${r.need60.toLocaleString()}</td>
-      <td class="num num-hi">${r.need90.toLocaleString()}</td>
-      <td class="num">${r.need120.toLocaleString()}</td>
+      <td class="num num-hi">${getForwardNeed(r,30).toLocaleString()}</td>
+      <td><span class="num ${getForwardSea(r,30)>=2.5?'sea-pk':getForwardSea(r,30)>=1.5?'sea-hi':getForwardSea(r,30)>=1.1?'sea-mid':getForwardSea(r,30)<0.9?'sea-lo':'sea-mid'}" style="font-size:11px">${getForwardSea(r,30)}×</span></td>
+      <td class="num">${getForwardNeed(r,60).toLocaleString()}</td>
+      <td><span class="num ${getForwardSea(r,60)>=2.5?'sea-pk':getForwardSea(r,60)>=1.5?'sea-hi':getForwardSea(r,60)>=1.1?'sea-mid':getForwardSea(r,60)<0.9?'sea-lo':'sea-mid'}" style="font-size:11px">${getForwardSea(r,60)}×</span></td>
+      <td class="num num-hi">${getForwardNeed(r,90).toLocaleString()}</td>
+      <td><span class="num ${getForwardSea(r,90)>=2.5?'sea-pk':getForwardSea(r,90)>=1.5?'sea-hi':getForwardSea(r,90)>=1.1?'sea-mid':getForwardSea(r,90)<0.9?'sea-lo':'sea-mid'}" style="font-size:11px">${getForwardSea(r,90)}×</span></td>
+      <td class="num">${getForwardNeed(r,120).toLocaleString()}</td>
+      <td><span class="num ${getForwardSea(r,120)>=2.5?'sea-pk':getForwardSea(r,120)>=1.5?'sea-hi':getForwardSea(r,120)>=1.1?'sea-mid':getForwardSea(r,120)<0.9?'sea-lo':'sea-mid'}" style="font-size:11px">${getForwardSea(r,120)}×</span></td>
       <td class="num ${r.total_onhand>0?'num-hi':''}">${r.total_onhand>0?r.total_onhand.toLocaleString():'—'}</td>
       <td class="num">${r.fba_available>0?r.fba_available.toLocaleString():'—'}</td>
       ${gC(g30)}${gC(g90)}
