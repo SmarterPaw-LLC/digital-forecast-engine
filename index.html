@@ -833,28 +833,32 @@ async function connectSheets(showErrors) {
   statusEl.innerHTML = '<span class="spin"></span>';
   statusEl.className = 'sheets-status ss-loading';
 
-  // Read warehouse inventory from 2_Warehouse_Inventory tab
-  const whUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('2_Warehouse_Inventory')}`;
+  // Try warehouse tab names in order of preference
+  const whTabNames = ['2_Warehouse_Inventory', '2_Inventory_Snapshot', 'Warehouse_Inventory', 'Inventory_Snapshot'];
+  let whSuccess = false;
 
-  try {
-    const resp = await fetch(whUrl, { signal: AbortSignal.timeout(8000) });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const text = await resp.text();
-    if (!text || text.trim().startsWith('<') || text.length < 50) throw new Error('Sheet not readable');
-
-    const updated = parseWarehouseSheet(text);
-    if (updated >= 0) {
-      statusEl.textContent = `✓ Warehouse inventory loaded — ${updated} SKUs`;
-      statusEl.className = 'sheets-status ss-ok';
-      setFreshBadge('Live · ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), true);
-      document.getElementById('refreshLabel').textContent = 'Warehouse from Sheet · ' + new Date().toLocaleDateString();
-      localStorage.setItem('lastSheetId', sheetId);
-      renderAll();
-      return;
-    }
-  } catch(e) {
-    console.log('Warehouse tab error:', e.message);
+  for (const tab of whTabNames) {
+    const whUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
+    try {
+      const resp = await fetch(whUrl, { signal: AbortSignal.timeout(8000) });
+      if (!resp.ok) continue;
+      const text = await resp.text();
+      if (!text || text.trim().startsWith('<') || text.length < 50) continue;
+      const updated = parseWarehouseSheet(text);
+      if (updated >= 0) {
+        statusEl.textContent = `✓ Connected (${tab}) — ${updated} SKUs`;
+        statusEl.className = 'sheets-status ss-ok';
+        setFreshBadge('Live · ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), true);
+        document.getElementById('refreshLabel').textContent = 'Warehouse from Sheet · ' + new Date().toLocaleDateString();
+        localStorage.setItem('lastSheetId', sheetId);
+        whSuccess = true;
+        renderAll();
+        break;
+      }
+    } catch(e) { continue; }
   }
+
+  if (whSuccess) return;
 
   // Fallback: try Forecast Engine tab
   const tabNames = ['5_Forecast_Engine', '2_Inventory_Snapshot'];
@@ -883,28 +887,40 @@ async function connectSheets(showErrors) {
   renderAll();
 }
 
-// ── Parse Warehouse Inventory tab (simple: ASIN + Qty) ──
+// ── Parse Warehouse Inventory tab (handles both old and new format) ──
 function parseWarehouseSheet(csv) {
   const lines = csv.split('\n').filter(l => l.trim());
-  if (lines.length < 3) return 0;
+  if (lines.length < 2) return 0;
 
-  // Row 1 = title banner, Row 2 = headers
-  const headers = parseCSV(lines[1] || lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g,'_'));
+  // Find the header row — look for a row containing 'asin'
+  let hIdx = -1, headers = [];
+  for (let i = 0; i < Math.min(lines.length, 4); i++) {
+    const row = parseCSV(lines[i]);
+    if (row.some(h => h.toLowerCase().includes('asin'))) {
+      hIdx = i; headers = row.map(h => h.toLowerCase().replace(/[^a-z0-9]/g,'_')); break;
+    }
+  }
+  if (hIdx < 0) return 0;
+
   const ci = n => headers.findIndex(h => h.includes(n));
   const asinCol = ci('asin');
-  const qtyCol  = ci('warehouse') !== -1 ? ci('warehouse') : ci('qty') !== -1 ? ci('qty') : 2; // col C default
+  // Warehouse qty: look for warehouse, wh, qty, or on_hand columns
+  let qtyCol = ci('warehouse');
+  if (qtyCol < 0) qtyCol = ci('on_hand');
+  if (qtyCol < 0) qtyCol = ci('qty');
+  if (qtyCol < 0) qtyCol = 2; // default col C
 
   if (asinCol < 0) return 0;
 
   let updated = 0;
-  for (let i = 2; i < lines.length; i++) {
+  for (let i = hIdx + 1; i < lines.length; i++) {
     const row = parseCSV(lines[i]);
     const asin = clean(row[asinCol]);
     if (!asin || asin.length < 8) continue;
     const qty = pNum(row[qtyCol]);
     const rec = records.find(r => r.asin === asin);
     if (rec) {
-      rec.warehouse   = qty;
+      rec.warehouse    = qty;
       rec.total_onhand = (rec.fba_available || 0) + (rec.fba_inbound || 0) + qty;
       updated++;
     }
