@@ -1678,11 +1678,13 @@ function restoreStorageBackup(input) {
 // Change APP_PASSWORD to whatever you want:
 const APP_PASSWORD = 'SmarterPaw2026';
 const PW_KEY = 'sp_unlocked_v3';
+const PW_HASH = btoa(unescape(encodeURIComponent(APP_PASSWORD)));
 
 function checkPW() {
-  const val = document.getElementById('pw-input').value;
-  if (btoa(val) === btoa(APP_PASSWORD)) {
-    sessionStorage.setItem(PW_KEY, btoa(APP_PASSWORD));
+  const val = document.getElementById('pw-input').value.trim();
+  const valHash = btoa(unescape(encodeURIComponent(val)));
+  if (valHash === PW_HASH) {
+    sessionStorage.setItem(PW_KEY, PW_HASH);
     document.getElementById('pw-gate').style.display = 'none';
     init();
   } else {
@@ -1695,7 +1697,7 @@ function checkPW() {
 }
 
 function checkSession() {
-  if (sessionStorage.getItem(PW_KEY) === btoa(APP_PASSWORD)) {
+  if (sessionStorage.getItem(PW_KEY) === PW_HASH) {
     document.getElementById('pw-gate').style.display = 'none';
     init();
   } else {
