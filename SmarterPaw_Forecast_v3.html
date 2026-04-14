@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SmarterPaw — Inventory Forecast</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* SmarterPaw brand */
+  --sp-green:   #3a7d2c;
+  --sp-green2:  #4a9e38;
+  --sp-green3:  #2d6122;
+  --sp-orange:  #e8601a;
+  --sp-orange2: #f07030;
+  --sp-yellow:  #f5a623;
+  --sp-yellow2: #fbbf24;
+
+  /* Dark base */
+  --bg:       #0e1208;
+  --surface:  #141a0e;
+  --surface2: #1c2414;
+  --surface3: #222d18;
+  --border:   #2a3620;
+  --border2:  #354428;
+
+  /* Text */
+  --text:  #edf2e8;
+  --text2: #9aab88;
+  --text3: #5a6b4a;
+
+  /* Status */
+  --red:    #f87171;
+  --orange: #fb923c;
+  --yellow: #fbbf24;
+  --green:  #6dd44a;
+  --blue:   #60c8fa;
+  --purple: #b89bfa;
+  --pink:   #f472b6;
+
+  /* Brand chips */
+  --meow:  #6dd44a;
+  --doggi: #60c8fa;
+  --kkz:   #f472b6;
+
+  --mono:    'DM Mono', monospace;
+  --sans:    'DM Sans', sans-serif;
+  --display: 'Nunito', sans-serif;
+  --radius:  7px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 13px; min-height: 100vh; overflow-x: hidden; }
+
+/* ── HEADER ── */
+header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(14,18,8,0.95);
+  backdrop-filter: blur(18px);
+  border-bottom: 2px solid var(--sp-green3);
+  padding: 0 20px;
+  display: flex; align-items: center; gap: 14px; height: 54px;
+}
+.logo {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--display); font-weight: 900; font-size: 18px;
+  color: var(--text); letter-spacing: -0.3px; text-decoration: none;
+}
+.logo-paw { font-size: 20px; }
+.logo em { color: var(--sp-green2); font-style: normal; }
+.logo-tag {
+  font-family: var(--mono); font-size: 10px; font-weight: 400;
+  color: var(--text3); letter-spacing: 1px; text-transform: uppercase;
+  border-left: 1px solid var(--border2); padding-left: 10px; margin-left: 2px;
+}
+
+.nav-tabs { display: flex; gap: 3px; }
+.nav-tab {
+  font-family: var(--display); font-weight: 700; font-size: 12px;
+  padding: 6px 13px; border-radius: var(--radius);
+  cursor: pointer; color: var(--text3);
+  transition: all .15s; border: none; background: transparent;
+}
+.nav-tab:hover { color: var(--text2); background: var(--surface2); }
+.nav-tab.active { color: var(--sp-green2); background: rgba(74,158,56,.12); border: 1px solid rgba(74,158,56,.25); }
+
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+/* ── SHEETS BAR ── */
+.sheets-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 9px 20px;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.sheets-label { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
+.sheets-id {
+  font-family: var(--mono); font-size: 11px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 5px; color: var(--text2); padding: 5px 10px;
+  flex: 1; min-width: 200px; max-width: 480px; outline: none;
+  transition: border-color .2s;
+}
+.sheets-id:focus { border-color: var(--sp-green2); }
+.sheets-status { font-family: var(--mono); font-size: 11px; }
+.ss-ok { color: var(--green); } .ss-err { color: var(--red); } .ss-loading { color: var(--yellow); }
+.sheets-hint { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--text3); }
+
+/* ── BUTTONS ── */
+.btn {
+  background: var(--sp-green); color: #fff;
+  border: none; border-radius: var(--radius);
+  font-family: var(--display); font-weight: 800; font-size: 12px;
+  padding: 7px 14px; cursor: pointer; white-space: nowrap;
+  transition: background .15s, transform .1s;
+  box-shadow: 0 2px 8px rgba(58,125,44,.3);
+}
+.btn:hover { background: var(--sp-green2); }
+.btn:active { transform: scale(.97); }
+.btn-orange { background: var(--sp-orange); box-shadow: 0 2px 8px rgba(232,96,26,.3); }
+.btn-orange:hover { background: var(--sp-orange2); }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+.btn-ghost {
+  background: transparent; border: 1px solid var(--border2); color: var(--text2);
+  border-radius: var(--radius); font-family: var(--display); font-weight: 700;
+  font-size: 11px; padding: 5px 11px; cursor: pointer;
+  transition: border-color .2s, color .2s, background .2s;
+}
+.btn-ghost:hover { border-color: var(--sp-green2); color: var(--sp-green2); background: rgba(74,158,56,.06); }
+
+/* ── BADGE ── */
+.badge { font-family: var(--mono); font-size: 10px; padding: 3px 8px; border-radius: 4px; background: var(--surface2); color: var(--text3); }
+.badge.live { background: rgba(109,212,74,.1); color: var(--green); border: 1px solid rgba(109,212,74,.25); }
+.badge.warn { background: rgba(251,191,36,.1); color: var(--yellow); border: 1px solid rgba(251,191,36,.2); }
+
+/* ── PAGES ── */
+.page { display: none; flex-direction: column; flex: 1; }
+.page.active { display: flex; }
+
+/* ── Q4 BANNER ── */
+.q4-banner {
+  margin: 12px 20px;
+  background: linear-gradient(135deg, rgba(58,125,44,.15) 0%, rgba(245,166,35,.1) 100%);
+  border: 1px solid rgba(245,166,35,.25);
+  border-radius: 10px; padding: 12px 18px;
+  display: flex; align-items: center; gap: 16px;
+}
+.q4-count { text-align: center; min-width: 56px; }
+.q4-num { font-family: var(--display); font-size: 28px; font-weight: 900; color: var(--sp-orange); line-height: 1; }
+.q4-lbl { font-family: var(--mono); font-size: 9px; color: var(--text3); text-transform: uppercase; }
+.q4-title { font-family: var(--display); font-weight: 800; font-size: 14px; color: var(--sp-yellow); }
+.q4-sub { color: var(--text2); font-size: 12px; margin-top: 3px; }
+
+/* ── SCORECARDS ── */
+.scorecards { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px,1fr)); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+.sc { background: var(--surface); padding: 13px 18px; }
+.sc-lbl { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 3px; }
+.sc-val { font-family: var(--display); font-size: 28px; font-weight: 900; line-height: 1; }
+.sc-sub { font-size: 11px; color: var(--text3); margin-top: 3px; }
+.sc-red .sc-val { color: var(--red); } .sc-orange .sc-val { color: var(--orange); }
+.sc-yellow .sc-val { color: var(--yellow); } .sc-green .sc-val { color: var(--green); }
+.sc-blue .sc-val { color: var(--blue); } .sc-purple .sc-val { color: var(--purple); }
+
+/* ── CONTROLS ── */
+.controls {
+  padding: 9px 20px; display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap; border-bottom: 1px solid var(--border); background: var(--surface);
+}
+.fl { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .4px; }
+select, .srch {
+  background: var(--surface2); border: 1px solid var(--border2);
+  border-radius: 5px; color: var(--text); font-family: var(--mono);
+  font-size: 11px; padding: 5px 9px; outline: none; cursor: pointer;
+  transition: border-color .2s;
+}
+select:focus, .srch:focus { border-color: var(--sp-green2); }
+.srch { width: 200px; }
+.srch::placeholder { color: var(--text3); }
+.ctrl-r { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--text3); }
+
+/* ── TABLE ── */
+.tbl-wrap { flex: 1; overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead { position: sticky; top: 0; z-index: 10; background: var(--surface); }
+.thg {
+  text-align: center; font-family: var(--mono); font-size: 9px;
+  text-transform: uppercase; letter-spacing: .6px; color: var(--text3);
+  padding: 5px 8px 3px; border-bottom: 1px solid var(--border2);
+}
+.thg-forecast { color: var(--sp-yellow); border-bottom-color: rgba(245,166,35,.3); }
+.thg-gap { color: var(--sp-orange); border-bottom-color: rgba(232,96,26,.3); }
+.thg-po { color: var(--purple); border-bottom-color: rgba(184,155,250,.3); }
+th {
+  padding: 7px 9px; text-align: right; font-family: var(--mono); font-size: 10px;
+  font-weight: 500; color: var(--text2); border-bottom: 2px solid var(--border2);
+  white-space: nowrap; cursor: pointer; user-select: none; transition: color .15s;
+}
+th:hover { color: var(--sp-green2); } th.tl { text-align: left; } th.sorted { color: var(--sp-green2); }
+.si { margin-left: 3px; opacity: .4; font-size: 9px; } th.sorted .si { opacity: 1; }
+tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+tbody tr:hover { background: var(--surface2); }
+td { padding: 9px 9px; text-align: right; vertical-align: middle; white-space: nowrap; }
+td.tl { text-align: left; max-width: 250px; }
+
+/* ── CELL TYPES ── */
+.pname { font-family: var(--display); font-weight: 600; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 230px; }
+.pasin { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+.chip { display: inline-block; font-family: var(--display); font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: .5px; }
+.c-meow  { background: rgba(109,212,74,.12); color: var(--meow); }
+.c-doggi { background: rgba(96,200,250,.12); color: var(--doggi); }
+.c-kkz   { background: rgba(244,114,182,.12); color: var(--kkz); }
+.num { font-family: var(--mono); font-size: 12px; color: var(--text2); }
+.num-hi { color: var(--text); font-weight: 500; }
+.tc { display: inline-block; font-family: var(--mono); font-size: 10px; padding: 2px 6px; border-radius: 3px; }
+.t-up2  { background: rgba(109,212,74,.1);  color: var(--green);  }
+.t-up1  { background: rgba(74,158,56,.1);   color: var(--sp-green2); }
+.t-flat { background: rgba(90,107,74,.15);  color: var(--text3);  }
+.t-dn1  { background: rgba(232,96,26,.12);  color: var(--orange); }
+.t-dn2  { background: rgba(248,113,113,.1); color: var(--red);    }
+.sea-lo { color: var(--blue); font-family: var(--mono); font-size: 11px; }
+.sea-mid{ color: var(--text2); font-family: var(--mono); font-size: 11px; }
+.sea-hi { color: var(--sp-yellow); font-family: var(--mono); font-size: 11px; }
+.sea-pk { color: var(--sp-orange); font-family: var(--mono); font-size: 11px; font-weight: 600; }
+.gap-ok   { font-family: var(--mono); font-size: 12px; color: var(--text3); }
+.gap-warn { font-family: var(--mono); font-size: 12px; color: var(--yellow); font-weight: 500; }
+.gap-crit { font-family: var(--mono); font-size: 12px; color: var(--red); font-weight: 600; }
+.po-ok   { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+.po-soon { color: var(--yellow); font-family: var(--mono); font-size: 11px; }
+.po-crit { color: var(--orange); font-family: var(--mono); font-size: 11px; }
+.po-over { color: var(--red); font-family: var(--mono); font-size: 11px; font-weight: 600; }
+.sbadge { display: inline-flex; align-items: center; gap: 4px; font-family: var(--display); font-weight: 700; font-size: 10px; padding: 3px 8px; border-radius: 5px; white-space: nowrap; }
+.s-now  { background: rgba(248,113,113,.12); color: var(--red);    border: 1px solid rgba(248,113,113,.25); }
+.s-soon { background: rgba(251,146,60,.12);  color: var(--orange); border: 1px solid rgba(251,146,60,.25); }
+.s-plan { background: rgba(251,191,36,.08);  color: var(--yellow); border: 1px solid rgba(251,191,36,.2);  }
+.s-ok   { background: rgba(109,212,74,.08);  color: var(--green);  border: 1px solid rgba(109,212,74,.2);  }
+.s-nd   { background: rgba(90,107,74,.15);   color: var(--text3);  border: 1px solid var(--border2);       }
+.lt-in  {
+  background: transparent; border: 1px solid transparent; border-radius: 4px;
+  color: var(--text2); font-family: var(--mono); font-size: 11px;
+  padding: 3px 5px; width: 50px; text-align: center; outline: none;
+  transition: border-color .15s, background .15s;
+}
+.lt-in:hover { border-color: var(--border2); background: var(--surface2); }
+.lt-in:focus { border-color: var(--sp-green2); background: var(--surface2); color: var(--text); }
+
+/* ── REGION TAG ── */
+.rtag { font-family: var(--mono); font-size: 9px; padding: 1px 5px; border-radius: 3px; text-transform: uppercase; letter-spacing: .4px; }
+.rtag-us { background: rgba(96,200,250,.1); color: var(--blue); }
+.rtag-ca { background: rgba(245,166,35,.1); color: var(--sp-yellow); }
+
+/* ── DATA PAGE ── */
+.data-wrap { padding: 22px 20px; display: flex; flex-direction: column; gap: 22px; }
+.ds { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.ds-hdr { padding: 15px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 12px; }
+.ds-title { font-family: var(--display); font-weight: 800; font-size: 15px; }
+.ds-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.ds-body { padding: 18px 20px; }
+.dg { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap: 14px; }
+
+/* ── DROPZONES ── */
+.dz {
+  border: 2px dashed var(--border2); border-radius: 9px; padding: 26px 18px;
+  text-align: center; cursor: pointer; transition: all .2s; position: relative;
+}
+.dz:hover, .dz.over { border-color: var(--sp-green2); background: rgba(74,158,56,.05); }
+.dz input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.dz-ico { font-size: 26px; margin-bottom: 8px; }
+.dz-title { font-family: var(--display); font-weight: 800; font-size: 13px; margin-bottom: 3px; }
+.dz-sub { font-size: 11px; color: var(--text3); line-height: 1.5; }
+.dz-st { margin-top: 10px; font-family: var(--mono); font-size: 11px; }
+.dz-ok { color: var(--green); } .dz-err { color: var(--red); } .dz-ld { color: var(--yellow); }
+.dz-last { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-top: 5px; }
+
+/* ── SKU TABLE ── */
+.sku-wrap { overflow: auto; max-height: 380px; }
+.sku-tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+.sku-tbl th { padding: 7px 10px; text-align: left; font-family: var(--mono); font-size: 9px; text-transform: uppercase; color: var(--text3); border-bottom: 1px solid var(--border2); background: var(--surface); position: sticky; top: 0; white-space: nowrap; }
+.sku-tbl td { padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--text2); }
+.sku-tbl tr:hover td { background: var(--surface2); }
+.lt-cell { background: transparent; border: none; color: var(--text); font-family: var(--mono); font-size: 11px; width: 55px; text-align: right; outline: none; padding: 2px 4px; border-radius: 3px; }
+.lt-cell:focus { background: var(--surface2); border: 1px solid var(--sp-green2); }
+.del-btn { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 12px; padding: 2px 5px; border-radius: 3px; transition: color .15s; }
+.del-btn:hover { color: var(--red); }
+.tpl-row { display: flex; align-items: center; gap: 12px; padding: 13px 20px; background: rgba(74,158,56,.05); border-top: 1px solid var(--border); }
+.tpl-lbl { flex: 1; font-size: 12px; color: var(--text2); }
+.tpl-cols { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-top: 2px; }
+
+/* ── MODAL ── */
+.modal-ov { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.modal-ov.open { opacity: 1; pointer-events: auto; }
+.modal { background: var(--surface); border: 1px solid var(--border2); border-radius: 12px; padding: 26px; width: 460px; max-width: 90vw; transform: translateY(8px); transition: transform .2s; border-top: 3px solid var(--sp-green2); }
+.modal-ov.open .modal { transform: translateY(0); }
+.modal h2 { font-family: var(--display); font-weight: 900; font-size: 18px; margin-bottom: 5px; }
+.modal p { color: var(--text2); font-size: 12px; margin-bottom: 18px; line-height: 1.6; }
+.mg { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+.mf label { display: block; font-family: var(--mono); font-size: 10px; color: var(--text3); margin-bottom: 4px; text-transform: uppercase; }
+.mf input { width: 100%; background: var(--surface2); border: 1px solid var(--border2); border-radius: 5px; color: var(--text); font-family: var(--mono); font-size: 13px; padding: 7px 9px; outline: none; }
+.mf input:focus { border-color: var(--sp-green2); }
+.ma { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* ── UTILS ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+.ani { animation: fadeIn .2s ease forwards; }
+.empty { padding: 40px; text-align: center; color: var(--text3); }
+.empty h3 { font-family: var(--display); font-size: 16px; margin-bottom: 6px; color: var(--text2); }
+.spin { width: 13px; height: 13px; border: 2px solid var(--border2); border-top-color: var(--sp-green2); border-radius: 50%; animation: rot .6s linear infinite; display: inline-block; }
+@keyframes rot { to { transform: rotate(360deg); } }
+code { font-family: var(--mono); font-size: 11px; background: var(--surface2); padding: 1px 5px; border-radius: 3px; color: var(--sp-green2); }
+.divider { width: 1px; height: 20px; background: var(--border2); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <span class="logo-paw">🐾</span>
+    Smarter<em>Paw</em>
+    <span class="logo-tag">Forecast Engine</span>
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPage('forecast',this)">📊 Forecast</button>
+    <button class="nav-tab" onclick="showPage('data',this)">📁 Data & Inventory</button>
+  </div>
+  <div class="header-right">
+    <span class="badge" id="freshBadge">Seed data</span>
+    <div class="divider"></div>
+    <button class="btn-ghost" onclick="openBulkLT()">⚙ Lead Times</button>
+    <button class="btn-ghost" onclick="exportCSV()">↓ CSV</button>
+  </div>
+</header>
+
+<!-- SHEETS BAR -->
+<div class="sheets-bar">
+  <span class="sheets-label">Google Sheet ID</span>
+  <input class="sheets-id" id="sheetIdInput"
+    value="1yi8jiH7Lh-5XrdJJWp6DrJ2oGyL3OklriIEhv9-V71s"
+    placeholder="Paste Sheet ID from URL…">
+  <button class="btn btn-sm" onclick="connectSheets(true)">↻ Refresh from Sheet</button>
+  <span class="sheets-status" id="sheetsStatus"></span>
+  <span class="sheets-hint">Sheet must be shared: Anyone on the internet → Viewer ✓</span>
+</div>
+
+<!-- FORECAST PAGE -->
+<div class="page active" id="page-forecast">
+  <div class="scorecards" id="scorecards"></div>
+
+  <div class="q4-banner">
+    <div class="q4-count">
+      <div class="q4-num" id="q4Num">—</div>
+      <div class="q4-lbl">wks to peak</div>
+    </div>
+    <div>
+      <div class="q4-title" id="q4Title">Q4 Peak Season Planning</div>
+      <div class="q4-sub" id="q4Sub"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <span class="fl">Brand</span>
+    <select id="fBrand" onchange="applyFilters()">
+      <option value="">All Brands</option>
+      <option value="Meowijuana">Meowijuana</option>
+      <option value="Doggijuana">Doggijuana</option>
+      <option value="Kitty Ka-Zoom">Kitty Ka-Zoom</option>
+    </select>
+    <span class="fl">Region</span>
+    <select id="fRegion" onchange="applyFilters()">
+      <option value="">US + CA</option>
+      <option value="US">US only</option>
+      <option value="CA">CA only</option>
+    </select>
+    <span class="fl">Status</span>
+    <select id="fStatus" onchange="applyFilters()">
+      <option value="">All</option>
+      <option value="order-now">🔴 Order Now</option>
+      <option value="order-soon">🟡 Order Soon</option>
+      <option value="plan">⚠️ Plan Ahead</option>
+      <option value="ok">🟢 OK</option>
+      <option value="nodata">No Inv Data</option>
+    </select>
+    <span class="fl">Horizon</span>
+    <select id="fHorizon" onchange="applyFilters()">
+      <option value="90">90-Day</option>
+      <option value="30">30-Day</option>
+      <option value="60">60-Day</option>
+      <option value="120">120-Day</option>
+    </select>
+    <input class="srch" id="srchInput" placeholder="Search product or ASIN…" oninput="applyFilters()">
+    <div class="ctrl-r" id="recCount"></div>
+  </div>
+
+  <div class="tbl-wrap">
+    <table id="mainTable">
+      <thead>
+        <tr>
+          <th class="thg tl" colspan="4" style="border-right:1px solid var(--border2)">SKU</th>
+          <th class="thg" colspan="3" style="border-right:1px solid var(--border2)">VELOCITY</th>
+          <th class="thg thg-forecast" colspan="4" style="border-right:1px solid var(--border2)">DEMAND FORECAST (units needed)</th>
+          <th class="thg" colspan="2" style="border-right:1px solid var(--border2)">INVENTORY</th>
+          <th class="thg thg-gap" colspan="2" style="border-right:1px solid var(--border2)">GAP</th>
+          <th class="thg thg-po" colspan="3">PO PLANNING</th>
+        </tr>
+        <tr id="colRow"></tr>
+      </thead>
+      <tbody id="tBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- DATA PAGE -->
+<div class="page" id="page-data">
+  <div class="data-wrap">
+
+    <div class="ds">
+      <div class="ds-hdr">
+        <div style="flex:1">
+          <div class="ds-title">📥 Weekly Inventory Refresh</div>
+          <div class="ds-sub">Upload your weekly Amazon Restock CSV and Shopify Inventory export. Drag & drop or click to browse. Data saves to browser storage.</div>
+        </div>
+        <span class="badge" id="refreshLabel">Never updated</span>
+      </div>
+      <div class="ds-body">
+        <div class="dg">
+
+          <div class="dz" id="dz-restock">
+            <input type="file" id="f-restock" accept=".csv,.txt" onchange="handleUpload('restock',this)">
+            <div class="dz-ico">🛒</div>
+            <div class="dz-title">Amazon Restock Report</div>
+            <div class="dz-sub">Seller Central → Reports → Fulfillment → Restock Inventory (.csv or .txt)<br><br>Updates: FBA Available, FBA Inbound, Velocity</div>
+            <div class="dz-st" id="st-restock"></div>
+            <div class="dz-last" id="last-restock"></div>
+          </div>
+
+          <div class="dz" id="dz-shopify">
+            <input type="file" id="f-shopify" accept=".csv" onchange="handleUpload('shopify',this)">
+            <div class="dz-ico">🏪</div>
+            <div class="dz-title">Shopify Inventory Export</div>
+            <div class="dz-sub">Shopify Admin → Products → Inventory → Export<br>Use "Office" location only for warehouse stock.<br><br>Updates: Warehouse / 3PL stock</div>
+            <div class="dz-st" id="st-shopify"></div>
+            <div class="dz-last" id="last-shopify"></div>
+          </div>
+
+          <div class="dz" id="dz-caRestock">
+            <input type="file" id="f-caRestock" accept=".csv,.txt" onchange="handleUpload('caRestock',this)">
+            <div class="dz-ico">🍁</div>
+            <div class="dz-title">Amazon CA Restock Report</div>
+            <div class="dz-sub">Same report format, from your CA Seller Central account.<br><br>Creates CA rows alongside US in the forecast table.</div>
+            <div class="dz-st" id="st-caRestock"></div>
+            <div class="dz-last" id="last-caRestock"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="ds">
+      <div class="ds-hdr">
+        <div style="flex:1">
+          <div class="ds-title">🗂 SKU Master — <span id="skuCount" style="color:var(--sp-green2)">177 SKUs</span></div>
+          <div class="ds-sub">All tracked SKUs. Edit lead times inline. Upload CSV to add new ASINs/UPCs.</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn-ghost" onclick="document.getElementById('f-newsku').click()">+ Add SKUs via CSV</button>
+          <input type="file" id="f-newsku" accept=".csv" style="display:none" onchange="handleUpload('newsku',this)">
+          <button class="btn-ghost" onclick="openBulkLT()">⚙ Bulk Lead Times</button>
+        </div>
+      </div>
+      <div style="padding:9px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center">
+        <input class="srch" id="skuSrch" placeholder="Filter SKUs…" oninput="renderSkuTbl()" style="width:220px">
+        <select id="skuBrand" onchange="renderSkuTbl()" style="font-size:11px">
+          <option value="">All Brands</option>
+          <option value="Meowijuana">Meowijuana</option>
+          <option value="Doggijuana">Doggijuana</option>
+          <option value="Kitty Ka-Zoom">Kitty Ka-Zoom</option>
+        </select>
+        <span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text3)" id="skuTblCount"></span>
+      </div>
+      <div class="sku-wrap">
+        <table class="sku-tbl">
+          <thead><tr>
+            <th>Brand</th><th>Region</th><th>ASIN</th><th>Product</th>
+            <th style="text-align:right">Adj/day</th>
+            <th style="text-align:right">FBA Avail</th>
+            <th style="text-align:right">Warehouse</th>
+            <th style="text-align:right">Lead (d)</th>
+            <th style="text-align:right">Safety (d)</th>
+            <th>Supplier</th><th></th>
+          </tr></thead>
+          <tbody id="skuTBody"></tbody>
+        </table>
+      </div>
+      <div class="tpl-row">
+        <div>
+          <div class="tpl-lbl">📋 New SKU upload template</div>
+          <div class="tpl-cols">Required: <code>ASIN</code> <code>Title</code> <code>Brand</code> — Optional: <code>Region</code> <code>UPC</code> <code>MSKU</code> <code>Supplier</code> <code>Lead_Time_Days</code> <code>Safety_Stock_Days</code></div>
+        </div>
+        <button class="btn btn-sm" onclick="dlTemplate()">↓ Template</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- BULK LT MODAL -->
+<div class="modal-ov" id="ltModal">
+  <div class="modal">
+    <h2>⚙ Bulk Lead Time Defaults</h2>
+    <p>Apply default lead times to all SKUs that don't have one set yet. Individual overrides are preserved.</p>
+    <div class="mg">
+      <div class="mf"><label>Meowijuana Lead Time</label><input type="number" id="lt-meow" value="45"></div>
+      <div class="mf"><label>Doggijuana Lead Time</label><input type="number" id="lt-doggi" value="30"></div>
+      <div class="mf"><label>KKZ Lead Time</label><input type="number" id="lt-kkz" value="45"></div>
+      <div class="mf"><label>Meowijuana Safety (d)</label><input type="number" id="ss-meow" value="14"></div>
+      <div class="mf"><label>Doggijuana Safety (d)</label><input type="number" id="ss-doggi" value="14"></div>
+      <div class="mf"><label>KKZ Safety (d)</label><input type="number" id="ss-kkz" value="14"></div>
+    </div>
+    <div class="ma">
+      <button class="btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn" onclick="applyBulkLT()">Apply to Unset SKUs</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// SEED + CONSTANTS
+// ══════════════════════════════════════════════════════
+const SEED = {"records":[{"asin":"B07KPRTSMT","title":"Meowijuana Premium Catnip Spray - 3 oz. | High Potency Formula | Natural Formula for Pet Owners & Multi-Cat Households | Enhance Playtime & Relaxation | Perfect for New Cat Owners","brand":"Meowijuana","units_2yr":150,"daily_2yr":0.21,"daily_v30":65.57,"blended_daily":65.57,"sea_idx":0.96,"adj_daily":62.95,"trend":"\u2191\u2191 Accelerating","need30":1888,"need60":3777,"need90":5666,"need120":7554},{"asin":"B00U869UMK","title":"Meowijuana Good Vibes Kalico Kush | Valerian Root and Catnip Blend | Large Bottle High Potency Blend | Premium Hand Harvested North American Catnip","brand":"Meowijuana","units_2yr":4713,"daily_2yr":6.46,"daily_v30":27.67,"blended_daily":27.67,"sea_idx":0.96,"adj_daily":26.56,"trend":"\u2191\u2191 Accelerating","need30":797,"need60":1594,"need90":2390,"need120":3187},{"asin":"B00U6DJCR8","title":"Meowijuana | Dried Catnip Buds Jar | Premium Organic Catnip | Grown in North America | Perfect for Cat Toys | Fresh Catnip for Extended Playtime | Elevate Your Cat's Enjoyment","brand":"Meowijuana","units_2yr":238,"daily_2yr":0.33,"daily_v30":25.0,"blended_daily":25.0,"sea_idx":0.96,"adj_daily":24.0,"trend":"\u2191\u2191 Accelerating","need30":720,"need60":1440,"need90":2160,"need120":2880},{"asin":"B0CZ7KB218","title":"KITTY KA-ZOOM Catnip Bubbles - 5oz. Bottle with Built-in Wand | High Potency Catnip Bubbles Made from Steam-Distilled Natural Plants | Hand Harvest Grown in Canada and The USA","brand":"Kitty Ka-Zoom","units_2yr":6676,"daily_2yr":9.15,"daily_v30":24.9,"blended_daily":24.9,"sea_idx":0.96,"adj_daily":23.9,"trend":"\u2191\u2191 Accelerating","need30":717,"need60":1434,"need90":2151,"need120":2868},{"asin":"B00U6EGXGK","title":"Meowijuana Purrple Passion - Premium Silvervine and Catnip Blend - Purrfect Gift For Cats, Kitties, Felines, and Cat Lovers","brand":"Meowijuana","units_2yr":5198,"daily_2yr":7.12,"daily_v30":21.8,"blended_daily":21.8,"sea_idx":0.96,"adj_daily":20.93,"trend":"\u2191\u2191 Accelerating","need30":628,"need60":1256,"need90":1884,"need120":2512},{"asin":"B0FX3BPTGQ","title":"Doggijuana Treats for Dogs with Catnip, Chamomile & L-Tryptophan \u2013 Crunchy Reward Bites with Calming Botanicals \u2013 Low Calorie Natural Training Treats, 6 oz (Chicken)","brand":"Doggijuana","units_2yr":4,"daily_2yr":0.01,"daily_v30":12.17,"blended_daily":12.17,"sea_idx":0.96,"adj_daily":11.68,"trend":"\u2191\u2191 Accelerating","need30":350,"need60":701,"need90":1051,"need120":1402},{"asin":"B00U86E6Z6","title":"Meowijuana Meowi-Waui | Bud Shake and Catnip Blend | Large Bottle High Potency Blend | Premium Hand Harvested North American Catnip","brand":"Meowijuana","units_2yr":672,"daily_2yr":0.92,"daily_v30":12.03,"blended_daily":12.03,"sea_idx":0.96,"adj_daily":11.55,"trend":"\u2191\u2191 Accelerating","need30":346,"need60":693,"need90":1040,"need120":1386},{"asin":"B0BCDBGLWB","title":"Doggijuana Juananip\u2122 Refill Bottle (2-Pack) | Hand Harvested Organic Ground Catnip for Dogs | Naturally Calming Support for Anxiety, Stress | Grown in North America","brand":"Doggijuana","units_2yr":6112,"daily_2yr":8.37,"daily_v30":8.7,"blended_daily":8.7,"sea_idx":0.96,"adj_daily":8.35,"trend":"\u2192 Stable","need30":250,"need60":501,"need90":752,"need120":1002},{"asin":"B0CYJY8DJN","title":"KITTY KA-ZOOM ZOOMIE Shark Kicker - Refillable Catnip Toy + Catnip | High Potency Hand Harvested Fresh | Soft Plush for Engaging Play","brand":"Kitty Ka-Zoom","units_2yr":11,"daily_2yr":0.02,"daily_v30":8.57,"blended_daily":8.57,"sea_idx":0.96,"adj_daily":8.23,"trend":"\u2191\u2191 Accelerating","need30":247,"need60":494,"need90":741,"need120":988},{"asin":"B0CZ1R2GGG","title":"KITTY KA-ZOOM Catnip Spray - 4oz. Bottle | High Potency Catnip Spray Made from Steam-Distilled Natural Plants | Hand Harvest Grown in Canada and The USA","brand":"Kitty Ka-Zoom","units_2yr":1152,"daily_2yr":1.58,"daily_v30":8.47,"blended_daily":8.47,"sea_idx":0.96,"adj_daily":8.13,"trend":"\u2191\u2191 Accelerating","need30":244,"need60":488,"need90":732,"need120":976},{"asin":"B07WGHX6M3","title":"Meowijuana Catnibas Catnip Pawty Mix Jar | Premium Cat Nip for Cats with Silvervine, Passion Flower, Chamomile, Dandelion & Valerian Root | High Potency Catnip | 60g","brand":"Meowijuana","units_2yr":1402,"daily_2yr":1.92,"daily_v30":7.77,"blended_daily":7.77,"sea_idx":0.96,"adj_daily":7.46,"trend":"\u2191\u2191 Accelerating","need30":224,"need60":448,"need90":671,"need120":895},{"asin":"B0CYK66K6L","title":"KITTY KA-ZOOM ZOOMIE Crab - Refillable Catnip Toy + Catnip | High Potency Hand Harvested Fresh | Soft Plush for Engaging Play","brand":"Kitty Ka-Zoom","units_2yr":6,"daily_2yr":0.01,"daily_v30":7.57,"blended_daily":7.57,"sea_idx":0.96,"adj_daily":7.27,"trend":"\u2191\u2191 Accelerating","need30":218,"need60":436,"need90":654,"need120":872},{"asin":"B0844RR5FH","title":"Meowijuana Purr-Effect Trio Pack | Purrple Passion, Whisker Tickler and Paw Natural OG Catnip Blends | Large Bottle High Potency Blends | Premium Hand Harvested North American Catnip","brand":"Meowijuana","units_2yr":18,"daily_2yr":0.02,"daily_v30":6.6,"blended_daily":6.6,"sea_idx":0.96,"adj_daily":6.34,"trend":"\u2191\u2191 Accelerating","need30":190,"need60":380,"need90":571,"need120":761},{"asin":"B0FX5STYMK","title":"Doggijuana Treats for Dogs with Catnip, Chamomile & L-Tryptophan \u2013 Crunchy Reward Bites with Calming Botanicals \u2013 Low Calorie Natural Training Treats, 6 oz (Peanut Butter)","brand":"Doggijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":6.2,"blended_daily":6.2,"sea_idx":0.96,"adj_daily":5.95,"trend":"\u2014 Est. only","need30":178,"need60":357,"need90":536,"need120":714},{"asin":"B0D9ZHY9TF","title":"Meowijuana Crunchie Munchie Catnip Treats | Seafood Medley | Made with Organic Catnip | Produced in The USA | Low Calorie Cat Snack","brand":"Meowijuana","units_2yr":1630,"daily_2yr":2.23,"daily_v30":5.93,"blended_daily":5.93,"sea_idx":0.96,"adj_daily":5.69,"trend":"\u2191\u2191 Accelerating","need30":171,"need60":341,"need90":512,"need120":683},{"asin":"B081ZDBFXP","title":"Meowijuana Silvervine Sticks | 4\u201d Chew Sticks for Cats | Promote Healthy Chewing Habits and Dental Health | Freshly Harvested from Silverine Plants","brand":"Meowijuana","units_2yr":2963,"daily_2yr":4.06,"daily_v30":5.57,"blended_daily":5.57,"sea_idx":0.96,"adj_daily":5.35,"trend":"\u2191 Rising","need30":160,"need60":321,"need90":481,"need120":642},{"asin":"B0DKVFG2RF","title":"Meowijuana | Winter Lift Catnip Holiday Blend | Premium Organic Catnip | Grown in North America | Perfect for Cat Toys | Fresh Catnip for Extended Playtime","brand":"Meowijuana","units_2yr":1385,"daily_2yr":1.9,"daily_v30":4.27,"blended_daily":4.27,"sea_idx":0.96,"adj_daily":4.1,"trend":"\u2191\u2191 Accelerating","need30":123,"need60":246,"need90":369,"need120":492},{"asin":"B08ZGL2CNL","title":"Meowijuana Meowi-Waui Bundle | King Size Catnip Rollies and Meowi-Waui | Hand Harvested and Rolled Dried High Potency Catnip | Grown in North America","brand":"Meowijuana","units_2yr":10,"daily_2yr":0.01,"daily_v30":3.47,"blended_daily":3.47,"sea_idx":0.96,"adj_daily":3.33,"trend":"\u2191\u2191 Accelerating","need30":100,"need60":200,"need90":300,"need120":400},{"asin":"B0C1QC5BD4","title":"Doggijuana Juananip\u2122 Refill Jar | Hand Harvested Organic Ground Catnip for Dogs | Naturally Calming for Anxiety, Stress | Grown in The USA (Passionflower & Chamomile)","brand":"Doggijuana","units_2yr":789,"daily_2yr":1.08,"daily_v30":3.13,"blended_daily":3.13,"sea_idx":0.96,"adj_daily":3.0,"trend":"\u2191\u2191 Accelerating","need30":90,"need60":180,"need90":270,"need120":360},{"asin":"B0FX5QPLXL","title":"Doggijuana Treats for Dogs with Catnip, Chamomile & L-Tryptophan \u2013 Crunchy Reward Bites with Calming Botanicals \u2013 Low Calorie Natural Training Treats, 6 oz (Chicken & Peanut Butter 2 Pack)","brand":"Doggijuana","units_2yr":6,"daily_2yr":0.01,"daily_v30":3.1,"blended_daily":3.1,"sea_idx":0.96,"adj_daily":2.98,"trend":"\u2191\u2191 Accelerating","need30":89,"need60":179,"need90":268,"need120":358},{"asin":"B0FR9SSDB3","title":"Meowijuana Catnip & Silvervine Spray Trio - 3 oz | High Potency Formula | Natural Formula for Pet Owners & Multi-Cat Households | Enhance Playtime & Relaxation | Perfect for New Cat Owners","brand":"Meowijuana","units_2yr":29,"daily_2yr":0.04,"daily_v30":3.07,"blended_daily":3.07,"sea_idx":0.96,"adj_daily":2.95,"trend":"\u2191\u2191 Accelerating","need30":88,"need60":177,"need90":266,"need120":354},{"asin":"B0CYJWPGC7","title":"KITTY KA-ZOOM ZOOMIE Jelly Fish - Refillable Catnip Toy + Catnip | High Potency Hand Harvested Fresh Catnip | Soft Plush for Engaging Play","brand":"Kitty Ka-Zoom","units_2yr":27,"daily_2yr":0.04,"daily_v30":2.87,"blended_daily":2.87,"sea_idx":0.96,"adj_daily":2.76,"trend":"\u2191\u2191 Accelerating","need30":83,"need60":166,"need90":248,"need120":331},{"asin":"B0CYJX7L6M","title":"KITTY KA-ZOOM ZOOMIE Snake Kicker - Refillable Catnip Toy + Catnip | High Potency Hand Harvested Fresh | Soft Plush for Engaging Play","brand":"Kitty Ka-Zoom","units_2yr":5,"daily_2yr":0.01,"daily_v30":2.7,"blended_daily":2.7,"sea_idx":0.96,"adj_daily":2.59,"trend":"\u2191\u2191 Accelerating","need30":78,"need60":155,"need90":233,"need120":311},{"asin":"B00UDP417A","title":"Meowijuana Crunchie Munchie Catnip Treats | Chicken | Made with Organic Catnip | Produced in The USA | Low Calorie Cat Snack","brand":"Meowijuana","units_2yr":2923,"daily_2yr":4.0,"daily_v30":2.5,"blended_daily":2.5,"sea_idx":0.96,"adj_daily":2.4,"trend":"\u2193 Slowing","need30":72,"need60":144,"need90":216,"need120":288},{"asin":"B0F1C8BXMS","title":"Doggijuana Tuffer Chewer Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Taco)","brand":"Doggijuana","units_2yr":23,"daily_2yr":0.03,"daily_v30":2.27,"blended_daily":2.27,"sea_idx":0.96,"adj_daily":2.18,"trend":"\u2191\u2191 Accelerating","need30":65,"need60":131,"need90":196,"need120":262},{"asin":"B0BKLWF3JL","title":"Doggijuana Juananip\u2122 Refill Jar | Hand Harvested Organic Ground Catnip for Dogs | Naturally Calming for Anxiety, Stress | Grown in the USA","brand":"Doggijuana","units_2yr":1647,"daily_2yr":2.26,"daily_v30":2.23,"blended_daily":2.23,"sea_idx":0.96,"adj_daily":2.14,"trend":"\u2192 Stable","need30":64,"need60":128,"need90":193,"need120":257},{"asin":"B0CVLK4LTS","title":"Doggijuana Tuffer Chewer Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Sprinkled Donut)","brand":"Doggijuana","units_2yr":549,"daily_2yr":0.75,"daily_v30":2.13,"blended_daily":2.13,"sea_idx":0.96,"adj_daily":2.04,"trend":"\u2191\u2191 Accelerating","need30":61,"need60":122,"need90":184,"need120":245},{"asin":"B0DNLGFDBJ","title":"Meowijuana Jump 'n' Jamb Door Hanging Cat Toy | Funky Monkey | Refillable Interactive Catnip Toy | Promotes Play and Cat Health | Includes Potent Catnip Grown in North America","brand":"Meowijuana","units_2yr":823,"daily_2yr":1.13,"daily_v30":2.1,"blended_daily":2.1,"sea_idx":0.96,"adj_daily":2.02,"trend":"\u2191\u2191 Accelerating","need30":61,"need60":121,"need90":182,"need120":242},{"asin":"B0D9ZLLH9C","title":"Meowijuana Lollies | Silvervine Sticks with Compressed Catnip | 5.5\u201d Chew Sticks for Cats | Promote Healthy Chewing Habits and Dental Health | Freshly Harvested from Silverine Plants","brand":"Meowijuana","units_2yr":20,"daily_2yr":0.03,"daily_v30":1.6,"blended_daily":1.6,"sea_idx":0.96,"adj_daily":1.54,"trend":"\u2191\u2191 Accelerating","need30":46,"need60":92,"need90":139,"need120":185},{"asin":"B0D9PMWQ44","title":"Meowijuana Refillable Cat Toys | Get Silly - Furry Friend Catnip Toys | Includes Potent Hand Harvested Catnip Grown in North America | Promotes Play and Cat Health","brand":"Meowijuana","units_2yr":25,"daily_2yr":0.03,"daily_v30":1.53,"blended_daily":1.53,"sea_idx":0.96,"adj_daily":1.47,"trend":"\u2191\u2191 Accelerating","need30":44,"need60":88,"need90":132,"need120":176},{"asin":"B0CVLJWR4W","title":"Doggijuana Tuffer Chewer Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Pretzel)","brand":"Doggijuana","units_2yr":466,"daily_2yr":0.64,"daily_v30":1.47,"blended_daily":1.47,"sea_idx":0.96,"adj_daily":1.41,"trend":"\u2191\u2191 Accelerating","need30":42,"need60":85,"need90":127,"need120":169},{"asin":"B0CZ2F4G84","title":"KITTY KA-ZOOM Silverine Surge - Catnip & Silvervine Mix | Hand Harvested Fresh Catnip Grown in Canada and The USA","brand":"Kitty Ka-Zoom","units_2yr":1059,"daily_2yr":1.45,"daily_v30":0,"blended_daily":1.45,"sea_idx":0.96,"adj_daily":1.39,"trend":"\u2014 Est. only","need30":42,"need60":83,"need90":125,"need120":167},{"asin":"B08W24837G","title":"Meowijuana Birthjays Bundle | Birthjays Catnip Joints and Get Lit Cake Refillable Toy | Hand Harvested and Rolled Dried High Potency Catnip | Grown in North America","brand":"Meowijuana","units_2yr":3,"daily_2yr":0.0,"daily_v30":1.37,"blended_daily":1.37,"sea_idx":0.96,"adj_daily":1.32,"trend":"\u2014 Est. only","need30":40,"need60":79,"need90":119,"need120":158},{"asin":"B0BV3DYBR3","title":"Meowijuana Catnibas Catnip Pawty Mix with Lemongrass Jar | Value Bulk Jar | Premium High Potency Catnip | Premium Hand Harvested North American Catnip | 60g","brand":"Meowijuana","units_2yr":22,"daily_2yr":0.03,"daily_v30":1.33,"blended_daily":1.33,"sea_idx":0.96,"adj_daily":1.28,"trend":"\u2191\u2191 Accelerating","need30":38,"need60":77,"need90":115,"need120":154},{"asin":"B0DKVHHPDZ","title":"Meowijuana Crunchie Munchie Catnip Treats Bundle | 2 Seafood Medley and 1 Chicken | Made with Organic Catnip | Produced in The USA | Low Calorie Cat Snack","brand":"Meowijuana","units_2yr":735,"daily_2yr":1.01,"daily_v30":1.27,"blended_daily":1.27,"sea_idx":0.96,"adj_daily":1.22,"trend":"\u2191 Rising","need30":37,"need60":73,"need90":110,"need120":146},{"asin":"B0DNV32517","title":"Doggijuana Juananip\u2122 Training Treats | Chicken Flavor | Infused with Premium Organic Ground Catnip for Dogs | Naturally Calming for Anxiety, Stress | Grown in the USA","brand":"Doggijuana","units_2yr":2531,"daily_2yr":3.47,"daily_v30":1.2,"blended_daily":1.2,"sea_idx":0.96,"adj_daily":1.15,"trend":"\u2193\u2193 Declining","need30":34,"need60":69,"need90":103,"need120":138},{"asin":"B0CZ2DYMFN","title":"KITTY KA-ZOOM Super ZOOMIES Mix - 7 Ingredient Catnip Mix | Hand Harvested Fresh Catnip Grown in Canada and The USA","brand":"Kitty Ka-Zoom","units_2yr":332,"daily_2yr":0.45,"daily_v30":1.1,"blended_daily":1.1,"sea_idx":0.96,"adj_daily":1.06,"trend":"\u2191\u2191 Accelerating","need30":32,"need60":64,"need90":95,"need120":127},{"asin":"B0DKVHP6MS","title":"Meowijuana Crunchie Munchie Catnip Treats Bundle | 2 Chicken and 1 Seafood Medley | Made with Organic Catnip | Produced in The USA | Low Calorie Cat Snack","brand":"Meowijuana","units_2yr":895,"daily_2yr":1.23,"daily_v30":1.07,"blended_daily":1.07,"sea_idx":0.96,"adj_daily":1.03,"trend":"\u2193 Slowing","need30":31,"need60":62,"need90":93,"need120":124},{"asin":"B0BGJRCYN8","title":"Doggijuana Refillable Juananip Toy Bundle | Squirrel Bundle | Funny Dog Toy Plush with Catnip and Refill | Calming Aid for Dogs | Interactive Chew Toy for Play","brand":"Doggijuana","units_2yr":782,"daily_2yr":1.07,"daily_v30":0,"blended_daily":1.07,"sea_idx":0.96,"adj_daily":1.03,"trend":"\u2014 Est. only","need30":31,"need60":62,"need90":93,"need120":124},{"asin":"B0B1G3JM4X","title":"Doggijuana Refillable Juananip Toy Bundle | Taco Bundle | Funny Dog Toy Plush with Catnip and Refill | Calming Aid for Dogs | Interactive Chew Toy for Play","brand":"Doggijuana","units_2yr":771,"daily_2yr":1.06,"daily_v30":0,"blended_daily":1.06,"sea_idx":0.96,"adj_daily":1.02,"trend":"\u2014 Est. only","need30":31,"need60":61,"need90":92,"need120":122},{"asin":"B0DNV2YYL1","title":"Doggijuana | Juananip\u2122 Refill Bottle for Dogs | Premium Organic | Naturally Calming | Promotes Relaxation and Encourages Play | Grown in North America","brand":"Doggijuana","units_2yr":1845,"daily_2yr":2.53,"daily_v30":0.9,"blended_daily":0.9,"sea_idx":0.96,"adj_daily":0.86,"trend":"\u2193\u2193 Declining","need30":26,"need60":52,"need90":77,"need120":103},{"asin":"B0CZ1PLPQ9","title":"KITTY KA-ZOOM Catnip Spray - 1oz. Bottle | High Potency Catnip Spray Made from Steam-Distilled Natural Plants | Hand Harvest Grown in Canada and The USA","brand":"Kitty Ka-Zoom","units_2yr":660,"daily_2yr":0.9,"daily_v30":0,"blended_daily":0.9,"sea_idx":0.96,"adj_daily":0.86,"trend":"\u2014 Est. only","need30":26,"need60":52,"need90":77,"need120":103},{"asin":"B01MEEJAML","title":"Meowijuana | King Size Catnip Joints | Organic | Dried Premium Ground Catnip | High Potency | Grown in North America | Feline and Cat Lover Approved","brand":"Meowijuana","units_2yr":233,"daily_2yr":0.32,"daily_v30":0.8,"blended_daily":0.8,"sea_idx":0.96,"adj_daily":0.77,"trend":"\u2191\u2191 Accelerating","need30":23,"need60":46,"need90":69,"need120":92},{"asin":"B0CZ2VWSD3","title":"KITTY KA-ZOOM Valerian Root Roar - Catnip & Valerian Root Mix | Hand Harvested Fresh Catnip Grown in Canada and The USA","brand":"Kitty Ka-Zoom","units_2yr":586,"daily_2yr":0.8,"daily_v30":0,"blended_daily":0.8,"sea_idx":0.96,"adj_daily":0.77,"trend":"\u2014 Est. only","need30":23,"need60":46,"need90":69,"need120":92},{"asin":"B0DQF8R5XL","title":"Meowijuana Catnip & Silvervine Spray - 3 oz | High Potency Formula | Natural Formula for Pet Owners & Multi-Cat Households | Enhance Playtime & Relaxation | Perfect for New Cat Owners","brand":"Meowijuana","units_2yr":1889,"daily_2yr":2.59,"daily_v30":0.73,"blended_daily":0.73,"sea_idx":0.96,"adj_daily":0.7,"trend":"\u2193\u2193 Declining","need30":21,"need60":42,"need90":63,"need120":84},{"asin":"B0DNLVN8JY","title":"Meowijuana Jump 'n' Jamb Door Hanging Cat Toy | Deep Sea Squid | Refillable Interactive Catnip Toy | Promotes Play and Cat Health | Includes Potent Catnip Grown in North America","brand":"Meowijuana","units_2yr":342,"daily_2yr":0.47,"daily_v30":0.73,"blended_daily":0.73,"sea_idx":0.96,"adj_daily":0.7,"trend":"\u2191\u2191 Accelerating","need30":21,"need60":42,"need90":63,"need120":84},{"asin":"B0B1GHMGN2","title":"Doggijuana Refillable Juananip Toy Bundle | Pizza Bundle | Funny Dog Toy Plush with Catnip and Refill | Calming Aid for Dogs | Interactive Chew Toy for Play","brand":"Doggijuana","units_2yr":514,"daily_2yr":0.7,"daily_v30":0,"blended_daily":0.7,"sea_idx":0.96,"adj_daily":0.67,"trend":"\u2014 Est. only","need30":20,"need60":40,"need90":60,"need120":80},{"asin":"B0CVLY7TNZ","title":"Doggijuana Tuffer Chewer Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Dill Pickle)","brand":"Doggijuana","units_2yr":217,"daily_2yr":0.3,"daily_v30":0.63,"blended_daily":0.63,"sea_idx":0.96,"adj_daily":0.6,"trend":"\u2191\u2191 Accelerating","need30":18,"need60":36,"need90":54,"need120":72},{"asin":"B0D9MYHP1P","title":"Meowijuana Kicker Toy for Cats | Get Kickin' Gummy Worm | Refillable Kicker Catnip Toy | Promotes Play and Cat Health | Includes Potent Hand Harvested Catnip Grown in North America","brand":"Meowijuana","units_2yr":11,"daily_2yr":0.02,"daily_v30":0.6,"blended_daily":0.6,"sea_idx":0.96,"adj_daily":0.58,"trend":"\u2191\u2191 Accelerating","need30":17,"need60":35,"need90":52,"need120":70},{"asin":"B08ZHDPPNH","title":"Meowijuana Get Higher Bundle | Get Higher Kite Refillable Toy, King Size Catnip Joints, and Whisker Tickle | Hand Harvested and Rolled Dried High Potency Catnip | Grown in North America","brand":"Meowijuana","units_2yr":30,"daily_2yr":0.04,"daily_v30":0.57,"blended_daily":0.57,"sea_idx":0.96,"adj_daily":0.55,"trend":"\u2191\u2191 Accelerating","need30":16,"need60":33,"need90":50,"need120":66},{"asin":"B0CZ2TDMWV","title":"KITTY KA-ZOOM Zoom Sticks - Silvervine Sticks Covered in Silvervine Fruit | Dental Support Chew for Cats | High Potency Natural Chew Stick for Indoor Cats","brand":"Kitty Ka-Zoom","units_2yr":413,"daily_2yr":0.57,"daily_v30":0,"blended_daily":0.57,"sea_idx":0.96,"adj_daily":0.55,"trend":"\u2014 Est. only","need30":16,"need60":33,"need90":50,"need120":66},{"asin":"B0F1CDR3HS","title":"Doggijuana Tuffer Chewer Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Avocado Toast)","brand":"Doggijuana","units_2yr":15,"daily_2yr":0.02,"daily_v30":0.43,"blended_daily":0.43,"sea_idx":0.96,"adj_daily":0.41,"trend":"\u2191\u2191 Accelerating","need30":12,"need60":25,"need90":37,"need120":49},{"asin":"B0BG3K6JD4","title":"Doggijuana Refillable Juananip Toy Bundle | Barkling Whine Bundle | Funny Dog Toy Plush with Catnip and Refill | Calming Aid for Dogs | Interactive Chew Toy for Play","brand":"Doggijuana","units_2yr":267,"daily_2yr":0.37,"daily_v30":0,"blended_daily":0.37,"sea_idx":0.96,"adj_daily":0.36,"trend":"\u2014 Est. only","need30":11,"need60":22,"need90":32,"need120":43},{"asin":"B0BSMP5RL3","title":"Meowijuana Clawsome Bundle | Get Smoked Refillable Trout Toy and Paw Natural OG Catnip Blend | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":299,"daily_2yr":0.41,"daily_v30":0.33,"blended_daily":0.33,"sea_idx":0.96,"adj_daily":0.32,"trend":"\u2193 Slowing","need30":10,"need60":19,"need90":29,"need120":38},{"asin":"B0DKQ63JJP","title":"Doggijuana Tuffer Chewer Mini Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Gingerbread Cookie)","brand":"Doggijuana","units_2yr":237,"daily_2yr":0.32,"daily_v30":0,"blended_daily":0.32,"sea_idx":0.96,"adj_daily":0.31,"trend":"\u2014 Est. only","need30":9,"need60":19,"need90":28,"need120":37},{"asin":"B0CZ2DX1NW","title":"KITTY KA-ZOOM Catnip Craze - Catnip Mix | Hand Harvested Fresh Catnip Grown in Canada and The USA","brand":"Kitty Ka-Zoom","units_2yr":233,"daily_2yr":0.32,"daily_v30":0,"blended_daily":0.32,"sea_idx":0.96,"adj_daily":0.31,"trend":"\u2014 Est. only","need30":9,"need60":19,"need90":28,"need120":37},{"asin":"B0DNNHG3CM","title":"Meowijuana Kicker Toy for Cats | Get Kickin' Rainbow | Refillable Kicker Catnip Toy | Promotes Play and Cat Health | Includes Potent Hand Harvested Catnip Grown in North America","brand":"Meowijuana","units_2yr":223,"daily_2yr":0.31,"daily_v30":0,"blended_daily":0.31,"sea_idx":0.96,"adj_daily":0.3,"trend":"\u2014 Est. only","need30":9,"need60":18,"need90":27,"need120":36},{"asin":"B08ZGZDYFG","title":"Meowijuana Get Baked Bundle | Get Baked Cookie Refillable Toy, King Size Catnip Joints, and Kalico | Hand Harvested and Rolled Dried High Potency Catnip | Grown in North America","brand":"Meowijuana","units_2yr":25,"daily_2yr":0.03,"daily_v30":0.3,"blended_daily":0.3,"sea_idx":0.96,"adj_daily":0.29,"trend":"\u2191\u2191 Accelerating","need30":9,"need60":17,"need90":26,"need120":35},{"asin":"B0C1QYBG5Y","title":"Meowijuana Pickle Bundle | Get Kickin' Refillable Spicy Pickle Toy and Meowi-Waui Catnip | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":257,"daily_2yr":0.35,"daily_v30":0.3,"blended_daily":0.3,"sea_idx":0.96,"adj_daily":0.29,"trend":"\u2193 Slowing","need30":9,"need60":17,"need90":26,"need120":35},{"asin":"B0DNLQ49TS","title":"Meowijuana | Catnip Filled Cigar Toy | Promotes Play and Cat Health | Includes Organic Catnip Grown in North America | Feline and Cat Lover Approved","brand":"Meowijuana","units_2yr":216,"daily_2yr":0.3,"daily_v30":0,"blended_daily":0.3,"sea_idx":0.96,"adj_daily":0.29,"trend":"\u2014 Est. only","need30":9,"need60":17,"need90":26,"need120":35},{"asin":"B0CLPFTC7K","title":"Meowijuana | Santa's Secret Stash | Holiday Catnip Filled Candy Cane | Winter Lift Catnip Blend | Cat Toys | Promotes Play and Cat Health | Organic Catnip","brand":"Meowijuana","units_2yr":220,"daily_2yr":0.3,"daily_v30":0,"blended_daily":0.3,"sea_idx":0.96,"adj_daily":0.29,"trend":"\u2014 Est. only","need30":9,"need60":17,"need90":26,"need120":35},{"asin":"B0DL1LCWQ3","title":"Meowijuana Refillable Cat Toys | Get Sprung - Ladybug and Mushroom Catnip Toys | Includes Potent Hand Harvested Catnip Grown in North America | Promotes Play and Cat Health","brand":"Meowijuana","units_2yr":239,"daily_2yr":0.33,"daily_v30":0.23,"blended_daily":0.23,"sea_idx":0.96,"adj_daily":0.22,"trend":"\u2193 Slowing","need30":7,"need60":13,"need90":20,"need120":26},{"asin":"B0FR9C8PX5","title":"Meowijuana Chameleon Jump 'n' Jamb Door Hanging Cat Toy and Honeysuckle Haze Catnip Blend | Refillable Interactive Catnip Toy | Catnip Grown in North America","brand":"Meowijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0.23,"blended_daily":0.23,"sea_idx":0.96,"adj_daily":0.22,"trend":"\u2014 Est. only","need30":7,"need60":13,"need90":20,"need120":26},{"asin":"B0FN8FMTZ3","title":"Meowijuana Catnip Rollies King Size | Hand Harvested and Rolled Dried Premium Ground Catnip | High Potency | Grown in North America | Feline and Cat Lover Approved","brand":"Meowijuana","units_2yr":555,"daily_2yr":0.76,"daily_v30":0.2,"blended_daily":0.2,"sea_idx":0.96,"adj_daily":0.19,"trend":"\u2193\u2193 Declining","need30":6,"need60":11,"need90":17,"need120":23},{"asin":"B0DKQDJGBM","title":"Doggijuana Tuffer Chewer Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Candy Cane)","brand":"Doggijuana","units_2yr":146,"daily_2yr":0.2,"daily_v30":0,"blended_daily":0.2,"sea_idx":0.96,"adj_daily":0.19,"trend":"\u2014 Est. only","need30":6,"need60":11,"need90":17,"need120":23},{"asin":"B0BSM9K4CH","title":"Meowijuana Jump 'n' Jamb Door Hanging Cat Toy Bundle | Funky Monkey + Happy Grass Blend | Refillable Interactive Catnip Toy | Promotes Play and Cat Health | Potent Catnip Grown in North America","brand":"Meowijuana","units_2yr":135,"daily_2yr":0.18,"daily_v30":0,"blended_daily":0.18,"sea_idx":0.96,"adj_daily":0.17,"trend":"\u2014 Est. only","need30":5,"need60":10,"need90":15,"need120":20},{"asin":"B0FR9KBCMW","title":"Meowijuana Dragonfly Jump 'n' Jamb Door Hanging Cat Toy and Purrple Passion Catnip Blend | Refillable Interactive Catnip Toy | Catnip Grown in North America","brand":"Meowijuana","units_2yr":48,"daily_2yr":0.07,"daily_v30":0.17,"blended_daily":0.17,"sea_idx":0.96,"adj_daily":0.16,"trend":"\u2191\u2191 Accelerating","need30":5,"need60":10,"need90":14,"need120":19},{"asin":"B0CVLK2521","title":"Doggijuana Tuffer Chewer Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Supreme Pizza)","brand":"Doggijuana","units_2yr":126,"daily_2yr":0.17,"daily_v30":0,"blended_daily":0.17,"sea_idx":0.96,"adj_daily":0.16,"trend":"\u2014 Est. only","need30":5,"need60":10,"need90":14,"need120":19},{"asin":"B0B1FB47XZ","title":"Doggijuana Refillable Juananip Toy Bundle | Cake and Whine Bundle | Funny Dog Toy Plush with Catnip and Refill | Calming Aid for Dogs | Interactive Chew Toy for Play","brand":"Doggijuana","units_2yr":122,"daily_2yr":0.17,"daily_v30":0,"blended_daily":0.17,"sea_idx":0.96,"adj_daily":0.16,"trend":"\u2014 Est. only","need30":5,"need60":10,"need90":14,"need120":19},{"asin":"B0BBNBR49B","title":"Meowijuana | Catnip Bundles | Organic | High Potency Cat Treats | Perfect for Cat Toys | Grown in the USA | Feline and Cat Lover Approved (Cloud 9 Catnip Bottle Bundle)","brand":"Meowijuana","units_2yr":103,"daily_2yr":0.14,"daily_v30":0,"blended_daily":0.14,"sea_idx":0.96,"adj_daily":0.13,"trend":"\u2014 Est. only","need30":4,"need60":8,"need90":12,"need120":16},{"asin":"B0C1T82JL4","title":"Meowijuana Pepper Bundle | Get Kickin' Refillable Chili Pepper Toy and Kalico Kush Catnip Blend | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":94,"daily_2yr":0.13,"daily_v30":0,"blended_daily":0.13,"sea_idx":0.96,"adj_daily":0.12,"trend":"\u2014 Est. only","need30":4,"need60":7,"need90":11,"need120":14},{"asin":"B0C1T8JFHL","title":"Meowijuana Rainbow Bundle | Get Kickin' Refillable Rainbow Toy and Cloud 9 Catnip Blend | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":90,"daily_2yr":0.12,"daily_v30":0,"blended_daily":0.12,"sea_idx":0.96,"adj_daily":0.12,"trend":"\u2014 Est. only","need30":4,"need60":7,"need90":11,"need120":14},{"asin":"B0FH7LWFBR","title":"Meowijuana Jump 'n' Jamb Door Hanging Cat Toy | Chameleon | Refillable Interactive Catnip Toy | Promotes Play and Cat Health | Includes Potent Catnip Grown in North America","brand":"Meowijuana","units_2yr":85,"daily_2yr":0.12,"daily_v30":0,"blended_daily":0.12,"sea_idx":0.96,"adj_daily":0.12,"trend":"\u2014 Est. only","need30":4,"need60":7,"need90":11,"need120":14},{"asin":"B0CVLXZFMC","title":"Doggijuana Tuffer Chewer Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Eggs & Bacon)","brand":"Doggijuana","units_2yr":86,"daily_2yr":0.12,"daily_v30":0,"blended_daily":0.12,"sea_idx":0.96,"adj_daily":0.12,"trend":"\u2014 Est. only","need30":4,"need60":7,"need90":11,"need120":14},{"asin":"B0BL5MM9V5","title":"Meowijuana | Get Stuffed Bundle | Get Stuffed Stocking and Winter Lift | Promotes Play and Cat Health | Includes Organic Catnip | Feline and Cat Lover Approved","brand":"Meowijuana","units_2yr":72,"daily_2yr":0.1,"daily_v30":0,"blended_daily":0.1,"sea_idx":0.96,"adj_daily":0.1,"trend":"\u2014 Est. only","need30":3,"need60":6,"need90":9,"need120":12},{"asin":"B0FVGD1GW6","title":"Doggijuana Holiday Mini Doggi Duo Refillable Juananip Toy Bundle | Gingerbread & Juananip | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew for Play","brand":"Doggijuana","units_2yr":72,"daily_2yr":0.1,"daily_v30":0,"blended_daily":0.1,"sea_idx":0.96,"adj_daily":0.1,"trend":"\u2014 Est. only","need30":3,"need60":6,"need90":9,"need120":12},{"asin":"B0FVGCFNVQ","title":"Meowijuana Get Waddled Bundle | Penguin Refillable Toy and Feline Frost Blend | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":64,"daily_2yr":0.09,"daily_v30":0,"blended_daily":0.09,"sea_idx":0.96,"adj_daily":0.09,"trend":"\u2014 Est. only","need30":3,"need60":5,"need90":8,"need120":11},{"asin":"B0FR9S9G21","title":"Meowijuana Compressed Catnip Ball Trio - Kalico Kush, Purrple Passion, and Whack \u2018n\u2019 Roll | Interactive Cat Toy Refill | Potent Hand Harvested Catnip Grown in North America","brand":"Meowijuana","units_2yr":64,"daily_2yr":0.09,"daily_v30":0,"blended_daily":0.09,"sea_idx":0.96,"adj_daily":0.09,"trend":"\u2014 Est. only","need30":3,"need60":5,"need90":8,"need120":11},{"asin":"B0CVM279DX","title":"Doggijuana Tuffer Chewer Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Grilled Cheese)","brand":"Doggijuana","units_2yr":69,"daily_2yr":0.09,"daily_v30":0,"blended_daily":0.09,"sea_idx":0.96,"adj_daily":0.09,"trend":"\u2014 Est. only","need30":3,"need60":5,"need90":8,"need120":11},{"asin":"B0FRB1CTQQ","title":"Doggijuana Doggi Duo Refillable Juananip Toy Bundle | Pink Donut & Juananip | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew for Play","brand":"Doggijuana","units_2yr":65,"daily_2yr":0.09,"daily_v30":0,"blended_daily":0.09,"sea_idx":0.96,"adj_daily":0.09,"trend":"\u2014 Est. only","need30":3,"need60":5,"need90":8,"need120":11},{"asin":"B0FR8YBNCK","title":"Doggijuana Doggi Duo Refillable Juananip Toy Bundle | Tomahawk & Juananip | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew for Play","brand":"Doggijuana","units_2yr":64,"daily_2yr":0.09,"daily_v30":0,"blended_daily":0.09,"sea_idx":0.96,"adj_daily":0.09,"trend":"\u2014 Est. only","need30":3,"need60":5,"need90":8,"need120":11},{"asin":"B0D4379H26","title":"KITTY KA-ZOOM Crunchy Natural Seafood with Catnip Treats for Cats, 2.75 OZ | Low Calorie Carefully Crafted Treats for Indoor and Outdoor Felines | Hand Harvested Catnip","brand":"Kitty Ka-Zoom","units_2yr":67,"daily_2yr":0.09,"daily_v30":0,"blended_daily":0.09,"sea_idx":0.96,"adj_daily":0.09,"trend":"\u2014 Est. only","need30":3,"need60":5,"need90":8,"need120":11},{"asin":"B0D9PMWC7K","title":"Meowijuana Knock N' Nibble Starfish & Seafood Treat Bundle | Crunchie Munchie Catnip Treats | Refillable Treat Dispensing Toy | Interactive Puzzle Toy for Felines","brand":"Meowijuana","units_2yr":59,"daily_2yr":0.08,"daily_v30":0,"blended_daily":0.08,"sea_idx":0.96,"adj_daily":0.08,"trend":"\u2014 Est. only","need30":2,"need60":5,"need90":7,"need120":10},{"asin":"B0108I6PZC","title":"Meowijuana | 1oz. Premium Catnip Spray | Organic | High Potency | Use On Cat Toys, Teasers, and Scratchers | Grown In North America | Feline and Cat Lover Approved","brand":"Meowijuana","units_2yr":8758,"daily_2yr":12.0,"daily_v30":0.07,"blended_daily":0.07,"sea_idx":0.96,"adj_daily":0.07,"trend":"\u2193\u2193 Declining","need30":2,"need60":4,"need90":6,"need120":8},{"asin":"B0D9PN5XG8","title":"Doggijuana | Tuffer Chewer - Interactive Dog Toy with Juananip Refill | Refillable Durable Dog Toy for Engaging Play and Natural Calming (Tomahawk Steak Toy)","brand":"Doggijuana","units_2yr":48,"daily_2yr":0.07,"daily_v30":0,"blended_daily":0.07,"sea_idx":0.96,"adj_daily":0.07,"trend":"\u2014 Est. only","need30":2,"need60":4,"need90":6,"need120":8},{"asin":"B08455M66Q","title":"Meowijuana | Catnip Bundles | Organic | High Potency Cat Treats | Perfect for Cat Toys | Grown in The USA | Feline and Cat Lover Approved (Mice Dreams Catnip Bottle Bundle)","brand":"Meowijuana","units_2yr":45,"daily_2yr":0.06,"daily_v30":0,"blended_daily":0.06,"sea_idx":0.96,"adj_daily":0.06,"trend":"\u2014 Est. only","need30":2,"need60":4,"need90":5,"need120":7},{"asin":"B0FVG6YHGW","title":"Meowijuana Get Nogged | Eggnog & Get Frosted Sugar Cookies | Refillable Interactive Catnip Toy | Catnip Grown in North America","brand":"Meowijuana","units_2yr":47,"daily_2yr":0.06,"daily_v30":0,"blended_daily":0.06,"sea_idx":0.96,"adj_daily":0.06,"trend":"\u2014 Est. only","need30":2,"need60":4,"need90":5,"need120":7},{"asin":"B0FR9V5YN6","title":"Meowijuana Purrfect Pairing Jump 'n' Jamb Squid Door Hanging Cat Toy and Get Tangled Octopus | Refillable Interactive Catnip Toy | Includes Potent Catnip Grown in North America","brand":"Meowijuana","units_2yr":46,"daily_2yr":0.06,"daily_v30":0,"blended_daily":0.06,"sea_idx":0.96,"adj_daily":0.06,"trend":"\u2014 Est. only","need30":2,"need60":4,"need90":5,"need120":7},{"asin":"B0C1QKDPRM","title":"Meowijuana Strawberry Bundle | Get Sprung Refillable Strawberry Toy and Happy Grass Catnip Blend | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":42,"daily_2yr":0.06,"daily_v30":0,"blended_daily":0.06,"sea_idx":0.96,"adj_daily":0.06,"trend":"\u2014 Est. only","need30":2,"need60":4,"need90":5,"need120":7},{"asin":"B0C1T4VQWV","title":"Meowijuana Blue Blob Bundle | Get Silly Refillable Blue Bob Toy and Whisker Tickler Catnip Blend | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":41,"daily_2yr":0.06,"daily_v30":0,"blended_daily":0.06,"sea_idx":0.96,"adj_daily":0.06,"trend":"\u2014 Est. only","need30":2,"need60":4,"need90":5,"need120":7},{"asin":"B0D9PMPR6J","title":"Meowijuana Knock N' Nibble Avocado & Chicken Treat Bundle | Crunchie Munchie Low Calorie Catnip Treats | Refillable Treat Dispensing Toy | Interactive Puzzle Toy for Felines","brand":"Meowijuana","units_2yr":35,"daily_2yr":0.05,"daily_v30":0,"blended_daily":0.05,"sea_idx":0.96,"adj_daily":0.05,"trend":"\u2014 Est. only","need30":2,"need60":3,"need90":4,"need120":6},{"asin":"B0D9PP78X9","title":"Doggijuana Tuffer Chewer Mini Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Watermelon Slice)","brand":"Doggijuana","units_2yr":40,"daily_2yr":0.05,"daily_v30":0,"blended_daily":0.05,"sea_idx":0.96,"adj_daily":0.05,"trend":"\u2014 Est. only","need30":2,"need60":3,"need90":4,"need120":6},{"asin":"B0D9PNZBSV","title":"Doggijuana Get the Munchies Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Cheeseburger)","brand":"Doggijuana","units_2yr":39,"daily_2yr":0.05,"daily_v30":0,"blended_daily":0.05,"sea_idx":0.96,"adj_daily":0.05,"trend":"\u2014 Est. only","need30":2,"need60":3,"need90":4,"need120":6},{"asin":"B0D4312MXF","title":"KITTY KA-ZOOM Crunchy Natural Chicken with Catnip Treats for Cats, 2.75 OZ | Low Calorie Carefully Crafted Treats for Indoor and Outdoor Felines | Hand Harvested Catnip","brand":"Kitty Ka-Zoom","units_2yr":35,"daily_2yr":0.05,"daily_v30":0,"blended_daily":0.05,"sea_idx":0.96,"adj_daily":0.05,"trend":"\u2014 Est. only","need30":2,"need60":3,"need90":4,"need120":6},{"asin":"B0C1QV5B9P","title":"Meowijuana Jump 'n' Jamb Door Hanging Cat Toy | Sloth | Refillable Interactive Catnip Toy | Promotes Play and Cat Health | Includes Potent Catnip Grown in North America","brand":"Meowijuana","units_2yr":32,"daily_2yr":0.04,"daily_v30":0,"blended_daily":0.04,"sea_idx":0.96,"adj_daily":0.04,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":4,"need120":5},{"asin":"B0BBND4WFP","title":"Meowijuana | Catnip Bundles | Organic | High Potency Cat Treats | Perfect for Cat Toys | Grown in the USA | Feline and Cat Lover Approved (Honeysuckle Catnip Bottle Bundle)","brand":"Meowijuana","units_2yr":31,"daily_2yr":0.04,"daily_v30":0,"blended_daily":0.04,"sea_idx":0.96,"adj_daily":0.04,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":4,"need120":5},{"asin":"B0C1T81NMW","title":"Meowijuana Ruby Rascal Bundle | Get Silly Refillable Ruby Rascal Toy and Sierra Sunshine Catnip Blend | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":32,"daily_2yr":0.04,"daily_v30":0,"blended_daily":0.04,"sea_idx":0.96,"adj_daily":0.04,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":4,"need120":5},{"asin":"B0BSMC7RWX","title":"Meowijuana Get a Rise Bundle | Get a Rise Refillable Balloon Toy and Cloud 9 Catnip Blend | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":31,"daily_2yr":0.04,"daily_v30":0,"blended_daily":0.04,"sea_idx":0.96,"adj_daily":0.04,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":4,"need120":5},{"asin":"B0D9PNJZSJ","title":"Doggijuana Get the Munchies Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Donut)","brand":"Doggijuana","units_2yr":26,"daily_2yr":0.04,"daily_v30":0,"blended_daily":0.04,"sea_idx":0.96,"adj_daily":0.04,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":4,"need120":5},{"asin":"B0FR8Y4GLX","title":"Doggijuana Cafe Combo Refillable Juananip Toy Bundle | Dill Pickle & Chicken Wing | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew for Play","brand":"Doggijuana","units_2yr":32,"daily_2yr":0.04,"daily_v30":0,"blended_daily":0.04,"sea_idx":0.96,"adj_daily":0.04,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":4,"need120":5},{"asin":"B0FR9TPTZ6","title":"Doggijuana Cafe Combo Refillable Juananip Toy Bundle | Tomahawk Steak & Grilled Kebab | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew for Play","brand":"Doggijuana","units_2yr":27,"daily_2yr":0.04,"daily_v30":0,"blended_daily":0.04,"sea_idx":0.96,"adj_daily":0.04,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":4,"need120":5},{"asin":"B0FR8YBTVZ","title":"Doggijuana Mini Doggi Duo Refillable Juananip Toy Bundle | Corn Dog & Juananip | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew for Play","brand":"Doggijuana","units_2yr":26,"daily_2yr":0.04,"daily_v30":0,"blended_daily":0.04,"sea_idx":0.96,"adj_daily":0.04,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":4,"need120":5},{"asin":"B0FRB13L5W","title":"Doggijuana Cafe Combo Refillable Juananip Toy Bundle | Supreme Pizza & Pepperoni Pizza | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew for Play","brand":"Doggijuana","units_2yr":27,"daily_2yr":0.04,"daily_v30":0,"blended_daily":0.04,"sea_idx":0.96,"adj_daily":0.04,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":4,"need120":5},{"asin":"B0DL72SKBS","title":"Meowijuana Sprinkle 'n' Scratch | Rainbow Trout Hanging Cardboard Cat Scratching Post | Interactive Feline Nail Health and Scratcher for Homes with Multiple Felines","brand":"Meowijuana","units_2yr":23,"daily_2yr":0.03,"daily_v30":0,"blended_daily":0.03,"sea_idx":0.96,"adj_daily":0.03,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":3,"need120":4},{"asin":"B0BBNKH9V7","title":"Meowijuana | Catnip Bundles | Organic | High Potency Cat Treats | Perfect for Cat Toys | Grown in The USA | Feline and Cat Lover Approved (Thyme Out Catnip Bottle Bundle)","brand":"Meowijuana","units_2yr":25,"daily_2yr":0.03,"daily_v30":0,"blended_daily":0.03,"sea_idx":0.96,"adj_daily":0.03,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":3,"need120":4},{"asin":"B0FGKK9FFG","title":"Meowijuana Compressed Catnip Ball Refill - 2 Pack | Kalico Kush | Interactive Cat Toy Refill | Potent Hand Harvested Catnip Grown in North America","brand":"Meowijuana","units_2yr":23,"daily_2yr":0.03,"daily_v30":0,"blended_daily":0.03,"sea_idx":0.96,"adj_daily":0.03,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":3,"need120":4},{"asin":"B0G3D2DLJW","title":"Meowijuana Crunchie Munchie Catnip Treats | Salmon, Seafood, Chicken Trio | Made with Organic Catnip | Produced in The USA | Low Calorie Cat Snack","brand":"Meowijuana","units_2yr":22,"daily_2yr":0.03,"daily_v30":0,"blended_daily":0.03,"sea_idx":0.96,"adj_daily":0.03,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":3,"need120":4},{"asin":"B0F6B4BXJR","title":"Meowijuana Knock N' Nibble Avocado | Refillable Treat Dispensing Toy Cat | Promotes Play and Cat Health | Interactive Puzzle Toy for Felines","brand":"Meowijuana","units_2yr":23,"daily_2yr":0.03,"daily_v30":0,"blended_daily":0.03,"sea_idx":0.96,"adj_daily":0.03,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":3,"need120":4},{"asin":"B0C1QWRDT8","title":"Meowijuana Lady Bug Bundle | Get Sprung Refillable Lady Bug Toy and Garden Pawty Catnip Blend | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":19,"daily_2yr":0.03,"daily_v30":0,"blended_daily":0.03,"sea_idx":0.96,"adj_daily":0.03,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":3,"need120":4},{"asin":"B00UDP42NS","title":"Meowijuana Men's Baseball Design T-Shirt X-Large Charcoal","brand":"Meowijuana","units_2yr":20,"daily_2yr":0.03,"daily_v30":0,"blended_daily":0.03,"sea_idx":0.96,"adj_daily":0.03,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":3,"need120":4},{"asin":"B0D9PN1VZP","title":"Doggijuana Tuffer Chewer Mini Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Chicken Wing)","brand":"Doggijuana","units_2yr":19,"daily_2yr":0.03,"daily_v30":0,"blended_daily":0.03,"sea_idx":0.96,"adj_daily":0.03,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":3,"need120":4},{"asin":"B0DB2RWF26","title":"Doggijuana Tuffer Chewer Mini Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Bagel)","brand":"Doggijuana","units_2yr":20,"daily_2yr":0.03,"daily_v30":0,"blended_daily":0.03,"sea_idx":0.96,"adj_daily":0.03,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":3,"need120":4},{"asin":"B0D9PQD6HG","title":"Doggijuana Get the Munchies Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Taco)","brand":"Doggijuana","units_2yr":19,"daily_2yr":0.03,"daily_v30":0,"blended_daily":0.03,"sea_idx":0.96,"adj_daily":0.03,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":3,"need120":4},{"asin":"B0FR9V5PVR","title":"Doggijuana Cafe Combo Refillable Juananip Toy Bundle | Avocado Toast & Everything Bagel | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew for Play","brand":"Doggijuana","units_2yr":25,"daily_2yr":0.03,"daily_v30":0,"blended_daily":0.03,"sea_idx":0.96,"adj_daily":0.03,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":3,"need120":4},{"asin":"B0FRND4C83","title":"Doggijuana Tuffer Chewer Mini Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Werewolf)","brand":"Doggijuana","units_2yr":24,"daily_2yr":0.03,"daily_v30":0,"blended_daily":0.03,"sea_idx":0.96,"adj_daily":0.03,"trend":"\u2014 Est. only","need30":1,"need60":2,"need90":3,"need120":4},{"asin":"B0D9PMWYGM","title":"Meowijuana Refillable Cat Toys | Get Bubbly - Tropical Fish Catnip Toys | Includes Potent Hand Harvested Catnip Grown in North America | Promotes Play and Cat Health","brand":"Meowijuana","units_2yr":11,"daily_2yr":0.02,"daily_v30":0,"blended_daily":0.02,"sea_idx":0.96,"adj_daily":0.02,"trend":"\u2014 Est. only","need30":1,"need60":1,"need90":2,"need120":2},{"asin":"B0FGL9Q5W2","title":"Meowijuana Stick 'n' Lick Compressed Catnip - 2 Pack | Purrple Passion | Interactive Cat Toy | Potent Hand Harvested Catnip Grown in North America","brand":"Meowijuana","units_2yr":13,"daily_2yr":0.02,"daily_v30":0,"blended_daily":0.02,"sea_idx":0.96,"adj_daily":0.02,"trend":"\u2014 Est. only","need30":1,"need60":1,"need90":2,"need120":2},{"asin":"B0FGLJHD3N","title":"Meowijuana Kicker Toy for Cats | Get Kickin' Big Fishy Tourist | Refillable Kicker Catnip Toy | Promotes Play and Cat Health | Includes Potent Hand Harvested Catnip Grown in North America","brand":"Meowijuana","units_2yr":18,"daily_2yr":0.02,"daily_v30":0,"blended_daily":0.02,"sea_idx":0.96,"adj_daily":0.02,"trend":"\u2014 Est. only","need30":1,"need60":1,"need90":2,"need120":2},{"asin":"B0FGKQY7SM","title":"Meowijuana Compressed Catnip Ball Refill - 2 Pack | Purrple Passion | Interactive Cat Toy Refill | Potent Hand Harvested Catnip Grown in North America","brand":"Meowijuana","units_2yr":18,"daily_2yr":0.02,"daily_v30":0,"blended_daily":0.02,"sea_idx":0.96,"adj_daily":0.02,"trend":"\u2014 Est. only","need30":1,"need60":1,"need90":2,"need120":2},{"asin":"B0FGLQ32YD","title":"Meowijuana Whack 'n' Roll Compressed Catnip Ball with Cage | Purple Passion | Interactive Cat Toy with Feather | Potent Hand Harvested Catnip Grown in North America","brand":"Meowijuana","units_2yr":13,"daily_2yr":0.02,"daily_v30":0,"blended_daily":0.02,"sea_idx":0.96,"adj_daily":0.02,"trend":"\u2014 Est. only","need30":1,"need60":1,"need90":2,"need120":2},{"asin":"B0F69Y3YKP","title":"Meowijuana Knock N' Nibble Starfish | Refillable Treat Dispensing Cat Toy | Promotes Play and Cat Health | Interactive Puzzle Toy for Felines","brand":"Meowijuana","units_2yr":12,"daily_2yr":0.02,"daily_v30":0,"blended_daily":0.02,"sea_idx":0.96,"adj_daily":0.02,"trend":"\u2014 Est. only","need30":1,"need60":1,"need90":2,"need120":2},{"asin":"B0FR9GXP8K","title":"Meowijuana Purrfect Pairings | Refillable Treat Dispensing Cat Toys | Promotes Play and Cat Health | Interactive Puzzle Toy for Felines - Get Kickin' Gummy Worm & Knock 'n' Nibble Gummy Bear","brand":"Meowijuana","units_2yr":11,"daily_2yr":0.02,"daily_v30":0,"blended_daily":0.02,"sea_idx":0.96,"adj_daily":0.02,"trend":"\u2014 Est. only","need30":1,"need60":1,"need90":2,"need120":2},{"asin":"B0D9PP514H","title":"Doggijuana Tuffer Chewer Mini Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Corn Dog)","brand":"Doggijuana","units_2yr":15,"daily_2yr":0.02,"daily_v30":0,"blended_daily":0.02,"sea_idx":0.96,"adj_daily":0.02,"trend":"\u2014 Est. only","need30":1,"need60":1,"need90":2,"need120":2},{"asin":"B0D9PPS4HV","title":"Doggijuana Get the Munchies Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Ice Cream Pup Cup)","brand":"Doggijuana","units_2yr":11,"daily_2yr":0.02,"daily_v30":0,"blended_daily":0.02,"sea_idx":0.96,"adj_daily":0.02,"trend":"\u2014 Est. only","need30":1,"need60":1,"need90":2,"need120":2},{"asin":"B0C5PC6FJK","title":"Doggijuana Bundle - Interactive Dog Toy with Juananip Refill - Includes Refillable Durable Catnip Dog Toy & Organic Catnip Refill for Natural Calming - Engaging and Relaxing Pet Play (Eggs and Bacon)","brand":"Doggijuana","units_2yr":12,"daily_2yr":0.02,"daily_v30":0,"blended_daily":0.02,"sea_idx":0.96,"adj_daily":0.02,"trend":"\u2014 Est. only","need30":1,"need60":1,"need90":2,"need120":2},{"asin":"B08ZHSFPT4","title":"Meowijuana Sleepy Time Bundle | Get Hung Refillable Moon and Stars Toy and Mice Dreams Catnip Blend | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":5,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0D9PNDC1Q","title":"Meowijuana Refillable Cat Toys | Get Hungry - Burger and Fries Catnip Toys | Includes Potent Hand Harvested Catnip Grown in North America | Promotes Play and Cat Health","brand":"Meowijuana","units_2yr":10,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0D9PN38GG","title":"Meowijuana Refillable Cat Toys | Get Spacey - Planet and Meteor Catnip Toys | Includes Potent Hand Harvested Catnip Grown in North America | Promotes Play and Cat Health","brand":"Meowijuana","units_2yr":5,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0FGKNPX45","title":"Meowijuana Stick 'n' Lick Compressed Catnip - 2 Pack | Kalico Kush | Interactive Cat Toy | Potent Hand Harvested Catnip Grown in North America","brand":"Meowijuana","units_2yr":7,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0FRNCSD5T","title":"Meowijuana Get Spooked Bundle | Scarecrow Refillable Toy and Harvest Moon Blend | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":4,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0FRNB2VVV","title":"Meowijuana Refillable Cat Toys | Get Spooked - Scarecrow Catnip Toy | Includes Potent Hand Harvested Catnip Grown in North America | Promotes Play and Cat Health","brand":"Meowijuana","units_2yr":4,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0FRN7CMR6","title":"Meowijuana Fall Favorites Bundle | Pumpkin Spice Latte Refillable Toy, Harvest Moon Blend, Pumpkin Knock \u2018n\u2019 Nibble Toy, Chicken Crunchie Munchie Treats | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":4,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0FGLJ4MR2","title":"Meowijuana Jump 'n' Jamb Door Hanging Cat Toy | Dragonfly | Refillable Interactive Catnip Toy | Promotes Play and Cat Health | Includes Potent Catnip Grown in North America","brand":"Meowijuana","units_2yr":7,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0FR9M6H7P","title":"Meowijuana Knock N' Nibble Pumpkin & ChickenTreat Bundle | Crunchie Munchie Catnip Treats | Refillable Treat Dispensing Toy | Interactive Puzzle Toy for Felines","brand":"Meowijuana","units_2yr":7,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0G3D17RJ1","title":"Meowijuana Crunchie Munchie Catnip Treats | Salmon Trio | Made with Organic Catnip | Produced in The USA | Low Calorie Cat Snack","brand":"Meowijuana","units_2yr":4,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0953MFF7F","title":"","brand":"Doggijuana","units_2yr":5,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0D9PPT37N","title":"Doggijuana Tuffer Chewer Mini Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Pretzel Ring)","brand":"Doggijuana","units_2yr":9,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0D9PNF71P","title":"Doggijuana Tuffer Chewer Mini Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Pupcorn)","brand":"Doggijuana","units_2yr":4,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0D9PPH8PC","title":"Doggijuana Tuffer Chewer Mini Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Kebab)","brand":"Doggijuana","units_2yr":10,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0FVG84MDR","title":"Doggijuana Holiday Mini Doggi Duo Refillable Juananip Toy Bundle | Stocking & Juananip | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew for Play","brand":"Doggijuana","units_2yr":10,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0FVGBRKTG","title":"Doggijuana Tuffer Chewer Holiday Plush Dog Toy Bundle | Funny Dog Toy Plush with Juananip Catnip for Dogs (Mini Stocking Stuffer, Candy Cane)","brand":"Doggijuana","units_2yr":9,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0FR9HC3VG","title":"Doggijuana Cafe Combo Refillable Juananip Toy Bundle | Grilled Cheese & Corn Dog | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew for Play","brand":"Doggijuana","units_2yr":8,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0BFT9VH89","title":"Doggijuana | Durable and Adjustable Hemp Dog Collar and Leash Bundle | Medium Collar/Large Leash","brand":"Doggijuana","units_2yr":4,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0DHWG175S","title":"KITTY KA-ZOOM Shark Toy and Seafood Treat Bundle for Cats | High Potency Hand Harvested Fresh Catnip | Soft Plush for Engaging Play | Low Calorie Carefully Crafted Treats","brand":"Kitty Ka-Zoom","units_2yr":4,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0DHWJSYZN","title":"KITTY KA-ZOOM Jellyfish Toy and Seafood Treat Bundle for Cats | High Potency Hand Harvested Fresh Catnip | Soft Plush for Engaging Play | Low Calorie Carefully Crafted Treats","brand":"Kitty Ka-Zoom","units_2yr":6,"daily_2yr":0.01,"daily_v30":0,"blended_daily":0.01,"sea_idx":0.96,"adj_daily":0.01,"trend":"\u2014 Est. only","need30":0,"need60":1,"need90":1,"need120":1},{"asin":"B0DKVNCGJ6","title":"Meowijuana | Feline Frost Catnip Holiday Blend | Premium Organic Catnip | Grown in North America | Perfect for Cat Toys | Fresh Catnip for Extended Playtime","brand":"Meowijuana","units_2yr":3,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B017ME6VMW","title":"Meowijuana | Cigar Box | Grand Daddy Purr Catnip Buds | Premium Organic Catnip | Grown in North America | Perfect for Cat Toys","brand":"Meowijuana","units_2yr":2,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0BSMQF7C5","title":"Meowijuana Honey Bee Bundle | Get Buzzed Honey Bee Wand Toy and Honeysuckle Haze Catnip Blend | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":3,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0BL5P83QD","title":"Meowijuana | Get Twisted Bundle | Get Twisted Candy Cane and Winter Lift | Promotes Play and Cat Health | Includes Organic Catnip | Feline and Cat Lover Approved","brand":"Meowijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0DYKD1S8V","title":"Meowijuana Knock N' Nibble Strawberry | Refillable Treat Dispensing Cat Toy | Promotes Play and Cat Health | Interactive Puzzle Toy for Felines","brand":"Meowijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0BL5KYLQR","title":"Meowijuana | Furry and Bright Bundle | Get Blitzed Reindeer and Winter Lift | Promotes Play and Cat Health | Includes Organic Catnip | Feline and Cat Lover Approved","brand":"Meowijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0BSMBZN6Y","title":"Meowijuana Jump 'n' Jamb Door Hanging Cat Toy Bundle | Deep Sea Squid + Sierra Sunshine Blend | Refillable Interactive Catnip Toy | Promotes Play and Cat Health | Potent Catnip Grown in North America","brand":"Meowijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FVG7WJFK","title":"Meowijuana Knock N' Nibble Winter Buddy & Seafood Treat Bundle | Crunchie Munchie Catnip Treats | Refillable Treat Dispensing Toy | Interactive Puzzle Toy for Felines","brand":"Meowijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FGLNL5L6","title":"Meowijuana Refillable Cat Toys | Get Paired - Wine and Cheese Catnip Toys | Includes Potent Hand Harvested Catnip Grown in North America | Promotes Play and Cat Health","brand":"Meowijuana","units_2yr":3,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FR8XSWS2","title":"Meowijuana Refillable Cat Toys | Get Silly Trio - 3 Pack Catnip Toys | Includes Potent Hand Harvested Catnip Grown in North America | Promotes Play and Cat Health","brand":"Meowijuana","units_2yr":3,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FR9CD1CG","title":"Meowijuana Purrfect Pairings Sprinkle 'n' Scratch Rainbow Trout Hanging Cardboard Cat Scratching Post and Get Smoked Rainbow Trout Toy | Refillable Interactive Catnip Toy","brand":"Meowijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FR9GYG6K","title":"Meowijuana Refillable Cat Toys | Grill \u2018n\u2019 Thrill - 3 Pack Catnip Toys | Includes Potent Hand Harvested Catnip Grown in North America | Promotes Play and Cat Health","brand":"Meowijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FFTS34FF","title":"Meowijuana Knock N' Nibble Gummy Bear | Refillable Treat Dispensing Cat Toy | Promotes Play and Cat Health | Interactive Puzzle Toy for Felines","brand":"Meowijuana","units_2yr":3,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FRNBPRG1","title":"Meowijuana Refillable Cat Toys | Get Spooked - Pumpkin Catnip Toy | Includes Potent Hand Harvested Catnip Grown in North America | Promotes Play and Cat Health","brand":"Meowijuana","units_2yr":2,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FRN7J7SF","title":"Meowijuana Refillable Cat Toys | Get Spooked - Pumpkin Spice Latte Catnip Toy | Includes Potent Hand Harvested Catnip Grown in North America | Promotes Play and Cat Health","brand":"Meowijuana","units_2yr":2,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FRN7KHHB","title":"Meowijuana Get Spooked Bundle | Pumpkin Spice Latte Refillable Toy and Harvest Moon Blend | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":3,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FRNB8QDX","title":"Meowijuana Get Spooked Bundle | Pumpkin Refillable Toy and Harvest Moon Blend | Promotes Play and Cat Health | Includes North American Organic Catnip","brand":"Meowijuana","units_2yr":2,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FRTSWB9J","title":"Meowijuana Knock N' Nibble Pumpkin | Refillable Treat Dispensing Cat Toy | Promotes Play and Cat Health | Interactive Puzzle Toy for Felines","brand":"Meowijuana","units_2yr":2,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FRN7PVFJ","title":"Meowijuana Refillable Cat Toys | Get Spooked Bundle - Scarecrow, Pumpkin, Pumpkin Spice Latte Catnip Toys | Includes Potent Hand Harvested Catnip Grown in North America | Promotes Play","brand":"Meowijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0D9PMQQG1","title":"Doggijuana Tuffer Chewer Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Beer Mug Toy)","brand":"Doggijuana","units_2yr":3,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FR8Y827Y","title":"Doggijuana Mini Doggi Duo Refillable Juananip Toy Bundle | Watermelon Slice & Juananip | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew for Play","brand":"Doggijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FRB1W9CG","title":"Doggijuana Cozy Cafe Combo Refillable Juananip Toy Bundle | Candy Cane & Gingerbread | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew for Play","brand":"Doggijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FR9V1JRC","title":"Doggijuana Doggi Duo Refillable Juananip Toy Bundle | Mini P & Beer | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew Toy for Play","brand":"Doggijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FVGGLQNZ","title":"Doggijuana Tuffer Chewer Mini Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs (Stocking Stuffer)","brand":"Doggijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FR9S57CN","title":"Doggijuana Cafe Combo Refillable Juananip Toy Bundle | Twisted Pretzel & Pretzel Ring | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew Toy for Play","brand":"Doggijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FRNC5B73","title":"Doggijuana Tuffer Chewer Howl-ween Bundle Mini Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs (Werewolf, Pumpkin Spice Latte, Jack O\u2019 Lantern)","brand":"Doggijuana","units_2yr":3,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FRND18GC","title":"Doggijuana Tuffer Chewer Mini Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Jack O\u2019 Lantern)","brand":"Doggijuana","units_2yr":3,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0C5PFK3ZM","title":"Doggijuana Bundle - Interactive Dog Toy with Juananip Refill - Includes Refillable Durable Catnip Dog Toy & Organic Catnip Refill for Natural Calming - Engaging and Relaxing Pet Play (Grilled Cheese)","brand":"Doggijuana","units_2yr":2,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FRNDPMXG","title":"Doggijuana Tuffer Chewer Mini Plush Dog Toy | Funny Dog Toy Plush with Juananip Catnip for Dogs | Calming Aid for Dogs | Interactive Squeaky Chew Toy for Play (Pumpkin Spice Latte)","brand":"Doggijuana","units_2yr":2,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0BFT9VH8B","title":"Doggijuana | Durable and Adjustable Hemp Dog Collar and Leash Bundle | Extra Small Collar/Medium Leash","brand":"Doggijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0FR9MHXGW","title":"Doggijuana Mini Doggi Duo Refillable Juananip Toy Bundle | Pumpkin Spice Latte & Juananip w/Chamomile Refill | Funny Dog Toy Plush with Catnip and Refill | Interactive Chew for Play","brand":"Doggijuana","units_2yr":1,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0},{"asin":"B0DHWGQYSC","title":"KITTY KA-ZOOM Snake Toy and Chicken Treat Bundle for Cats | High Potency Hand Harvested Fresh Catnip | Soft Plush for Engaging Play | Low Calorie Carefully Crafted Treats","brand":"Kitty Ka-Zoom","units_2yr":2,"daily_2yr":0.0,"daily_v30":0,"blended_daily":0.0,"sea_idx":0.96,"adj_daily":0.0,"trend":"\u2014 Est. only","need30":0,"need60":0,"need90":0,"need120":0}],"seasonal":{"1":0.75,"2":0.78,"3":0.8,"4":0.82,"5":0.85,"6":0.87,"7":0.88,"8":0.88,"9":0.9,"10":0.92,"11":0.93,"12":0.93,"13":0.95,"14":0.95,"15":0.96,"16":0.96,"17":0.98,"18":0.98,"19":1.0,"20":1.0,"21":1.0,"22":1.0,"23":1.02,"24":1.02,"25":1.05,"26":1.05,"27":1.08,"28":1.1,"29":1.05,"30":1.02,"31":1.0,"32":0.98,"33":1.0,"34":1.02,"35":1.05,"36":1.08,"37":1.2,"38":1.35,"39":1.5,"40":1.65,"41":1.9,"42":2.1,"43":2.4,"44":2.8,"45":3.2,"46":3.5,"47":3.2,"48":2.8,"49":2.4,"50":2.0,"51":2.5,"52":1.5}};
+const SHEET_ID = '1yi8jiH7Lh-5XrdJJWp6DrJ2oGyL3OklriIEhv9-V71s';
+
+const LS_LT  = 'sp_lt_v2';
+const LS_INV = 'sp_inv_v2';
+const LS_LR  = 'sp_lr_v2';
+
+let records = [];
+let sortKey = 'adj_daily', sortDir = -1;
+let fBrand='', fRegion='', fStatus='', fHorizon=90, srchTerm='';
+
+// ══════════════════════════════════════════════════════
+// STORAGE HELPERS
+// ══════════════════════════════════════════════════════
+const save = (k,v) => { try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} };
+const load = (k,d) => { try{ const v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } };
+
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
+function init() {
+  records = JSON.parse(JSON.stringify(SEED.records));
+
+  // Apply stored inventory
+  const inv = load(LS_INV, {});
+  records.forEach(r => {
+    const k = r.asin + (r.region||'US');
+    const s = inv[k] || inv[r.asin] || {};
+    r.fba_available = s.fba || 0;
+    r.fba_inbound   = s.inbound || 0;
+    r.warehouse     = s.wh || 0;
+    r.total_onhand  = (s.fba||0) + (s.inbound||0) + (s.wh||0);
+  });
+
+  // Apply stored lead times
+  const lt = load(LS_LT, {});
+  records.forEach(r => {
+    const s = lt[r.asin] || {};
+    r.lead_time    = s.lt || 0;
+    r.safety_stock = s.ss || 14;
+    r.supplier     = s.sup || '';
+  });
+
+  // Region — all seed records are US; CA added via upload
+  records.forEach(r => { if (!r.region) r.region = 'US'; });
+
+  // Restore freshness UI
+  const lr = load(LS_LR, {});
+  if (lr.restock) { document.getElementById('last-restock').textContent = '✓ Last: ' + new Date(lr.restock).toLocaleDateString(); }
+  if (lr.shopify) { document.getElementById('last-shopify').textContent = '✓ Last: ' + new Date(lr.shopify).toLocaleDateString(); }
+  if (lr.caRestock) { document.getElementById('last-caRestock').textContent = '✓ Last: ' + new Date(lr.caRestock).toLocaleDateString(); }
+  if (lr.restock || lr.shopify) {
+    const latest = new Date(Math.max(...[lr.restock,lr.shopify].filter(Boolean).map(d=>new Date(d))));
+    setFreshBadge('Updated ' + latest.toLocaleDateString('en-US',{month:'short',day:'numeric'}), true);
+    document.getElementById('refreshLabel').textContent = 'Last updated: ' + latest.toLocaleDateString();
+  }
+
+  initQ4();
+  renderAll();
+  renderSkuTbl();
+
+  // Auto-connect Google Sheets on load
+  connectSheets(false);
+}
+
+// ══════════════════════════════════════════════════════
+// GOOGLE SHEETS — auto-connect
+// ══════════════════════════════════════════════════════
+async function connectSheets(showErrors) {
+  const sheetId = document.getElementById('sheetIdInput').value.trim() || SHEET_ID;
+  const statusEl = document.getElementById('sheetsStatus');
+  statusEl.innerHTML = '<span class="spin"></span>';
+  statusEl.className = 'sheets-status ss-loading';
+
+  // Try multiple tab name variants (the tab could be named slightly differently)
+  const tabNames = ['5_Forecast_Engine', 'Forecast_Engine', '5_Forecast Engine', 'Forecast Engine'];
+  let success = false;
+
+  for (const tab of tabNames) {
+    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
+    try {
+      const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!resp.ok) continue;
+      const text = await resp.text();
+      if (!text || text.trim().startsWith('<') || text.length < 200) continue;
+      // Got valid CSV
+      const updated = parseSheetCSV(text);
+      if (updated > 0) {
+        statusEl.textContent = `✓ Sheet connected — ${updated} SKUs live`;
+        statusEl.className = 'sheets-status ss-ok';
+        setFreshBadge('Live · ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), true);
+        document.getElementById('refreshLabel').textContent = 'Live from Google Sheets · ' + new Date().toLocaleDateString();
+        success = true;
+        break;
+      }
+    } catch(e) { /* try next tab */ }
+  }
+
+  if (!success) {
+    // Try Inventory Snapshot tab as fallback
+    const invUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('2_Inventory_Snapshot')}`;
+    try {
+      const resp = await fetch(invUrl, { signal: AbortSignal.timeout(8000) });
+      if (resp.ok) {
+        const text = await resp.text();
+        if (text && !text.trim().startsWith('<') && text.length > 100) {
+          const updated = parseInventorySnapshotCSV(text);
+          if (updated > 0) {
+            statusEl.textContent = `✓ Inventory Snapshot loaded — ${updated} SKUs`;
+            statusEl.className = 'sheets-status ss-ok';
+            setFreshBadge('Live · ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), true);
+            success = true;
+          }
+        }
+      }
+    } catch(e) {}
+  }
+
+  if (!success) {
+    statusEl.textContent = showErrors
+      ? '✗ Could not reach sheet — check sharing settings (Anyone on internet → Viewer)'
+      : 'Using cached/seed data';
+    statusEl.className = showErrors ? 'sheets-status ss-err' : 'sheets-status ss-loading';
+  }
+
+  renderAll();
+}
+
+// ── Parse Forecast Engine tab ──
+function parseSheetCSV(csv) {
+  const lines = csv.split('\n').filter(l => l.trim());
+  if (lines.length < 4) return 0;
+
+  // Find the data header row (contains MSKU / Adj / Total On Hand etc)
+  let hIdx = -1, headers = [];
+  for (let i = 0; i < Math.min(lines.length, 5); i++) {
+    const row = parseCSV(lines[i]);
+    const joined = row.join(' ').toLowerCase();
+    if (joined.includes('msku') || joined.includes('total on') || joined.includes('adj')) {
+      hIdx = i; headers = row.map(h => h.toLowerCase().replace(/[^a-z0-9]/g,'_')); break;
+    }
+  }
+  if (hIdx < 0) return 0;
+
+  const ci = n => headers.findIndex(h => h.includes(n));
+  const asinCol  = ci('asin');
+  const totalCol = ci('total_on');
+  const fbaCol   = ci('fba_av');
+  const inbCol   = ci('fba_in');
+  const ltCol    = ci('lead_time');
+  const ssCol    = ci('safety');
+
+  if (asinCol < 0) return 0;
+
+  let updated = 0;
+  const inv = load(LS_INV, {});
+  const lt  = load(LS_LT, {});
+
+  for (let i = hIdx + 1; i < lines.length; i++) {
+    const row = parseCSV(lines[i]);
+    const asin = clean(row[asinCol]);
+    if (!asin || asin.length < 8) continue;
+    const rec = records.find(r => r.asin === asin);
+    if (!rec) continue;
+
+    const fba     = pNum(row[fbaCol]);
+    const inbound = pNum(row[inbCol]);
+    const total   = pNum(row[totalCol]) || fba + inbound;
+    const ltDays  = pNum(row[ltCol]);
+    const ssDays  = pNum(row[ssCol]) || 14;
+
+    rec.fba_available = fba;
+    rec.fba_inbound   = inbound;
+    rec.total_onhand  = total;
+
+    if (ltDays > 0 && rec.lead_time === 0) {
+      rec.lead_time    = ltDays;
+      rec.safety_stock = ssDays;
+      lt[asin] = { lt: ltDays, ss: ssDays, sup: rec.supplier||'' };
+    }
+
+    inv[asin] = { fba, inbound, wh: rec.warehouse||0 };
+    updated++;
+  }
+
+  save(LS_INV, inv);
+  save(LS_LT, lt);
+  return updated;
+}
+
+// ── Parse Inventory Snapshot tab ──
+function parseInventorySnapshotCSV(csv) {
+  const lines = csv.split('\n').filter(l => l.trim());
+  if (lines.length < 3) return 0;
+
+  // Row 1 = title, Row 2 = headers
+  const headers = parseCSV(lines[1] || lines[0]).map(h => h.toLowerCase().replace(/[^a-z0-9]/g,'_'));
+  const ci = n => headers.findIndex(h => h.includes(n));
+  const mskuCol   = ci('msku');
+  const asinCol   = ci('asin');
+  const fbaCol    = ci('fba_av');
+  const inbCol    = ci('fba_in');
+  const whCol     = ci('warehouse');
+  const totalCol  = ci('total_on');
+
+  if (asinCol < 0 && mskuCol < 0) return 0;
+
+  let updated = 0;
+  const inv = load(LS_INV, {});
+
+  for (let i = 2; i < lines.length; i++) {
+    const row = parseCSV(lines[i]);
+    const asin = clean(row[asinCol] || row[mskuCol] || '');
+    if (!asin) continue;
+    const rec = records.find(r => r.asin === asin);
+    if (!rec) continue;
+
+    const fba     = pNum(row[fbaCol]);
+    const inbound = pNum(row[inbCol]);
+    const wh      = pNum(row[whCol]);
+    const total   = pNum(row[totalCol]) || fba + inbound + wh;
+
+    rec.fba_available = fba;
+    rec.fba_inbound   = inbound;
+    rec.warehouse     = wh;
+    rec.total_onhand  = total;
+    inv[asin] = { fba, inbound, wh };
+    updated++;
+  }
+
+  save(LS_INV, inv);
+  return updated;
+}
+
+// ══════════════════════════════════════════════════════
+// FILE UPLOADS
+// ══════════════════════════════════════════════════════
+function handleUpload(type, input) {
+  const file = (input.files||[])[0]; if (!file) return;
+  const stEl = document.getElementById('st-'+type);
+  if (stEl) { stEl.innerHTML = '<span class="spin"></span>'; stEl.className = 'dz-st dz-ld'; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      if (type==='restock')   parseRestock(e.target.result, 'US');
+      if (type==='caRestock') parseRestock(e.target.result, 'CA');
+      if (type==='shopify')   parseShopify(e.target.result);
+      if (type==='newsku')    parseNewSKU(e.target.result);
+    } catch(err) {
+      if (stEl) { stEl.textContent = '✗ ' + err.message; stEl.className = 'dz-st dz-err'; }
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// Drag & drop
+['dz-restock','dz-shopify','dz-caRestock'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('over'));
+  el.addEventListener('drop', e => {
+    e.preventDefault(); el.classList.remove('over');
+    const file = e.dataTransfer.files[0]; if (!file) return;
+    const type = id==='dz-restock'?'restock':id==='dz-shopify'?'shopify':'caRestock';
+    handleUpload(type, {files:[file]});
+  });
+});
+
+function parseRestock(text, region) {
+  const lines = text.split('\n');
+  let hIdx = -1, headers = [];
+  for (let i=0; i<Math.min(lines.length,6); i++) {
+    const row = parseCSV(lines[i]);
+    if (row.some(h => h.toLowerCase().includes('asin'))) {
+      hIdx=i; headers=row.map(h=>h.toLowerCase().trim()); break;
+    }
+  }
+  if (hIdx<0) throw new Error('ASIN column not found — is this a Restock Inventory report?');
+
+  const ci = n => headers.findIndex(h=>h.includes(n));
+  const asinCol = ci('asin'), availCol = ci('available'), inbCol = ci('inbound'), v30Col = ci('units sold last 30');
+  const inv = load(LS_INV, {});
+  let matched = 0;
+
+  for (let i=hIdx+1; i<lines.length; i++) {
+    const row = parseCSV(lines[i]);
+    if (!row || row.length < 3) continue;
+    const asin = clean(row[asinCol]);
+    if (!asin || asin.length < 8) continue;
+
+    const fba     = pNum(row[availCol]);
+    const inbound = pNum(row[inbCol]);
+    const v30     = pNum(row[v30Col]);
+
+    // Find or create record for this region
+    let rec = records.find(r => r.asin===asin && r.region===region);
+    if (!rec && region==='CA') {
+      // Clone US record as CA
+      const usRec = records.find(r => r.asin===asin && r.region==='US');
+      if (usRec) {
+        rec = { ...JSON.parse(JSON.stringify(usRec)), region:'CA', fba_available:0, fba_inbound:0, warehouse:0, total_onhand:0 };
+        records.push(rec);
+      }
+    }
+    if (!rec) rec = records.find(r => r.asin===asin);
+    if (!rec) continue;
+
+    rec.fba_available = fba;
+    rec.fba_inbound   = inbound;
+    rec.total_onhand  = fba + inbound + (rec.warehouse||0);
+    rec.region = region;
+
+    if (v30 > 0) {
+      rec.daily_v30   = parseFloat((v30/30).toFixed(2));
+      rec.blended_daily = rec.daily_v30;
+      rec.adj_daily   = parseFloat((rec.blended_daily * rec.sea_idx).toFixed(2));
+      rec.need30  = Math.round(rec.adj_daily * 30);
+      rec.need60  = Math.round(rec.adj_daily * 60);
+      rec.need90  = Math.round(rec.adj_daily * 90);
+      rec.need120 = Math.round(rec.adj_daily * 120);
+    }
+
+    inv[asin+(region||'US')] = { fba, inbound, wh: rec.warehouse||0 };
+    matched++;
+  }
+
+  save(LS_INV, inv);
+  const lr = load(LS_LR,{}); lr[region==='CA'?'caRestock':'restock'] = new Date().toISOString(); save(LS_LR,lr);
+  const stEl = document.getElementById('st-'+(region==='CA'?'caRestock':'restock'));
+  if (stEl) { stEl.textContent = `✓ ${matched} ${region} SKUs updated`; stEl.className = 'dz-st dz-ok'; }
+  document.getElementById('last-'+(region==='CA'?'caRestock':'restock')).textContent = 'Last: '+new Date().toLocaleDateString();
+  setFreshBadge('Updated '+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'}), true);
+  renderAll(); renderSkuTbl();
+}
+
+function parseShopify(text) {
+  const lines = text.split('\n');
+  if (lines.length<2) throw new Error('File appears empty');
+  const headers = parseCSV(lines[0]).map(h=>h.toLowerCase().trim());
+  const ci = n => headers.findIndex(h=>h.includes(n));
+  const skuCol=ci('sku'), ohCol=ci('on hand'), locCol=ci('location'), availCol=ci('available');
+  if (skuCol<0) throw new Error('SKU column not found');
+
+  const whMap = {};
+  for (let i=1; i<lines.length; i++) {
+    const row = parseCSV(lines[i]); if (!row||row.length<3) continue;
+    const loc = clean(row[locCol]||'');
+    // Only process Office/warehouse rows; skip Printful/other fulfillment
+    if (loc && (loc.toLowerCase().includes('printful') || loc.toLowerCase().includes('amazon'))) continue;
+    const sku = clean(row[skuCol]); if (!sku) continue;
+    const oh  = pNum(row[ohCol]);
+    if (!isNaN(oh)) whMap[sku] = (whMap[sku]||0) + oh;
+  }
+
+  const inv = load(LS_INV,{});
+  let matched = 0;
+  Object.entries(whMap).forEach(([sku,qty]) => {
+    const rec = records.find(r => r.asin===sku || (r.msku && r.msku===sku));
+    if (rec) {
+      rec.warehouse   = qty;
+      rec.total_onhand = (rec.fba_available||0) + (rec.fba_inbound||0) + qty;
+      if (!inv[rec.asin]) inv[rec.asin] = {};
+      inv[rec.asin].wh = qty;
+      matched++;
+    }
+  });
+
+  save(LS_INV,inv);
+  const lr=load(LS_LR,{}); lr.shopify=new Date().toISOString(); save(LS_LR,lr);
+  document.getElementById('st-shopify').textContent = `✓ ${matched} SKUs warehouse stock updated`;
+  document.getElementById('st-shopify').className = 'dz-st dz-ok';
+  document.getElementById('last-shopify').textContent = 'Last: '+new Date().toLocaleDateString();
+  renderAll(); renderSkuTbl();
+}
+
+function parseNewSKU(text) {
+  const lines = text.split('\n').filter(l=>l.trim());
+  if (lines.length<2) throw new Error('File empty');
+  const headers = parseCSV(lines[0]).map(h=>h.toLowerCase().replace(/\s+/g,'_'));
+  const ci = n => headers.findIndex(h=>h.includes(n));
+  const asinC=ci('asin'), titleC=ci('title'), brandC=ci('brand'),
+        ltC=ci('lead_time'), ssC=ci('safety'), supC=ci('supplier'), regC=ci('region');
+  if (asinC<0||titleC<0) throw new Error('ASIN and Title columns required');
+
+  const lt = load(LS_LT,{});
+  let added=0, updated=0;
+  for (let i=1; i<lines.length; i++) {
+    const row = parseCSV(lines[i]);
+    const asin=clean(row[asinC]), title=clean(row[titleC]);
+    if (!asin||!title) continue;
+    const brand   = brandC>=0 ? clean(row[brandC]) : 'Unknown';
+    const region  = regC>=0 ? (clean(row[regC])||'US') : 'US';
+    const ltDays  = ltC>=0  ? pNum(row[ltC]) : 0;
+    const ssDays  = ssC>=0  ? pNum(row[ssC]) : 14;
+    const sup     = supC>=0 ? clean(row[supC]) : '';
+    const existing = records.find(r=>r.asin===asin&&r.region===region);
+    if (existing) {
+      if (ltDays>0) existing.lead_time=ltDays;
+      if (sup) existing.supplier=sup;
+      updated++;
+    } else {
+      const wk = new Date().getDay();
+      records.push({ asin,title,brand,region,units_2yr:0,daily_2yr:0,daily_v30:0,blended_daily:0,
+        sea_idx:SEED.seasonal[wk]||1.0,adj_daily:0,trend:'— New SKU',
+        need30:0,need60:0,need90:0,need120:0,
+        fba_available:0,fba_inbound:0,warehouse:0,total_onhand:0,
+        lead_time:ltDays||0,safety_stock:ssDays||14,supplier:sup });
+      added++;
+    }
+    if (ltDays>0||sup) lt[asin]={lt:ltDays,ss:ssDays,sup};
+  }
+  save(LS_LT,lt);
+  alert(`✓ Added ${added} new SKUs, updated ${updated}.`);
+  renderAll(); renderSkuTbl();
+}
+
+// ══════════════════════════════════════════════════════
+// COMPUTE
+// ══════════════════════════════════════════════════════
+function getStatus(r) {
+  if (!r.total_onhand && !r.lead_time) return 'nodata';
+  if (r.total_onhand < r.need30)  return 'order-now';
+  if (r.total_onhand < r.need60)  return 'order-soon';
+  if (r.total_onhand < r['need'+fHorizon]) return 'plan';
+  return 'ok';
+}
+
+function poDL(r, h) {
+  if (!r.lead_time) return null;
+  const d=new Date(); d.setDate(d.getDate()+h-r.lead_time-(r.safety_stock||14)); return d;
+}
+
+function dUntil(d) { return d ? Math.ceil((d-new Date())/864e5) : null; }
+
+// ══════════════════════════════════════════════════════
+// Q4
+// ══════════════════════════════════════════════════════
+function initQ4() {
+  const bf = new Date(new Date().getFullYear(), 10, 28);
+  const wks = Math.ceil((bf-new Date())/(7*864e5));
+  document.getElementById('q4Num').textContent   = wks>0?wks:'🔴';
+  document.getElementById('q4Title').textContent = wks>0?'Q4 Peak Season Planning':'🔴 Peak Season Active';
+  document.getElementById('q4Sub').textContent   = wks<=0
+    ? 'Black Friday peak is active. 3–3.5× normal velocity. Replenish aggressively.'
+    : wks<=8
+    ? `⚠️ ${wks} weeks to peak — SKUs with 60+ day lead times need POs PLACED NOW.`
+    : `${wks} weeks until Black Friday (W45). Use 120-day column to plan Q4 supplier orders.`;
+}
+
+// ══════════════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════════════
+function applyFilters() {
+  fBrand  = document.getElementById('fBrand').value;
+  fRegion = document.getElementById('fRegion').value;
+  fStatus = document.getElementById('fStatus').value;
+  fHorizon= parseInt(document.getElementById('fHorizon').value);
+  srchTerm= document.getElementById('srchInput').value.toLowerCase();
+  renderAll();
+}
+
+function renderAll() { renderScorecards(); renderTable(); }
+
+function getVisible() {
+  return records.filter(r => {
+    if (fBrand  && r.brand!==fBrand)              return false;
+    if (fRegion && (r.region||'US')!==fRegion)    return false;
+    if (fStatus && getStatus(r)!==fStatus)        return false;
+    if (srchTerm && !(r.title+r.asin+(r.supplier||'')).toLowerCase().includes(srchTerm)) return false;
+    return true;
+  }).sort((a,b) => {
+    let va=a[sortKey], vb=b[sortKey];
+    if (sortKey==='status') { va=getStatus(a); vb=getStatus(b); }
+    if (typeof va==='string') return sortDir*va.localeCompare(vb||'');
+    return sortDir*((va||0)-(vb||0));
+  });
+}
+
+function renderScorecards() {
+  const vis=getVisible();
+  let n=0,s=0,p=0,ok=0,nd=0,vel=0;
+  vis.forEach(r=>{ const st=getStatus(r); if(st==='order-now')n++; else if(st==='order-soon')s++; else if(st==='plan')p++; else if(st==='ok')ok++; else nd++; vel+=r.adj_daily; });
+  document.getElementById('scorecards').innerHTML=`
+    <div class="sc sc-red"><div class="sc-lbl">Order Now</div><div class="sc-val">${n}</div><div class="sc-sub">Below 30-day need</div></div>
+    <div class="sc sc-orange"><div class="sc-lbl">Order Soon</div><div class="sc-val">${s}</div><div class="sc-sub">Gap opens at 60d</div></div>
+    <div class="sc sc-yellow"><div class="sc-lbl">Plan Ahead</div><div class="sc-val">${p}</div><div class="sc-sub">Gap at ${fHorizon}d</div></div>
+    <div class="sc sc-green"><div class="sc-lbl">Covered</div><div class="sc-val">${ok}</div><div class="sc-sub">Through ${fHorizon}d</div></div>
+    <div class="sc sc-blue"><div class="sc-lbl">Velocity/day</div><div class="sc-val">${Math.round(vel).toLocaleString()}</div><div class="sc-sub">${vis.length} SKUs shown</div></div>
+    <div class="sc sc-purple"><div class="sc-lbl">No Inv Data</div><div class="sc-val">${nd}</div><div class="sc-sub">Upload restock report</div></div>`;
+}
+
+function renderTable() {
+  const vis=getVisible();
+  document.getElementById('recCount').textContent=`${vis.length} of ${records.length} SKUs`;
+  const cols=[
+    {k:'brand',l:'Brand',cls:'tl',w:'76px'},{k:'region',l:'Rgn',cls:'tl',w:'46px'},
+    {k:'title',l:'Product',cls:'tl',w:'220px'},{k:'asin',l:'ASIN',cls:'tl',w:'100px'},
+    {k:'adj_daily',l:'Adj /day',w:'62px'},{k:'trend',l:'Trend',w:'108px'},{k:'sea_idx',l:'Sea ×',w:'50px'},
+    {k:'need30',l:'30d',w:'60px'},{k:'need60',l:'60d',w:'60px'},{k:'need90',l:'90d',w:'60px'},{k:'need120',l:'120d',w:'60px'},
+    {k:'total_onhand',l:'On Hand',w:'68px'},{k:'fba_available',l:'FBA Avail',w:'68px'},
+    {k:'gap30',l:'30d Gap',w:'68px'},{k:'gap90',l:'90d Gap',w:'68px'},
+    {k:'lead_time',l:'Lead (d)',w:'62px'},{k:'po90',l:'PO By',w:'98px'},{k:'status',l:'Status',w:'104px'},
+  ];
+  document.getElementById('colRow').innerHTML=cols.map(c=>
+    `<th class="${c.cls||''} ${sortKey===c.k?'sorted':''}" onclick="setSort('${c.k}')" style="min-width:${c.w}">
+      ${c.l}<span class="si">${sortKey===c.k?(sortDir>0?'↑':'↓'):'↕'}</span></th>`).join('');
+  if (!vis.length){
+    document.getElementById('tBody').innerHTML=`<tr><td colspan="18" class="empty"><h3>No matching SKUs</h3>Adjust filters.</td></tr>`;
+    return;
+  }
+  document.getElementById('tBody').innerHTML=vis.map(r=>{
+    const st=getStatus(r);
+    const g30=r.total_onhand>0?r.need30-r.total_onhand:null;
+    const g90=r.total_onhand>0?r.need90-r.total_onhand:null;
+    const po90=poDL(r,90), po90d=dUntil(po90);
+    const cc=r.brand==='Meowijuana'?'c-meow':r.brand==='Doggijuana'?'c-doggi':'c-kkz';
+    const bl=r.brand==='Kitty Ka-Zoom'?'KKZ':r.brand.slice(0,6);
+    const tc=r.trend.includes('↑↑')?'t-up2':r.trend.includes('↑')?'t-up1':r.trend.includes('↓↓')?'t-dn2':r.trend.includes('↓')?'t-dn1':'t-flat';
+    const sc2=r.sea_idx>=2.5?'sea-pk':r.sea_idx>=1.5?'sea-hi':r.sea_idx>=1.1?'sea-mid':'sea-lo';
+    const gC=g=>{
+      if(g===null) return '<td class="gap-ok">—</td>';
+      if(g>0) return `<td class="${g>r.need30?'gap-crit':'gap-warn'}">+${g.toLocaleString()}</td>`;
+      return `<td class="gap-ok">${Math.abs(g).toLocaleString()} surplus</td>`;
+    };
+    let poC='<td class="po-ok">—</td>';
+    if(po90&&r.lead_time>0){
+      const cls=po90d<0?'po-over':po90d<14?'po-crit':po90d<30?'po-soon':'po-ok';
+      const lbl=po90d<0?`${Math.abs(po90d)}d overdue`:po90d===0?'Today':`${po90d}d`;
+      poC=`<td class="${cls}" title="${po90.toLocaleDateString()}">${po90.toLocaleDateString('en-US',{month:'short',day:'numeric'})} <small style="opacity:.65">(${lbl})</small></td>`;
+    }
+    const sb={'order-now':['s-now','🔴 Order Now'],'order-soon':['s-soon','🟡 Order Soon'],'plan':['s-plan','⚠️ Plan Ahead'],'ok':['s-ok','🟢 OK'],'nodata':['s-nd','— No Data']}[st];
+    const nm=r.title.length>50?r.title.slice(0,47)+'…':r.title;
+    const reg=r.region||'US';
+    return `<tr class="ani">
+      <td class="tl"><span class="chip ${cc}">${bl}</span></td>
+      <td class="tl"><span class="rtag rtag-${reg.toLowerCase()}">${reg}</span></td>
+      <td class="tl"><div class="pname" title="${r.title.replace(/"/g,'&quot;')}">${nm}</div></td>
+      <td class="tl"><span class="pasin">${r.asin}</span></td>
+      <td><span class="num num-hi">${r.adj_daily}</span></td>
+      <td><span class="tc ${tc}">${r.trend}</span></td>
+      <td><span class="${sc2}">${r.sea_idx}×</span></td>
+      <td class="num">${r.need30.toLocaleString()}</td>
+      <td class="num">${r.need60.toLocaleString()}</td>
+      <td class="num num-hi">${r.need90.toLocaleString()}</td>
+      <td class="num">${r.need120.toLocaleString()}</td>
+      <td class="num ${r.total_onhand>0?'num-hi':''}">${r.total_onhand>0?r.total_onhand.toLocaleString():'—'}</td>
+      <td class="num">${r.fba_available>0?r.fba_available.toLocaleString():'—'}</td>
+      ${gC(g30)}${gC(g90)}
+      <td><input class="lt-in" type="number" value="${r.lead_time||''}" placeholder="—" min="0" max="365"
+          onchange="updateField('${r.asin}','lt',this.value)"></td>
+      ${poC}
+      <td><span class="sbadge ${sb[0]}">${sb[1]}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function setSort(k){ sortKey===k?sortDir*=-1:(sortKey=k,sortDir=-1); renderTable(); }
+
+function updateField(asin,field,val){
+  const r=records.find(r=>r.asin===asin); if(!r) return;
+  const n=parseInt(val)||0;
+  if(field==='lt') r.lead_time=n; else r.safety_stock=n;
+  const lt=load(LS_LT,{});
+  if(!lt[asin]) lt[asin]={lt:r.lead_time,ss:r.safety_stock,sup:r.supplier||''};
+  lt[asin][field==='lt'?'lt':'ss']=n;
+  save(LS_LT,lt); renderTable(); renderScorecards();
+}
+
+// ══════════════════════════════════════════════════════
+// SKU TABLE
+// ══════════════════════════════════════════════════════
+function renderSkuTbl(){
+  const q=(document.getElementById('skuSrch')||{}).value?.toLowerCase()||'';
+  const bf=(document.getElementById('skuBrand')||{}).value||'';
+  const vis=records.filter(r=>{
+    if(bf&&r.brand!==bf) return false;
+    if(q&&!(r.title+r.asin+(r.supplier||'')).toLowerCase().includes(q)) return false;
+    return true;
+  });
+  document.getElementById('skuTblCount').textContent=`${vis.length} SKUs`;
+  document.getElementById('skuCount').textContent=records.length+' SKUs';
+  document.getElementById('skuTBody').innerHTML=vis.map(r=>{
+    const cc=r.brand==='Meowijuana'?'c-meow':r.brand==='Doggijuana'?'c-doggi':'c-kkz';
+    const bl=r.brand==='Kitty Ka-Zoom'?'KKZ':r.brand.slice(0,6);
+    const nm=r.title.length>44?r.title.slice(0,41)+'…':r.title;
+    const reg=r.region||'US';
+    return `<tr>
+      <td><span class="chip ${cc}">${bl}</span></td>
+      <td><span class="rtag rtag-${reg.toLowerCase()}">${reg}</span></td>
+      <td style="font-family:var(--mono);font-size:10px;color:var(--text3)">${r.asin}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;color:var(--text)" title="${r.title}">${nm}</td>
+      <td style="text-align:right;font-family:var(--mono);color:var(--sp-green2)">${r.adj_daily||'—'}</td>
+      <td style="text-align:right;font-family:var(--mono)">${r.fba_available>0?r.fba_available.toLocaleString():'—'}</td>
+      <td style="text-align:right;font-family:var(--mono)">${r.warehouse>0?r.warehouse.toLocaleString():'—'}</td>
+      <td style="text-align:right"><input class="lt-cell" type="number" value="${r.lead_time||''}" placeholder="—"
+          onchange="updateField('${r.asin}','lt',this.value)"></td>
+      <td style="text-align:right"><input class="lt-cell" type="number" value="${r.safety_stock||14}"
+          onchange="updateField('${r.asin}','ss',this.value)"></td>
+      <td style="font-size:11px;color:var(--text2)">${r.supplier||'—'}</td>
+      <td><button class="del-btn" onclick="delSKU('${r.asin}','${reg}')">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function delSKU(asin,region){
+  if(!confirm(`Remove ${asin} (${region}) from forecast?`)) return;
+  records=records.filter(r=>!(r.asin===asin&&(r.region||'US')===region));
+  const lt=load(LS_LT,{}); delete lt[asin]; save(LS_LT,lt);
+  renderAll(); renderSkuTbl();
+}
+
+// ══════════════════════════════════════════════════════
+// BULK LT MODAL
+// ══════════════════════════════════════════════════════
+function openBulkLT(){ document.getElementById('ltModal').classList.add('open'); }
+function closeModal(){ document.getElementById('ltModal').classList.remove('open'); }
+document.getElementById('ltModal').addEventListener('click',e=>{ if(e.target===e.currentTarget) closeModal(); });
+
+function applyBulkLT(){
+  const defs={
+    'Meowijuana':   {lt:+document.getElementById('lt-meow').value||45, ss:+document.getElementById('ss-meow').value||14},
+    'Doggijuana':   {lt:+document.getElementById('lt-doggi').value||30, ss:+document.getElementById('ss-doggi').value||14},
+    'Kitty Ka-Zoom':{lt:+document.getElementById('lt-kkz').value||45,  ss:+document.getElementById('ss-kkz').value||14},
+  };
+  const lt=load(LS_LT,{});
+  records.forEach(r=>{
+    if(!r.lead_time||r.lead_time===0){
+      const d=defs[r.brand]; if(!d) return;
+      r.lead_time=d.lt; r.safety_stock=d.ss;
+      lt[r.asin]={lt:d.lt,ss:d.ss,sup:r.supplier||''};
+    }
+  });
+  save(LS_LT,lt); closeModal(); renderAll(); renderSkuTbl();
+}
+
+// ══════════════════════════════════════════════════════
+// EXPORT + TEMPLATE
+// ══════════════════════════════════════════════════════
+function exportCSV(){
+  const vis=getVisible();
+  const today=new Date().toISOString().slice(0,10);
+  const hdr='Brand,Region,ASIN,Title,Adj Vel/day,Trend,Sea Idx,Need 30d,Need 60d,Need 90d,Need 120d,On Hand,FBA Avail,Warehouse,Gap 30d,Gap 90d,Lead Time,Safety Stock,PO Deadline 90d,Status';
+  const rows=vis.map(r=>{
+    const g30=r.total_onhand>0?r.need30-r.total_onhand:'';
+    const g90=r.total_onhand>0?r.need90-r.total_onhand:'';
+    const po=poDL(r,90);
+    return [r.brand,r.region||'US',r.asin,`"${r.title.replace(/"/g,'""')}"`,r.adj_daily,r.trend,r.sea_idx,r.need30,r.need60,r.need90,r.need120,r.total_onhand||'',r.fba_available||'',r.warehouse||'',g30,g90,r.lead_time||'',r.safety_stock||'',po?po.toLocaleDateString():'',getStatus(r)].join(',');
+  });
+  const blob=new Blob([[hdr,...rows].join('\n')],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`smarterpaw-forecast-${today}.csv`; a.click();
+}
+
+function dlTemplate(){
+  const csv=`ASIN,MSKU,UPC,Title,Brand,Region,Supplier,Lead_Time_Days,Safety_Stock_Days\nB0EXAMPLE1,MSKU001,012345678901,My New Product,Meowijuana,US,Supplier Co,45,14\nB0EXAMPLE2,MSKU002,012345678902,Another Product,Doggijuana,CA,Other Supplier,30,7`;
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='smarterpaw_new_sku_template.csv'; a.click();
+}
+
+// ══════════════════════════════════════════════════════
+// PAGE NAV
+// ══════════════════════════════════════════════════════
+function showPage(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(id==='data') renderSkuTbl();
+}
+
+function setFreshBadge(text,live){
+  const el=document.getElementById('freshBadge');
+  el.textContent=text; el.className='badge'+(live?' live':'');
+}
+
+// ══════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════
+function parseCSV(line){
+  const res=[]; let cur='',inQ=false;
+  for(let i=0;i<(line||'').length;i++){
+    const c=line[i];
+    if(c==='"'){inQ=!inQ;}
+    else if(c===','&&!inQ){res.push(cur);cur='';}
+    else cur+=c;
+  }
+  res.push(cur); return res;
+}
+function clean(s){ return s?s.replace(/^"|"$/g,'').trim():''; }
+function pNum(s){ if(!s&&s!==0) return 0; const n=parseFloat(String(s).replace(/[",\s]/g,'')); return isNaN(n)?0:n; }
+
+// ══════════════════════════════════════════════════════
+// START
+// ══════════════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>
