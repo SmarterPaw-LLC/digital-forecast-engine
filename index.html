@@ -450,8 +450,8 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
   </div>
 </header>
 
-<!-- SHEETS BAR -->
-<div class="sheets-bar">
+<!-- SHEETS BAR hidden - using Supabase -->
+<div class="sheets-bar" style="display:none">
   <span class="sheets-label">Google Sheet ID</span>
   <input class="sheets-id" id="sheetIdInput"
     value="1RD9llOyEi_R_bLY3Cz7nJiqQKf00aF7PF2P79VpgbDw"
@@ -831,7 +831,7 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
 // SUPABASE CONFIG
 // ══════════════════════════════════════════════════════
 const SB_URL = 'https://yjcnuyoaemlipvuinptp.supabase.co';
-const SB_KEY = 'sb_publishable_PxKE1eRF6SmS85PGi3N0Fw_vj6VOZdo';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlqY251eW9hZW1saXB2dWlucHRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNTY4NjcsImV4cCI6MjA5MzgzMjg2N30.CACwOGjnC370ZPjKlXG4dDpU9bVwCP4JDBD451WvwaM';
 
 async function sbGet(table, query='') {
   const res = await fetch(`${SB_URL}/rest/v1/${table}?${query}`, {
