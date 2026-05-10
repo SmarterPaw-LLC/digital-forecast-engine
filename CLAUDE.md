@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.51**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.52**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,9 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.52)
+- **Export CSV dialog — column-scope chooser.** The export dialog (Forecast tab only — other tabs have fixed column sets) now has a "Columns" panel above the row-scope buttons with two radios: **Visible columns** (default — matches what's in the table, including new toggles like per-channel sold/forecast and velocity lookbacks) and **All columns** (every entry in `FC_COLUMNS`, useful for one-time data dumps without having to toggle each column on first). Row-scope buttons (Filtered / Everything) still control which records are exported; the column scope is orthogonal. `doExportCSV(tab, mode, colScope)` reads `colScope` to pick `fcVisibleColumns()` vs `FC_COLUMNS`; locked columns (e.g., the row-selection checkbox) are always excluded.
 
 ## Recent Fixes (v4.51)
 - **Forecast tab — column registry refactor.** The hardcoded 17-column `cols` array inside `renderTable()` is replaced by a `FC_COLUMNS` registry near the top of the forecast section. Each column is one object with `key`, `group`, `groupHdr`, `label` (or dynamic `headHtml(ctx)`), `get(r, ctx)`, `render(r, ctx, pre)`, and optional `csv(r, ctx)`. `renderTable` now iterates `fcVisibleColumns()`. Adding a new column means appending one entry to the registry — no edits to `renderTable` or `doExportCSV` needed.
