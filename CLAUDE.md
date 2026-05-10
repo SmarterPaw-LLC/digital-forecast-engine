@@ -1,0 +1,93 @@
+# SmarterPaw Forecast Dashboard — Claude Code Handoff
+
+## Project Overview
+Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
+File: `SmarterPaw_Forecast_v4.html` — current version **v4.43**
+
+## Supabase
+- URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
+- Anon key: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlqY251eW9hZW1saXB2dWlucHRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyNTY4NjcsImV4cCI6MjA5MzgzMjg2N30.CACwOGjnC370ZPjKlXG4dDpU9bVwCP4JDBD451WvwaM`
+- Dashboard password: `SmarterPaw2026`
+
+## Database Tables
+- **products** — PK: `master_id` (SP-XXXX real, SP-TEMP-{ASIN} temporary). Fields: master_id, sp_sku, shopify_sku, chewy_part_no, asin, brand, title, short_name, is_bundle, category_id, barcode, msrp, wholesale, cogs, supplier, active, notes
+- **sales_weekly** — (master_id, channel, asin, shopify_sku, week_start). Channels: amazon_us, amazon_ca, shopify, chewy. Unique index: `(channel, asin, coalesce(shopify_sku,''), week_start)`
+- **velocity_calculated** — VIEW grouping by master_id+region, returns v30/v60/v90/v120
+- **inventory** — asin, region, master_id, fba_available, fba_inbound, warehouse, lead_time_days, safety_stock
+- **bom** — bundle_master_id, component_master_id, qty, verified
+- **sku_economics** — full P&L per (asin, region, week_start). Unique: (asin, region, week_start)
+- **chewy_forecasts** — (chewy_part_no, master_id, forecast_month YYYY-MM, forecast_units, upload_date). Unique: (chewy_part_no, forecast_month, upload_date)
+- **categories** — id, category, subcategory
+
+## Dashboard Tabs
+- 📊 **Forecast** (dropdown): Demand Forecast, Inventory Planning, Seasonality, Chewy Forecasts
+- 📁 **Data** (dropdown): Uploads, Query Database
+- 📋 **Products**
+- 📦 **Bundles**
+- 📈 **Units Sold**
+- 💰 **P&L**
+- ⚙ **Settings**
+
+## Critical Architecture Rules
+1. **Amazon rows in sales_weekly NEVER have shopify_sku** — must be null or unique constraint breaks
+2. **master_id is always auto-incremented SP-XXXX** — never derived from sp_sku or any other field
+3. **SP-TEMP-{ASIN}** = auto-created placeholder when ASIN not in products catalog. Promoted to real SP-XXXX when user saves the product
+4. **Supabase default row limit = 1000** — all large queries must use `.range()` pagination
+5. **SKU Economics upload uses delete+insert** (not upsert) for Amazon rows due to functional coalesce index
+6. **Chewy data → chewy_forecasts table only** (not sales_weekly). Velocity uses getChewyFcUnits() forward forecast
+7. **Foreign key order matters**: when promoting SP-TEMP → SP-XXXX, insert new product FIRST, then update references, then delete old temp
+
+## Active Issues to Fix
+
+### 1. Install `exec_sql` in Supabase (one-time)
+File `supabase_create_exec_sql.sql` lives in the project folder. Open Supabase → SQL Editor → New query → paste the file → Run. Uses `SECURITY INVOKER` + `SET LOCAL transaction_read_only = on` so writes are rejected by the database itself, not just by a string check. Once installed, the Query Database subview runs arbitrary SELECT/WITH queries via `/rest/v1/rpc/exec_sql`. If not installed, the dashboard now surfaces a clear error pointing to this file.
+
+### 2. Header dropdowns invisible (workaround in place)
+The Data + Forecast header dropdowns set `display:block` on click but the panel doesn't paint visibly — likely a stacking-context interaction with the sticky header's `backdrop-filter: blur(18px)`. Workaround in v4.42: visible sub-tab strip inside `page-data` (📥 Uploads | 🔍 Query Database) so the dropdown isn't required for navigation. Forecast tab still relies on the dropdown — needs a similar fallback or a real CSS fix.
+
+### 3. Query tab presets to add (once Query tab is reachable)
+Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.43)
+- **Merge tool no longer overwrites survivor's `short_name`.** The auto-fill loop in `runMerge()` was copying the duplicate's `short_name` onto the survivor whenever the survivor's was empty — but `short_name` is an editorial display label, not a functional identifier, so the chosen survivor's name (even if blank) should win. Removed that single line; other fields (asin, sp_sku, barcode, etc.) still auto-fill from the duplicate when the survivor lacks them.
+- **Query Database `syntax error at or near ";"`** — `exec_sql` wraps the user query as `select ... from (USER_QUERY) t`, so any trailing `;` breaks the wrapper. `runDbQuery()` now strips trailing semicolons before sending. (All built-in presets end with `;`, so they all hit this.)
+- **Query Database tab finally renders.** The `data-view-query` markup added in v4.42 was inserted past the actual `</div>` that closes `page-data` (which has no comment — page-data closes at the bare `</div>` after `data-view-uploads`, not at the line that *says* `<!-- /page-data -->`). The block ended up nested inside `page-sales` (display:none), so clicking Query Database toggled `dataView` but the panel was never visible. Moved the block into `page-data` and corrected the misleading `<!-- /page-data -->` and `<!-- /data-view-uploads -->` comments that pointed at unrelated `</div>`s in `page-sales`.
+- **Lesson for future edits:** the closing `</div>` for each `page-X` is unmarked. When inserting markup at the end of a page, verify nesting depth (count opens/closes from the page's opening `<div>`) — don't trust comments. Quick check: `getComputedStyle(el).display` on a wrapping ancestor will reveal if you've landed in a `display:none` page.
+
+## Recent Fixes (v4.42)
+- **Data sub-tab strip** added inside page-data so Uploads / Query Database can be reached without the broken header dropdown. `switchDataView` now syncs both the dropdown buttons and the new strip.
+- **Query tab error reporting** now surfaces the real Postgres/PostgREST error instead of always claiming "exec_sql RPC not found". The misleading single-table FROM-parsing fallback was removed — better to fail loudly with the install instructions.
+- **`supabase_create_exec_sql.sql`** generated in project folder. Read-only-safe (SECURITY INVOKER + transaction_read_only).
+
+## Recent Fixes (v4.41)
+- **Data/Forecast nav dropdowns** fixed: handlers now track active page via `currentPage` JS variable instead of reading `pageData.classList.contains('active')`. The DOM-based check was unreliable because async render passes (`loadSalesAnalytics`, `connectSheets`) or any future `showPage()` call could wipe the class between clicks, making the second click look like a fresh navigation instead of a toggle. Removed the `[DataNav]`/`[DEBUG]`/`[DocClick]`/`[Init]` debug instrumentation.
+
+## Recent Fixes (v4.40)
+- **SP-TEMP promotion** fixed: now inserts new SP-XXXX product FIRST, then migrates all FK references (sales_weekly, sku_economics, chewy_forecasts, bom, inventory), then deletes old temp. Was failing with 409 Conflict because it was trying to update FKs before the target existed.
+- **Duplicate `const isNew`** removed from saveProduct
+- **stale allProducts cache** — openProductModal now reloads from Supabase if masterId not found in cache
+- **Merge tool** updates chewy_forecasts + sku_economics, asks which BOM to keep when both products have components
+- **Channel checkboxes** Total ↔ individual channels sync bidirectionally
+- **Chewy Forecasts tab** forward-looking 30/60/90/120d scorecards with delta vs prior snapshot, monthly column totals footer, per-cell month delta
+- **SKU Economics uploader** checks SP-TEMP-{asin} before creating duplicate products
+- **P&L tab** live CAD→USD conversion via Bank of Canada Valet API
+
+## Key Functions Reference
+- `handleDataNavClick(btn)` — Data nav dropdown toggle
+- `switchDataView(view)` — switches between 'uploads' and 'query' subviews
+- `handleForecastNavClick(btn)` — Forecast nav dropdown toggle  
+- `switchForecastView(view)` — switches between demand/inventory/seasonality/chewy
+- `saveProduct()` — saves product, promotes SP-TEMP to SP-XXXX
+- `runMerge()` — merges duplicate products, handles BOM conflict
+- `parseSkuEconomics(text)` — SKU Economics CSV parser, writes to sales_weekly + sku_economics
+- `parseChewyVendorStatement(arrayBuffer, snapshotDate)` — Chewy XLSX parser → chewy_forecasts
+- `getChewyFcUnits(masterId, days)` — prorates Chewy monthly forecast into N-day forward demand
+- `loadChewyFcLatest(sb)` — loads latest-per-month Chewy forecast into chewyFcLatest map
+- `renderChewyForecast()` — renders the Chewy Forecasts subview
+- `renderPnl()` — renders P&L tab
+- `runDbQuery()` — executes SQL via exec_sql RPC; surfaces real error if function missing
+- `init()` — main init: loads products, velocity, inventory, BOM, Chewy forecasts, renders all
+
+## Versioning
+Bump version string at top of file after every change: `v4.42 · 2026-05-10`
+Run syntax check before shipping: extract script tag and run through `new Function(js)`
