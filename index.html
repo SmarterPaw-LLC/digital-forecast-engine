@@ -3141,7 +3141,6 @@ async function parseSkuEconomics(text) {
     const cogsUsd   = cogsUsdCol >= 0 ? parseFloat(row[cogsUsdCol]) || 0 : 0;
 
     if (!asin || !weekStr) continue;
-    if (netUnits <= 0) continue;
 
     const weekStart = weekToMonday(weekStr);
     if (!weekStart) continue;
@@ -3157,9 +3156,13 @@ async function parseSkuEconomics(text) {
     // totals BEFORE the upsert collapsed them to one row, so the row that landed in
     // the DB had inflated $ and unit values. We track dupCount and surface it in the
     // upload status so a malformed file is visible instead of silently doubling totals.
-    if (agg[key]) dupCount++;
-    if (!agg[key]) agg[key] = { asin, channel, region, weekStart, units: 0 };
-    agg[key].units = netUnits;
+    // sales_weekly is about SALES — skip rows that didn't sell.
+    // sku_economics still gets them (storage/ad/return fees apply even at zero sales).
+    if (netUnits > 0) {
+      if (agg[key]) dupCount++;
+      if (!agg[key]) agg[key] = { asin, channel, region, weekStart, units: 0 };
+      agg[key].units = netUnits;
+    }
 
     if (!econAgg[key]) {
       econAgg[key] = {
