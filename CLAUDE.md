@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.55**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.56**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,9 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.56)
+- **P&L product table — Contrib % column added.** New rightmost column showing per-product Contribution % = `(net_proceeds − cogs_total) / net_sales`. Sits alongside the existing Margin % column so the row tells the full story: Margin % (after fees, before COGS) plus Contrib % (after fees AND COGS). Same green/orange/red color thresholds as the scorecard (≥15% green, ≥5% orange, below red). Tooltip on the header explains the formula.
 
 ## Recent Fixes (v4.55)
 - **P&L product cell — ASIN is now copy-friendly.** Previously a double-click on the ASIN selected the trailing word of the product title too (no clean text boundary between the truncated title `<span>` and the ASIN `<div>` directly below it), and clicking the ASIN bubbled up to the row's `onclick` and toggled row selection instead of letting you copy. Wrapped the ASIN in its own inline-block `<span>` with `user-select: all` (single click selects the whole ASIN) + `cursor: text`, and added `event.stopPropagation()` on `click`/`dblclick` so clicking the ASIN doesn't trigger the row toggle. Title got `user-select: text` to make its own selection behave normally too.
