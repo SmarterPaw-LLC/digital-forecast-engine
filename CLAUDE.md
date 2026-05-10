@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.44**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.45**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,10 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.45)
+- **P&L drill-down by product.** Click any row in the P&L product table → scorecards + fee breakdown rebuild from that single product's numbers. A green-bordered banner appears above the scorecards showing "Drilled into <title>" with a "← Show all products" button to clear. Selection state lives in `pnlSelectedMid` and clears automatically if the chosen product falls out of the active filters (region/brand/category/search/date). The full product table still shows everything — only the aggregate panels narrow.
+- **Fee bars now match their displayed percentage.** Previously each fee's bar fill was the fee's share of *total fees*, while the text label above it said "X% of sales" — two different denominators producing visually misleading bars (a fee that's 30% of all fees but only 2% of sales had a 30%-wide bar). Bars now fill based on fee-as-share-of-net-sales, matching the label.
 
 ## Recent Fixes (v4.44)
 - **P&L tab was silently truncating to 1000 rows.** `loadPnlTab()` did `sb.from('sku_economics').select('*').order(...)` with no `.range()` — Supabase caps a single un-paginated select at 1000 rows, so the dashboard saw only the most recent ~1000 weekly rows and quietly dropped everything older. Every total (gross sales, net sales, fees, ad spend, COGS, net proceeds) was therefore understated for any range that reached past that cutoff. Replaced with the same paginated loop already used in `loadChewyFcLatest`. This is the third place that violated Architecture Rule #4 — worth a codebase sweep next time we're in here.
