@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.52**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.53**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,11 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.53)
+- **SKU Economics upload — strict 1 row per (asin, region, week_start).** The previous loop summed financials and units across rows with the same key (`e.field += pn(...)`), then upserted one row to Supabase. If a CSV contained duplicate rows for the same key (e.g., re-downloaded "Full" file appended onto an older copy, manual concatenation, partial re-pull), every duplicate **inflated** the corresponding row's $ / unit values before the upsert collapsed them. Found this when the source CSV had 99 rows for week 2026-04-05 Doggijuana CA where 42 was expected. Now: each duplicate row OVERWRITES the prior in-memory row (last-write-wins, matching Supabase's eventual upsert behavior); the dupe count is tracked in `dupCount` and surfaced in the upload status — `⚠ X duplicate rows in CSV (deduped — last value kept)` with the dz-warn styling — so a malformed input is visible rather than silently doubling totals.
+- **Existing data note:** this fix only affects FUTURE uploads. Rows already in Supabase that were inflated by the old summing behavior remain inflated until they're overwritten by a fresh upload of the same week. Re-uploading the affected CSV from a clean source will correct them via the unique-key upsert.
+- **Architecture Rule #5 updated:** SKU Economics upload now enforces last-write-wins for in-memory dedup, in addition to the database's unique-key upsert. The note about "delete+insert for Amazon rows" still applies to `sales_weekly` (the functional coalesce index there), not to `sku_economics`.
 
 ## Recent Fixes (v4.52)
 - **Export CSV dialog — column-scope chooser.** The export dialog (Forecast tab only — other tabs have fixed column sets) now has a "Columns" panel above the row-scope buttons with two radios: **Visible columns** (default — matches what's in the table, including new toggles like per-channel sold/forecast and velocity lookbacks) and **All columns** (every entry in `FC_COLUMNS`, useful for one-time data dumps without having to toggle each column on first). Row-scope buttons (Filtered / Everything) still control which records are exported; the column scope is orthogonal. `doExportCSV(tab, mode, colScope)` reads `colScope` to pick `fcVisibleColumns()` vs `FC_COLUMNS`; locked columns (e.g., the row-selection checkbox) are always excluded.
