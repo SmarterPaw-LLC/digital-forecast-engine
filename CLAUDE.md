@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.53**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.54**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,9 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.54)
+- **P&L scorecard: Gross Margin → Contribution %.** Replaced the last scorecard. `Gross Margin = net_proceeds / net_sales` was double-represented (the Net Proceeds card's subtitle already showed that percentage). The new `Contribution % = (net_proceeds − cogs) / net_sales` matches the dollar figure shown in the Contribution Profit card. Color thresholds: ≥15% green, ≥5% orange, below red.
 
 ## Recent Fixes (v4.53)
 - **SKU Economics upload — zero-sale rows now reach `sku_economics`.** The upload loop had a blanket `if (netUnits <= 0) continue;` near the top that silently dropped every CSV row where Net Units Sold was zero. Amazon's SKU Economics report includes those rows because they still incur fees — FBA storage on inventory, ad spend on listings that didn't convert, refund admin on returns, aged-inventory surcharges, etc. Dropping them on upload meant the dashboard's Amazon Fees / Ad Spend / Net Proceeds were systematically understated; orphan-hunting earlier missed this because the rows didn't make it past the parser. Specific case: for Doggijuana CA Apr 10 → May 10, the source CSV had 126 rows; the filter dropped 114 of them. Now `sku_economics` gets every valid row (`asin`, `weekStr`, parseable `weekStart`); `sales_weekly` keeps the `netUnits > 0` gate (it really is about sales). Re-upload your latest SKU Economics CSV after deploying to backfill those rows into Supabase via upsert.
