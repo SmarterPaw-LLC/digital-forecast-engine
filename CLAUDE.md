@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.46**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.47**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,11 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.47)
+- **Fee breakdown bars now visually unmistakable.** Math was already correct (bar width = fee as % of net sales since v4.45), but the 4px-tall bar against `var(--border)` track had near-zero contrast — a 30%-filled bar looked like a solid line. Bumped track to 7px, switched track to `var(--surface2)` with `var(--border2)` outline, and added a numeric `X.X%` label to the right of each bar so the percentage is unambiguous at a glance.
+- **Brand chip in P&L product rows.** Added the same `chip c-meow` / `c-doggi` / `c-kkz` badge used on the Forecast/Inventory/Products/Sales tabs, inline next to the product title. Label uses `KKZ` for Kitty Ka-Zoom and the first 6 chars otherwise (matches the existing convention everywhere else).
+- **Contribution Profit scorecard added; Units Returned removed.** New card shows `Net Proceeds − COGS` with the `% of net sales` subtitle. Replaced "Units Returned" — its math was always 0 by construction (`tot.units − sum(rows.units)` where the two are the same number); restoring a real returns metric needs a dedicated `units_returned` column on `sku_economics` which we don't currently capture.
 
 ## Recent Fixes (v4.46)
 - **P&L quick filter dropdown.** New "Quick" select in the filter strip composes with brand/category/search/date/region: `Top 10/25 — Net Proceeds`, `Top 10 — Margin %`, `Bottom 10 — Net Proceeds`, `Bottom 10 — Margin %`, `Negative margin only`. Quick filter is applied AFTER the page filters narrow `rows`, then the table + scorecards reflect the narrowed subset.
