@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.45**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.46**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,11 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.46)
+- **P&L quick filter dropdown.** New "Quick" select in the filter strip composes with brand/category/search/date/region: `Top 10/25 — Net Proceeds`, `Top 10 — Margin %`, `Bottom 10 — Net Proceeds`, `Bottom 10 — Margin %`, `Negative margin only`. Quick filter is applied AFTER the page filters narrow `rows`, then the table + scorecards reflect the narrowed subset.
+- **P&L multi-select aggregation.** Replaced single-row drill-down (`pnlSelectedMid` string) with a multi-select set (`pnlSelectedMids` Set). Each row has a checkbox in a new leftmost column; clicking the row anywhere also toggles. Header checkbox toggles select-all-visible (indeterminate when partial). When N≥1 are selected, scorecards + fee breakdown show the SUM of those rows; banner reads "Drilled into <title>" for N=1, "Aggregating N products" with a 3-title preview for N>1. Selection auto-prunes anything that falls outside the current visible set (e.g. when filters change). Clear via the banner button.
+- Numeric fields summed for multi-select are listed in `PNL_NUMERIC_FIELDS` constant — keep this in sync if new financial columns are added to the row aggregator.
 
 ## Recent Fixes (v4.45)
 - **P&L drill-down by product.** Click any row in the P&L product table → scorecards + fee breakdown rebuild from that single product's numbers. A green-bordered banner appears above the scorecards showing "Drilled into <title>" with a "← Show all products" button to clear. Selection state lives in `pnlSelectedMid` and clears automatically if the chosen product falls out of the active filters (region/brand/category/search/date). The full product table still shows everything — only the aggregate panels narrow.
