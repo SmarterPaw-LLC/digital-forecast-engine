@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.50**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.51**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,19 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.51)
+- **Forecast tab — column registry refactor.** The hardcoded 17-column `cols` array inside `renderTable()` is replaced by a `FC_COLUMNS` registry near the top of the forecast section. Each column is one object with `key`, `group`, `groupHdr`, `label` (or dynamic `headHtml(ctx)`), `get(r, ctx)`, `render(r, ctx, pre)`, and optional `csv(r, ctx)`. `renderTable` now iterates `fcVisibleColumns()`. Adding a new column means appending one entry to the registry — no edits to `renderTable` or `doExportCSV` needed.
+- **All columns are sortable.** Sort comparator (`fcCompare`) calls each column's `get(r, ctx)`, so dynamic columns (the ID column, the period-aware "Sold (X)", custom-channel forecast values, forward seasonal indices, per-channel breakouts) all sort correctly. Trend column uses `fcTrendSortValue` to sort by signed magnitude (`↑↑ +2.0×` > flat > `↓↓ -2.0×`). The old inline sort that read `a[sortKey]` left half the columns un-sortable; that's gone.
+- **Velocity 120-day lookback now loaded.** Records previously had `daily_v30/60/90` but no `daily_v120`; added it from `velocity_calculated.v120`. Powers the new "Vel 120d" column.
+- **New columns (default off, toggle via 📋 Columns popup).**
+  - SKU group: ASIN, SP SKU, Shopify SKU, Chewy #, Master ID (each as their own selectable column).
+  - Velocity lookbacks: Vel 30d, Vel 60d, Vel 90d, Vel 120d (raw daily velocity over each window).
+  - Sold by channel: Amazon / Shopify / Chewy × 30/60/90/120 day windows. Chewy column will be empty since chewy data lives in `chewy_forecasts`, not `sales_weekly`.
+  - Forecast by channel: Amazon / Shopify / Chewy × 30/60/90/120. Amazon and Shopify extrapolate the last 30 days' velocity outward; Chewy uses `getChewyFcUnits()` (forward forecast from the chewy_forecasts table).
+- **Column show/hide popup.** New `📋 Columns` button next to the search input opens a popup with checkboxes grouped by category. Each group has "all"/"none" shortcuts; "Reset to defaults" restores the original visible set. Visible-columns state persists per browser via `localStorage('fcVisibleCols')`.
+- **Group header row is now dynamic.** The static `<tr>` containing "SKU / VELOCITY / DEMAND FORECAST" group titles is replaced by `<tr id="colGroupRow">`, populated by `renderTable` based on which columns are visible. Adjacent visible columns sharing the same `groupHdr` value coalesce into a single spanning header.
+- **CSV export follows visible columns.** `doExportCSV('forecast', ...)` now iterates `fcVisibleColumns()` and uses each column's `csv` (preferred) or `get` to emit the cell, with proper quoting/escaping for separators. Headers strip any HTML in dynamic header labels. Show a column → it appears in the export. Hide it → it doesn't.
 
 ## Recent Fixes (v4.50)
 - **`loadProducts()` now paginates.** Same 1000-row cap fix as `loadPnlTab()` got in v4.44. Currently the catalog has ~513 products so this isn't biting yet, but it would silently start losing brands the moment count crosses 1000. Defensive.
