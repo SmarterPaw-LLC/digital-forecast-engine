@@ -3757,11 +3757,15 @@ function initQueryTool() {
 }
 
 async function runDbQuery() {
-  const sql    = document.getElementById('query-editor')?.value?.trim();
+  let sql      = document.getElementById('query-editor')?.value?.trim();
   const status = document.getElementById('query-status');
   const head   = document.getElementById('query-results-head');
   const body   = document.getElementById('query-results-body');
   if (!sql) return;
+
+  // exec_sql wraps the query as `select ... from (USER_QUERY) t`,
+  // so any trailing `;` becomes a syntax error. Strip them.
+  sql = sql.replace(/;\s*$/g, '').trim();
 
   // Only allow SELECT/WITH
   const stripped = sql.replace(/--.*$/gm,'').replace(/\/\*[\s\S]*?\*\//g,'').trim().toUpperCase();
@@ -7325,7 +7329,8 @@ async function runMerge() {
     if (!tgt.msrp          && src.msrp)          patch.msrp          = src.msrp;
     if (!tgt.wholesale     && src.wholesale)     patch.wholesale     = src.wholesale;
     if (!tgt.supplier      && src.supplier)      patch.supplier      = src.supplier;
-    if (!tgt.short_name    && src.short_name)    patch.short_name    = src.short_name;
+    // short_name intentionally NOT auto-filled — it's an editorial display label;
+    // the chosen survivor's name (even if empty) takes precedence over the duplicate's.
     if (Object.keys(patch).length > 0) {
       await sb.from('products').update(patch).eq('master_id', tgt.master_id);
     }
