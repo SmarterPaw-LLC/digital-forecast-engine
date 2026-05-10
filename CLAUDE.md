@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.48**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.49**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,11 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.49)
+- **`--sp-red` CSS variable was never defined.** Every `var(--sp-red)` reference in the file (fee bars, scorecard "loss" colors, status indicators, etc.) resolved to its CSS initial — `transparent` for `background`, default text color for `color`. That's why the fee bars looked unfilled: the fill div was transparent on top of the track. Defined `--sp-red: #d63f2a` and `--sp-red2: #ef5a44` to match the existing brand-orange/yellow/green palette. This fix likely affects other red elements throughout the dashboard that have been silently un-styled.
+- **P&L join was dropping rows whose ASIN didn't match a product.** `renderPnl()` did `allProducts.find(p => p.asin === row.asin)` and `if (!prod) continue;` — every `sku_economics` row whose ASIN wasn't in the products catalog (e.g. delisted ASINs, multi-region ASIN collisions, stale uploads) was silently excluded from totals. In the user's CA data this was eating roughly half the revenue. Now joins by `row.master_id` first (the actual FK on sku_economics), falls back to ASIN match, and synthesizes a placeholder product (`brand: 'Unknown'`, `master_id: unmatched-<asin>`, `cogs: 0`) for rows that match neither — so the financial data still flows through to scorecards and fee breakdown. Brand/category filters still exclude the placeholder bucket, which is the correct behavior (truly unknown brand shouldn't satisfy "Brand: Meowijuana").
+- This is a known-pattern issue worth grepping the codebase for: any `find(p => p.asin === ...)` followed by `if (!prod) continue` is potentially silently dropping data the same way.
 
 ## Recent Fixes (v4.48)
 - **Negative dollar values now show a minus sign.** The `$` formatter wraps `Math.abs(v)` so it always emits a positive-looking string — that's correct for fee/expense values that are inherently positive (you can't have negative ad spend), but wrong for values that can flip negative when a product loses money: Net Proceeds, Contribution Profit, Gross/Net Sales when refunds dominate. Added a `$s` (signed) helper alongside `$`, used in those four scorecards and in the Net Sales / Net Proceeds columns of the product table. Color logic was already firing red for negatives — now the minus sign comes through too. Fee breakdown still uses the explicit `±$X` prefix because it intentionally shows refunds as `+` rather than `−`.
