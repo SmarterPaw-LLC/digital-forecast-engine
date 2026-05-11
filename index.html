@@ -8035,7 +8035,33 @@ for (const d of FC_HORIZONS) {
       // when selected, so no separate add here.
       return Math.round(forwardSeaDemand({ ...r, blended_daily: cv, sea_override: null }, d));
     },
-    render: (r,ctx,pre) => `<td class="num ${ctx.fHorizon===d?'num-hi horizon-active':''}">${(pre['n'+d]||0).toLocaleString()}</td>`,
+    render: (r,ctx,pre) => {
+      const need  = pre['n'+d] || 0;
+      // Breakdown: how much of the total need came from each component.
+      // For the default mode (Total), forwardSeaDemand integrates the
+      // Amazon/DTC blended velocity across the seasonal curve, and Chewy's
+      // forecast is added on top (Chewy is US-only). Showing this split
+      // in a hover tooltip makes the math transparent — otherwise users
+      // see a Need that's much larger than `vel × days × sea` and assume
+      // the calculation is wrong, when actually Chewy is silently
+      // contributing a large slice.
+      const chewy   = ctx.useCustomChans ? 0 : (getChewyFcUnits(r.master_id, d, r.region || 'US') || 0);
+      const amzDtc  = Math.max(0, need - chewy);
+      const seaAvg  = getForwardSea(r, d);
+      const blended = (r.blended_daily || 0).toFixed(2);
+      const bundle  = (r.bundle_daily || 0);
+      const bundleNote = (bundle > 0) ? ` (includes +${bundle.toFixed(2)} u/day from bundle-component attribution)` : '';
+      const chewyLine = chewy > 0
+        ? `\n• Chewy ${d}d forecast: ${chewy.toLocaleString()} units (prorated from monthly snapshots, US only)`
+        : '\n• Chewy: 0 (no Chewy forecast for this product / row)';
+      const tip = `${d}-day Need = ${need.toLocaleString()} units\n\n` +
+        `• Amazon + DTC contribution: ${amzDtc.toLocaleString()} units\n` +
+        `   = blended velocity (${blended} u/day${bundleNote}) integrated across the seasonal curve for the next ${d} days\n` +
+        `   avg seasonal multiplier over horizon: ${seaAvg}×` +
+        chewyLine +
+        `\n\nTotal: ${amzDtc.toLocaleString()} + ${chewy.toLocaleString()} = ${need.toLocaleString()}`;
+      return `<td class="num ${ctx.fHorizon===d?'num-hi horizon-active':''}" title="${tip.replace(/"/g,'&quot;')}">${need.toLocaleString()}</td>`;
+    },
   });
   FC_COLUMNS.push({
     key: `sea${d}`, group: 'forecast', groupHdr: 'DEMAND FORECAST (units needed)', label: `${d}d Sea`, w: '52px', default: true, num: true,
