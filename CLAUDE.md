@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.88**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.89**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,10 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.89)
+- **Chewy Forecasts tab — "Include past months" toggle.** The month columns auto-advance forward as the calendar rolls over (the `m >= now` filter at render time silently drops months once they're in the past). Confirmed working — May 2026 drops off the left when the date hits June 1. New checkbox in the filter strip relaxes that filter so historical months show up too: useful for comparing what Chewy projected for a past month vs what they actually purchased. Defaults to off so the table stays focused on upcoming demand.
+- **Chewy upload — older-snapshot guardrail.** The Snapshot date input on the Chewy upload card now has a "Today" button (one-click prefill) and an orange warning callout directly underneath spelling out the failure mode: for backfilling older files, set this to the date Chewy originally sent the file, otherwise the older forecast gets tagged with today's date and overrides your newer forecasts in the displayed "latest" view. The underlying rows aren't lost — `chewy_forecasts` is uniquely keyed on `(chewy_part_no, forecast_month, upload_date)` so multiple snapshots coexist — but `loadChewyFcLatest()` picks the most recent `upload_date` per `(master_id, forecast_month)` when surfacing the current view.
 
 ## Recent Fixes (v4.88)
 - **Bundle attribution now flows into the Need forecasts and scorecards, not just the Sold (period) column.** Bundle sales are recorded with the BUNDLE's master_id; `velocity_calculated` groups by master_id+region, so a component product's `daily_v30` (and `blended_daily` derived from it) never reflected demand pulled through bundle sales. v4.87 added a `+B N` badge to the Sold column but the Need columns + scorecards stayed bundle-blind. New helper `getBundleAttrDailyVelocity(masterId, windowDays, channels, region)` walks `allBomData`, sums each parent bundle's region-filtered sales over the rolling window, multiplies by component qty, divides by window length, and returns daily units. Folded into `blended_daily` inside a new `recomputeRecordVelocity(rec)` helper that's now the single source of truth used by the init finalization pass, `applyVelocityWindow()`, `combineRegionRecords` (post-merge finalize), and the `fBundleAttr` checkbox toggle.
