@@ -720,7 +720,7 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
       <div id="sea-chart-msg" style="color:var(--text3);font-family:var(--mono);font-size:12px;text-align:center;padding:40px">Select a product or category to view its seasonal curve</div>
       <canvas id="sea-canvas" style="display:none;width:100%;height:280px"></canvas>
       <div id="sea-table-wrap" style="display:none;margin-top:16px;overflow-x:auto">
-        <table id="sea-table" style="width:100%;border-collapse:collapse;font-size:11px;font-family:var(--mono)">
+        <table id="sea-table" style="border-collapse:separate;border-spacing:0;font-size:11px;font-family:var(--mono)">
           <thead><tr id="sea-thead"></tr></thead>
           <tbody id="sea-tbody"></tbody>
         </table>
@@ -6009,8 +6009,8 @@ function renderSeasonalityList() {
     <th style="text-align:left;padding:7px 8px;color:var(--text3);font-family:var(--mono);font-size:10px;font-weight:500">Brand</th>
     <th style="text-align:left;padding:7px 8px;color:var(--text3);font-family:var(--mono);font-size:10px;font-weight:500">Product</th>
     <th style="text-align:left;padding:7px 8px;color:var(--text3);font-family:var(--mono);font-size:10px;font-weight:500">Master ID</th>
-    <th style="text-align:left;padding:7px 8px;color:var(--text3);font-family:var(--mono);font-size:10px;font-weight:500" title="Standard = use category curve · Seasonal = SEED.curves.seasonal · Seasonal-limited = SEED.curves.seasonal_limited · Flat = no seasonality (good for new launches)">Seasonal type</th>
-    <th style="text-align:left;padding:7px 8px;color:var(--text3);font-family:var(--mono);font-size:10px;font-weight:500">Method</th>
+    <th style="text-align:left;padding:7px 8px;color:var(--text3);font-family:var(--mono);font-size:10px;font-weight:500;cursor:help" title="Seasonal TYPE — picks the SHAPE of the curve to use when the calculated curve isn't applied.&#10;&#10;• standard — use the category-level SEED curve (default).&#10;• seasonal — moderate, broad peak (good for items with a real but spread-out high season).&#10;• seasonal_limited — sharp narrow peak (good for items with a tight on/off window — e.g. holiday-only).&#10;• flat — multiplier 1.0 every week (good for new launches before there's enough data to characterize them).&#10;&#10;Hover any row's dropdown for a per-product recommendation based on its sales history.">Seasonal type ⓘ</th>
+    <th style="text-align:left;padding:7px 8px;color:var(--text3);font-family:var(--mono);font-size:10px;font-weight:500;cursor:help" title="METHOD — how the weekly multiplier is sourced.&#10;&#10;• — default — use the category curve (or seasonal_type if set).&#10;• ⚡ calculated — use the product's own curve, computed from its sales_weekly history.&#10;• ⊕ mix — 50/50 blend of calculated and the fallback (category default or seasonal_type SEED). Best for moderate data — anchors the calc to a sensible prior.&#10;• ✎ manual — user-edited curve (no UI yet, placeholder).&#10;&#10;Rule of thumb: ≥52 weeks → calculated · 26–52 weeks → mix · <26 weeks → default.&#10;Hover any row's dropdown for a per-product recommendation.">Method ⓘ</th>
     <th style="text-align:right;padding:7px 8px;color:var(--text3);font-family:var(--mono);font-size:10px;font-weight:500">Weeks data</th>
     <th style="text-align:left;padding:7px 8px;color:var(--text3);font-family:var(--mono);font-size:10px;font-weight:500">Eligibility</th>`;
 
@@ -6034,6 +6034,14 @@ function renderSeasonalityList() {
     const isActive = seaActiveMid === p.master_id;
     const m = p.sea_method || 'category-default';
     const wkData = p.sea_weeks_of_data || ((salesData?.[p.master_id])?.length || 0);
+    // Per-product recommendation derived from sales history + curve shape.
+    // Surfaced via title= tooltips on the two inline dropdowns below.
+    const rec = recommendSeasonalitySettings(p);
+    const methodMatch = (m === rec.method) ? '✓ matches recommendation' : `current: ${m}`;
+    const stypeCur    = p.seasonal_type || 'standard';
+    const stypeMatch  = (stypeCur === rec.stype) ? '✓ matches recommendation' : `current: ${stypeCur}`;
+    const methodTip   = `Recommendation: ${rec.method}\nWhy: ${rec.methodReason}\n${methodMatch}`;
+    const stypeTip    = `Recommendation: ${rec.stype}\nWhy: ${rec.stypeReason}\n${stypeMatch}`;
     // Inline method picker — same UX as the seasonal_type column. Switching to
     // 'calculated' or 'mix' will auto-compute the curve from sales history if
     // one isn't already saved (handled in seaSetMethod).
@@ -6042,10 +6050,10 @@ function renderSeasonalityList() {
                       : m === 'manual'     ? 'var(--orange)'
                                             : 'var(--text3)';
     const methodBg    = m === 'category-default' ? 'var(--surface2)' : 'rgba(232,96,26,0.10)';
-    const methodSel = `<select onchange="seaSetMethod('${p.master_id}',this.value)" style="font-family:var(--mono);font-size:10px;background:${methodBg};color:${methodColor};border:1px solid var(--border2);border-radius:4px;padding:2px 6px;outline:none;cursor:pointer;font-weight:700">
-      <option value="category-default" ${m==='category-default'?'selected':''}>— default</option>
-      <option value="calculated"       ${m==='calculated'?'selected':''}>⚡ calculated</option>
-      <option value="mix"              ${m==='mix'?'selected':''}>⊕ mix (50/50)</option>
+    const methodSel = `<select onchange="seaSetMethod('${p.master_id}',this.value)" title="${methodTip.replace(/"/g,'&quot;')}" style="font-family:var(--mono);font-size:10px;background:${methodBg};color:${methodColor};border:1px solid var(--border2);border-radius:4px;padding:2px 6px;outline:none;cursor:pointer;font-weight:700">
+      <option value="category-default" ${m==='category-default'?'selected':''}>— default${rec.method==='category-default'?' ★':''}</option>
+      <option value="calculated"       ${m==='calculated'?'selected':''}>⚡ calculated${rec.method==='calculated'?' ★':''}</option>
+      <option value="mix"              ${m==='mix'?'selected':''}>⊕ mix (50/50)${rec.method==='mix'?' ★':''}</option>
       ${m==='manual' ? `<option value="manual" selected>✎ manual</option>` : ''}
     </select>`;
     const eligible = wkData >= minWeeks;
@@ -6062,11 +6070,11 @@ function renderSeasonalityList() {
       <td style="padding:6px 8px;max-width:280px"><div style="font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(p.title||'').replace(/"/g,'&quot;')}">${p.short_name || p.title || '—'}</div></td>
       <td style="padding:6px 8px;font-family:var(--mono);font-size:10px;color:var(--text3)">${p.master_id}</td>
       <td style="padding:6px 8px" onclick="event.stopPropagation()">
-        <select onchange="seaSetSeasonalType('${p.master_id}',this.value)" style="font-family:var(--mono);font-size:10px;background:${seasonalType==='standard'?'var(--surface2)':'rgba(232,96,26,0.10)'};color:${seasonalType==='standard'?'var(--text2)':'var(--sp-orange)'};border:1px solid var(--border2);border-radius:4px;padding:2px 6px;outline:none;cursor:pointer">
-          <option value="standard"          ${seasonalType==='standard'?'selected':''}>standard</option>
-          <option value="seasonal"          ${seasonalType==='seasonal'?'selected':''}>seasonal</option>
-          <option value="seasonal_limited"  ${seasonalType==='seasonal_limited'?'selected':''}>seasonal-limited</option>
-          <option value="flat"              ${seasonalType==='flat'?'selected':''}>flat (no seasonality)</option>
+        <select onchange="seaSetSeasonalType('${p.master_id}',this.value)" title="${stypeTip.replace(/"/g,'&quot;')}" style="font-family:var(--mono);font-size:10px;background:${seasonalType==='standard'?'var(--surface2)':'rgba(232,96,26,0.10)'};color:${seasonalType==='standard'?'var(--text2)':'var(--sp-orange)'};border:1px solid var(--border2);border-radius:4px;padding:2px 6px;outline:none;cursor:pointer">
+          <option value="standard"          ${seasonalType==='standard'?'selected':''}>standard${rec.stype==='standard'?' ★':''}</option>
+          <option value="seasonal"          ${seasonalType==='seasonal'?'selected':''}>seasonal${rec.stype==='seasonal'?' ★':''}</option>
+          <option value="seasonal_limited"  ${seasonalType==='seasonal_limited'?'selected':''}>seasonal-limited${rec.stype==='seasonal_limited'?' ★':''}</option>
+          <option value="flat"              ${seasonalType==='flat'?'selected':''}>flat (no seasonality)${rec.stype==='flat'?' ★':''}</option>
         </select>
       </td>
       <td style="padding:6px 8px" onclick="event.stopPropagation()">${methodSel}</td>
@@ -6191,6 +6199,69 @@ async function seaBulkApplyMids(mids, minWeeks) {
     if (status) { status.textContent = '✗ ' + (e.message || e); status.style.color = 'var(--sp-red)'; }
   }
   return { applied, skipped, errors };
+}
+
+// Inspect a product's sales history + saved curve and recommend the right
+// `sea_method` and `seasonal_type` to use. Used by the inline tooltips on the
+// Seasonality product list so the user can see, per row, what the data suggests.
+//
+// Method recommendation is driven by weeks of data:
+//   ≥52 weeks → calculated (full year of signal, trust the product's own curve)
+//   ≥26 weeks → mix        (moderate signal — blend 50/50 with a category prior)
+//   <26 weeks → category-default (too thin for a reliable calc)
+//
+// Seasonal type recommendation looks at the shape of the calculated curve
+// (when computable): a sharp narrow peak (max ≥3× with ≤4 weeks above 1.5×)
+// suggests seasonal_limited; a broad peak (max ≥1.5× with ≥6 weeks above 1.5×)
+// suggests seasonal; otherwise standard. Products with <12 weeks of data
+// can't be characterized — recommend flat so noise doesn't drive forecasts.
+function recommendSeasonalitySettings(p) {
+  const wkData = p.sea_weeks_of_data || ((salesData?.[p.master_id])?.length || 0);
+
+  // Method
+  let method, methodReason;
+  if (wkData >= 52) {
+    method = 'calculated';
+    methodReason = `${wkData} weeks of history — enough to trust the product's own curve`;
+  } else if (wkData >= 26) {
+    method = 'mix';
+    methodReason = `${wkData} weeks of history — moderate signal; blend 50/50 with category prior to smooth noise`;
+  } else if (wkData > 0) {
+    method = 'category-default';
+    methodReason = `only ${wkData} weeks of data — too thin for a reliable calculated curve`;
+  } else {
+    method = 'category-default';
+    methodReason = `no sales history yet — use the category curve until data accumulates`;
+  }
+
+  // Seasonal type — look at the shape of the (calculated) curve if computable
+  let stype, stypeReason;
+  if (wkData < 12) {
+    stype = 'flat';
+    stypeReason = `only ${wkData} week${wkData===1?'':'s'} of data — too new to characterize; flat is safer than noise`;
+  } else {
+    const result = computeProductSeasonality(p.master_id, 1);
+    if (!result || !result.curve) {
+      stype = 'standard';
+      stypeReason = `no usable sales history — defer to category curve`;
+    } else {
+      const values = Object.values(result.curve).map(Number);
+      const max = values.length ? Math.max(...values) : 1;
+      const weeksAboveHigh = values.filter(v => v >= 1.5).length;
+      if (max >= 3.0 && weeksAboveHigh > 0 && weeksAboveHigh <= 4) {
+        stype = 'seasonal_limited';
+        stypeReason = `peak ${max.toFixed(1)}× across ${weeksAboveHigh} week${weeksAboveHigh===1?'':'s'} — sharp narrow seasonal pattern`;
+      } else if (max >= 1.5 && weeksAboveHigh >= 6) {
+        stype = 'seasonal';
+        stypeReason = `peak ${max.toFixed(1)}× across ${weeksAboveHigh} weeks — broad seasonal pattern`;
+      } else {
+        stype = 'standard';
+        stypeReason = `peak only ${max.toFixed(1)}× — no clear seasonal shape; category curve is fine`;
+      }
+    }
+  }
+
+  return { method, methodReason, stype, stypeReason };
 }
 
 // Per-row sea_method change — fires from the inline dropdown in the product
@@ -6606,7 +6677,13 @@ function renderSeasonality() {
   const tbody = document.getElementById('sea-tbody');
   if (!thead || !tbody) return;
 
-  thead.innerHTML = `<th style="padding:4px 8px;text-align:left;color:var(--text3);border-bottom:1px solid var(--border2);white-space:nowrap">Metric</th>` +
+  // Frozen first column: position:sticky + left:0 + matching surface bg + a
+  // right-edge box-shadow that mimics a 1px border (real borders disappear
+  // under sticky cells in some renderers; box-shadow is rock-solid).
+  const stickyHdr  = `position:sticky;left:0;z-index:3;background:var(--surface2);box-shadow:1px 0 0 var(--border2)`;
+  const stickyCell = `position:sticky;left:0;z-index:1;background:var(--surface2);box-shadow:1px 0 0 var(--border)`;
+
+  thead.innerHTML = `<th style="padding:4px 8px;text-align:left;color:var(--text3);border-bottom:1px solid var(--border2);white-space:nowrap;${stickyHdr}">Metric</th>` +
     weeks.map(w => `<th style="padding:4px 5px;text-align:center;font-size:9px;color:${w===currentWk?'var(--sp-green)':'var(--text3)'};border-bottom:1px solid var(--border2);min-width:26px${w===currentWk?';background:rgba(74,158,56,.12)':''}">W${w}</th>`).join('');
 
   const seaRow = weeks.map(w => {
@@ -6619,13 +6696,13 @@ function renderSeasonality() {
   let velRow = '';
   if (r) {
     const baseVel = r.blended_daily || r.adj_daily || 0;
-    velRow = `<tr style="border-top:1px solid var(--border)">
-      <td style="padding:4px 8px;color:var(--text3);white-space:nowrap;font-size:10px">Adj u/day</td>
+    velRow = `<tr>
+      <td style="padding:4px 8px;color:var(--text3);white-space:nowrap;font-size:10px;border-top:1px solid var(--border);${stickyCell}">Adj u/day</td>
       ${weeks.map(w => {
         const idx = curve[String(w)] || 1;
         const adj = (baseVel * idx).toFixed(1);
         const bg  = w === currentWk ? 'background:rgba(74,158,56,.12)' : '';
-        return `<td style="padding:3px 5px;text-align:center;font-family:var(--mono);font-size:10px;${bg}">${adj}</td>`;
+        return `<td style="padding:3px 5px;text-align:center;font-family:var(--mono);font-size:10px;border-top:1px solid var(--border);${bg}">${adj}</td>`;
       }).join('')}
     </tr>`;
   }
@@ -6634,13 +6711,13 @@ function renderSeasonality() {
   // the optional Saved / Preview rows below the default-category row.
   const curveRow = (label, labelColor, curveObj) => {
     if (!curveObj) return '';
-    return `<tr style="border-top:1px dashed var(--border)">
-      <td style="padding:4px 8px;color:${labelColor};white-space:nowrap;font-size:10px;font-weight:700">${label}</td>
+    return `<tr>
+      <td style="padding:4px 8px;color:${labelColor};white-space:nowrap;font-size:10px;font-weight:700;border-top:1px dashed var(--border);${stickyCell}">${label}</td>
       ${weeks.map(w => {
         const idx = curveObj[String(w)] != null ? curveObj[String(w)] : 1;
         const cls = idx >= 2.5 ? 'sea-pk' : idx >= 1.5 ? 'sea-hi' : idx >= 1.1 ? 'sea-mid' : idx <= 0.9 ? 'sea-lo' : '';
         const bg  = w === currentWk ? 'background:rgba(74,158,56,.12)' : '';
-        return `<td style="padding:3px 5px;text-align:center;${bg}"><span class="${cls}" style="font-size:10px">${Number(idx).toFixed(2)}×</span></td>`;
+        return `<td style="padding:3px 5px;text-align:center;border-top:1px dashed var(--border);${bg}"><span class="${cls}" style="font-size:10px">${Number(idx).toFixed(2)}×</span></td>`;
       }).join('')}
     </tr>`;
   };
@@ -6648,7 +6725,7 @@ function renderSeasonality() {
   const previewRow = (seaCalcCache && r && seaCalcCache.masterId === r.master_id)
     ? curveRow(`Preview (calc, ${seaCalcCache.weeksOfData} wks)`, 'var(--orange)', seaCalcCache.curve) : '';
 
-  tbody.innerHTML = `<tr><td style="padding:4px 8px;color:var(--text3);white-space:nowrap;font-size:10px">Category default</td>${seaRow}</tr>${savedRow}${previewRow}${velRow}`;
+  tbody.innerHTML = `<tr><td style="padding:4px 8px;color:var(--text3);white-space:nowrap;font-size:10px;${stickyCell}">Category default</td>${seaRow}</tr>${savedRow}${previewRow}${velRow}`;
 }
 
 // ══════════════════════════════════════════════════════
