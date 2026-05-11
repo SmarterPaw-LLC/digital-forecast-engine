@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.66**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.67**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,11 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.67)
+- **Units Sold chart — fixed duplicate month labels.** Both the drill chart and the by-channel chart had `labels: weeks.map(w => w.slice(0,7))` which truncated week_start to `YYYY-MM`, so any month with 4+ weeks showed `2026-04 / 2026-04 / 2026-04 / 2026-04`. Replaced with `M/D/YY` formatter so every week is uniquely labeled. The existing `maxTicksLimit: 24` still controls density for long ranges.
+- **Units Sold chart — stable initial height.** The drill panel was `min-height:320px;max-height:480px` with `resize:vertical`, which Chart.js interacted with weirdly on first render (canvas grew taller than the parent). Replaced with an explicit `height:380px;min-height:280px;max-height:720px` so the initial size is deterministic; vertical resize handle still works inside the new bounds.
+- **P&L Amazon line chart added.** New panel between scorecards and the product table. Shows up when 1+ products are checked via the row checkboxes (same mechanism as the existing scorecard drill-down). One line per selected master_id, weekly granularity, with a **Metric** dropdown: Net Sales, Gross Sales, Net Proceeds, Contribution Profit, Contribution %, Margin %, Total Amazon Fees, Ad Spend, COGS, Units Sold. Pulls from `pnlData` (sku_economics rows) with the same FX conversion and region/date filters as the rest of the P&L view — so the chart always tracks the table above. Uses `getAmazonCogs()` for COGS, Contribution Profit, and Contribution % so it reflects the live `product_cogs` data. `updatePnlChart()` is called at the end of `renderPnl()` so any filter or selection change refreshes the chart in lockstep.
 
 ## Recent Fixes (v4.66)
 - **Top-bar `↓ CSV` button now exports the P&L tab.** Previously the active-tab detection routed `pnl` into `showExportDialog`, which had no case for it and fell through to the forecast fallback (or did nothing visible). `exportCSV()` now branches on `pnlView`: on the **Amazon SKU Economics** sub-view it calls a new `doDownloadPnlAmazonCSV()` that exports the currently-rendered aggregated product rows (one row per master_id, mirroring the on-screen table plus computed margin %, contribution profit, contribution %, and total fees); on the **COGS** sub-view it delegates straight to the existing `downloadCogsCSV()`. No dialog — same one-click feel as the COGS page.
