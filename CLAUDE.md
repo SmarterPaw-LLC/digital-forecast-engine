@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.57**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.58**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,9 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.58)
+- **SKU Economics upload — brand prompt when no Brand column.** Raw Amazon CSVs don't have a Brand column, so v4.57's auto-create defaulted unknown ASINs to "Meowijuana" (legacy fallback). Now the upload handler peeks the header line BEFORE parsing; if there's no Brand column, it shows a modal (`promptForSkuEconomicsBrand`) with four buttons — Meowijuana / Doggijuana / Kitty Ka-Zoom / Skip (mixed file). The chosen brand is passed into `parseSkuEconomics(text, fileBrand)` and applied to any newly-auto-created `SP-TEMP-<asin>` products. Existing products keep their current brand. The status line afterward shows e.g. `· 12 new products (brand: Doggijuana)`. Cancelling the modal aborts the upload cleanly.
 
 ## Recent Fixes (v4.57)
 - **SKU Economics upload — raw Amazon download now accepted directly.** Previously the parser required the curated CSV (with `Brand`, `Region`, `Reporting Week`, `Item Name`, `COGS` columns pre-prepended); the raw Amazon export only has `Start date`, `End date`, `Amazon store`, ASIN, financials. Two fallbacks added: (a) if `Reporting Week` column is absent, week_start is derived from `Start date` via `dateToMonday()`; (b) if `Region` column is absent, region is derived from `Amazon store` via `storeToRegion()` (`Amazon.ca` → CA, `*.mx` → MX, else US). Brand and Item Name are still optional (already were); ASINs with no product match still auto-create as `SP-TEMP-<asin>`. The required-columns check is now ASIN + Net units sold + (Reporting Week OR Start date).
