@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.106**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.107**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,11 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.107)
+- **Velocity Window dropdown now affects custom-channels mode.** `getChannelVelocityForRecord` was hardcoded to a 30-day window — meaning when the user filtered the Forecast tab to specific channels (Amazon + Shopify, Amazon only, etc.), switching the Velocity dropdown to 60/90/120 had NO effect on the Need columns or scorecards because they routed through this helper. Now reads `document.getElementById('fVelocityWindow')` like `recomputeRecordVelocity` does, so the dropdown is consistent across Total mode and any channel-filtered view. Chewy branch still uses 30d (it's a forward forecast prorated to daily, not a historical rolling window).
+- **Saved Views now include the advanced sort chain.** Storage schema upgraded from `[col keys...]` to `{ cols: [...], sortChain: [{key, dir}, ...] }`. Backward-compat helpers (`fcViewCols`, `fcViewSort`) read both shapes — pre-v4.107 views still apply correctly (their `sortChain` is null so the current chain is kept). Applying a view restores BOTH column visibility AND sort order. Saving captures both. The view label in the popup now shows sort summary: `Export — Amazon · 18 cols · sort: ↓90d, ↓Brand`.
+- **New "Update" button (↻) per saved view.** Previously the only way to overwrite was to save with the same name and confirm the overwrite prompt — clunky and easy to typo. New green ↻ button next to each view's apply button refreshes the view in place: column visibility + sort chain get overwritten with the current state, with a confirm dialog so accidents don't happen. Same persistence path (localStorage + Supabase) as save-as-new.
 
 ## Recent Fixes (v4.106)
 - **Forecast tab — DTC-only and Chewy-only products were invisible.** The records-build loop had `if (!p.asin) return;` at the top, skipping every product without an Amazon ASIN. Below it sat a "DTC-only fallback" block that filtered `velocities.filter(v => v.source === 'shopify')` — but `velocity_calculated` has no `source` column (it groups by master_id+region only), so that filter always returned an empty array. Net effect: Shopify-only products (like Mice Dreams, Whisker Tickler) and Chewy-only products never made it into `records` and so never appeared in the Forecast tab, scorecards, or CSV exports.
