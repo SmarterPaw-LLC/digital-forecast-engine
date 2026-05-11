@@ -131,14 +131,18 @@ drop policy if exists "audit select all" on audit_log;
 create policy "audit select all" on audit_log for select to authenticated using (true);
 
 -- ──────────────────────────────────────────────────────────────────────────
--- 5b. Sequence grants
---    BIGSERIAL/SERIAL primary keys use a sequence under the hood. Table-level
---    GRANTs (via RLS) do NOT cover sequence USAGE — an INSERT that needs to
---    nextval() the sequence fails with "permission denied for sequence ...".
---    Grant USAGE on every existing sequence, and set default privileges so any
---    future sequence is automatically usable by the authenticated role.
+-- 5b. Table + sequence grants for `authenticated` role
+--    RLS is LAYERED on top of standard Postgres GRANTs — without the role
+--    having underlying SELECT/INSERT/UPDATE/DELETE on the table, every request
+--    is denied with 403 before RLS even gets a chance to evaluate. Same story
+--    for sequences: BIGSERIAL/SERIAL primary keys need USAGE on the sequence
+--    or INSERTs fail with "permission denied for sequence ...".
+--    Grant on every existing table+sequence, and set ALTER DEFAULT PRIVILEGES
+--    so future tables/sequences inherit the grants automatically.
 -- ──────────────────────────────────────────────────────────────────────────
+grant select, insert, update, delete on all tables in schema public to authenticated;
 grant usage, select on all sequences in schema public to authenticated;
+alter default privileges in schema public grant select, insert, update, delete on tables to authenticated;
 alter default privileges in schema public grant usage, select on sequences to authenticated;
 
 -- ──────────────────────────────────────────────────────────────────────────

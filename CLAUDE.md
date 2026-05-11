@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.64**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.65**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,13 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Setup notes — Supabase RLS + table GRANTs
+
+**Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.65)
+- **COGS page now includes bundles.** Was filtering out `p.is_bundle` rows under the rationale that bundle COGS is normally computed from BOM components — but that hid 128 of 502 products from view, making the row count mismatch the Products tab confusing. Bundles now appear in the COGS table with a small orange `📦 BUNDLE` badge next to the product name. Setting COGS on a bundle row works the same as any other product (stores as an override in `product_cogs.amazon_cogs/dtc_cogs/chewy_cogs`). CSV download also includes bundles now.
 
 ## Recent Fixes (v4.64)
 - **Amazon P&L now flags rows with missing COGS.** Two new surfaces: (a) a red-bordered banner above the scorecards reading `⚠ Missing Amazon COGS — N products in this view had sales ($X net sales) but no COGS — Contribution Profit is overstated`. Banner has a `Fix in COGS →` button that switches the view to the COGS sub-page. Only shows when at least one row has sales-without-COGS. (b) Per-row indicator: the product table's COGS column now renders `⚠ missing` (in red) for any row where `units > 0` and `cogsByMaster[master_id].amazon_cogs` is null/zero, instead of the ambiguous `—` (which previously could mean either "no sales" or "no COGS"). Hover tooltip explains the implication. Rows with no sales still show `—`.

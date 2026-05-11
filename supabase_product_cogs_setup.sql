@@ -59,8 +59,11 @@ drop policy if exists "authenticated full access" on product_cogs;
 create policy "authenticated full access" on product_cogs
   for all to authenticated using (true) with check (true);
 
--- Sequence grant safety (no sequences here since master_id is text, but stays
--- consistent with the rest of the schema's setup).
+-- Table-level GRANT — required IN ADDITION to the RLS policy. Without it,
+-- PostgREST denies the request with 403 before RLS gets a chance to evaluate.
+-- (The auth setup's ALTER DEFAULT PRIVILEGES should cover future tables, but
+-- this explicit grant is here for safety and so a partial install still works.)
+grant select, insert, update, delete on product_cogs to authenticated;
 
 -- ──────────────────────────────────────────────────────────────────────────
 -- Verify:
