@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.82**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.83**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,9 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.83)
+- **Combined-region rows now show "ALL" instead of "CA+US" / "US+CA".** v4.82's `combineRegionRecords()` set `r.region` to a `+`-joined string for the rendered Rgn pill — but reading "CA+US" on a row that included Shopify and Chewy sales misled users into thinking those US-only channels also operated in Canada. The pill was also broken visually because no `.rtag-ca+us` CSS class existed. Fixes: (a) added a `.rtag-all` style (green) to match `.rtag-us` / `.rtag-ca`; (b) sorted the internal region string to put US first ('US+CA', not 'CA+US') for the rare callsite that needs to read it; (c) the Rgn column render now detects a `+` and prints "ALL" with a tooltip naming the merged regions and the channel semantics ("Amazon US + Amazon CA velocity summed; Shopify and Chewy added once, US-only").
 
 ## Recent Fixes (v4.82)
 - **Forecast tab: US + CA region mode now collapses to one row per product.** Previously each product with both US and CA Amazon listings appeared as two rows in the table when no region filter was pinned, which made the "same Chewy/Shopify number on both rows" duplication very visible (v4.81 zeroed Chewy on the CA row but the CA row was still there). New helper `combineRegionRecords(records)` merges records by master_id when fRegion=''  — summing daily_vXX / blended_daily / dtc_daily_v30 / fba_available / fba_inbound / warehouse / total_onhand across regions, preferring US identifiers (ASIN, sp_sku), re-deriving sea_idx / adj_daily / trend / need windows. Combined record's `region` is `'US+CA'` (or just `'US'` if only one region had data) so downstream functions can still tell the difference. Region dropdown label updated to "US + CA (combined)" with an explanatory `title` tooltip.
