@@ -7892,8 +7892,9 @@ const FC_COLUMNS = [
       const prod = (allProducts || []).find(p => p.master_id === r.master_id);
       const note = prod?.forecast_notes || '';
       const safe = note.replace(/"/g, '&quot;');
+      const placeholder = '<span style="color:var(--text3);font-style:italic;font-size:10px">click to add note</span>';
       return `<td class="tl" style="padding:4px 6px;max-width:220px" onclick="event.stopPropagation();fcEditNote('${r.master_id}', this)">
-        <div class="fc-note-cell" style="min-height:22px;padding:3px 6px;font-size:11px;color:${note?'var(--text)':'var(--text3)'};border:1px dashed transparent;border-radius:4px;cursor:text;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${safe}">${note || '<span style=\\'color:var(--text3);font-style:italic;font-size:10px\\'>click to add note</span>'}</div>
+        <div class="fc-note-cell" style="min-height:22px;padding:3px 6px;font-size:11px;color:${note?'var(--text)':'var(--text3)'};border:1px dashed transparent;border-radius:4px;cursor:text;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${safe}">${note || placeholder}</div>
       </td>`;
     },
     csv: r => {
