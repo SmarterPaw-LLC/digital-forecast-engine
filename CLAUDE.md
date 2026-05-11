@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.59**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.60**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,24 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.60)
+- **Real user authentication replaces the hardcoded password gate.** Supabase Auth (email/password + Google OAuth) is now the access wall. Every DB call carries the user's JWT instead of the anon key; row-level security on every table enforces this server-side. Setup runs in three places: SQL migration (`supabase_auth_setup.sql`), Supabase dashboard config (`AUTH_SETUP.md`), then dashboard code (this version).
+- **New tables:** `user_profiles` (auto-populated by `on_auth_user_created` trigger; one row per `auth.users`; role column defaults to 'admin'); `audit_log` (writes via `log_action` RPC).
+- **RLS policies:** every existing data table (`products`, `sales_weekly`, `sku_economics`, `inventory`, `bom`, `chewy_forecasts`, `categories`, `channel_listings`) is now `authenticated`-only. Anon role can no longer read or write. `user_profiles` is readable by all authenticated users; users can update only their own row. `audit_log` is read-only to clients; writes go through the SECURITY DEFINER `log_action` RPC.
+- **Login UI:** the password input is gone. Replaced with email + password fields, "Sign in with Google" button (uses the existing Supabase OAuth provider), and a "Sign out" pill in the header showing the current user's email.
+- **Settings → Users:** invite-by-email (uses `signInWithOtp({shouldCreateUser:true})` — sends a magic link that creates the user on first click; admin's session unaffected; no service_role needed in client code). Lists all users with role, joined date, last seen. Self is marked "you".
+- **Settings → Audit Log:** scrollable table of the last 200 audit events with a filter dropdown (Auth / Uploads / Products / Invites / All). Each row shows timestamp, user email, action, and JSON details.
+- **Audit logging wired into:** sign-in, sign-out, invites, and SKU Economics uploads (logs row counts, dupes, brand assignment, etc.). Future product mutations should call `logAudit('product.create', {...})` / `'product.update'` / `'product.delete'` at the same hook points.
+- **`getSB()` updated:** now passes `{auth: {persistSession, autoRefreshToken, detectSessionInUrl}}` so the SDK auto-rotates JWTs and handles OAuth redirect URLs landing back at the dashboard.
+- **Old `SmarterPaw2026` password and session-storage gate removed** — no longer a JS-only check that anyone could bypass via DevTools.
+
+**Deploy + setup order (one-time):**
+1. Run `supabase_auth_setup.sql` in Supabase SQL Editor.
+2. Walk through `AUTH_SETUP.md` to create your first admin user and configure the Google OAuth provider.
+3. Push v4.60 via GitHub Desktop.
+4. Hard-refresh the live site. The login screen should appear; sign in with the account from step 2.
+5. Settings → Users → invite the others by email.
 
 ## Recent Fixes (v4.59)
 - **SKU Economics upload — clearer post-upload nudge for auto-created products.** When a raw Amazon CSV creates new `SP-TEMP-<asin>` products, the upload status now reads `⚠ X new products auto-created as <brand> — set COGS / category in Products tab → Needs Review (Contribution % is overstated until COGS is set)` with the dz-warn style. Makes it visible at upload time why subsequent P&L numbers will look too rosy before COGS is filled in (the `cogs_total` aggregator multiplies `prod.cogs` by units; null/0 COGS = no contribution drag).
