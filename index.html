@@ -5253,7 +5253,7 @@ async function cogsEditSave(masterId, channelField, input) {
 const DB_PRESETS = [
   { label: 'Products', sql: `select master_id, sp_sku, shopify_sku, chewy_sku, asin, brand, title, active\nfrom products\norder by master_id\nlimit 100;` },
   { label: 'Sales Weekly', sql: `select master_id, channel, region, week_start, units_ordered\nfrom sales_weekly\norder by week_start desc, units_ordered desc\nlimit 100;` },
-  { label: 'Velocity', sql: `select master_id, region, v30, v60, v90, v120, weeks_of_data\nfrom velocity_calculated\norder by v30 desc\nlimit 100;` },
+  { label: 'Velocity', sql: `select v.master_id, p.short_name, p.title, v.region,\n  v.v30, v.v60, v.v90, v.v120, v.weeks_of_data\nfrom velocity_calculated v\nleft join products p on p.master_id = v.master_id\nwhere v.v30 > 0\norder by v.v30 desc\nlimit 100;` },
   { label: 'SKU Economics', sql: `select master_id, asin, region, week_start,\n  gross_sales, net_sales, fba_fulfillment_fee_total,\n  sponsored_products_total, net_proceeds_total\nfrom sku_economics\norder by week_start desc\nlimit 100;` },
   { label: 'Chewy Forecasts', sql: `select master_id, chewy_sku, product_name, forecast_month,\n  forecast_units, upload_date\nfrom chewy_forecasts\norder by upload_date desc, forecast_month\nlimit 100;` },
   { label: 'Inventory', sql: `select master_id, asin, region, fba_available, fba_inbound,\n  warehouse, lead_time_days, safety_stock\nfrom inventory\norder by fba_available asc\nlimit 100;` },
