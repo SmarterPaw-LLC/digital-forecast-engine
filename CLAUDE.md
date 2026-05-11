@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.85**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.86**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,11 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.86)
+- **Column header tooltips on the Forecast tab.** Every column in `FC_COLUMNS` now has an optional `tooltip` field; the `<th>` `title` attribute prefers that over the bare label. The header cursor flips to `help` so it's clear hovering will say something. Tooltip text explains the underlying math + source (e.g., Need columns name the curve integration; Sea Now names where the multiplier comes from; Trend names the v60/v90 ratio thresholds; per-channel Forecast columns call out that they don't apply seasonality — intentional). Sort hint appended where applicable.
+- **Velocity Window selector.** New dropdown in the filter strip (`30d (live)` / `60d` / `90d` / `120d`) picks which historical window feeds `blended_daily` for every record. Changing it fires `applyVelocityWindow()` which recomputes `blended_daily = daily_v{N}`, then re-derives `sea_idx → adj_daily → rederiveNeeds(rec)` for every record, then renders. Default stays at 30d (matches v4.85 init behavior). The matching `Vel Xd` column in the VELOCITY LOOKBACK group is tagged with a green `★ LIVE` indicator and `num-hi` styling so it's visible at a glance.
+- **CSV export now respects the US+CA collapse.** Previously the "Everything" export scope dumped `records` directly (per-region), which split US+CA into two rows even though the on-screen UI had collapsed them. Fix: `doExportCSV('forecast', 'everything')` now applies `combineRegionRecords(records)` when no region filter is pinned (mirrors `getVisible()` behavior). Filtered exports were already correct since they route through `getVisible()`.
 
 ## Recent Fixes (v4.85)
 - **Query Database tab — broken by v4.60 auth migration, now fixed.** `runDbQuery()` was hand-rolling `fetch('/rest/v1/rpc/exec_sql', { headers: { apikey: SB_KEY, Authorization: \`Bearer ${SB_KEY}\` }})` — both headers using the anon key. After v4.60 enabled RLS on every data table and restricted access to the `authenticated` role, those anon-keyed calls hit RLS deny on the inner SELECT (`exec_sql` is SECURITY INVOKER, so it runs as the caller's role). The SKU Economics preset (and any other preset that touched an RLS-protected table) returned 0 rows or a generic error. Switched to `sb.rpc('exec_sql', { query: sql })` through the shared Supabase client — the client automatically attaches the logged-in user's JWT, so the query runs as `authenticated` and the policy lets it through. Cleaner error surfacing too: the Supabase client returns structured `{message, hint}` so the status line shows the real Postgres error directly.
