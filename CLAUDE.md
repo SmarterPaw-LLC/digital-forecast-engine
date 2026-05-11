@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.65**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.66**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,10 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.66)
+- **Top-bar `↓ CSV` button now exports the P&L tab.** Previously the active-tab detection routed `pnl` into `showExportDialog`, which had no case for it and fell through to the forecast fallback (or did nothing visible). `exportCSV()` now branches on `pnlView`: on the **Amazon SKU Economics** sub-view it calls a new `doDownloadPnlAmazonCSV()` that exports the currently-rendered aggregated product rows (one row per master_id, mirroring the on-screen table plus computed margin %, contribution profit, contribution %, and total fees); on the **COGS** sub-view it delegates straight to the existing `downloadCogsCSV()`. No dialog — same one-click feel as the COGS page.
+- **`renderPnl()` now snapshots its rows.** Added `pnlExportRows` and `pnlExportCtx` module-level caches set at the end of each render (after region/date/brand/category/search/quick-filter all apply). The export uses this snapshot directly, so what's exported exactly matches what's on screen at that moment. Audit log records `pnl.export` with row count, region, date range, and active filters.
 
 ## Recent Fixes (v4.65)
 - **COGS page now includes bundles.** Was filtering out `p.is_bundle` rows under the rationale that bundle COGS is normally computed from BOM components — but that hid 128 of 502 products from view, making the row count mismatch the Products tab confusing. Bundles now appear in the COGS table with a small orange `📦 BUNDLE` badge next to the product name. Setting COGS on a bundle row works the same as any other product (stores as an override in `product_cogs.amazon_cogs/dtc_cogs/chewy_cogs`). CSV download also includes bundles now.
