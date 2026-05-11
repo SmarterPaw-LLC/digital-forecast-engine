@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.61**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.62**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,17 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.62)
+- **P&L is now a dropdown** with two sub-views: `📊 Amazon SKU Economics` (the prior P&L page) and `📦 COGS` (new). Same dropdown pattern as the Data tab. State persists in `pnlView`.
+- **New `product_cogs` table** (`supabase_product_cogs_setup.sql`): per-channel COGS values. One row per master_id with `amazon_cogs`, `dtc_cogs`, `chewy_cogs`. PK is master_id with FK→products(master_id) ON DELETE CASCADE. RLS authenticated full access. `updated_at` + `updated_by` maintained by trigger. Backfill at setup time copies existing `products.cogs` into `amazon_cogs` (every previously-stored COGS came from Amazon's report). `products.cogs` is retained in the DB as backup but no longer authoritative.
+- **In-memory cache** `cogsByMaster` mirrors the table; loaded by `loadProductCogs()` at init (parallel with products/velocity/inventory), refreshed after CSV uploads and after `parseSkuEconomics` writes new Amazon COGS values.
+- **`parseSkuEconomics` writes to `product_cogs.amazon_cogs`** (not `products.cogs`). Same delta semantics: any non-null COGS from the report's `cogs` column → upserted, batched, then `loadProductCogs()` refreshes the cache.
+- **`renderPnl` reads from the new lookup.** `getAmazonCogs(master_id)` is the single source of truth; the `cogs_total` aggregator uses it × `net_units_sold`. The old `prod.cogs` read is gone.
+- **COGS page (Settings → P&L → COGS):** table of every product (excluding bundles) with one row showing Brand chip / product name / master_id / channel IDs (ASIN + Shopify SKU + Chewy Part # tagged with A:/S:/C: prefixes) / Amazon COGS / DTC COGS / Chewy COGS / Status badge. A product is flagged "⚠ Missing" only for channels it's actually sold on (has the respective channel ID). Filters: Brand, "All / Missing any / Missing Amazon / Missing DTC / Missing Chewy", search.
+- **CSV download/upload for COGS:** Download exports `master_id,brand,title,asin,shopify_sku,chewy_part_no,amazon_cogs,dtc_cogs,chewy_cogs`. Upload upserts on master_id; empty cells preserve existing values (so partial updates work — e.g. fill in just DTC COGS without overwriting Amazon).
+- **Audit log:** `cogs.download` and `cogs.upload` events recorded (with row counts).
+- **One-time setup:** run `supabase_product_cogs_setup.sql` in Supabase SQL Editor BEFORE deploying v4.62, otherwise `loadProductCogs()` silently warns to console and `cogsByMaster` stays empty (P&L will show $0 COGS for everything until the table exists).
 
 ## Recent Fixes (v4.61)
 - **SKU Economics upload — revert v4.53's last-write-wins back to summing.** v4.53 changed the per-row aggregation from `+=` to `=` to dedupe accidental byte-identical duplicates in concatenated curated CSVs. That decision was wrong for the **raw** Amazon download: Amazon legitimately emits multiple CSV rows for the same ASIN+week when the ASIN is listed under multiple MSKUs (merchant SKUs). v4.53 silently kept only the LAST MSKU's data and dropped the others, undercounting those ASINs. Reverted to summing; same key collisions are now tracked as `repeatCount` (renamed from `dupCount`) and surfaced as an informational note (`ℹ X ASIN rows repeated for same week (summed — usually Amazon's multi-MSKU split for the same product)`), no longer flagged as warning. Byte-identical dupes (rare; happens only with hand-concatenated exports) will still inflate the row by 2× — acceptable trade-off given multi-MSKU is the common case.
