@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.100**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.101**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,13 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.101)
+- **Forecast tab — multi-column sort (sortChain).** Replaced the single `sortKey/sortDir` pair with `sortChain = [{key, dir}, ...]` where `[0]` is primary, `[1]` is tiebreaker, etc. `fcCompare` walks the chain and returns the first non-zero comparison; ties fall through to the next entry. `sortKey`/`sortDir` are kept as derived mirrors of `sortChain[0]` for any other code that reads them (status filters, etc.) via `fcSyncLegacySort()`.
+- **Two ways to manage the chain:**
+  - **Shift+click any column header** in the table — appends the column to the chain or toggles its direction if already present. Plain click still replaces (single-column sort) and toggles direction on repeat. Header `<span class="si">` now shows a small superscript chain position (e.g. `↓²`) for secondary/tertiary sorts so the priority is visible at a glance.
+  - **New ↕ Sort button** next to 📋 Columns opens an Advanced Sort dialog. Lists the current chain row-by-row with per-row controls: toggle direction, move up/down, remove from chain. A dropdown at the bottom lets you add any non-active column. Plus "Clear all" and "Reset to default (Vel/day ↓)" buttons.
+- **Session-only persistence.** The chain resets on page reload (back to `[{adj_daily, -1}]`). Same convention as before for a transient view state; if you want a sort to persist, save the column visibility into a Saved View — that's about columns, not sort order. (Could be extended later to persist per-user alongside saved views.)
 
 ## Recent Fixes (v4.100)
 - **Saved Views now sync to Supabase per user.** Previously stored only in `localStorage` (per-browser, per-device, no sync). Now stored in `user_profiles.forecast_saved_views` (JSONB) keyed to the authenticated user — views follow you across browsers and devices, survive cache clears, and are private per user. `localStorage` is kept as a fast first-paint cache (no flash of empty popup while the DB read is in flight). `fcLoadSavedViewsFromDb()` runs at init kick-off; `fcPersistSavedViews()` writes to both localStorage and Supabase on every save/delete. Failures (RLS, network) fall back silently to local cache.
