@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.105**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.106**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,11 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.106)
+- **Forecast tab — DTC-only and Chewy-only products were invisible.** The records-build loop had `if (!p.asin) return;` at the top, skipping every product without an Amazon ASIN. Below it sat a "DTC-only fallback" block that filtered `velocities.filter(v => v.source === 'shopify')` — but `velocity_calculated` has no `source` column (it groups by master_id+region only), so that filter always returned an empty array. Net effect: Shopify-only products (like Mice Dreams, Whisker Tickler) and Chewy-only products never made it into `records` and so never appeared in the Forecast tab, scorecards, or CSV exports.
+- **Fix:** the no-ASIN early-return is replaced with a check that requires at least ONE channel ID (`asin` OR `shopify_sku` OR `chewy_sku`). Products without ASIN get a single US-only record (Shopify and Chewy are US-only channels) instead of iterating US+CA. Velocity is looked up via `master_id+region` (works for any channel that lands in sales_weekly, including shopify); inventory and ASIN-keyed lookups gracefully degrade to undefined when there's no ASIN. For Chewy-only products with no sales_weekly history, `blended_daily` ends up 0 and the Need columns are driven entirely by `getChewyFcUnits` + bundle attribution at render time — which is the right semantic.
+- **Dead-code cleanup:** removed the broken `dtcVel = velocities.filter(v => v.source === 'shopify')` block; main loop now handles all cases.
 
 ## Recent Fixes (v4.105)
 - **Seasonality tab — bulk apply supports `mix` method, not just `calculated`.** New "Method:" dropdown in the Bulk Seasonality panel (between Min weeks and the apply buttons) with two options: `⚡ calculated` (default, prior behavior) and `⊕ mix (50/50)`. `seaBulkApplyMids(mids, minWeeks, method)` now accepts a third argument and sets `sea_method` accordingly on every successfully-applied row. Both wrappers (`seaBulkApplyToSelected`, `seaBulkApplyToAll`) read the picker via `seaBulkMethod()` and pass through. The Apply Selected button label updates live (⚡/⊕ icon flips) when the dropdown changes via `renderSeasonalityList`. Confirm dialogs name the method, status line ("✓ Applied ⊕ mix to N") names the method, audit log records `seasonality.bulk_apply` with the method field.
