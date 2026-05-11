@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.102**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.104**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,12 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.104)
+- **`sbGet` now paginates.** The init flow's parallel `sbGet('products') / sbGet('velocity_calculated') / sbGet('inventory')` calls used un-ranged `select('*')` which Supabase silently caps at 1000 rows. With SmarterPaw's ~500 products × 2 regions = ~1000 velocity rows, the cap was right at the boundary — products whose velocity row landed past it had `daily_v60/90/120 = 0` (the `|| 0` fallback when `vel` was undefined), so when the user switched the Velocity Window dropdown to 60d/90d/120d, those products' `blended_daily` became 0 (= 0 + bundle attribution), making it look like the dropdown had no effect for entire swaths of the catalog. Architecture Rule #4 cleanup. Now `sbGet` loops 1000 rows at a time via `.range()` until a page comes back smaller. Every callsite benefits — products, velocity, inventory, and any other table fetched through this helper.
+
+## Recent Fixes (v4.103)
+- **Forecast tab Need cells get a breakdown tooltip.** Hovering any Need column cell shows how the total breaks down into Amazon/DTC velocity × seasonal curve + Chewy forward forecast (or just channel velocity × curve when a channel filter is active). The breakdown is channel-aware: Total mode shows "Amazon + DTC" + "Chewy" with the on-top math, while a pinned channel filter (Shopify only / Amazon only / etc.) shows just the active channels' velocity contribution.
 
 ## Recent Fixes (v4.102)
 - **Seasonality calculation no longer mixes pre- and post-channel-launch data.** `computeProductSeasonality` was summing `units_ordered` across every channel for every weekly bucket without considering when each channel went live for that product. Result: a product like Purrple Passion (Shopify since 2024, Amazon since Aug 2025) would show a false seasonal peak around late summer — that wasn't seasonality, it was "Amazon launched and the weekly volume jumped 10x."
