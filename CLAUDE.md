@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.91**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.92**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,13 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.92)
+- **Shopify upload — fractured week_start values from a timezone-poisoned parser.** The Shopify daily→weekly aggregator did `new Date(dayString)` to parse each row's Day column. JS interprets ISO strings ("2025-08-04") as UTC midnight while reading `getDay`/`getDate` in LOCAL time — so in non-UTC timezones the parser saw the "wrong" day-of-week, derived a shifted week_start via the same Sun-is-day-7 math the Amazon parser had, and finally serialized via `toISOString()` (UTC again). Different CSV formats (ISO vs M/D/YYYY) and different upload times scattered rows across multiple buggy week_start values for what should have been one canonical week — the user observed week_starts of 2025-07-29 (Tue), 2025-08-04 (Mon), and 2025-08-05 (Tue) all in the same period.
+- **Fix:** new global helpers `parseLocalDate` (parses ISO + US date strings to local midnight, sidestepping UTC) and `dateToMondayLocal` (does week math in local time, formats output from local parts via `fmtLocalYMD` instead of `toISOString`). The Shopify aggregator now routes through them, producing stable Monday-of-Mon-Sun-week values regardless of CSV format or user timezone. Sunday inputs (the day-7 trap) map FORWARD to the next-day Monday (same rule the v4.91 dateToMonday fix introduced for Amazon).
+- **Migration for existing data:** `supabase_fix_shopify_week_dates.sql`. Uses Postgres `date_trunc('week', week_start)::date` (which returns the Mon-Sun ISO Monday) to collapse every shopify row onto its canonical Monday, then groups by `(channel, asin, shopify_sku, region, monday)` and sums `units_ordered + revenue`. Wrapped in a transaction with preview steps before the `commit`. Note: since the existing rows are already weekly aggregates (the per-day fidelity was lost at original upload), the migration consolidates the buggy weeklies but can't reconstruct day-level placement. For high-precision needs, re-upload the daily Shopify CSVs after deploying v4.92 — the parser's delete+insert path will replace existing rows cleanly.
+- **Chewy parser is NOT affected.** chewy_forecasts stores monthly granularity (forecast_month = YYYY-MM); no daily→weekly aggregation path, no timezone bug.
+- **Legacy Amazon by-Child-ASIN uploader is NOT affected.** It only updates in-memory velocity (`daily_v30/v60/v90`), no week_start writes to sales_weekly.
 
 ## Recent Fixes (v4.91)
 - **SKU Economics upload — uploaded data didn't appear in the P&L tab.** Two compounding bugs:
