@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.101**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.102**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,12 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.102)
+- **Seasonality calculation no longer mixes pre- and post-channel-launch data.** `computeProductSeasonality` was summing `units_ordered` across every channel for every weekly bucket without considering when each channel went live for that product. Result: a product like Purrple Passion (Shopify since 2024, Amazon since Aug 2025) would show a false seasonal peak around late summer — that wasn't seasonality, it was "Amazon launched and the weekly volume jumped 10x."
+- **Fix — channel-stable window detection.** The function now scans the product's sales rows and per-channel records the first sale week + total weeks of activity. A channel is "significant" if it has ≥3 weeks of sales (filters out one-off / test orders that would otherwise narrow the window unnecessarily). The data window for the curve calculation starts at the LATEST first-sale-week across all significant channels — so for Purrple Passion that's August 2025 onwards, where both Shopify AND Amazon were active. Pre-window data is excluded.
+- **Surface the window in the UI.** The status line after Calculate from sales now reads `✓ enough data · 38 weeks observed · baseline X units/wk · window: 2025-08-04 → now (channel-stable) · channels: amazon_us(38w), shopify(36w)`. Hover tooltip explains the heuristic. The `result` object also gains `channels` and `stableStart` fields so any future UI or audit-log entry can show what data fed the curve.
+- **Re-calc affected curves.** Existing stored curves (`sea_method='calculated'` or `'mix'`) are based on the pre-v4.102 math. Open the Seasonality tab → click each affected product → click ⚡ Calculate from sales → ✓ Apply. Or use the bulk "Apply to ALL eligible" button to re-run every active product. The Query Database tab → Seasonality Status preset shows which products are on calculated/mix and when they were last computed.
 
 ## Recent Fixes (v4.101)
 - **Forecast tab — multi-column sort (sortChain).** Replaced the single `sortKey/sortDir` pair with `sortChain = [{key, dir}, ...]` where `[0]` is primary, `[1]` is tiebreaker, etc. `fcCompare` walks the chain and returns the first non-zero comparison; ties fall through to the next entry. `sortKey`/`sortDir` are kept as derived mirrors of `sortChain[0]` for any other code that reads them (status filters, etc.) via `fcSyncLegacySort()`.
