@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.77**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.78**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,14 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.78)
+- **Per-product method picker — adds `mix` as a fourth `sea_method`.** The Method column on the Seasonality page is now an inline `<select>` (same UX as the Seasonal type column) instead of a static chip. Options: `— default` (uses category curve), `⚡ calculated` (uses product's own computed curve), `⊕ mix (50/50)` (blends the calculated curve 50/50 with the fallback curve), and `✎ manual` (shown only if already set; no UI to enter).
+- **Why mix.** For products with moderate history (~26–52 weeks), the calculated curve has signal but is still noisy — single outlier weeks can dominate. Blending 50/50 with the fallback (category default OR `seasonal_type` SEED curve if set) pulls extreme calc values back toward a sensible prior. Best-practice middle ground between "trust the data fully" (`calculated`) and "ignore product-specific signal" (`category-default`).
+- **`getEffectiveCurveForProduct`** now recognises `method === 'mix'` and, when the product meets `sea_min_weeks`, computes `effective[w] = (calculated[w] + fallback[w]) / 2` per week, rounded to 2 decimals. The fallback resolution mirrors the standalone case: `seasonal_type=flat/seasonal/seasonal_limited` first, then `category default`. If `sea_curve_calculated` is missing or below threshold, falls through to the seasonal_type / category-default branches just like `calculated` does.
+- **`seaSetMethod(masterId, newMethod)`** handler runs from the per-row dropdown. For `calculated`/`mix`, if no saved curve exists yet (or it's below the current threshold), the function auto-computes from sales history using the Min weeks input as threshold. Thin data aborts with an alert + the dropdown reverts to the stored value. Audit log records `seasonality.set_method`.
+- **Method filter dropdown** gains a `Mix (50/50)` option so the product list can be narrowed to mix-method rows.
+- **`supabase_seasonality_setup.sql`** updates the `sea_method` CHECK constraint to include `'mix'`. Uses a `do $$ … $$` block that drops the existing constraint (whatever its auto-generated name) and re-adds it with the wider set. **Re-run the file in Supabase SQL Editor before deploying v4.78** — without it, the update will fail with `new row for relation "products" violates check constraint`.
 
 ## Recent Fixes (v4.77)
 - **`products.seasonal_type` designation.** New per-product enum: `standard` (default — uses category curve), `seasonal` (uses `SEED.curves.seasonal`), `seasonal_limited` (uses `SEED.curves.seasonal_limited`), `flat` (multiplier of 1.0 every week — good for new launches). The Query Jason ran confirmed no products were classified as `seasonal_limited` via `category_id`, so this gives a more direct route: tag the product itself rather than relying on the categories table.

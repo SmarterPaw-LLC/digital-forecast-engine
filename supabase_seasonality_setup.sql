@@ -11,6 +11,12 @@
 --   sea_method        — how to source the weekly multiplier:
 --                       'category-default' (default, uses SEED.curves)
 --                       'calculated'        (uses sea_curve_calculated)
+--                       'mix'               (50/50 blend of sea_curve_calculated
+--                                            with the fallback curve — category
+--                                            default or seasonal_type SEED curve.
+--                                            Useful for products with moderate
+--                                            history where the calc is noisy and
+--                                            the category default is a useful prior.)
 --                       'manual'            (uses sea_curve_manual)
 --   sea_curve_calculated — JSON { "1": 1.2, "2": 1.1, ..., "52": 0.8 }
 --   sea_curve_manual     — JSON same shape; user-edited override
@@ -24,7 +30,23 @@
 -- ============================================================================
 
 alter table products add column if not exists sea_method            text default 'category-default'
-  check (sea_method in ('category-default','calculated','manual'));
+  check (sea_method in ('category-default','calculated','mix','manual'));
+
+-- For existing installs (pre-v4.78), widen the CHECK constraint to include 'mix'.
+-- `add column if not exists` above won't update a column that already exists,
+-- so we drop and re-add the constraint explicitly. Safe to re-run.
+do $$
+declare cn text;
+begin
+  select conname into cn
+    from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+   where t.relname = 'products' and c.contype = 'c'
+     and pg_get_constraintdef(c.oid) like '%sea_method%';
+  if cn is not null then execute format('alter table products drop constraint %I', cn); end if;
+  alter table products add constraint products_sea_method_check
+    check (sea_method in ('category-default','calculated','mix','manual'));
+end$$;
 alter table products add column if not exists sea_curve_calculated  jsonb;
 alter table products add column if not exists sea_curve_manual      jsonb;
 alter table products add column if not exists sea_min_weeks         integer default 26;
