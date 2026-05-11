@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.74**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.75**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,19 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.75)
+- **Per-product seasonality calculated from sales history.** The Seasonality page previously could only display the legacy `SEED.curves` category-level curves baked into the file. Now: pick a product, click `⚡ Calculate from sales`, and `computeProductSeasonality()` derives a 52-week curve from `salesData[master_id]` — grouping `units_ordered` by ISO week-of-year, dividing each week's average by the overall average to produce indices around 1.0. Result is cached in `seaCalcCache` and rendered as a `Preview` row in the existing 52-week table, below the `Category default` row, so the two are visually comparable.
+- **Per-product threshold for confidence.** New `Min weeks of data` input (default 26) is the threshold per product — below that, the calculated curve is considered too thin and won't be applied even after Save. Lets you tag new launches with a high threshold (52) so they keep using category default until enough data accumulates; lower it (8–12) for known-seasonal items where you want the curve to apply early. Stored on `products.sea_min_weeks`.
+- **Apply / Revert.** `💾 Apply this curve` persists the computed curve + threshold to `products.sea_curve_calculated`, sets `sea_method='calculated'`, and triggers `init()` so every downstream view (Demand Forecast, Inventory Planning, P&L) immediately picks up the new sea_idx. `↺ Revert to category default` clears the saved curve and flips method back. Audit log captures `seasonality.apply` and `seasonality.revert`.
+- **Resolver: `getEffectiveCurveForProduct(p)`** — single source of truth that `getAutoSeaIdx` and `getForwardSea` both call. Returns `{ curve, source }` where source is `'calculated' | 'manual' | 'category-default'`. Falls back to category when method is `'calculated'` but weeks-of-data is below threshold (so new launches don't accidentally pick up half-baked curves).
+- **New `products` columns** (`supabase_seasonality_setup.sql` — uses `add column if not exists`, safe to re-run):
+  - `sea_method TEXT default 'category-default'` — picks which source wins
+  - `sea_curve_calculated JSONB` — `{"1":1.2,"2":1.05,...,"52":0.8}`
+  - `sea_curve_manual JSONB` — placeholder for future user-edited curves (no UI yet)
+  - `sea_min_weeks INTEGER default 26` — per-product confidence threshold
+  - `sea_calculated_at TIMESTAMPTZ`, `sea_weeks_of_data INTEGER` — provenance/staleness metadata
+- **Setup:** run `supabase_seasonality_setup.sql` in Supabase SQL Editor BEFORE deploying v4.75. Without it, the Apply button will fail with `column does not exist` on the products UPDATE.
 
 ## Recent Fixes (v4.74)
 - **Amazon P&L — every column header is click-to-sort.** Replaced the static thead with a dynamic `<tr id="pnl-thead-row">` rendered by `renderPnl()`. Each column (Product, Units, Net Sales, FBA Fees, Referral, Ad Spend, COGS, Net Proceeds, Margin %, Contrib %) has an onclick that calls `pnlSetSort(key)`. First click on a numeric column sorts desc; first click on Product sorts asc; clicking the same column again toggles direction. Active sort column highlighted in `var(--text)` with `↑` or `↓` indicator; inactive columns show a dimmed `↕`. State is preserved across renders via `pnlSortKey` and `pnlSortDir`.
