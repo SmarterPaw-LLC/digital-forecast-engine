@@ -23,15 +23,18 @@ create index if not exists product_cogs_amazon_idx on product_cogs(master_id) wh
 create index if not exists product_cogs_dtc_idx    on product_cogs(master_id) where dtc_cogs    is not null;
 create index if not exists product_cogs_chewy_idx  on product_cogs(master_id) where chewy_cogs  is not null;
 
--- Backfill: every existing products.cogs value lands in amazon_cogs.
+-- Backfill: create one product_cogs row per product (1:1 with products).
+-- Existing products.cogs values land in amazon_cogs. Products without a COGS
+-- value get a row anyway with amazon_cogs=null — that way the table mirrors
+-- products exactly and the COGS page UI is consistent. Re-runs are safe: the
+-- on-conflict clause only updates rows that don't already have amazon_cogs set,
+-- so any values entered post-migration are preserved.
 insert into product_cogs (master_id, amazon_cogs, updated_at)
 select master_id, cogs, now()
 from products
-where cogs is not null and cogs > 0
 on conflict (master_id) do update
-  set amazon_cogs = excluded.amazon_cogs,
-      updated_at  = now()
-  where product_cogs.amazon_cogs is null;
+  set amazon_cogs = coalesce(product_cogs.amazon_cogs, excluded.amazon_cogs),
+      updated_at  = now();
 
 -- Trigger: maintain updated_at + updated_by on each modification.
 create or replace function bump_product_cogs_updated_at()

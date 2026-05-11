@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.62**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.64**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,13 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.64)
+- **Amazon P&L now flags rows with missing COGS.** Two new surfaces: (a) a red-bordered banner above the scorecards reading `⚠ Missing Amazon COGS — N products in this view had sales ($X net sales) but no COGS — Contribution Profit is overstated`. Banner has a `Fix in COGS →` button that switches the view to the COGS sub-page. Only shows when at least one row has sales-without-COGS. (b) Per-row indicator: the product table's COGS column now renders `⚠ missing` (in red) for any row where `units > 0` and `cogsByMaster[master_id].amazon_cogs` is null/zero, instead of the ambiguous `—` (which previously could mean either "no sales" or "no COGS"). Hover tooltip explains the implication. Rows with no sales still show `—`.
+- **Migration backfill updated to 1:1.** `supabase_product_cogs_setup.sql` now creates a `product_cogs` row for **every** product (not just those with non-null/positive `cogs`). Re-runs are safe — uses `coalesce` on conflict so existing `amazon_cogs` values are preserved. For users on v4.62/v4.63 who already ran the older migration, the chat-provided patch query (`insert ... left join product_cogs ... where pc.master_id is null`) backfills the missing rows.
+
+## Recent Fixes (v4.63)
+- **Products modal rewired to the per-channel COGS table.** The COGS field on the edit-product modal now reads from `cogsByMaster[mid]?.amazon_cogs` (falls back to legacy `products.cogs` if no `product_cogs` row exists yet, so older data still displays). On save, the value is upserted into `product_cogs.amazon_cogs` via a separate call; `cogs` was removed from the `products` table payload so the legacy column stops accumulating writes. After upsert, `loadProductCogs()` refreshes the in-memory cache so the P&L picks up the new value immediately. Label renamed to "Amazon COGS (USD)" with a hint pointing users to P&L → COGS for DTC and Chewy COGS editing.
 
 ## Recent Fixes (v4.62)
 - **P&L is now a dropdown** with two sub-views: `📊 Amazon SKU Economics` (the prior P&L page) and `📦 COGS` (new). Same dropdown pattern as the Data tab. State persists in `pnlView`.
