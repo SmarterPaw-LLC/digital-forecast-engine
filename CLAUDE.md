@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.68**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.69**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,9 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.69)
+- **Uploads tab — Amazon by-Child-ASIN tiles moved behind a collapsible "Other / Legacy uploads" disclosure.** The six tiles (Meowijuana / Doggijuana / Kitty Ka-Zoom × US / CA) populated `sales_weekly` only — no fees or COGS — and the SKU Economics upload above now covers the same channels with full financial data. The tiles are kept available (in case of historical By-Child-ASIN exports needing backfill) but tucked inside a `<details>` element so they're out of the way by default. Header reads `🗂 Other / Legacy uploads — Amazon by Child ASIN (superseded by SKU Economics above)`.
 
 ## Recent Fixes (v4.68)
 - **SKU Economics upload now enforces strict one-week Sun→Sat scope.** A previous lump 9/1–12/31 upload (17 weeks of activity rolled into a single CSV) all aggregated into one `week_start = 2025-09-01` row per ASIN and required manual SQL cleanup. The parser now scans for unique `Reporting Week` (or `Start date|End date`) keys BEFORE the agg loop runs and throws a clear error if more than one is present: `Multi-week file detected (N+ different weeks in this CSV). Upload ONE WEEK AT A TIME…`. When the CSV has Start/End date columns, additionally validates: start must be a Sunday, end must be a Saturday, range must be exactly 7 days. Each failure mode has its own targeted error message naming the offending date and the day-of-week it actually fell on.
