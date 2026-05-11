@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.76**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.77**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,13 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.77)
+- **`products.seasonal_type` designation.** New per-product enum: `standard` (default — uses category curve), `seasonal` (uses `SEED.curves.seasonal`), `seasonal_limited` (uses `SEED.curves.seasonal_limited`), `flat` (multiplier of 1.0 every week — good for new launches). The Query Jason ran confirmed no products were classified as `seasonal_limited` via `category_id`, so this gives a more direct route: tag the product itself rather than relying on the categories table.
+- **Precedence in `getEffectiveCurveForProduct`:** 1) Per-product calculated/manual curve (if it meets `sea_min_weeks`) → 2) `seasonal_type` designation → 3) Category default curve. The calculated/manual curve still wins when present and confident — `seasonal_type` is a fallback / opinionated override one step above the category default.
+- **Inline dropdown** in the Seasonality product list — new "Seasonal type" column with a per-row `<select>` (highlighted in orange when not `standard`). Change fires `seaSetSeasonalType()` which UPDATEs `products` and refreshes downstream views.
+- **Bulk type-setter** in the existing bulk panel: pick a type, click `🏷 Set type for Selected` to apply to every checked product. Routes through `seaBulkSetSeasonalType()` which mirrors the structure of `seaBulkApplyMids` — per-product UPDATE, status reporting, audit log entry (`seasonality.bulk_set_type`).
+- **New `seasonal_type` column** added to `supabase_seasonality_setup.sql` (uses `add column if not exists`, safe to re-run). Run it before deploying v4.77 or the dropdown change will fail with a `column does not exist` Postgres error.
 
 ## Recent Fixes (v4.76)
 - **Seasonality page — searchable product list + bulk operations.** The single-product dropdown is now backed by a full product table at the top of the page, matching the search/filter pattern used on other tabs (P&L, COGS, Forecast). Controls: text search (matches title / short_name / master_id / ASIN / Shopify SKU / Chewy Part #), Brand filter, Method filter (Category default / Calculated / Manual), Status filter (Active / Inactive / All — defaults to Active), plus the existing Category dropdown for viewing a category curve directly. Each row shows: checkbox, brand chip, product name, master_id, current method (⚡ calculated / ✎ manual / — default), weeks of sales data, and eligibility (✓ ready / ⚠ thin) computed against the current Min weeks input.
