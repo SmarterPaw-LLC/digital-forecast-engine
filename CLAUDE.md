@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.75**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.76**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,16 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.76)
+- **Seasonality page — searchable product list + bulk operations.** The single-product dropdown is now backed by a full product table at the top of the page, matching the search/filter pattern used on other tabs (P&L, COGS, Forecast). Controls: text search (matches title / short_name / master_id / ASIN / Shopify SKU / Chewy Part #), Brand filter, Method filter (Category default / Calculated / Manual), Status filter (Active / Inactive / All — defaults to Active), plus the existing Category dropdown for viewing a category curve directly. Each row shows: checkbox, brand chip, product name, master_id, current method (⚡ calculated / ✎ manual / — default), weeks of sales data, and eligibility (✓ ready / ⚠ thin) computed against the current Min weeks input.
+- **Click a row to activate** for the detail view (the existing 52-week table below). The legacy `sea-product` dropdown is kept in the DOM as hidden state storage so `renderSeasonality()` doesn't change.
+- **Bulk Calculate + Apply.** Three new buttons in a `Bulk seasonality` panel above the product list:
+  - **⚡ Calculate + Apply Selected (N)** — runs `computeProductSeasonality()` for every checked product, applies any whose `weeksOfData >= minWeeks`. Counts skipped (thin data) and reports.
+  - **📊 Apply to ALL eligible** — same, but candidate set is every active product. Skips those below threshold automatically.
+  - **↺ Revert Selected** — bulk-revert checked products to `sea_method='category-default'`, clearing saved curves.
+- All three issue per-product UPDATEs via `seaBulkApplyMids(mids, minWeeks)` (one round-trip per product — acceptable for hundreds of products in one operation), then call `loadProducts()` + `init()` so the new curves immediately flow through to Forecast / Inventory / P&L views. Audit log records `seasonality.bulk_apply` and `seasonality.bulk_revert` with counts.
+- **Min weeks input** in the bulk panel is the same value used by single-product apply. Changing it instantly re-renders the eligibility column in the product list.
 
 ## Recent Fixes (v4.75)
 - **Per-product seasonality calculated from sales history.** The Seasonality page previously could only display the legacy `SEED.curves` category-level curves baked into the file. Now: pick a product, click `⚡ Calculate from sales`, and `computeProductSeasonality()` derives a 52-week curve from `salesData[master_id]` — grouping `units_ordered` by ISO week-of-year, dividing each week's average by the overall average to produce indices around 1.0. Result is cached in `seaCalcCache` and rendered as a `Preview` row in the existing 52-week table, below the `Category default` row, so the two are visually comparable.
