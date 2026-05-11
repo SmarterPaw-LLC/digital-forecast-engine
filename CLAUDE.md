@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.99**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.100**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,11 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.100)
+- **Saved Views now sync to Supabase per user.** Previously stored only in `localStorage` (per-browser, per-device, no sync). Now stored in `user_profiles.forecast_saved_views` (JSONB) keyed to the authenticated user — views follow you across browsers and devices, survive cache clears, and are private per user. `localStorage` is kept as a fast first-paint cache (no flash of empty popup while the DB read is in flight). `fcLoadSavedViewsFromDb()` runs at init kick-off; `fcPersistSavedViews()` writes to both localStorage and Supabase on every save/delete. Failures (RLS, network) fall back silently to local cache.
+- **Setup:** run `supabase_add_forecast_saved_views.sql` in Supabase SQL Editor BEFORE deploying v4.100. Without it, writes log a warning to console but views still work in this session via localStorage; they just won't follow you to other devices.
+- **Existing localStorage views auto-migrate.** First time you save or modify a view after v4.100 deploys, the full `fcSavedViews` object (including views you'd already created locally) writes to your `user_profiles` row. Nothing special to do — just save one view as if making a new one (or modify an existing one) and the local set lands in the DB.
 
 ## Recent Fixes (v4.99)
 - **Forecast tab — new `Title` and `Notes` columns.** Two new entries in the SKU group of `FC_COLUMNS`:
