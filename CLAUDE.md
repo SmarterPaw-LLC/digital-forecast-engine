@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.72**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.73**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,9 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.73)
+- **Inline COGS editing on the COGS page.** Click any of the three COGS cells (Amazon / DTC / Chewy) → it becomes a number input pre-filled with the current value. **Enter** saves, **Escape** cancels, **click outside** also saves (blur). Save upserts the full per-channel row to `product_cogs` (preserving the other two channels — no accidental null-outs), refreshes `cogsByMaster`, and re-renders the table in place. Bundle cells stay editable too; the BOM-comparison line below them updates immediately when you change a component's value or the bundle's stored value. Audit log records `cogs.edit` with the master_id, channel, previous value, and new value.
 
 ## Recent Fixes (v4.72)
 - **Bundle COGS — BOM comparison & mismatch flag.** Bundle COGS does NOT auto-derive from components (stays manual / per-channel like any other product), but the COGS page now shows the sum-of-components value inline under each bundle's stored COGS so you can spot drift. New helper `bundleCogsFromBom(masterId, channelField)` iterates `allBomData[bundleMid]`, multiplying each component's `cogsByMaster[comp.component_master_id][channelField]` by `comp.qty`. The cell below each bundle's stored value shows `BOM: $X.XX` with one of four states: ✓ green when it matches (within $0.01), ⚠ red when stored ≠ BOM (delta shown, e.g. `⚠ (+1.20)`), gray "partial" when some components themselves lack COGS, or green "auto-fillable" when stored is blank but BOM has a complete value.
