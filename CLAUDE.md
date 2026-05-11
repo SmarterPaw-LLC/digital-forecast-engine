@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.84**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.85**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,19 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.85)
+- **Query Database tab — broken by v4.60 auth migration, now fixed.** `runDbQuery()` was hand-rolling `fetch('/rest/v1/rpc/exec_sql', { headers: { apikey: SB_KEY, Authorization: \`Bearer ${SB_KEY}\` }})` — both headers using the anon key. After v4.60 enabled RLS on every data table and restricted access to the `authenticated` role, those anon-keyed calls hit RLS deny on the inner SELECT (`exec_sql` is SECURITY INVOKER, so it runs as the caller's role). The SKU Economics preset (and any other preset that touched an RLS-protected table) returned 0 rows or a generic error. Switched to `sb.rpc('exec_sql', { query: sql })` through the shared Supabase client — the client automatically attaches the logged-in user's JWT, so the query runs as `authenticated` and the policy lets it through. Cleaner error surfacing too: the Supabase client returns structured `{message, hint}` so the status line shows the real Postgres error directly.
+- **New preset queries** added to the Query Database tab presets bar:
+  - **Stale Products (90d)** — products with `active=true` but no sales rows in the last 90 days; ordered by last sale date so launches that never sold appear first.
+  - **Missing COGS** — products with at least one channel identifier (ASIN / Shopify SKU / Chewy Part #) but no COGS recorded for that channel AND the dismissal flag isn't set; reports which channels each row is missing.
+  - **Channel Mix 90d** — units per channel per master_id over 90 days plus a `pct` column (each channel's share of that product's total), so you can see whether a product is Amazon-heavy, balanced, etc.
+  - **Last Upload By Channel** — most recent `week_start` per (channel, region) plus a `days_old` delta; catches stale Shopify or Chewy uploads at a glance.
+  - **Seasonality Status** — per-product `sea_method`, `seasonal_type`, weeks_of_data vs sea_min_weeks threshold, and a 'ready/thin' flag.
+  - **Bundle BOM** — bundle-component pairs with `verified` flag; sorted unverified-first so QC candidates surface.
+  - **Margin Leaders 90d** — per-product contribution margin over 90 days from `sku_economics`; filters out low-volume noise (`units >= 30`).
+  - **Audit Log Recent** — last 100 audit_log entries; the existing `audit_log` table has been there since v4.60 but there was no preset to peek at it.
+- These are read-only `select` statements; the new auth-routed `exec_sql` call still enforces `transaction_read_only = on` at the database level, so any write attempt smuggled in (including via WITH ... INSERT) is rejected by Postgres.
 
 ## Recent Fixes (v4.84)
 - **Rgn pill is now channel-aware.** When the channel filter is active and every selected channel is US-only (Shopify and/or Chewy), the Rgn column renders "US" on every row — even when the underlying product has an Amazon CA listing. Previously rows for those products read "ALL" because the v4.82 collapse set `r.region='US+CA'`, which was misleading: with Shopify-only or Chewy-only selected, there are no CA sales contributing to the row. Now: row pill says what's actually being counted. Falls back to the v4.83 "ALL" pill when Amazon (or a mix including Amazon) is among the selected channels, since that genuinely is multi-region.
