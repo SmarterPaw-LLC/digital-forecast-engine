@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.83**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.84**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,9 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.84)
+- **Rgn pill is now channel-aware.** When the channel filter is active and every selected channel is US-only (Shopify and/or Chewy), the Rgn column renders "US" on every row — even when the underlying product has an Amazon CA listing. Previously rows for those products read "ALL" because the v4.82 collapse set `r.region='US+CA'`, which was misleading: with Shopify-only or Chewy-only selected, there are no CA sales contributing to the row. Now: row pill says what's actually being counted. Falls back to the v4.83 "ALL" pill when Amazon (or a mix including Amazon) is among the selected channels, since that genuinely is multi-region.
 
 ## Recent Fixes (v4.83)
 - **Combined-region rows now show "ALL" instead of "CA+US" / "US+CA".** v4.82's `combineRegionRecords()` set `r.region` to a `+`-joined string for the rendered Rgn pill — but reading "CA+US" on a row that included Shopify and Chewy sales misled users into thinking those US-only channels also operated in Canada. The pill was also broken visually because no `.rtag-ca+us` CSS class existed. Fixes: (a) added a `.rtag-all` style (green) to match `.rtag-us` / `.rtag-ca`; (b) sorted the internal region string to put US first ('US+CA', not 'CA+US') for the rare callsite that needs to read it; (c) the Rgn column render now detects a `+` and prints "ALL" with a tooltip naming the merged regions and the channel semantics ("Amazon US + Amazon CA velocity summed; Shopify and Chewy added once, US-only").
