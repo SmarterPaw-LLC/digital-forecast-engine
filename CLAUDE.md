@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.97**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.98**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,9 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.98)
+- **Chewy Forecasts — multi-select drill-down via row checkboxes.** New checkbox column on the left of each row, plus a header check-all (with indeterminate when partial). Selection state lives in `chewySelected` (Set of chewy_skus). When the selection is non-empty, the four top scorecards (30/60/90/120-Day Chewy Demand), the consumption-adjusted deltas, the monthly totals footer, and the current-month peak total all aggregate over the selected SKUs only — same UX as P&L tab's multi-select. The row count line above the table switches to "N of M SKUs selected · scorecards + totals aggregate selection only · ✕ Clear" with a clear button. Selected rows are tinted green; per-row click still opens the product modal (checkbox uses `event.stopPropagation()`). Selections auto-prune when filtered out of view (changing the Brand or Search filter drops any selected SKU that's no longer visible). New helpers `chewyToggleOne`, `chewyToggleAllVisible`, `chewyClearSelection`.
 
 ## Recent Fixes (v4.97)
 - **Chewy Forecasts scorecards now use a consumption-adjusted delta vs prev snapshot.** v4.96 fixed the per-row current-month cells (showing "remaining / peak") but the top scorecards (30/60/90/120-Day Chewy Demand) still computed `delta = latest_total - prev_total`, where both totals' current-month portions had already been drained by consumption — so the delta read as a misleading drop. New helper builds a "peak-adjusted" map per part (replaces current month's value with `currentMonthPeak` for the latest comparison and `currentMonthPeakAtPrev` for the prev snapshot's view) and re-runs `fwdUnits` against it. Delta label changed from "↑/↓ X vs prev_snap" to "↑/↓ X Chewy revision vs prev_snap" with a tooltip explaining the adjustment. The displayed scorecard VALUE is unchanged (still the raw remaining demand, which is what you actually need for inventory planning) — only the delta is normalized.
