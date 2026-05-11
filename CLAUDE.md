@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.78**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.79**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,9 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.79)
+- **Per-product seasonality now flows into the main Forecast tab.** Previously the `sea_method` / `seasonal_type` settings only drove the forward-looking sea columns (via `getForwardSea` → `getEffectiveCurveForProduct`); the current-week `r.sea_idx` and the derived `adj_daily` + `need30/60/90/120` columns were still computed during the initial record build at index.html:2061 / index.html:2137 using raw `SEED.curves[category]`. Result: "Sea Now" and the 30/60/90/120-day need totals on the Forecast tab were stuck on category defaults regardless of what was picked per-product. Added a finalization pass right after the records array is built (between the DTC-only loop and `setFreshBadge`) that recomputes `sea_idx = getAutoSeaIdx(rec)` for every record (honoring `sea_override` when set) then re-derives `adj_daily` and the need windows. The two initial build sites still write a category-default sea_idx, but the finalization pass overwrites it before render — leaving them in place avoids touching the legacy DTC/Amazon-build code paths.
 
 ## Recent Fixes (v4.78)
 - **Seasonality detail table — frozen first column.** With 52 week columns the table requires horizontal scrolling; the leftmost "Metric" column (Category default / Saved / Preview / Adj u/day) is now `position: sticky; left: 0` so the row labels stay visible as you scroll. Switched the table from `border-collapse: collapse` to `border-collapse: separate; border-spacing: 0` since sticky cells don't carry collapsed borders reliably, and replaced borders with a 1px right-edge `box-shadow` on the sticky column (so the divider stays visible). Row-internal borders moved onto the cells themselves (each `<td>` carries the top border) since `<tr>` borders don't render with `border-collapse: separate`.
