@@ -131,6 +131,17 @@ drop policy if exists "audit select all" on audit_log;
 create policy "audit select all" on audit_log for select to authenticated using (true);
 
 -- ──────────────────────────────────────────────────────────────────────────
+-- 5b. Sequence grants
+--    BIGSERIAL/SERIAL primary keys use a sequence under the hood. Table-level
+--    GRANTs (via RLS) do NOT cover sequence USAGE — an INSERT that needs to
+--    nextval() the sequence fails with "permission denied for sequence ...".
+--    Grant USAGE on every existing sequence, and set default privileges so any
+--    future sequence is automatically usable by the authenticated role.
+-- ──────────────────────────────────────────────────────────────────────────
+grant usage, select on all sequences in schema public to authenticated;
+alter default privileges in schema public grant usage, select on sequences to authenticated;
+
+-- ──────────────────────────────────────────────────────────────────────────
 -- 6. Backfill profiles for any users that already exist (e.g. you signed up
 --    via the Supabase dashboard before running this script).
 -- ──────────────────────────────────────────────────────────────────────────

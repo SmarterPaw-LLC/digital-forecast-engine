@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.60**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.61**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,10 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.61)
+- **SKU Economics upload — revert v4.53's last-write-wins back to summing.** v4.53 changed the per-row aggregation from `+=` to `=` to dedupe accidental byte-identical duplicates in concatenated curated CSVs. That decision was wrong for the **raw** Amazon download: Amazon legitimately emits multiple CSV rows for the same ASIN+week when the ASIN is listed under multiple MSKUs (merchant SKUs). v4.53 silently kept only the LAST MSKU's data and dropped the others, undercounting those ASINs. Reverted to summing; same key collisions are now tracked as `repeatCount` (renamed from `dupCount`) and surfaced as an informational note (`ℹ X ASIN rows repeated for same week (summed — usually Amazon's multi-MSKU split for the same product)`), no longer flagged as warning. Byte-identical dupes (rare; happens only with hand-concatenated exports) will still inflate the row by 2× — acceptable trade-off given multi-MSKU is the common case.
+- **Sequence GRANT added to auth setup.** The original `supabase_auth_setup.sql` enabled RLS + table policies but didn't grant USAGE on the BIGSERIAL sequences used by primary keys, so authenticated INSERTs failed with `permission denied for sequence sales_weekly_id_seq`. Added `grant usage, select on all sequences in schema public to authenticated` plus a default-privileges line so future sequences are covered too. If you set up auth before v4.61, run those two lines in SQL Editor to patch your existing DB.
 
 ## Recent Fixes (v4.60)
 - **Real user authentication replaces the hardcoded password gate.** Supabase Auth (email/password + Google OAuth) is now the access wall. Every DB call carries the user's JWT instead of the anon key; row-level security on every table enforces this server-side. Setup runs in three places: SQL migration (`supabase_auth_setup.sql`), Supabase dashboard config (`AUTH_SETUP.md`), then dashboard code (this version).
