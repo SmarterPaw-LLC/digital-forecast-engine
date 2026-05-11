@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.93**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.94**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,9 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.94)
+- **SKU Economics — ZIP upload for back-fill.** New `🗜 Zip of CSVs` button next to the folder-upload button on the SKU Economics dropzone. Accepts a single `.zip` containing many SKU Economics CSVs (e.g. one per week, the user's historical batch). Lazy-loads JSZip from CDN on first use (kept out of the initial bundle since back-fill is rare), unpacks every `.csv` member (flattens subdirectories, skips macOS resource forks like `__MACOSX/` and `._*`), then iterates each through `parseSkuEconomics` — same validation as the folder uploader (single Sun-Sat week, dedup, brand prompt once if no Brand column). Pnl cache invalidated and `init()` runs at the end so the dashboard picks up the new rows immediately. Audit log records `upload.sku_economics_zip` with the zip filename, member count, success/fail breakdown, and per-file error summaries.
 
 ## Recent Fixes (v4.93)
 - **SKU Economics — `storeToRegion()` blind to plain country codes.** Amazon's current SKU Economics CSV format puts plain country codes (`US`, `CA`, `MX`) in the `Amazon store` column, not the legacy domain-style values (`Amazon.com`, `Amazon.ca`, `Amazon.com.mx`). The old helper only matched on `.ca` / `.mx` substrings, so every plain `CA` row fell through to the US default. Worse: because the in-memory aggregation key is `(asin, region, week_start)`, US and CA rows for the same ASIN collided under `(asin, 'US', week)` and got **summed together** (per the v4.61 multi-MSKU policy) — silently inflating US totals with CA contributions, and writing zero CA rows to the DB. Fixed `storeToRegion` to recognize both formats: legacy domain-style `.ca` / `.mx` / `.co.uk` / `.de` AND plain country codes `CA` / `MX` / `UK` / `GB` / `DE` / `US`.
