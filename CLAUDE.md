@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.92**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.93**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,16 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.93)
+- **SKU Economics — `storeToRegion()` blind to plain country codes.** Amazon's current SKU Economics CSV format puts plain country codes (`US`, `CA`, `MX`) in the `Amazon store` column, not the legacy domain-style values (`Amazon.com`, `Amazon.ca`, `Amazon.com.mx`). The old helper only matched on `.ca` / `.mx` substrings, so every plain `CA` row fell through to the US default. Worse: because the in-memory aggregation key is `(asin, region, week_start)`, US and CA rows for the same ASIN collided under `(asin, 'US', week)` and got **summed together** (per the v4.61 multi-MSKU policy) — silently inflating US totals with CA contributions, and writing zero CA rows to the DB. Fixed `storeToRegion` to recognize both formats: legacy domain-style `.ca` / `.mx` / `.co.uk` / `.de` AND plain country codes `CA` / `MX` / `UK` / `GB` / `DE` / `US`.
+- **Affected uploads:** any SKU Economics file uploaded with the current Amazon format (plain country codes) — visible as "no CA rows present for that week even though the source CSV had a CA section." Historical uploads from when Amazon used domain-style values are untouched. The May 3-9 batch the user hit was the latest example.
+- **Cleanup for affected weeks:** delete the contaminated week's `sku_economics` + `sales_weekly` Amazon rows and re-upload the same file with v4.93's parser:
+  ```sql
+  delete from sku_economics where week_start = '2026-05-04';
+  delete from sales_weekly where channel in ('amazon_us', 'amazon_ca') and week_start = '2026-05-04';
+  ```
+  Then re-upload the same file in the dashboard. The parser will now split US and CA rows correctly into separate `(asin, region, week_start)` keys.
 
 ## Recent Fixes (v4.92)
 - **Shopify upload — fractured week_start values from a timezone-poisoned parser.** The Shopify daily→weekly aggregator did `new Date(dayString)` to parse each row's Day column. JS interprets ISO strings ("2025-08-04") as UTC midnight while reading `getDay`/`getDate` in LOCAL time — so in non-UTC timezones the parser saw the "wrong" day-of-week, derived a shifted week_start via the same Sun-is-day-7 math the Amazon parser had, and finally serialized via `toISOString()` (UTC again). Different CSV formats (ISO vs M/D/YYYY) and different upload times scattered rows across multiple buggy week_start values for what should have been one canonical week — the user observed week_starts of 2025-07-29 (Tue), 2025-08-04 (Mon), and 2025-08-05 (Tue) all in the same period.
