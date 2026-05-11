@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.98**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.99**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,13 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.99)
+- **Forecast tab — new `Title` and `Notes` columns.** Two new entries in the SKU group of `FC_COLUMNS`:
+  - **`full_title`** (label "Title", default OFF) — shows the full untruncated product title in its own column. The existing "Product" column still shows `short_name || truncated_title` for compactness; this gives you the full marketing copy for CSV exports / audits.
+  - **`forecast_notes`** (label "Notes", default OFF) — free-form annotations per product (demand expectations, supply caveats, promo flags, etc.). Click the cell to edit (textarea, Enter saves, Esc cancels, blur saves). Stored in `products.forecast_notes` via the new `supabase_add_forecast_notes.sql` migration. Audit log records `product.forecast_notes`.
+- **Saved Views for column selection.** Stored in localStorage as `fcSavedViews = { "View Name": [colKeys...] }`. New "💾 Saved Views" section at the top of the column-popup with three actions: apply (click the view name), delete (✕ button), or save-current-as-new (prompts for a name). Each view stores a snapshot of `fcVisibleCols`. CSV export still follows currently-visible columns — so apply a view, then export, to get that view's exact column set. Helpers: `fcSaveCurrentAsView`, `fcApplyView`, `fcDeleteView`, `fcPersistSavedViews`.
+- **Setup:** run `supabase_add_forecast_notes.sql` in Supabase SQL Editor BEFORE deploying v4.99. Without it, edits to the Notes column will fail with "column products.forecast_notes does not exist".
 
 ## Recent Fixes (v4.98)
 - **Chewy Forecasts — multi-select drill-down via row checkboxes.** New checkbox column on the left of each row, plus a header check-all (with indeterminate when partial). Selection state lives in `chewySelected` (Set of chewy_skus). When the selection is non-empty, the four top scorecards (30/60/90/120-Day Chewy Demand), the consumption-adjusted deltas, the monthly totals footer, and the current-month peak total all aggregate over the selected SKUs only — same UX as P&L tab's multi-select. The row count line above the table switches to "N of M SKUs selected · scorecards + totals aggregate selection only · ✕ Clear" with a clear button. Selected rows are tinted green; per-row click still opens the product modal (checkbox uses `event.stopPropagation()`). Selections auto-prune when filtered out of view (changing the Brand or Search filter drops any selected SKU that's no longer visible). New helpers `chewyToggleOne`, `chewyToggleAllVisible`, `chewyClearSelection`.
