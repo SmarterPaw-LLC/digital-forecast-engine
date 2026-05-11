@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.70**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.71**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,9 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.71)
+- **SKU Economics — folder/batch upload.** New green button inside the SKU Economics dropzone: `📁 Or upload an entire folder (one CSV per week, validated)`. Uses a hidden `<input webkitdirectory directory multiple>` to let the user pick a whole folder; `handleSkuEconFolderUpload` then iterates every `.csv` inside (sorted alphabetically) and runs each through the existing `parseSkuEconomics` pipeline — so every validation still applies per file (single Sun→Sat week, deduplication, brand prompt). The brand prompt fires ONCE for the batch (peek at first file's header) and the chosen brand applies to all. Per-file errors are collected but don't abort the run; the status reports `✓ N/M files · X sales rows · Y P&L rows · Z weeks` and surfaces failure details in the tooltip (hover the status text). `init()` is called once at the end (not per file). Audit log records `upload.sku_economics_folder` with totals + up to 10 error summaries.
 
 ## Recent Fixes (v4.70)
 - **Uploads tab header relabeled:** `📈 SKU Economics Report — All brands · US + CA · Includes COGS` → `📈 Amazon SKU Economics Report — All brands`. Removed the "Includes COGS" since COGS now lives in `product_cogs` and is managed independently (per channel). Removed "US + CA" since other Amazon marketplaces may be added later — the report intrinsically covers whatever regions Seller Central exposes.
