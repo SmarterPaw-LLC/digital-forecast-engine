@@ -11,13 +11,21 @@
 -- ============================================================================
 
 create table if not exists product_cogs (
-  master_id    text primary key references products(master_id) on delete cascade,
-  amazon_cogs  numeric(10,4),
-  dtc_cogs     numeric(10,4),
-  chewy_cogs   numeric(10,4),
-  updated_at   timestamptz default now(),
-  updated_by   uuid references auth.users on delete set null
+  master_id          text primary key references products(master_id) on delete cascade,
+  amazon_cogs        numeric(10,4),
+  dtc_cogs           numeric(10,4),
+  chewy_cogs         numeric(10,4),
+  amazon_dismissed   boolean default false,   -- suppress "⚠ Missing Amazon COGS" alert (e.g. ASIN exists but you don't sell there)
+  dtc_dismissed      boolean default false,   -- suppress "⚠ Missing DTC COGS" alert
+  chewy_dismissed    boolean default false,   -- suppress "⚠ Missing Chewy COGS" alert
+  updated_at         timestamptz default now(),
+  updated_by         uuid references auth.users on delete set null
 );
+
+-- For existing installs: bring the three dismiss columns in (no-op if already present)
+alter table product_cogs add column if not exists amazon_dismissed boolean default false;
+alter table product_cogs add column if not exists dtc_dismissed    boolean default false;
+alter table product_cogs add column if not exists chewy_dismissed  boolean default false;
 
 create index if not exists product_cogs_amazon_idx on product_cogs(master_id) where amazon_cogs is not null;
 create index if not exists product_cogs_dtc_idx    on product_cogs(master_id) where dtc_cogs    is not null;

@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.73**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.74**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,16 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.74)
+- **Amazon P&L — every column header is click-to-sort.** Replaced the static thead with a dynamic `<tr id="pnl-thead-row">` rendered by `renderPnl()`. Each column (Product, Units, Net Sales, FBA Fees, Referral, Ad Spend, COGS, Net Proceeds, Margin %, Contrib %) has an onclick that calls `pnlSetSort(key)`. First click on a numeric column sorts desc; first click on Product sorts asc; clicking the same column again toggles direction. Active sort column highlighted in `var(--text)` with `↑` or `↓` indicator; inactive columns show a dimmed `↕`. State is preserved across renders via `pnlSortKey` and `pnlSortDir`.
+- **COGS page — Active/Inactive filter; default Active only.** New "Status" dropdown next to the existing Show filter with three options: `Active only` (default), `Inactive only`, `All`. Filters `allProducts` by `p.active !== false` (null/undefined treated as active for backwards-compat). Inactive products are hidden from view by default — they don't pollute the missing-COGS counts or the table.
+- **COGS page — dismissible alerts.** Each "— missing" cell now has a small `✕` button next to it. Clicking dismisses the missing-COGS alert for that specific product+channel (persisted to `product_cogs.amazon_dismissed` / `dtc_dismissed` / `chewy_dismissed`). Useful when a product technically has an ASIN/Shopify SKU/Chewy Part # but isn't actually sold on that channel — the alert was just noise. Dismissed cells display "dismissed" in italic gray with a `↺` undo button. Dismissed channels are also excluded from "Missing …" filter results.
+- **Schema additions** (run via `supabase_product_cogs_setup.sql` re-execute — uses `add column if not exists`, safe to re-run):
+  - `product_cogs.amazon_dismissed BOOLEAN DEFAULT false`
+  - `product_cogs.dtc_dismissed BOOLEAN DEFAULT false`
+  - `product_cogs.chewy_dismissed BOOLEAN DEFAULT false`
+- Audit log records `cogs.dismiss_toggle` events with master_id, field, and value.
 
 ## Recent Fixes (v4.73)
 - **Inline COGS editing on the COGS page.** Click any of the three COGS cells (Amazon / DTC / Chewy) → it becomes a number input pre-filled with the current value. **Enter** saves, **Escape** cancels, **click outside** also saves (blur). Save upserts the full per-channel row to `product_cogs` (preserving the other two channels — no accidental null-outs), refreshes `cogsByMaster`, and re-renders the table in place. Bundle cells stay editable too; the BOM-comparison line below them updates immediately when you change a component's value or the bundle's stored value. Audit log records `cogs.edit` with the master_id, channel, previous value, and new value.
