@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.96**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.97**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,11 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.97)
+- **Chewy Forecasts scorecards now use a consumption-adjusted delta vs prev snapshot.** v4.96 fixed the per-row current-month cells (showing "remaining / peak") but the top scorecards (30/60/90/120-Day Chewy Demand) still computed `delta = latest_total - prev_total`, where both totals' current-month portions had already been drained by consumption — so the delta read as a misleading drop. New helper builds a "peak-adjusted" map per part (replaces current month's value with `currentMonthPeak` for the latest comparison and `currentMonthPeakAtPrev` for the prev snapshot's view) and re-runs `fwdUnits` against it. Delta label changed from "↑/↓ X vs prev_snap" to "↑/↓ X Chewy revision vs prev_snap" with a tooltip explaining the adjustment. The displayed scorecard VALUE is unchanged (still the raw remaining demand, which is what you actually need for inventory planning) — only the delta is normalized.
+- **Tooltip on the current-month column header.** The current-month `<th>` is now highlighted in orange with `ⓘ` and a hover tooltip explaining the "remaining / peak" format, why trend arrows are suppressed on that column, and how the scorecards above account for it. Other month headers get a simpler tooltip explaining the cell format.
+- **Tooltip on each scorecard.** Hovering the scorecard label/box surfaces a tooltip clarifying: the number is forward-looking remaining demand summed across visible SKUs, the in-month drop is normal consumption, and the delta below is adjusted for that.
 
 ## Recent Fixes (v4.96)
 - **Chewy Forecasts — current month displays "remaining / peak" instead of just the dropping remaining value.** As the month progresses Chewy's snapshot value for the current month drops while units ship/consume; it's not Chewy lowering demand, but the dashboard was rendering raw values and a `↓ Declining` trend arrow that misled the user into thinking demand was falling. Now: for the current month column (per-product cells AND footer total), the cell shows `remaining / peak` — peak = max value seen across all uploaded snapshots for that month — with a tooltip explaining "Remaining: N · Peak projection: M · Consumed/shipped so far: M-N. The drop is in-month consumption, not Chewy revising demand down." Trend arrow is suppressed on the current month since the latest-vs-prev raw delta is dominated by consumption. Other months (past, future) keep the standard value + trend display. Legend at the bottom of the table now shows `X / Y current month: remaining / peak projection (consumption-adjusted)`.
