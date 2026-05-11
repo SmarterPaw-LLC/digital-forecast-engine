@@ -2165,11 +2165,7 @@ async function init() {
     records.forEach(rec => {
       if (rec.sea_override == null) rec.sea_idx = getAutoSeaIdx(rec);
       rec.adj_daily = parseFloat(((rec.blended_daily || 0) * (rec.sea_idx || 1)).toFixed(2));
-      const mid = rec.master_id;
-      rec.need30  = Math.round(forwardSeaDemand(rec, 30))  + getChewyFcUnits(mid, 30);
-      rec.need60  = Math.round(forwardSeaDemand(rec, 60))  + getChewyFcUnits(mid, 60);
-      rec.need90  = Math.round(forwardSeaDemand(rec, 90))  + getChewyFcUnits(mid, 90);
-      rec.need120 = Math.round(forwardSeaDemand(rec, 120)) + getChewyFcUnits(mid, 120);
+      rederiveNeeds(rec);
     });
 
     console.log(`Loaded ${records.length} records from Supabase (${products.length} products, ${velocities.length} velocity rows, ${inventories.length} inventory rows)`);
@@ -2566,11 +2562,7 @@ function parseRestock(text, region, choice='replace') {
       rec.daily_v30     = parseFloat((v30/30).toFixed(2));
       rec.blended_daily = rec.daily_v30;
       rec.adj_daily     = parseFloat((rec.blended_daily * rec.sea_idx).toFixed(2));
-      const mid = rec.master_id;
-      rec.need30  = Math.round(rec.adj_daily * 30)  + getChewyFcUnits(mid, 30);
-      rec.need60  = Math.round(rec.adj_daily * 60)  + getChewyFcUnits(mid, 60);
-      rec.need90  = Math.round(rec.adj_daily * 90)  + getChewyFcUnits(mid, 90);
-      rec.need120 = Math.round(rec.adj_daily * 120) + getChewyFcUnits(mid, 120);
+      rederiveNeeds(rec);
     }
 
     invRows.push({ asin, region: region||'US', master_id: rec.master_id||null, fba_available: fba, fba_inbound: inbound, warehouse: rec.warehouse||0, lead_time_days: rec.lead_time||0, safety_stock: rec.safety_stock||14 });
@@ -3125,11 +3117,7 @@ async function parseSalesWeekly(text, region, brand, channel='amazon') {
     rec.daily_v90     = vel.v90;
     rec.blended_daily = vel.v30 || vel.v90;
     rec.adj_daily     = parseFloat(((rec.blended_daily) * rec.sea_idx).toFixed(2));
-    const mid = rec.master_id;
-    rec.need30  = Math.round(rec.adj_daily * 30)  + getChewyFcUnits(mid, 30);
-    rec.need60  = Math.round(rec.adj_daily * 60)  + getChewyFcUnits(mid, 60);
-    rec.need90  = Math.round(rec.adj_daily * 90)  + getChewyFcUnits(mid, 90);
-    rec.need120 = Math.round(rec.adj_daily * 120) + getChewyFcUnits(mid, 120);
+    rederiveNeeds(rec);
     const tV60 = vel.v60 > 0 ? vel.v60 : vel.v30;
     const tV90 = vel.v90 > 0 ? vel.v90 : vel.v120;
     const ratio = tV60 > 0 && tV90 > 0 ? tV60 / tV90 : null;
@@ -5386,11 +5374,7 @@ function parseVelReport(text, brand, region) {
       rec.blended_daily = v30; // primary velocity = 30-day
       rec.sea_idx      = rec.sea_override != null ? rec.sea_override : getAutoSeaIdx(rec);
       rec.adj_daily    = parseFloat((rec.blended_daily * rec.sea_idx).toFixed(2));
-      const mid = rec.master_id;
-      rec.need30  = Math.round(rec.adj_daily * 30)  + getChewyFcUnits(mid, 30);
-      rec.need60  = Math.round(rec.adj_daily * 60)  + getChewyFcUnits(mid, 60);
-      rec.need90  = Math.round(rec.adj_daily * 90)  + getChewyFcUnits(mid, 90);
-      rec.need120 = Math.round(rec.adj_daily * 120) + getChewyFcUnits(mid, 120);
+      rederiveNeeds(rec);
       // Trend: v60 vs v90 (avoids launch spike distortion from v30)
       const tRecent = v60 > 0 ? v60 : v30;
       if (tRecent > 0 && v90 > 0) {
@@ -7004,6 +6988,18 @@ function forwardSeaDemand(r, horizonDays) {
   return total;
 }
 
+// ── Re-derive every need window on a record using the integrated curve.
+// Single source of truth: every place that writes `need30/60/90/120` on a
+// record should call this so they all use the same math (curve-integrated
+// Amazon/DTC demand + Chewy's own monthly forecast added separately).
+function rederiveNeeds(rec) {
+  const mid = rec.master_id;
+  rec.need30  = Math.round(forwardSeaDemand(rec, 30))  + getChewyFcUnits(mid, 30);
+  rec.need60  = Math.round(forwardSeaDemand(rec, 60))  + getChewyFcUnits(mid, 60);
+  rec.need90  = Math.round(forwardSeaDemand(rec, 90))  + getChewyFcUnits(mid, 90);
+  rec.need120 = Math.round(forwardSeaDemand(rec, 120)) + getChewyFcUnits(mid, 120);
+}
+
 // ── Forward-adjusted need at horizon (Amazon/DTC demand integrated over
 // the curve, plus Chewy's own forward forecast for the same horizon).
 function getForwardNeed(r, horizonDays) {
@@ -7190,10 +7186,16 @@ function fcPrecompute(r, ctx) {
   const chanVelRaw = getChannelVelocityForRecord(r, ctx.selectedChans, ctx.useCustomChans);
   const effectiveVel = ctx.useCustomChans ? chanVelRaw : r.adj_daily;
   const adjVel = effectiveVel !== null ? parseFloat((effectiveVel * (r.sea_idx||1)).toFixed(2)) : (r.adj_daily||0);
-  const n30  = ctx.useCustomChans ? Math.round(adjVel * 30)  : (r.need30||0);
-  const n60  = ctx.useCustomChans ? Math.round(adjVel * 60)  : (r.need60||0);
-  const n90  = ctx.useCustomChans ? Math.round(adjVel * 90)  : (r.need90||0);
-  const n120 = ctx.useCustomChans ? Math.round(adjVel * 120) : (r.need120||0);
+  // Need windows: in custom-channels mode, integrate the seasonal curve
+  // across the chosen-channel velocity (mirrors the default path's math,
+  // which already uses forwardSeaDemand inside the v4.80 finalization pass).
+  // Chewy is already folded into chanVelRaw by getChannelVelocityForRecord
+  // when selected, so no separate add here.
+  const synth = ctx.useCustomChans ? { ...r, blended_daily: (effectiveVel||0), sea_override: null } : null;
+  const n30  = ctx.useCustomChans ? Math.round(forwardSeaDemand(synth, 30))  : (r.need30||0);
+  const n60  = ctx.useCustomChans ? Math.round(forwardSeaDemand(synth, 60))  : (r.need60||0);
+  const n90  = ctx.useCustomChans ? Math.round(forwardSeaDemand(synth, 90))  : (r.need90||0);
+  const n120 = ctx.useCustomChans ? Math.round(forwardSeaDemand(synth, 120)) : (r.need120||0);
   const velDisplay = effectiveVel !== null ? effectiveVel : '—';
   const reg = r.region || 'US';
   const rowKey = r.master_id + '_' + reg;
@@ -8223,10 +8225,7 @@ function saveEditModal() {
     r.sea_idx = getAutoSeaIdx(r);
   }
   r.adj_daily = parseFloat((r.blended_daily * r.sea_idx).toFixed(2));
-  r.need30  = Math.round(r.adj_daily * 30);
-  r.need60  = Math.round(r.adj_daily * 60);
-  r.need90  = Math.round(r.adj_daily * 90);
-  r.need120 = Math.round(r.adj_daily * 120);
+  rederiveNeeds(r);
 
   // Persist to Supabase inventory table
   sbUpsert('inventory', {
