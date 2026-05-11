@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.87**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.88**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,13 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.88)
+- **Bundle attribution now flows into the Need forecasts and scorecards, not just the Sold (period) column.** Bundle sales are recorded with the BUNDLE's master_id; `velocity_calculated` groups by master_id+region, so a component product's `daily_v30` (and `blended_daily` derived from it) never reflected demand pulled through bundle sales. v4.87 added a `+B N` badge to the Sold column but the Need columns + scorecards stayed bundle-blind. New helper `getBundleAttrDailyVelocity(masterId, windowDays, channels, region)` walks `allBomData`, sums each parent bundle's region-filtered sales over the rolling window, multiplies by component qty, divides by window length, and returns daily units. Folded into `blended_daily` inside a new `recomputeRecordVelocity(rec)` helper that's now the single source of truth used by the init finalization pass, `applyVelocityWindow()`, `combineRegionRecords` (post-merge finalize), and the `fBundleAttr` checkbox toggle.
+- **`fBundleAttr` checkbox now triggers a full velocity recompute, not just renderAll.** Previously toggling "+ bundle components" only re-rendered the table from the same precomputed `r.need30/60/90/120` values — so the Need columns + scorecards didn't move. Now `onchange="applyVelocityWindow()"` re-runs `recomputeRecordVelocity` on every record so the forecasts shift in real time as you toggle.
+- **`combineRegionRecords` no longer sums `blended_daily` across regions.** Bundle attribution is region-aware (each region's record already counts bundle sales tagged to its region; the combined record sees all rows via the 'US+CA' marker). Summing the per-region `blended_daily` would double-count bundle credit on combined rows. Removed `blended_daily` and `bundle_daily` from the additive-sum list and rely on the post-merge `recomputeRecordVelocity(c)` call to derive both fresh against the combined region marker.
+- **+B badge on the Vel/day column.** New per-row indicator (orange, like the existing +DTC pill) shows the bundle-attributed daily velocity contribution to `blended_daily`. Confirms at a glance that bundle attribution is feeding the forecast — previously the +B indicator only appeared on the historical Sold column.
+- **Tooltips updated** on the "+ bundle components" filter checkbox (explains it folds into velocity for forecasts) and the Vel/day column header (explains the math + when +B fires).
 
 ## Recent Fixes (v4.87)
 - **Bundle attribution: paginated `bom` load.** The init flow's `sb.from('bom').select('*')` had no `.range()` call — default Supabase row cap is 1000, so any BOM rows past that were silently dropped from `allBomData`, and components whose mapping landed past the cutoff stopped getting bundle credit on the Forecast tab. Violated Architecture Rule #4 (the codebase sweep noted in earlier velocity / P&L fixes). Now paginates 1000 at a time, matching the `loadProducts` / `loadPnlTab` / `loadChewyFcLatest` pattern. Visible failure mode was "the bundle attribution stopped working" once your BOM grew past 1000 rows.
