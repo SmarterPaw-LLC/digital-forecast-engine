@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.80**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.81**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,10 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.81)
+- **Chewy demand was double-counted on CA rows.** Each product has separate US and CA records, but `getChewyFcUnits(masterId, days)` was keyed only by master_id — so when "All regions" was selected and Chewy was in the channel mix, the same Chewy forecast got added to both the US row AND the CA row for that product, showing duplicate Chewy values on a row (CA) where Chewy doesn't actually sell. Added a `region` parameter to `getChewyFcUnits` that returns 0 when the caller's region isn't US. Region is optional for back-compat — old call-sites that haven't been updated still behave as before. Updated record-level call-sites (`rederiveNeeds`, `getForwardNeed`, `getChannelVelocityForRecord` chewy branch, `fcForecastByChannel`, scorecard totals) to pass `r.region`. Net effect: CA rows now show 0 for Chewy contribution; US rows show the full Chewy forecast as before. The "duplicate rows" feeling was the same Chewy number appearing twice — now it appears once, on the US row.
+- **Scorecard totals also picked up the v4.80 curve integration.** `renderScoreCards`'s totalNeed reducer was still using the v4.79 flat math (`adjVel × h`) for the mixed-channels path; now uses `forwardSeaDemand` like every other site. Single-channel Chewy-only scorecard already used `getChewyFcUnits` directly, so just needed region gating.
 
 ## Recent Fixes (v4.80)
 - **Forecast need windows now INTEGRATE the seasonal curve across the horizon** instead of multiplying current-week sea_idx by N. Previously `need30 = adj_daily × 30` and `need120 = adj_daily × 120` used the SAME current-week multiplier as a constant across the whole horizon — so a product sitting at sea_idx=2.0 (peak) with a 120d window crossing into a 0.5× trough was forecasting ~2-3× too much demand. New helper `forwardSeaDemand(r, days)` sums `blended_daily × curve[weekOf(day)]` for each day in the horizon (max 120 iterations — fine for performance). Used by the finalization pass in `init()`, by `getForwardNeed`, and by the custom-channels render path. Chewy demand still added separately via `getChewyFcUnits` because Chewy's monthly forecast already encodes its own seasonality.
