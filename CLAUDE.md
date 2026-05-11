@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.58**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.59**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -47,6 +47,9 @@ The Data + Forecast header dropdowns set `display:block` on click but the panel 
 
 ### 3. Query tab presets to add (once Query tab is reachable)
 Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30), stale products (no sales 90d), channel mix per master_id, unverified bundles, products missing identifiers, last-upload timestamps per channel.
+
+## Recent Fixes (v4.59)
+- **SKU Economics upload — clearer post-upload nudge for auto-created products.** When a raw Amazon CSV creates new `SP-TEMP-<asin>` products, the upload status now reads `⚠ X new products auto-created as <brand> — set COGS / category in Products tab → Needs Review (Contribution % is overstated until COGS is set)` with the dz-warn style. Makes it visible at upload time why subsequent P&L numbers will look too rosy before COGS is filled in (the `cogs_total` aggregator multiplies `prod.cogs` by units; null/0 COGS = no contribution drag).
 
 ## Recent Fixes (v4.58)
 - **SKU Economics upload — brand prompt when no Brand column.** Raw Amazon CSVs don't have a Brand column, so v4.57's auto-create defaulted unknown ASINs to "Meowijuana" (legacy fallback). Now the upload handler peeks the header line BEFORE parsing; if there's no Brand column, it shows a modal (`promptForSkuEconomicsBrand`) with four buttons — Meowijuana / Doggijuana / Kitty Ka-Zoom / Skip (mixed file). The chosen brand is passed into `parseSkuEconomics(text, fileBrand)` and applied to any newly-auto-created `SP-TEMP-<asin>` products. Existing products keep their current brand. The status line afterward shows e.g. `· 12 new products (brand: Doggijuana)`. Cancelling the modal aborts the upload cleanly.
