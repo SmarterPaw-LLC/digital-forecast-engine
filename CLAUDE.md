@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.86**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.87**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,10 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.87)
+- **Bundle attribution: paginated `bom` load.** The init flow's `sb.from('bom').select('*')` had no `.range()` call — default Supabase row cap is 1000, so any BOM rows past that were silently dropped from `allBomData`, and components whose mapping landed past the cutoff stopped getting bundle credit on the Forecast tab. Violated Architecture Rule #4 (the codebase sweep noted in earlier velocity / P&L fixes). Now paginates 1000 at a time, matching the `loadProducts` / `loadPnlTab` / `loadChewyFcLatest` pattern. Visible failure mode was "the bundle attribution stopped working" once your BOM grew past 1000 rows.
+- **Bundle-attributed slice surfaced in the Sold column.** Previously bundle attribution was silent — the Sold (period) column added bundle-component sales to the total but you couldn't tell from the row whether anything was contributing, which made the feature feel broken when nothing visually changed on toggle. Added `pre.bundleAttr` to `fcPrecompute` (separate count of just the bundle-attributed portion), and the unitsSoldPeriod render now shows a small orange `+B N` badge next to the total when N>0, with a hover tooltip naming the contribution. Column width bumped to 96px to fit. Tooltip text updated to mention the indicator.
 
 ## Recent Fixes (v4.86)
 - **Column header tooltips on the Forecast tab.** Every column in `FC_COLUMNS` now has an optional `tooltip` field; the `<th>` `title` attribute prefers that over the bare label. The header cursor flips to `help` so it's clear hovering will say something. Tooltip text explains the underlying math + source (e.g., Need columns name the curve integration; Sea Now names where the multiplier comes from; Trend names the v60/v90 ratio thresholds; per-channel Forecast columns call out that they don't apply seasonality — intentional). Sort hint appended where applicable.
