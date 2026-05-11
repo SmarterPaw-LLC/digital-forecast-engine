@@ -5078,6 +5078,19 @@ async function runDbQuery() {
   // so any trailing `;` becomes a syntax error. Strip them.
   sql = sql.replace(/;\s*$/g, '').trim();
 
+  // Strip LEADING -- line comments and /* */ block comments. exec_sql's
+  // SECURITY guard checks `upper(left(trimmed, 6))` to confirm the query
+  // starts with SELECT or WITH — a preset that begins with `-- explainer`
+  // would otherwise be rejected before it ran. Comments inside the body of
+  // the query are fine; only the leading ones trip the check.
+  while (true) {
+    const before = sql;
+    sql = sql.replace(/^\s*--[^\n]*\n?/, '');      // leading line comment
+    sql = sql.replace(/^\s*\/\*[\s\S]*?\*\/\s*/, ''); // leading block comment
+    sql = sql.replace(/^\s+/, '');                  // leading whitespace
+    if (sql === before) break;
+  }
+
   // Only allow SELECT/WITH
   const stripped = sql.replace(/--.*$/gm,'').replace(/\/\*[\s\S]*?\*\//g,'').trim().toUpperCase();
   if (!stripped.startsWith('SELECT') && !stripped.startsWith('WITH')) {
