@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.113**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.114**
+
+## Recent Fixes (v4.114) — Bundle attribution badge on Need columns
+- **30d / 60d / 90d / 120d Need columns now show a `+B N` badge** when bundle attribution is contributing units, same orange marker style as the Sold column already had. Visual confirmation that bundle attribution is feeding the forecast (previously you had to hover the cell and read the tooltip's "+X.XX u/day from bundle-component attribution" line to know).
+- **Math:** the bundle slice is computed by running the bundle-only daily velocity through `forwardSeaDemand(..., d)` — same curve integration as the main Need, so the badge's number is directly comparable to the cell's main number. In Total mode the bundle velocity is `r.bundle_daily` (precomputed by `recomputeRecordVelocity`); in custom-channels mode it's `getBundleAttrDailyVelocity(r.master_id, fcWinDays, nonChewy, r.region)` for the active channel filter. Hidden when the "+ bundle components" filter is off or when there's no bundle contribution.
+- **CSV export unchanged** — the `get(r,ctx)` function still returns the all-in Need total (which already includes bundle attribution); only the inline `<td>` render adds the badge. Intentional per user request: the badge is visual confirmation only, not a separate exportable column.
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
