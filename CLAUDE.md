@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.116**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.117**
+
+## Recent Fixes (v4.117) — P&L Diagnostics: ASIN click-to-copy
+- **Every ASIN cell in the Diagnostics tables now has a ⎘ copy button** next to the Amazon PDP link. Clicking copies the bare ASIN to the clipboard (useful for pasting into Seller Central, Looker filters, the products catalog form, etc.). Button flashes "✓" green for ~0.9s on success.
+- **Single `asinCell(asin)` helper** inside `renderPnlDiagnostics` renders both the link + copy button so all four diagnostic tables (Unmatched, Matched, Off-week, Duplicates) get the same affordance — no duplicated JSX per table.
+- **`pnlCopyAsin(asin, btn)` writer** uses `navigator.clipboard.writeText` with a hidden-textarea + `document.execCommand('copy')` fallback for browsers that block the modern API outside secure contexts.
 
 ## Recent Fixes (v4.116) — P&L Diagnostics sub-view
 - **New 🔍 Diagnostics tab inside the Amazon SKU Economics P&L view** for reconciling against Looker / Amazon's own reports. Sub-tab strip with `📊 Summary` (default — original scorecards + chart + product table) and `🔍 Diagnostics` (the new view). Shares all filters (region / period / brand / category / search / FX-mode), so flipping tabs just re-renders the same dataset through a different lens.
