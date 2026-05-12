@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.120**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.121**
+
+## Recent Fixes (v4.121) — ASIN affordances: explicit US + CA listing links
+- **Both regional listing links rendered side-by-side.** `renderAsinAffordances` now always emits a 🇺🇸 amazon.com/dp/{asin} link AND a 🍁 amazon.ca/dp/{asin} link, regardless of which region the calling context "thinks" the ASIN belongs to. An ASIN can exist in either marketplace and the user often wants to check both; relying on a single inferred-region link forced an extra click when the inference was wrong.
+- **Five icons per ASIN cell:** ⎘ copy · 🇺🇸 US listing · 🍁 CA listing · 🔍 Amazon search · 🌐 Google search. The /dp/ links are the primary action; search + Google remain as fallbacks for delisted ASINs where the product detail page 404s.
+- **Affects both surfaces** that use the helper: the Products tab ASIN column and the four P&L Diagnostics tables (Unmatched / Matched / Off-week / Duplicates).
 
 ## Recent Fixes (v4.120) — Products tab gets the same ASIN affordances as Diagnostics
 - **Shared `renderAsinAffordances(asin, region)` helper hoisted to module scope.** Renders the ASIN text plus three small icon-buttons: ⎘ copy · 🔍 Amazon search · 🌐 Google search. Default region is US (matches the Products tab convention; ASINs there aren't region-tagged, and a product with both US+CA listings has different ASINs per region anyway).
