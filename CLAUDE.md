@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.114**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.115**
+
+## Recent Fixes (v4.115) — P&L CAD/USD toggle actually applied
+- **The CAD/USD pill on the Amazon P&L tab was wired to UI but not to the aggregator.** v4.113 added the toggle, `pnlCurrencyMode` state, and a `toUsd(val, currency)` helper, but the row-aggregation loop at the heart of `renderPnl` was still using the original hardcoded `const fx = row.currency === 'CAD' ? 1 / pnlFxRate : 1;` — so every CAD row was converted to USD regardless of mode and the scorecards/table/chart didn't move when the user clicked CAD. Same bug in the chart's per-week aggregator and the hidden-orphan sales tracker.
+- **Fix:** replaced the helper with `fxMul(currency)` — `(currency === 'CAD' && pnlCurrencyMode === 'usd') ? 1/pnlFxRate : 1`. Three call-sites updated: the orphan-tracker (line ~4411), the main aggregator (line ~4423), and the chart aggregator (line ~4808 — kept inline since the helper isn't in scope there). The currency-label `cur` and FX footnote were already mode-aware from v4.113.
+- **Why the bug existed:** the v4.113 work created `toUsd(val, currency)` as a new utility but never replaced the existing inline `fx` expressions. Two parallel conversion paths existed; only the unused one honored the mode. The new helper is named `fxMul` because what it returns is a multiplier (used inline as `* fx`), not a converted value — names the actual semantics so callers don't get tempted to rebuild the same parallel path.
 
 ## Recent Fixes (v4.114) — Bundle attribution badge on Need columns
 - **30d / 60d / 90d / 120d Need columns now show a `+B N` badge** when bundle attribution is contributing units, same orange marker style as the Sold column already had. Visual confirmation that bundle attribution is feeding the forecast (previously you had to hover the cell and read the tooltip's "+X.XX u/day from bundle-component attribution" line to know).
