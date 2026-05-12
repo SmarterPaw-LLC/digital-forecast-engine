@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.107**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.109**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,18 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.109) — Chewy seasonality double-application
+- **Custom-channels Need column no longer double-applies seasonality to Chewy.** The Need column's custom-channels `get` was passing `getChannelVelocityForRecord(...)` (which includes Chewy's `fc/window` daily rate when Chewy is selected) through `forwardSeaDemand`, which multiplies the dashboard's seasonal curve. Chewy's monthly forecasts already encode Chewy's own seasonality, so this was double-counting. Symptom: scorecard `chewyOnly` branch correctly showed `getChewyFcUnits(d)` (e.g. 101 for 30d), but the per-row Need cell showed `cv × d × avg_sea` (e.g. 59) — same product, same horizon, different numbers. Fixed by splitting non-Chewy and Chewy channels at the Need-column `get` and at `fcPrecompute.fcNeed`: non-Chewy velocity gets the curve integration, Chewy's slice comes from `getChewyFcUnits` directly. Matches the scorecard `nonChewy + chewy` logic.
+- **Scorecard subtitle is no longer misleading for Chewy-only.** Previously rendered "X u/day · sea 0.58× · -N from sea" even though the total came entirely from `getChewyFcUnits` and never touched the seasonal curve. Now: when `chewyOnly`, the subtitle reads "Chewy forecast · no curve applied" (with a hover tooltip explaining) and the "+/- from sea" footer is hidden. Mixed-channel and Total modes keep the existing display.
+- **Duplicate `const reg` fix.** The fcPrecompute edit redeclared `reg` later in the function — would've thrown SyntaxError and broken every render path that uses fcPrecompute (i.e. the entire Forecast table). Removed the duplicate declaration before deploy.
+
+## Recent Fixes (v4.108) — sanity-check pass cleanup
+Audit found four issues in recent feature work; v4.108 addresses all four:
+
+- **Chewy branch in `getChannelVelocityForRecord` still hardcoded to 30d.** v4.107 made the rest of the function honor `fVelocityWindow` but missed the Chewy branch — `const fc30 = getChewyFcUnits(mid, 30, ...); total += fc30 / 30;` would keep Chewy's daily rate at 30d regardless of the dropdown when Chewy was among the selected channels. Fixed: now uses `windowDays` for both the lookup horizon and the divisor, so Chewy's contribution scales with the active window like every other channel.
+- **`fcSaveCurrentAsView` / `fcUpdateView` / `fcDeleteView` were sync, fired `fcPersistSavedViews()` without awaiting.** The persist function became async in v4.100 when Saved Views started writing to Supabase. Sync callers meant rapid clicks (save → save → delete) could queue concurrent writes; if a later one fired before the earlier resolved, the in-flight one could lose against the queued one or get cancelled on tab close. Three callers now `async` + `await fcPersistSavedViews()`.
+- **`parseSkuEconomics`'s local `dateToMonday` used `new Date(s)`.** Worked fine for the US-format strings Amazon currently sends (`M/D/YYYY` parses as local midnight), but if Amazon ever switches to ISO format (`YYYY-MM-DD` parses as UTC midnight), the subsequent local `getDay`/`setDate` math could shift by ±1 day in non-UTC timezones — same class of bug that bit the Shopify parser in v4.92. Defensive fix: delegate to the global `dateToMondayLocal` helper (which uses `parseLocalDate` for timezone-safe parsing).
 
 ## Recent Fixes (v4.107)
 - **Velocity Window dropdown now affects custom-channels mode.** `getChannelVelocityForRecord` was hardcoded to a 30-day window — meaning when the user filtered the Forecast tab to specific channels (Amazon + Shopify, Amazon only, etc.), switching the Velocity dropdown to 60/90/120 had NO effect on the Need columns or scorecards because they routed through this helper. Now reads `document.getElementById('fVelocityWindow')` like `recomputeRecordVelocity` does, so the dropdown is consistent across Total mode and any channel-filtered view. Chewy branch still uses 30d (it's a forward forecast prorated to daily, not a historical rolling window).
