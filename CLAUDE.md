@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.111**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.112**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,11 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.112) — Forecast search + Velocity Window default/persistence
+- **Forecast search now matches every identifier.** Was `(r.title + r.asin + r.supplier).includes(srchTerm)` — so typing "CF312" (sp_sku) or "SP-0123" (master_id) returned nothing because those fields weren't in the search blob. Expanded the search blob to include `title`, `short_name`, `master_id`, `sp_sku`, `shopify_sku`, `chewy_sku`, `asin`, and `supplier`. Matches the search behavior on the Seasonality / P&L tabs.
+- **Velocity Window default changed from 30d → 60d.** 30d (live) was too noisy for forecasting — one slow week or one promo spike swings the rate enough to distort Need totals. 60d smooths weekly variation while still picking up real demand shifts within ~2 weeks. Option labels also updated to flag the trade-off ("live · noisy", "balanced", "stable", "smoothest").
+- **Velocity Window choice persists across sessions.** `applyVelocityWindow` now writes the active value to `localStorage`; new `restoreVelocityWindowPref()` reads it at init (called from the records-build finalization, before the recompute, so `blended_daily` / `need_N` start from the saved window not the HTML default). Per-browser (not synced to Supabase) — matches how `fcVisibleCols` is persisted.
 
 ## Recent Fixes (v4.111) — bundle attribution in custom-channels mode
 - **Custom-channels mode silently dropped bundle attribution.** Total mode includes bundle-attributed velocity in `blended_daily` via `recomputeRecordVelocity`, but the Need-column custom-channels path used only `getChannelVelocityForRecord` for the velocity term — direct channel sales only, no bundle credit. Symptom: a product whose recent direct sales had stalled (so `getChannelVelocityForRecord` returned 0) but whose parent bundle was still selling would show `Vel/day=0` and Need=0 across all horizons in Amazon/Shopify-filtered views, even though the Sold column displayed a meaningful `+B N` bundle attribution. Fixed in three places to keep them consistent:
