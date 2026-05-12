@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.118**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.119**
+
+## Recent Fixes (v4.119) — P&L Diagnostics: identify-then-assign UX for unmatched ASINs
+- **Amazon link switched from `/dp/ASIN` → `/s?k=ASIN`** (search). Most unmatched ASINs are old / discontinued listings; their product-detail page returns "Page Not Found", but the search results page still surfaces the listing (with title, which is the fastest way to identify the brand). Added a 🌐 Google search link as a last-resort fallback for ASINs that Amazon has fully purged. Three icons per ASIN cell: ⎘ copy · 🔍 Amazon search · 🌐 Google search.
+- **Per-row Action column rebuilt as three brand quick-chips** (`M` / `D` / `K`) using the existing `chip c-meow / c-doggi / c-kkz` brand color classes. One click creates the SP-TEMP-{ASIN} product under that brand — no popup, no Brand-filter dependency. Replaces the v4.118 generic ✚ Add button that relied on a prompt or the active Brand filter (which Jason often had set to a *different* brand than the orphan's actual brand). Workflow now: hover 🔍 → see the title → click matching letter → row drops off and totals refresh. New helper `pnlDiagCreateOneAs(asin, brand, btn)` powers the chips; the brand is hardcoded per chip so no resolver logic runs.
+- **Bulk button is still available** for the "I already know they're all the same brand" case (resolves brand via the active filter or one prompt as before).
 
 ## Recent Fixes (v4.118) — P&L Diagnostics: inline "Create product" actions for unmatched ASINs
 - **Per-row ✚ Add button** on every UNMATCHED row of the diagnostics Unmatched table — creates an `SP-TEMP-{ASIN}` product on the spot, mirroring the auto-create logic in `parseSkuEconomics` (same upsert, same `notes:'Auto-created from P&L Diagnostics — needs review'`, same `active:true`). After write, refreshes `allProducts` and re-renders both Diagnostics and Summary so the row disappears and its fees/sales roll into the totals. Brand-mismatched rows show "already exists" instead (those products are in the catalog already; the button would be a no-op).
