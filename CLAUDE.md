@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.115**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.116**
+
+## Recent Fixes (v4.116) — P&L Diagnostics sub-view
+- **New 🔍 Diagnostics tab inside the Amazon SKU Economics P&L view** for reconciling against Looker / Amazon's own reports. Sub-tab strip with `📊 Summary` (default — original scorecards + chart + product table) and `🔍 Diagnostics` (the new view). Shares all filters (region / period / brand / category / search / FX-mode), so flipping tabs just re-renders the same dataset through a different lens.
+- **Four diagnostic surfaces, each driven from `pnlData` filtered by the active region+date+brand+cat+search:**
+  - **Tiles row** — Matched ASINs / Unmatched ASINs / Brand-mismatched ASINs / Suspect rows (off-week + duplicate counts). Each tile names the dollar impact so the user sees at a glance where hidden $ are.
+  - **Unmatched ASINs table** — ASIN-level rows that the brand filter dropped (either no product in `products` OR product brand doesn't match the active filter). Shows units, net sales, fees, ad spend — these are dollars NOT in the Summary scorecards. Each ASIN links to its Amazon page (`amazon.com` for US, `amazon.ca` for CA). Common smoking gun for the "Looker shows N more products than the app" complaint: the user can spot Doggijuana SKUs hidden under "Unknown" brand placeholders and add them to the catalog.
+  - **Matched ASINs table** — every ASIN being summed into the Summary scorecards, with its mapped `master_id` and brand. Useful for spotting brand misattributions (an ASIN here under "Doggijuana" that Looker counts elsewhere, or vice versa). Aggregates 1 row per ASIN (no master_id collapse) so the count matches Looker's ASIN-level row count.
+  - **Week-start hygiene** — Amazon SKU Economics rows where `week_start` isn't a Monday. Leftover bad dates from pre-v4.91 / pre-v4.92 parser bugs would show up here. Should be empty.
+  - **Same-week duplicate canary** — ASINs with ≥2 `sku_economics` rows for the same ISO week but different `week_start` values. Each pair inflates the totals because both rows are summed. Inflates totals exactly the way the user saw with the "app fees > Looker fees" discrepancy.
+- **All amounts honor the CAD/USD toggle** (same `fxMul(currency)` semantics as the Summary view), so Diagnostics totals tie out against the Summary totals.
+- **Live refresh:** flipping `Brand` / `Period` / etc. while on the Diagnostics tab calls `renderPnl()` which now also calls `renderPnlDiagnostics()` when active. No-op when on Summary (the panel isn't rendering hidden DOM until the tab is opened).
 
 ## Recent Fixes (v4.115) — P&L CAD/USD toggle actually applied
 - **The CAD/USD pill on the Amazon P&L tab was wired to UI but not to the aggregator.** v4.113 added the toggle, `pnlCurrencyMode` state, and a `toUsd(val, currency)` helper, but the row-aggregation loop at the heart of `renderPnl` was still using the original hardcoded `const fx = row.currency === 'CAD' ? 1 / pnlFxRate : 1;` — so every CAD row was converted to USD regardless of mode and the scorecards/table/chart didn't move when the user clicked CAD. Same bug in the chart's per-week aggregator and the hidden-orphan sales tracker.
