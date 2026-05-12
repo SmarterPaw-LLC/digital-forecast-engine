@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.117**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.118**
+
+## Recent Fixes (v4.118) — P&L Diagnostics: inline "Create product" actions for unmatched ASINs
+- **Per-row ✚ Add button** on every UNMATCHED row of the diagnostics Unmatched table — creates an `SP-TEMP-{ASIN}` product on the spot, mirroring the auto-create logic in `parseSkuEconomics` (same upsert, same `notes:'Auto-created from P&L Diagnostics — needs review'`, same `active:true`). After write, refreshes `allProducts` and re-renders both Diagnostics and Summary so the row disappears and its fees/sales roll into the totals. Brand-mismatched rows show "already exists" instead (those products are in the catalog already; the button would be a no-op).
+- **Bulk ✚ Create N SP-TEMP products button** in the Unmatched table header — same upsert against every unmatched ASIN in one round-trip, after a confirm dialog naming the count and brand. `pnlDiagUnmatchedCache` stashes the ASIN list at render time so the bulk handler doesn't have to re-walk `pnlData`.
+- **Brand resolution:** if the P&L Brand filter is already on Meowijuana / Doggijuana / Kitty Ka-Zoom, that brand is used directly. Otherwise the user gets the same `promptForSkuEconomicsBrand` modal that the upload flow uses (cancel aborts the operation). One prompt covers an entire bulk run.
+- **Why the unmatched ASINs existed in the first place:** sku_economics rows uploaded before v4.57's auto-create logic existed, OR rows pointing to master_ids that were later deleted, OR rows inserted via raw SQL. The button gives the user a one-click path to recover those rows so their fees / ad spend / units stop being orphaned from the brand-filtered P&L. Audit log records `product.diag_create` (single) or `product.diag_bulk_create` (batch).
 
 ## Recent Fixes (v4.117) — P&L Diagnostics: ASIN click-to-copy
 - **Every ASIN cell in the Diagnostics tables now has a ⎘ copy button** next to the Amazon PDP link. Clicking copies the bare ASIN to the clipboard (useful for pasting into Seller Central, Looker filters, the products catalog form, etc.). Button flashes "✓" green for ~0.9s on success.
