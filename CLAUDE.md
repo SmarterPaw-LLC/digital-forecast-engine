@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.110**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.111**
 
 ## Supabase
 - URL: `https://yjcnuyoaemlipvuinptp.supabase.co`
@@ -51,6 +51,13 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+## Recent Fixes (v4.111) — bundle attribution in custom-channels mode
+- **Custom-channels mode silently dropped bundle attribution.** Total mode includes bundle-attributed velocity in `blended_daily` via `recomputeRecordVelocity`, but the Need-column custom-channels path used only `getChannelVelocityForRecord` for the velocity term — direct channel sales only, no bundle credit. Symptom: a product whose recent direct sales had stalled (so `getChannelVelocityForRecord` returned 0) but whose parent bundle was still selling would show `Vel/day=0` and Need=0 across all horizons in Amazon/Shopify-filtered views, even though the Sold column displayed a meaningful `+B N` bundle attribution. Fixed in three places to keep them consistent:
+  - **Need column `get`** — `effectiveVel = chanVel + getBundleAttrDailyVelocity(mid, windowDays, nonChewyChans, region)` when `+bundle components` is on. The bundle slice respects the channel filter (e.g. Amazon-only excludes Shopify bundle sales) and the active velocity window.
+  - **`fcPrecompute.fcNeed`** — same logic, so `pre.n30/60/90/120` (used by render) matches the column `get` (used by sort/export).
+  - **Scorecard `nonChewyTotal` reducer** — same logic, so the top scorecards agree with per-row totals when bundle attribution is contributing in a custom-channels view.
+- **Why this didn't show up in Total mode:** `r.blended_daily` is computed by `recomputeRecordVelocity` which already calls `getBundleAttrDailyVelocity(mid, w, null, r.region)`. Total mode reads the precomputed value from `r.need_N` — bundle was already in there. Only the custom-channels code paths bypassed the precomputed values, recomputing velocity fresh from `salesData` per channel and forgetting the bundle slice.
 
 ## Recent Fixes (v4.110) — scorecard `from sea` excludes Chewy
 - **Mixed-channel scorecard `+/- X from sea` was over-attributing.** v4.109 fixed the per-row Need totals to avoid double-applying the seasonal curve to Chewy, but the scorecard's `from sea` footer still computed `totalNeed - totalNeed/avgSea` against the FULL total (including the Chewy slice). Symptom: with Shopify + Chewy selected, the displayed sea impact was larger than with Shopify-only, even though Chewy contributes the exact same units in both views (Chewy bypasses the curve). Fixed: scorecard now tracks `nonChewyTotal` and `chewyTotal` separately for each horizon. `seaImpact = nonChewyTotal - nonChewyTotal/avgSea` — only the curve-applied slice contributes to sea attribution. Display labels updated: "X from sea (non-Chewy)" appears whenever Chewy is part of the channel mix, with a hover tooltip naming the split. Total mode (chewy-included default) also gets the fix — `r.need_N - getChewyFcUnits(N)` separates the slices for each record.
