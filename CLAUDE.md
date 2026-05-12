@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.119**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.120**
+
+## Recent Fixes (v4.120) — Products tab gets the same ASIN affordances as Diagnostics
+- **Shared `renderAsinAffordances(asin, region)` helper hoisted to module scope.** Renders the ASIN text plus three small icon-buttons: ⎘ copy · 🔍 Amazon search · 🌐 Google search. Default region is US (matches the Products tab convention; ASINs there aren't region-tagged, and a product with both US+CA listings has different ASINs per region anyway).
+- **All three icons stop click propagation** so they don't trigger a parent row's onclick (Products tab rows open the edit modal on row click; without `stopPropagation` the search would happen *and* the modal would open underneath).
+- **Products tab ASIN cell** now uses the helper — same UX as the P&L Diagnostics Unmatched/Matched/Off-week/Duplicates tables. Click ⎘ to copy, 🔍 to look up the listing on Amazon search (works for delisted ASINs where the legacy `/dp/ASIN` link 404s), 🌐 to Google it as a last resort.
+- **P&L Diagnostics `asinCell` slimmed** down to a pass-through wrapper around the shared helper (passes `pnlRegion` for the regional storefront TLD).
 
 ## Recent Fixes (v4.119) — P&L Diagnostics: identify-then-assign UX for unmatched ASINs
 - **Amazon link switched from `/dp/ASIN` → `/s?k=ASIN`** (search). Most unmatched ASINs are old / discontinued listings; their product-detail page returns "Page Not Found", but the search results page still surfaces the listing (with title, which is the fastest way to identify the brand). Added a 🌐 Google search link as a last-resort fallback for ASINs that Amazon has fully purged. Three icons per ASIN cell: ⎘ copy · 🔍 Amazon search · 🌐 Google search.
