@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.127**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.128**
+
+## Recent Fixes (v4.128) — View popup repositioned + relabeled
+- **Button label "📋 Columns" → "📋 View"** on both the Demand Forecast and P&L tabs. Since v4.126/v4.127 the popup actually manages a lot more than columns (full report state: sort, filters, time range, channels, selection, + columns), so "View" frames it better and matches how the popup itself describes a saved bookmark.
+- **Popup anchoring switched from inline / button-anchored → fixed top-right of viewport.** Earlier behavior anchored the popup directly below the button using the button's bounding rect (Forecast) or `position:absolute;top:100%;right:0` (P&L). When the button landed mid-filter-strip the popup got clipped by neighboring controls; with two rows of filters above the popup it visibly cut off (see screenshot 2026-05-14).
+- **New positioning:** `position:fixed; top:84px; right:20px; max-height:calc(100vh - 110px); overflow-y:auto`. Always lands in the top-right corner just below the app header — consistent regardless of where the trigger button sits, and tall enough to scroll its own content rather than being squeezed by adjacent UI. Both tabs use the same metrics so they feel uniform.
+- **Popup title updated** to "📋 View — Saved Views & Columns" so the popup's purpose is clear once opened.
 
 ## Recent Fixes (v4.127) — Forecast Saved Views capture full report state
 - **Same upgrade as v4.126 P&L, applied to the Forecast tab.** Saved views now capture every dimension that defines what's on screen, not just columns + sort.
