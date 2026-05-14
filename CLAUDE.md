@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.126**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.127**
+
+## Recent Fixes (v4.127) — Forecast Saved Views capture full report state
+- **Same upgrade as v4.126 P&L, applied to the Forecast tab.** Saved views now capture every dimension that defines what's on screen, not just columns + sort.
+- **Schema v3:** `{ cols, sortChain, filters, selection }`.
+  - `filters = { fBrand, fRegion, fCategory, fStatus, fHorizon, srchTerm, fPeriod, fCustomFrom, fCustomTo, channels: {total, amazon, shopify, chewy}, fVelocityWindow, fBundleAttr, fHideBundles, fIdCol }`
+  - `selection = [...forecastSelected]` — array of `master_id_region` row-keys.
+- **Backward compatible.** New helpers `fcViewFilters(v)` and `fcViewSelection(v)` return null for v1 (bare array) and v2 (cols + sortChain) views — older views still apply correctly, they just don't restore filters or selection.
+- **Apply order:** set columns, sort, every DOM filter input, then `applyVelocityWindow()` (recomputes blended_daily per record honoring the new velocity window), then `applyFilters()` (reads the DOM into f* globals and triggers renderAll + chart update). Selection is replaced before applyFilters so the chart/scorecards/banner pick it up on the same render.
+- **Popup summary chip** beneath each view name now shows a compact preview — `N cols · sort · brand · region · status · period · vel · channels · N selected` — so the user can read a view's contents without applying it. Tooltip on apply names every captured dimension.
+- **Saves to Supabase** via the existing `fcPersistSavedViews()` → `user_profiles.forecast_saved_views` sync (introduced v4.100), so the full-state views follow the user across browsers / devices. localStorage stays as a fast first-paint cache.
 
 ## Recent Fixes (v4.126) — P&L Saved Views capture full report state
 - **Saved views upgraded from columns-only → full report snapshot.** Each view now captures: visible columns, sort key/direction, region (US/CA), currency mode (USD/CAD), time-range period (and customFrom/customTo for custom), brand, category, search text, quick filter, AND the selected products list (`pnlSelectedMids` as an array). Applying a view restores every dimension.
