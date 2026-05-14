@@ -2,7 +2,31 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.124**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.125**
+
+## Recent Fixes (v4.125) — Forecast chart + P&L column registry / saved views (feature parity pass)
+Two ports between the Forecast and P&L tabs:
+
+### Forecast tab — horizon line chart (port of the P&L weekly chart)
+- **New chart panel between scorecards and the table.** Visible only when 1+ products are selected (mirrors P&L). X-axis is the 4 forecast horizons (30 / 60 / 90 / 120 days); Y-axis is the picked metric. Two dropdowns:
+  - **Metric** — `forecast_vs_sold` (default — two lines: Need + historical Units Sold over same window), `forecast` (just Need), `sold` (just historical sold), `gap` (Need − Sold; positive = accelerating demand vs recent run-rate), `seasonality` (avg multiplier across each horizon — weighted by Need for the Total aggregation), `inventory_cover` (cover days = inventory ÷ implied daily rate at each horizon).
+  - **Series** — `Total` (one line per metric, summed across selection) or `Per product` (one line per selected product per metric).
+- **Calculations exactly mirror the scorecard math.** Two helpers — `fcForecastNeedAt(r, h, chans, useCustom)` and `fcHistoricalSold(r, days, chans, useCustom)` — reproduce the existing forecast-Need + bundle-attribution + Chewy-bypass + channel-filter semantics. The "Sold" line honors the SAME channel selection as the forecast (Amazon-only forecast → Amazon-only sold), so the comparison is apples-to-apples. Bundle attribution is included on both sides via `getBundleAttrDailyVelocity` (for forecast) and `getBundleAttrUnits` (for sold).
+- **No new precomputation.** All values are derived per-record at chart-render time from the same precomputed `r.blended_daily`, `r.need_N`, `r.sea_idx`, salesData[], BOM[] — so bundles / per-channel velocity / per-product seasonality stay correct regardless of selection state.
+- **Updates live** on row toggle (`toggleForecastRow` / `toggleForecastAll`), full re-render (`renderAll`), and metric / series dropdown changes. Same lazy-load Chart.js (`getChart()`) used by the P&L chart.
+
+### P&L tab — column registry + saved views (port of the Forecast tab pattern)
+- **New `PNL_COLUMNS` registry** at module scope: 23 columns covering identity (master_id, ASIN, Product), volume (Units), revenue (Gross / Net Sales), every Amazon fee line (FBA Fees / FBA Storage / Inbound Placement / Inbound Transport / Low Inventory / Aged Inventory / Removal / Storage Util / Referral / Referral Refunds / Refund Admin), ads (Ad Spend), cost (COGS / FBA Reimbursement), profit (Net Proceeds / Contrib Profit / Margin % / Contrib %). Each column has `key` (matches sort), `label`, `default:true/false`, `align`, `headerTitle` tooltip, `render(r)` cell HTML, `csv(r)` export value, and a soft `group` for the popup layout.
+- **Default visible set = the pre-v4.125 layout** — Product, Units, Net Sales, FBA Fees, Referral, Ad Spend, COGS, Net Proceeds, Margin %, Contrib %. So users see no visual change until they open the popup.
+- **`📋 Columns` button** in the filter strip (next to Quick filter) opens a popup with:
+  - Saved Views section (apply / ↻ update / ✕ delete) + 💾 Save current as view button at the bottom.
+  - Column checkboxes grouped by category (Identity / Volume / Revenue / Amazon fees / Advertising / COGS / Profit) with hover tooltips on each.
+  - ↺ Reset defaults button to return to the original visible set.
+- **Persistence:** `pnlVisibleCols` (Set of column keys) and `pnlSavedViews` (`{viewName: [colKeys]}`) both write to `localStorage` immediately on change. Stale keys (column removed from the registry between versions) are filtered out on load. Cross-device sync via `user_profiles` is NOT done yet — that's a follow-up if needed; matches how v4.99 first shipped saved-views before the v4.100 Supabase backfill.
+- **Sort still works for all columns.** `PNL_SORT_VAL` keeps explicit formulas for computed columns (`margin`, `contribution_pct`, `contribution_profit`) and falls back to `r[key]` for everything else — so any new field-based column in the registry sorts correctly without a switch entry per column.
+- **Click-to-sort header** preserved (each `<th>` has `onclick=pnlSetSort(key)`, ↑/↓/↕ indicators).
+- **No changes to scorecards / chart / Diagnostics** — those use the same precomputed `rows` they always did.
+- **CSV export** unchanged for now (still uses its own fixed column list). Could be wired to honor visible columns later; out of scope for this pass per user.
 
 ## Recent Fixes (v4.124) — Forecast tab: persistent selection + "Show selection in table" toggle
 - **Same selection-persistence behavior as v4.122/v4.123 P&L** ported to the Demand Forecast tab. `applyFilters()` no longer calls `forecastSelected.clear()` — selections survive Brand / Region / Category / Status / Search / Horizon changes. The user can build a custom forecast report by checking products across multiple searches.
