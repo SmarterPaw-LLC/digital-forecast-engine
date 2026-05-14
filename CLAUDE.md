@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.121**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.122**
+
+## Recent Fixes (v4.122) — P&L selections persist across filter changes
+- **Bug:** clicking products to add to the report, then changing the search / brand / category, **silently cleared** the prior selections. `renderPnl` had a hard prune step (`if (!pnlVisibleMids.includes(mid)) pnlSelectedMids.delete(mid)`) that removed any selection that fell outside the current display filter. So you couldn't build a custom report by searching multiple times in a row.
+- **Fix:** removed the prune. `pnlSelectedMids` now persists across brand / category / search / quick-filter changes — only region + date are "universally applied" (those filter `pnlData` itself before anything else runs). Selections clear only when the user explicitly hits the ✕ Clear button or unchecks a row.
+- **Parallel `selectedAgg` aggregator** built fresh each render. Walks `pnlData` for any row whose `master_id ∈ pnlSelectedMids` AND matches region + date, completely bypassing brand / cat / search / quick filters. Scorecards / fee breakdown / chart now show the full selected set even when some products are hidden by the visible-table filter. The pre-existing `updatePnlChart` aggregator was already doing this for the chart (read pnlData directly, filtered by mid), so it remains untouched; only the scorecard/fee path was using the wrong source.
+- **Drill banner upgraded** to communicate the new behavior:
+  - Subtitle now reads "selection persists across filters" so the user knows mid-search clicks don't blow away their progress.
+  - When 1+ selected products fall outside the current visible filter, an orange "⚠ N hidden by filter" chip appears next to the Clear button — with a tooltip explaining that those products are still in the totals above, just not in the table below.
+  - Clear button text changed from "← Show all products" to "✕ Clear selection" for clarity.
+- **CSV export honors the selection.** When the top-bar CSV button is clicked while a selection is active, `doDownloadPnlAmazonCSV` exports the selected rows (not the visible-but-not-selected ones). Filename gets a `-selected` suffix so you can tell custom-report exports apart from the standard "this view" export. Falls back to visible-rows export when no selection is active. Audit log records `selectedOnly: true/false`.
 
 ## Recent Fixes (v4.121) — ASIN affordances: explicit US + CA listing links
 - **Both regional listing links rendered side-by-side.** `renderAsinAffordances` now always emits a 🇺🇸 amazon.com/dp/{asin} link AND a 🍁 amazon.ca/dp/{asin} link, regardless of which region the calling context "thinks" the ASIN belongs to. An ASIN can exist in either marketplace and the user often wants to check both; relying on a single inferred-region link forced an extra click when the inference was wrong.
