@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.122**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.123**
+
+## Recent Fixes (v4.123) — P&L: "Show selection in table" toggle
+- **New `👁 Show selection in table` button** in the drill-banner (right of the "hidden by filter" chip, left of "✕ Clear selection"). Click to filter the visible product table to ONLY the currently-selected products — brand / category / search / quick-filter are all bypassed in this mode. Click again (button reads `✓ Showing selection only` in green) to return to the normal filtered view. Lets the user see their full custom report (built across multiple searches) in one table without having to manually clear their filters.
+- **Selection-only mode preserves the filters in state** — the brand/cat/search inputs aren't cleared; they just don't apply while the toggle is on. Turning it off restores the prior view exactly.
+- **Quick-filter slicing is also bypassed** in this mode (no point Top-10-ing your selection of 7 products).
+- **Auto-exit:** `pnlClearSelection` and the empty-selection case in `pnlToggleShowSelected` both reset `pnlShowSelectedOnly = false`. If you uncheck rows one-by-one until the selection is empty, the next render falls back to the normal filtered view automatically (the agg-loop gates on `pnlSelectedMids.size > 0`).
+- **Hidden-by-filter chip suppressed** when this mode is active — it would always be 0 (everything selected is also visible).
 
 ## Recent Fixes (v4.122) — P&L selections persist across filter changes
 - **Bug:** clicking products to add to the report, then changing the search / brand / category, **silently cleared** the prior selections. `renderPnl` had a hard prune step (`if (!pnlVisibleMids.includes(mid)) pnlSelectedMids.delete(mid)`) that removed any selection that fell outside the current display filter. So you couldn't build a custom report by searching multiple times in a row.
