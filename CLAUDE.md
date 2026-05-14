@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.125**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.126**
+
+## Recent Fixes (v4.126) — P&L Saved Views capture full report state
+- **Saved views upgraded from columns-only → full report snapshot.** Each view now captures: visible columns, sort key/direction, region (US/CA), currency mode (USD/CAD), time-range period (and customFrom/customTo for custom), brand, category, search text, quick filter, AND the selected products list (`pnlSelectedMids` as an array). Applying a view restores every dimension.
+- **Why:** the user explicitly asked "does the saved view also keep the selected products and time range set?" — previously no; now yes for both, plus everything else that defines what's on screen.
+- **Storage schema v2:** `{ cols: [...], sort: {key,dir}, region, currency, period, customFrom, customTo, brand, cat, search, quick, selectedMids: [...] }`. Old format (bare array of column keys) is still readable via the new `pnlViewCols(v)` accessor — pre-v4.126 views still apply (columns-only) without errors.
+- **Apply logic:**
+  - Sets columns first (no render), then sort, then calls `setPnlRegion(...)` (which triggers a render), then currency mode + button styling, then period/from/to/brand/cat/search/quick/selection, then a final `renderPnl()` to pick up the rest. Shows / hides the custom-range inputs based on the restored period.
+  - Selection is replaced wholesale (cleared first so unrelated current selections don't bleed in).
+- **Popup affordances:** each view name now shows a compact metadata strip beneath it — `N cols · region · brand · period · quick · N selected` — so the user can see what's in a view at a glance without applying it. Tooltip on apply names every captured dimension. The Save / Update buttons name what they capture in the dialog text + tooltip. A footer note below the Save button enumerates the captured fields ("columns · sort · region · currency · time range · brand · category · search · quick filter · selected products").
+- **Snapshot helper:** `pnlSnapshotState()` is the single source of truth for what gets saved — used by both Save-as-new and ↻ Update so the two paths can't drift.
 
 ## Recent Fixes (v4.125) — Forecast chart + P&L column registry / saved views (feature parity pass)
 Two ports between the Forecast and P&L tabs:
