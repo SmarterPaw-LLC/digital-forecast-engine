@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.128**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.129**
+
+## Recent Fixes (v4.129) — Rename saved views
+- **New ✎ rename button** next to each view in the View popup, on BOTH Forecast and P&L. Prompts for a new name (pre-filled with the current one); cancels on empty / unchanged input. Conflicting target name asks to overwrite.
+- **Button order in each row:** Apply (the view name itself) · ✎ Rename · ↻ Update · ✕ Delete — rename sits just left of update because it's the less-destructive edit action.
+- **Rebuild instead of delete+add** for the rename so the entry keeps its iteration position. Doesn't matter for the popup (sorts alphabetically) but stays cleaner if downstream code ever needs insertion order. Forecast version persists the rebuilt object via the existing `fcPersistSavedViews()` so the rename syncs to Supabase too; P&L version persists to localStorage via `pnlPersistSavedViews()`.
 
 ## Recent Fixes (v4.128) — View popup repositioned + relabeled
 - **Button label "📋 Columns" → "📋 View"** on both the Demand Forecast and P&L tabs. Since v4.126/v4.127 the popup actually manages a lot more than columns (full report state: sort, filters, time range, channels, selection, + columns), so "View" frames it better and matches how the popup itself describes a saved bookmark.
