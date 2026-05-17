@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.129**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.130**
+
+## Recent Fixes (v4.130) — Query Database: COGS % of MSRP presets
+- **Two new presets** in the Query Database tab:
+  - **COGS % of MSRP** — catalog-wide avg / median / min / max of `amazon_cogs ÷ msrp × 100`, plus the sample-size count.
+  - **COGS % of MSRP by Brand** — same metric grouped by brand (avg + median per brand).
+- Both join `products` ↔ `product_cogs`, use `amazon_cogs` as the COGS source, and exclude bundles + rows missing MSRP or COGS. Comments in each query note how to swap to `dtc_cogs` for the DTC cost basis.
 
 ## Recent Fixes (v4.129) — Rename saved views
 - **New ✎ rename button** next to each view in the View popup, on BOTH Forecast and P&L. Prompts for a new name (pre-filled with the current one); cancels on empty / unchanged input. Conflicting target name asks to overwrite.
