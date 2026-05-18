@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.131**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.132**
+
+## Recent Fixes (v4.132) — P&L: "Last 7 days" period + scorecard period-over-period deltas
+- **New "Last 7 days" option** at the top of the P&L period dropdown.
+- **Every scorecard now shows a +/- delta vs the previous equal-length period.** e.g. with "Last 7 days" selected, each card shows "▲ 12.4% vs prev" comparing against the 7 days before that. Works for every period type (fixed-day, YTD, custom) — `getPnlPrevDateRange()` derives the prior window purely from the current `{from,to}` span (equal length, immediately preceding).
+- **Apples-to-apples comparison set.** The prior-period total is computed over the SAME products the scorecards reflect — the selected set if a selection is active, else the visible post-quick-filter rows (`comparisonMids`). So the delta answers "these exact SKUs — how did they do in the prior window," not "top 10 this period vs a different top 10 last period."
+- **Color sense flips for cost metrics.** `pnlDeltaChip(cur, prev, goodWhenUp, ...)` — Gross/Net Sales, Net Proceeds, Contribution Profit/% read green on an increase; Amazon Fees, Ad Spend, COGS read green on a *decrease* (a fee increase is unfavorable).
+- **Contribution %** delta is shown in percentage POINTS (`+2.3 pts`), not percent-of-percent, since the metric is itself a percentage.
+- **Edge cases:** no prior data → "▲ new · no prior data"; flat (<0.05% change) → grey "→". Each chip's tooltip names the exact prior date range.
+- **New helpers:** `getPnlPrevDateRange(cur)`, `pnlTotalsForRange(from, to, midSet)` (mirrors the renderPnl agg loop's fx + field mapping so prior totals are directly comparable), `pnlDeltaChip(...)`.
 
 ## Recent Fixes (v4.131) — Password reset + change password
 - **"Forgot password?" link** on the login screen. `sendPasswordReset()` reads the email field (or prompts if empty) and calls `sb.auth.resetPasswordForEmail(email, { redirectTo })`. Success message shows inline in green.
