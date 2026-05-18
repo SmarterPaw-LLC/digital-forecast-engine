@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.130**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.131**
+
+## Recent Fixes (v4.131) — Password reset + change password
+- **"Forgot password?" link** on the login screen. `sendPasswordReset()` reads the email field (or prompts if empty) and calls `sb.auth.resetPasswordForEmail(email, { redirectTo })`. Success message shows inline in green.
+- **Password-recovery landing flow.** Clicking the reset email returns the user to the dashboard with `type=recovery` in the URL. Two detection paths so the user can't slip into the app without setting a new password:
+  1. `bootAuth()` checks `window.location.hash`/`.search` for `type=recovery` BEFORE `getSession()` runs and sets `_passwordRecoveryMode = true` + shows the reset gate (guards the race where `getSession()` returns the recovery session before the `PASSWORD_RECOVERY` event fires).
+  2. `onAuthStateChange` also handles the `PASSWORD_RECOVERY` event → `showPasswordResetGate()`.
+  `onAuthSuccess()` bails while `_passwordRecoveryMode` is set, so the dashboard never loads behind the reset screen.
+- **New `#pw-reset-gate` overlay** — "Set a new password" form (new + confirm, min 8 chars). `submitPasswordReset()` validates, calls `sb.auth.updateUser({ password })`, clears the recovery flag, strips the recovery token from the URL via `history.replaceState` (so a reload doesn't re-trigger the gate), then runs the normal `onAuthSuccess` flow.
+- **Settings → 🔑 Change password** — for already-signed-in users. `changePassword()` validates new + confirm (min 8 chars), calls `sb.auth.updateUser({ password })`; the existing session stays valid so no re-login. New section sits at the top of the Settings page above Users.
+- **Audit log:** `user.password_reset` (via email link) and `user.password_change` (via Settings) events recorded.
+- **Setup note:** `resetPasswordForEmail`'s `redirectTo` is `window.location.origin + pathname` — the same URL already whitelisted for Google OAuth, so no new Supabase redirect-URL config is needed. If reset emails land but the link errors, confirm that URL is in Supabase → Auth → URL Configuration → Redirect URLs.
 
 ## Recent Fixes (v4.130) — Query Database: COGS % of MSRP presets
 - **Two new presets** in the Query Database tab:
