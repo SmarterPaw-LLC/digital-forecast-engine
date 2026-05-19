@@ -2,7 +2,11 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.136**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.137**
+
+## Recent Fixes (v4.137) — Products tab: filter by notes
+- **Two new options in the Products tab `prodFilter` dropdown:** "📝 Has notes" (products where `products.notes` is non-empty — general admin / merge history) and "📝 Has forecast notes" (products where `products.forecast_notes` is non-empty — the deliberate per-product annotations edited from the Forecast tab, v4.99).
+- **Note indicators in the Product cell.** A 📝 icon shows when a product has a forecast note; a dimmed 🗒 shows when it has a general note (suppressed for needs-review rows, which already key off `notes`). Hovering either icon shows the note text in the tooltip — so the filter is actionable without opening every modal.
 
 ## Recent Fixes (v4.136) — Bundle attribution in the per-channel Sold / Forecast columns
 - **The "Sold by channel" and "Forecast by channel" 30/60/90/120d columns ignored bundle attribution.** Even with "+ bundle components" checked, `fcSoldByChannel` summed only direct channel sales — so a component product whose demand came mostly through bundle sales showed understated per-channel numbers (the main Need columns already counted it; only these per-channel columns didn't).
