@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.132**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.133**
+
+## Recent Fixes (v4.133) — Data Uploads: show "data through" date per section
+- **Each upload tile's `.dz-last` line now shows where the loaded data currently ends** — so the user can see at a glance how current each channel is before deciding what to upload next.
+- **`refreshUploadDataRanges()`** queries the latest data date per channel:
+  - **SKU Economics** — latest `week_start` per region from `sku_economics`, shown as the week-END (Saturday, `week_start + 6`): `📅 Data US: thru 2026-05-16 · CA: thru 2026-05-16`.
+  - **Shopify DTC** — latest `week_start` from `sales_weekly` where `channel='shopify'`, shown as week-end: `📅 Data through 2026-05-17`.
+  - **Chewy** — latest `upload_date` + furthest `forecast_month` from `chewy_forecasts`: `📅 Last snapshot 2026-05-12 · forecasts thru 2026-09`.
+- **Runs on Uploads-view open** (`switchDataView('uploads')`) and **after every successful upload** (Shopify / SKU Economics single + folder + zip / Chewy handlers all call it), so the line updates immediately without a tab switch. Per-file batch counts still live in the `.dz-st` status line.
+- Empty-state messages ("📅 No SKU Economics data loaded yet" etc.) when a channel has no rows.
 
 ## Recent Fixes (v4.132) — P&L: "Last 7 days" period + scorecard period-over-period deltas
 - **New "Last 7 days" option** at the top of the P&L period dropdown.
