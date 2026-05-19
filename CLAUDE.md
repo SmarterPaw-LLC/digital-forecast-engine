@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.134**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.135**
+
+## Recent Fixes (v4.135) — Shopify weekly aggregation: Sunday bucketed into the wrong week
+- **Bug:** the Shopify daily→weekly aggregator put each week's **Sunday** sales into the *next* week's bucket. `dateToMondayLocal` mapped Sunday FORWARD to the next-day Monday — correct for Amazon's Sun-Sat report weeks (a Sunday is the START of that week), but wrong for Shopify, which reports genuine daily data where a Sunday is the LAST day of its Mon-Sun week.
+- **Symptom:** a Shopify report covering Mon May 11 → Sun May 17 split into TWO `week_start` rows — May 11 (Mon-Sat) + May 18 (Sun only). The upload reported "2 weeks" for a one-week file, and the Uploads tab's "Data through" date showed `2026-05-24` (May 18 + 6) — a future date.
+- **Fix:** `dateToMondayLocal(date, sundayMapsForward = true)` gained a direction flag. `parseShopifySales` now passes `false` — a Sunday maps BACK 6 days to its week's Monday. `parseSkuEconomics` keeps the default (`true`) — Amazon's Sun-Sat convention is unchanged.
+- **Scope:** this affected every Shopify upload since v4.92 (when `dateToMondayLocal` was introduced). Each stored weekly row was `[Mon-Sat of its own week] + [Sunday of the prior week]` — total units conserved, but Sunday attributed one week late. Impact on velocity/forecasts is minor (a 1-day shift inside rolling 30/60/90d windows), but the week boundaries were wrong.
+- **Cleanup:** no clean SQL migration is possible — the rows are already weekly aggregates, so the mis-bucketed Sunday can't be separated out. To correct historical data, **re-upload the daily Shopify CSVs** (one Mon-Sun week per file is cleanest) and choose **Replace** at the overlap prompt; the v4.135 parser buckets them correctly. The most-recent week's dangling Sunday self-corrects when the following week is uploaded.
 
 ## Recent Fixes (v4.134) — "Data through" date: correct week-end per channel
 - **SKU Economics "data through" date was one day too late.** v4.133 added `week_start + 6` for every channel, but Amazon's SKU Economics report runs **Sunday→Saturday** while `week_start` is stored as the *Monday* of the overlapping Mon-Sun week (v4.91 parser convention). Monday + 6 = the *following Sunday* — one day past the report's real Saturday end. Fixed: SKU Economics now uses `week_start + 5` (Saturday) and labels it `thru Sat YYYY-MM-DD`.
