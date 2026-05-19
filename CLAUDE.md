@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.133**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.134**
+
+## Recent Fixes (v4.134) — "Data through" date: correct week-end per channel
+- **SKU Economics "data through" date was one day too late.** v4.133 added `week_start + 6` for every channel, but Amazon's SKU Economics report runs **Sunday→Saturday** while `week_start` is stored as the *Monday* of the overlapping Mon-Sun week (v4.91 parser convention). Monday + 6 = the *following Sunday* — one day past the report's real Saturday end. Fixed: SKU Economics now uses `week_start + 5` (Saturday) and labels it `thru Sat YYYY-MM-DD`.
+- **Shopify unchanged** — Shopify genuinely runs Monday→Sunday, so `week_start + 6` (Sunday) is correct. Now labeled `through Sun YYYY-MM-DD` for clarity.
+- `endOfWeek(mondayStr, offset)` gained an explicit offset arg (defaults to 6) so each channel passes its own reporting convention.
 
 ## Recent Fixes (v4.133) — Data Uploads: show "data through" date per section
 - **Each upload tile's `.dz-last` line now shows where the loaded data currently ends** — so the user can see at a glance how current each channel is before deciding what to upload next.
