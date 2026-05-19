@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.135**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.136**
+
+## Recent Fixes (v4.136) — Bundle attribution in the per-channel Sold / Forecast columns
+- **The "Sold by channel" and "Forecast by channel" 30/60/90/120d columns ignored bundle attribution.** Even with "+ bundle components" checked, `fcSoldByChannel` summed only direct channel sales — so a component product whose demand came mostly through bundle sales showed understated per-channel numbers (the main Need columns already counted it; only these per-channel columns didn't).
+- **Fix:** new `fcBundleAttrByChannel(r, channels, days)` helper returns the bundle-attributed units for a channel group over a window, gated by the `fBundleAttr` checkbox (returns 0 for the Chewy group — Chewy demand isn't in `sales_weekly`). `fcSoldByChannel` now adds it to the direct total; `fcForecastByChannel` extrapolates from that bundle-inclusive base automatically.
+- **+B badge** on both column families — orange `+B N` marker surfaces the attributed portion, same affordance as the main Sold / Need columns. Column width bumped 74px → 90px to fit. Tooltips updated.
+- **Core forecast untouched.** `fcSoldByChannel` only feeds the per-channel display columns — the main Need columns and scorecards run off `blended_daily` / `need_N` (a separate path that already had bundle attribution via `recomputeRecordVelocity`). Verified the change can't shift the primary forecast.
+- Toggling "+ bundle components" re-renders these columns live (the checkbox's `applyVelocityWindow()` → `renderAll()`).
 
 ## Recent Fixes (v4.135) — Shopify weekly aggregation: Sunday bucketed into the wrong week
 - **Bug:** the Shopify daily→weekly aggregator put each week's **Sunday** sales into the *next* week's bucket. `dateToMondayLocal` mapped Sunday FORWARD to the next-day Monday — correct for Amazon's Sun-Sat report weeks (a Sunday is the START of that week), but wrong for Shopify, which reports genuine daily data where a Sunday is the LAST day of its Mon-Sun week.
