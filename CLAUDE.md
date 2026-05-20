@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.147**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.148**
+
+## Recent Fixes (v4.148) — EU fees: stop parking into wrong US buckets
+- **User correctly pushed back** on the v4.141 mapping that parked Digital Services Fee (FBA) into `aged_inventory_fee_total` and DSF (Selling) into `refund_admin_fee_total`. Those are semantically different fee categories — "Aged Inventory" is Amazon's long-term storage penalty, not a UK/EU tax. The fee breakdown panel was displaying DSF values under those misleading labels.
+- **Fix:** EU rows now carry two distinct fields:
+  - `digital_services_fba_fee` ← Digital Services Fee (FBA Fulfilment fees) total
+  - `digital_services_selling_fee` ← Digital Services Fee (Selling on Amazon fees) total
+  US/CA buckets (`aged_inventory_fee_total`, `refund_admin_fee_total`) stay zero for EU rows; never reused for unrelated EU fees.
+- **`totalFees` calculation** now adds the two EU fields unconditionally — US/CA rows have undefined → 0, EU rows contribute their actual DSF values. Same change applied to `pnlTotalsForRange` (period-over-period delta), the main agg, and selectedAgg loops. `PNL_NUMERIC_FIELDS` (drives the multi-select rollup) extended to include both new fields.
+- **Fee breakdown panel is now region-aware.** EU mode shows: `FBA Fulfilment (incl. Base + Fuel)` · `Digital Services Fee — FBA Fulfilment` · `Digital Services Fee — Selling` · `Referral Fee` · `Sponsored Products`. US/CA mode unchanged.
+- **Explainer panel updated.** The 🧮 disclosure no longer claims DSF is "surfaced as Aged Inventory" — names the actual breakdown labels and explains DSF is EU-specific with its own distinct field.
 
 ## Recent Fixes (v4.147) — sales_weekly CHECK constraints: allow EU values
 - **SQL-only hotfix.** No code changes. v4.144 started inserting EU rows into `sales_weekly` (region in {GB, DE, FR, IT, ES, NL}, channel in {amazon_gb, ..., amazon_nl}), but the original schema's `sales_weekly_region_check` and `sales_weekly_channel_check` CHECK constraints only whitelist US/CA values, so inserts fail with `"new row violates check constraint sales_weekly_region_check"`.
