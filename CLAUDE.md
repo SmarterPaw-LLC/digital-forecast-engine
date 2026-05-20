@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.142**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.143**
+
+## Recent Fixes (v4.143) — EU SKU Economics: overlap-overwrite prompt
+- **Gap closed.** The EU uploader was upserting silently on `(asin, region, week_start)` conflict — a re-upload of the same week silently overwrote existing rows. The US uploader has a dedicated `showUploadConflictDialog` flow on overlap; EU now has the same.
+- **What it does:** after dedup, queries `sku_economics_eu` for any existing keys that match what the file is about to write. If any overlap, shows the conflict dialog with `Cancel` / `Add new rows only` / `Replace`. `new_only` filters out the overlapping `(asin, region, week_start)` rows before insert; `replace` lets the existing upsert proceed (overwrite via unique constraint); `cancel` aborts.
+- **Dedup remains as before:** in-file rows with the same `(asin, region, week_start)` are summed (multi-MSKU pattern, mirrors US v4.61). The DB-level unique constraint is the ultimate guarantee of one row per key.
 
 ## Recent Fixes (v4.142) — Fee calculation explainer for US + CA (parity with EU)
 - **New 🧮 disclosure panel above the scorecards** when US or CA region is active — mirrors the EU explainer added in v4.141. Lists every fee field that rolls into Amazon Fees, the Net Proceeds formula, where COGS comes from, and the Contribution Profit / Margin / Contribution % derivations.
