@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.143**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.144**
+
+## Recent Fixes (v4.144) — EU SKU Economics also writes to `sales_weekly` (visibility + forecast-ready)
+- **Gap acknowledged from v4.139:** EU was P&L-only — sales rows weren't landing in `sales_weekly`, so EU units never appeared in Units Sold, channel-mix queries, or `velocity_calculated`. User correctly pushed back that EU products map to existing SmarterPaw master_ids (same physical product, different regional listing) and the volume is comparable to Shopify (which is already mixed in without distorting US forecasts). Fixed.
+- **`parseEuSkuEconomics` now writes both tables.** Alongside the `sku_economics_eu` upsert, it inserts rows into `sales_weekly`:
+  - `channel` = `'amazon_gb' | 'amazon_de' | 'amazon_fr' | 'amazon_it' | 'amazon_es' | 'amazon_nl'` (per-country, mirroring the `amazon_us` / `amazon_ca` naming pattern — gives per-country velocity for free)
+  - `region` = the country code
+  - `shopify_sku` = NULL (Architecture Rule #1)
+  - `week_start` = Monday-shifted via `dateToMondayLocal(startSun, true)` — matches the US/CA convention so `sales_weekly` stays uniformly Monday-based
+  - `units_ordered` = `net_units_sold`; `revenue` = `net_sales` in **native currency** (GBP/EUR — `sales_weekly` has no currency column, so the value is raw native; `sku_economics_eu` remains the FX-aware source for revenue analysis. Forecasting uses units, which is currency-agnostic.)
+  - Zero-unit rows are skipped (existing US convention — `sales_weekly` is about sales)
+- **Delete + insert pattern** (Architecture Rule #5) — Amazon rows can't upsert against the functional `coalesce(shopify_sku,'')` unique index. Deletes existing `(channel, asin, week_start)` matches in batches of 100 ASINs, then inserts the new rows.
+- **Overlap prompt covers both writes.** The v4.143 `sku_economics_eu` overlap dialog already filters `econRows` by user's choice; `salesRows` is derived from the same array, so the choice flows through to sales_weekly writes too. No double-prompt.
+- **Phase 2 marker for EU forecasting.** The records-build loop in `init()` hardcodes `regions = ['US','CA']` for products with ASIN — that's why EU velocity rows in `velocity_calculated` never reach the Forecast tab today. Added a doc comment naming the **one-line change** to enable EU forecasting later: change that array to `['US','CA', ...EU_REGIONS]`. Marker text: `PHASE 2 EU forecasting`. EU sales_weekly + velocity_calculated entries are already populated from v4.144 onward, so flipping requires no parser changes, no schema migrations, no historical backfill.
+- **Status message** updated to surface both write counts: `✓ N P&L rows · M sales rows · GB/DE/... · 1 week · K ASINs · J new products`.
 
 ## Recent Fixes (v4.143) — EU SKU Economics: overlap-overwrite prompt
 - **Gap closed.** The EU uploader was upserting silently on `(asin, region, week_start)` conflict — a re-upload of the same week silently overwrote existing rows. The US uploader has a dedicated `showUploadConflictDialog` flow on overlap; EU now has the same.
