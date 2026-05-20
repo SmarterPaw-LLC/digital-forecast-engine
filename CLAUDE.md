@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.141**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.142**
+
+## Recent Fixes (v4.142) — Fee calculation explainer for US + CA (parity with EU)
+- **New 🧮 disclosure panel above the scorecards** when US or CA region is active — mirrors the EU explainer added in v4.141. Lists every fee field that rolls into Amazon Fees, the Net Proceeds formula, where COGS comes from, and the Contribution Profit / Margin / Contribution % derivations.
+- **Header swaps US ↔ CA** depending on selected region.
+- **CAD→USD conversion note** is conditionally inlined into the Net Sales bullet only when CA is selected — keeps the panel focused per region.
+- **Reuses the same `<details>` UX as the EU panel** so the disclosure feels uniform across the three Amazon regions.
 
 ## Recent Fixes (v4.141) — EU fee mapping bug + transparency
 - **Bug fix:** `loadEuPnlTab` was double-counting `Base fulfilment` and `Fuel/logistics surcharge` into Amazon Fees. The Amazon EU report's `Fulfilment by Amazon fulfilment fees total` column IS the consolidated fulfillment fee — it already includes Base + Fuel as sub-components. Per-unit reconciliation on a sample row: `Base 2.70/u + Fuel 0.04/u = 2.74/u = Fulfilment by Amazon per unit`. Adding the components on top inflated FBA Fulfillment by ~50% (it was `5.40 + 0.08 + 5.48` instead of just `5.48`).
