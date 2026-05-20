@@ -2,7 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.138**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.139**
+
+## Recent Fixes (v4.139) — Amazon EU SKU Economics: table + uploader + P&L EU toggle
+- **New table `sku_economics_eu`** — separate from `sku_economics` because the EU fee taxonomy is structurally different (Digital Services Fees, Fuel surcharge — no parallel in US/CA; conversely no Inbound/Aged/Removal/Storage Util in EU) and the native currencies are GBP + EUR rather than CAD/USD. `week_start` is kept as the report's native **Sunday** (not Monday-shifted like `sku_economics`) — isolated to this table, documented in the column. Unique key `(asin, region, week_start)`. Run `supabase_add_sku_economics_eu.sql` BEFORE deploying v4.139.
+- **New column `product_cogs.amazon_cogs_eu`** for EU shipments (different freight + import duty than US/CA fulfillment). EU P&L falls back to `amazon_cogs` if `amazon_cogs_eu` is blank, so adoption is gradual. Surface: new "Amazon EU COGS" column on the COGS page, editable inline; CSV download/upload extended to include it.
+- **New EU uploader tile** on the Uploads tab (separate from US/CA SKU Economics — same single-file Sun-Sat validation, but maps the British "fulfilment" spelling and EU-specific fee columns). Brand prompt fires at upload (no Brand column in the raw export); unknown EU ASINs auto-create as `SP-TEMP-{asin}` with the chosen brand. Non-EU rows in the file are rejected with a clear error.
+- **`storeToRegion`-equivalent EU set:** new module-level `EU_REGIONS = {GB, DE, FR, IT, ES, NL}`. The EU parser validates the file's `Amazon store` column against this set.
+- **P&L tab — new 🇪🇺 EU region button.** Clicking it:
+  - Loads `sku_economics_eu` (paginated, cached as `euPnlData`).
+  - Shows a secondary "Market" dropdown: `All EU (rollup)` / GB / DE / FR / IT / ES / NL — defaults to "All EU".
+  - Re-labels the native-currency toggle button from `CAD` → `Local` (since native varies per row: GBP for GB, EUR for the rest).
+  - Triggers `fetchEuFxRates()` against `frankfurter.app` (free, ECB-sourced) to get live GBP→USD and EUR→USD; cached for the session with sensible fallbacks (`pnlFxGbp = 1.27`, `pnlFxEur = 1.08`).
+  - All `pnlData`-iterating loops in `renderPnl` (main agg, selectedAgg, prev-period delta, chart) route through a new `getPnlSource()` helper that returns the right data array + region predicate, so the same renderer powers US/CA and EU without conditional branches in the loop body.
+  - COGS lookup goes through `getActivePnlCogs(mid)` — returns `amazon_cogs_eu` when in EU mode, falling back to `amazon_cogs` if the EU column is blank.
+- **FX semantics:** the existing `pnlCurrencyMode` two-state model (`usd` | `cad`) is reused for EU — `cad` mode now means "show native (Local)" when in EU view. The currency-label rendering elsewhere (`USD*` footnote, etc.) already adapts per region.
+- **Schema mapping (EU → normalized):** `loadEuPnlTab` projects EU rows onto the `sku_economics` shape `renderPnl` expects. `base_fulfilment + DSF FBA + Fuel + FBA fulfilment total` → `fba_fulfillment_fee_total` (consolidated FBA fee). `DSF (Selling on Amazon fees)` → `refund_admin_fee_total` (closest existing bucket; not perfect semantically but keeps total whole). Inbound / Aged / Removal / Storage Util / Referral Refunds / FBA Reimbursement default to 0 — the EU report doesn't break those out.
 
 ## Recent Fixes (v4.138) — Shopify DTC P&L sub-view (v1, partial data)
 - **New 🛍 Shopify DTC sub-view** added to the P&L dropdown (alongside Amazon SKU Economics and COGS). Mirrors the Amazon P&L layout — same filter strip (period with "Last 7 days", brand, category, search, quick filter), scorecards, time-series chart with metric selector, multi-select aggregation with persistent selection across filters, period-over-period delta chips, and click-to-sort product table.
