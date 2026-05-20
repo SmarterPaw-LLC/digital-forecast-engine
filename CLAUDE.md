@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.148**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.149**
+
+## Recent Fixes (v4.149) — Row-level math reconciliation: Net Proceeds tooltip + honest Margin/Contrib % for zero-sales rows
+- **Reported bug:** an EU row with $0 net sales, $3.72 FBA fees, and -$7.84 Net Proceeds looked unreconcilable in the table. The visible columns only show FBA Fees + Referral + Ad Spend as separate items — for EU, Net Proceeds also subtracts Digital Services Fees that aren't surfaced anywhere in the row. Made the row's math opaque.
+- **Reported bug #2:** Margin % and Contribution % showed `0.0%` for that row instead of indicating a real loss. The render did `r.net_sales > 0 ? (proceeds/net_sales)*100 : 0` — divide-by-zero protection that fell through to a misleading 0%.
+- **Fix #1: Net Proceeds cell tooltip.** Hover any Net Proceeds value to see the per-row fee breakdown: `Net Sales − FBA Fulfilment − DSF (FBA) − DSF (Selling) − Referral − Ad Spend − … + FBA Reimbursement = Net Proceeds`. Only non-zero fee lines are listed. Reconciles to Amazon's `net_proceeds_total` directly.
+- **Fix #2: Margin / Contribution % honest zero-sales handling.** When `net_sales = 0`:
+  - If proceeds (or contrib) is also 0 → show `0.0%` (truly nothing happened)
+  - If proceeds/contrib is non-zero → show `— (loss)` in red with a tooltip explaining: "No sales this period, but losing $X (storage / DSF / refunds on unsold inventory). Margin/Contribution % is undefined when sales = $0."
+  No more false `0.0%` reading on rows that are actually leaking money.
+- **Fix #3: DSF columns added to PNL_COLUMNS registry.** Two new toggleable columns — `DSF (FBA)` and `DSF (Selling)` — under the "fees" group. Default OFF; users enable via the View popup. When in EU mode, ticking these makes EU rows fully reconcilable inline without needing the explainer panel.
 
 ## Recent Fixes (v4.148) — EU fees: stop parking into wrong US buckets
 - **User correctly pushed back** on the v4.141 mapping that parked Digital Services Fee (FBA) into `aged_inventory_fee_total` and DSF (Selling) into `refund_admin_fee_total`. Those are semantically different fee categories — "Aged Inventory" is Amazon's long-term storage penalty, not a UK/EU tax. The fee breakdown panel was displaying DSF values under those misleading labels.
