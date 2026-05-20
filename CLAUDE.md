@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.140**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.141**
+
+## Recent Fixes (v4.141) — EU fee mapping bug + transparency
+- **Bug fix:** `loadEuPnlTab` was double-counting `Base fulfilment` and `Fuel/logistics surcharge` into Amazon Fees. The Amazon EU report's `Fulfilment by Amazon fulfilment fees total` column IS the consolidated fulfillment fee — it already includes Base + Fuel as sub-components. Per-unit reconciliation on a sample row: `Base 2.70/u + Fuel 0.04/u = 2.74/u = Fulfilment by Amazon per unit`. Adding the components on top inflated FBA Fulfillment by ~50% (it was `5.40 + 0.08 + 5.48` instead of just `5.48`).
+- **Verified against the report:** `27.78 net sales − 5.48 fulfillment − 0.10 DSF FBA − 0.10 DSF Selling − 5.00 referral − 9.79 sponsored = 7.31 net proceeds` ✓ matches `net_proceeds_total`.
+- **Corrected mapping (EU → sku_economics shape):**
+  - `fba_fulfilment_fees_total` → `fba_fulfillment_fee_total` (single source — no longer double-adding Base + Fuel)
+  - `digital_services_fee_fba_fulfilment_total` → `aged_inventory_fee_total` (parked in the unused EU bucket so it still rolls into Amazon Fees)
+  - `digital_services_fee_selling_total` → `refund_admin_fee_total`
+  - `referral_fee_total`, `sponsored_products_total`, `net_proceeds_total` → 1:1
+  - Raw `base_fulfilment_fee_total` + `fuel_logistics_surcharge_total` retained on the row under `_eu_base_fulfilment` / `_eu_fuel_surcharge` for future drill-down if needed.
+- **New 🧮 "How EU fees + proceeds are calculated" disclosure panel** above the scorecards, visible only when EU region is selected. Spells out every input → bucket → output mapping in plain language so the user can reconcile against the Amazon EU report row-by-row. Mirrors the partial-data callout pattern used on the Shopify view.
 
 ## Recent Fixes (v4.140) — P&L empty state on region switch
 - **Bug:** switching to a region with no data (e.g. clicking 🇪🇺 EU before any EU upload, or before running the v4.139 migration) left the previous region's scorecards + fee breakdown + footnote on screen. `renderPnl` early-returned on empty `sourceData`, so nothing got cleared — visually it looked like EU had CA's numbers.
