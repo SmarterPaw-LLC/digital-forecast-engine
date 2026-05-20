@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.137**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.138**
+
+## Recent Fixes (v4.138) — Shopify DTC P&L sub-view (v1, partial data)
+- **New 🛍 Shopify DTC sub-view** added to the P&L dropdown (alongside Amazon SKU Economics and COGS). Mirrors the Amazon P&L layout — same filter strip (period with "Last 7 days", brand, category, search, quick filter), scorecards, time-series chart with metric selector, multi-select aggregation with persistent selection across filters, period-over-period delta chips, and click-to-sort product table.
+- **Data sources for v1:** `sales_weekly` rows where `channel='shopify'` (paginated, per Architecture Rule #4) for revenue + units; `product_cogs.dtc_cogs` for COGS. No region toggle — Shopify is US-only by SmarterPaw's convention.
+- **Partial-data callout** prominently displayed above the scorecards naming what's NOT captured yet: transaction / payment-processor fees, shipping costs, refund admin, ad spend (Meta / Google / TikTok). Net Proceeds here is "Net Sales − COGS" with no fee/cost subtraction — explicitly flagged so the user doesn't read it as full P&L.
+- **Live scorecards (current):** Net Sales, Total COGS, Net Proceeds, Margin % — each with period-over-period delta vs the equal-length prior window (reuses the Amazon `pnlDeltaChip` helper). **Placeholder scorecards** render "—" with explanatory tooltips: Transaction Fees, Shipping, Ad Spend (DTC), Refunds. Visible gaps so the user can see exactly what an uploader needs to backfill.
+- **Cache invalidation:** `handleSalesUpload` resets `shopifyPnlData = []` after a successful `channel='shopify'` upload so the next open of the tab re-fetches.
+- **Skipped for v1 (can layer in later):** Diagnostics tab (no per-SKU mystery here — Shopify SKUs auto-create as SP-TEMP on upload), Saved Views popup, Show-selected-only toggle, fee-breakdown sidebar. Structure is parallel to Amazon so any of those can be ported when needed.
+- **Future:** when the user pulls a Shopify report with the missing economics columns, they'll likely want a new `shopify_economics` table parallel to `sku_economics`, an uploader that writes to it, and updates to `renderShopifyPnl` that read from it. The scorecard placeholders + the partial-data banner are the seams.
 
 ## Recent Fixes (v4.137) — Products tab: filter by notes
 - **Two new options in the Products tab `prodFilter` dropdown:** "📝 Has notes" (products where `products.notes` is non-empty — general admin / merge history) and "📝 Has forecast notes" (products where `products.forecast_notes` is non-empty — the deliberate per-product annotations edited from the Forecast tab, v4.99).
