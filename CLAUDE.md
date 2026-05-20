@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.146**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.147**
+
+## Recent Fixes (v4.147) — sales_weekly CHECK constraints: allow EU values
+- **SQL-only hotfix.** No code changes. v4.144 started inserting EU rows into `sales_weekly` (region in {GB, DE, FR, IT, ES, NL}, channel in {amazon_gb, ..., amazon_nl}), but the original schema's `sales_weekly_region_check` and `sales_weekly_channel_check` CHECK constraints only whitelist US/CA values, so inserts fail with `"new row violates check constraint sales_weekly_region_check"`.
+- **Patch file:** `supabase_v4147_sales_weekly_eu_checks.sql`. Idempotent — drops the existing region + channel CHECK constraints (under whatever auto-generated names they have) and re-adds them with the EU values included. Run ONCE in Supabase → SQL Editor before attempting any EU upload.
+- **New region whitelist:** `US, CA, MX, GB, DE, FR, IT, ES, NL`. Added MX since `storeToRegion()` already supports it.
+- **New channel whitelist:** `amazon_us, amazon_ca, amazon_mx, amazon_gb, amazon_de, amazon_fr, amazon_it, amazon_es, amazon_nl, shopify, chewy`.
 
 ## Recent Fixes (v4.146) — Merge robustness: product_cogs + FK cascade
 - **`runMerge` now handles `product_cogs`.** The previous version touched every other dependent table but missed `product_cogs` (its PK is master_id, so a straight UPDATE src→tgt would PK-collide when both products had COGS rows). New flow:
