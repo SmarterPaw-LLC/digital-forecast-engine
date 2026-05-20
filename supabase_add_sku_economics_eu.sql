@@ -16,7 +16,7 @@
 
 create table if not exists sku_economics_eu (
   id                                            bigserial primary key,
-  master_id                                     text references products(master_id),
+  master_id                                     text references products(master_id) on delete cascade,
   asin                                          text not null,
   region                                        text not null,    -- 'GB' | 'DE' | 'FR' | 'IT' | 'ES' | 'NL'
   week_start                                    date not null,    -- Sunday (Amazon EU report's native start)

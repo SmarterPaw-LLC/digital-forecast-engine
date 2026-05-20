@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.144**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.146**
+
+## Recent Fixes (v4.146) — Merge robustness: product_cogs + FK cascade
+- **`runMerge` now handles `product_cogs`.** The previous version touched every other dependent table but missed `product_cogs` (its PK is master_id, so a straight UPDATE src→tgt would PK-collide when both products had COGS rows). New flow:
+  - Read both src and tgt COGS rows.
+  - If src has a row: when tgt also has one, **merge null fields** — fill any tgt-null COGS column with the src value, upsert tgt, then delete src. When tgt has no row, just reassign src→tgt. Either way: useful COGS data from the duplicate is preserved on the survivor.
+  - Wrapped in try/catch — non-fatal. Worst case is the FK CASCADE handles cleanup at the final product delete.
+  - Fields covered: `amazon_cogs`, `amazon_cogs_eu`, `dtc_cogs`, `chewy_cogs`.
+- **Schema patch — `sku_economics_eu` FK now CASCADEs.** The original v4.139 migration created the FK with default NO ACTION semantics, blocking direct product deletes (Products tab → Delete button) when EU rows existed. v4.145 fixed the merge tool via JS reassignment; v4.146 fixes the schema so direct deletes also work without manual cleanup.
+  - **New file:** `supabase_v4146_eu_fk_cascade.sql` — idempotent ALTER that drops the existing FK (under any auto-generated name) and re-adds it with ON DELETE CASCADE. Run ONCE in Supabase SQL Editor.
+  - **Updated:** `supabase_add_sku_economics_eu.sql` for fresh installs now includes `on delete cascade` on the FK directly — anyone running it post-v4.146 gets the right behavior without the patch.
+
+## Recent Fixes (v4.145) — Merge + SP-TEMP promotion: reassign sku_economics_eu FKs
+- **Bug:** `runMerge` and the SP-TEMP→SP-XXXX promotion path in `saveProduct` updated the master_id on every other dependent table (sales_weekly, sku_economics, chewy_forecasts, bom, inventory, channel_listings) but missed `sku_economics_eu` (added in v4.139). Merging a duplicate that had any EU rows failed with: `"violates foreign key constraint sku_economics_eu_master_id_fkey on table sku_economics_eu"`.
+- **Fix:** added `sku_economics_eu.master_id` UPDATE alongside the others in both flows. Marker comment in `runMerge` flags it as the v4.139 oversight so anyone adding future FK-bearing tables knows to update both paths.
+- **Known latent gap (not v4.145 scope):** `product_cogs` rows aren't migrated during merge either — if both src + tgt have COGS rows, merge would fail on the master_id PK. Not the user's current symptom; flagged for a future pass.
+- **Schema note:** `sku_economics_eu`'s FK currently uses default `NO ACTION` behavior (not `ON DELETE CASCADE`). If you ever delete a product directly (via the Products tab Delete button) that has EU rows, you'll hit the same error. Workaround for now: delete the EU rows manually or run `ALTER TABLE sku_economics_eu DROP CONSTRAINT sku_economics_eu_master_id_fkey, ADD CONSTRAINT sku_economics_eu_master_id_fkey FOREIGN KEY (master_id) REFERENCES products(master_id) ON DELETE CASCADE;` once. Not bundled into v4.145 to avoid forcing another migration run.
 
 ## Recent Fixes (v4.144) — EU SKU Economics also writes to `sales_weekly` (visibility + forecast-ready)
 - **Gap acknowledged from v4.139:** EU was P&L-only — sales rows weren't landing in `sales_weekly`, so EU units never appeared in Units Sold, channel-mix queries, or `velocity_calculated`. User correctly pushed back that EU products map to existing SmarterPaw master_ids (same physical product, different regional listing) and the volume is comparable to Shopify (which is already mixed in without distorting US forecasts). Fixed.
