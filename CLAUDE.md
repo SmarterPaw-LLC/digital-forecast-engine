@@ -2,7 +2,11 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.139**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.140**
+
+## Recent Fixes (v4.140) — P&L empty state on region switch
+- **Bug:** switching to a region with no data (e.g. clicking 🇪🇺 EU before any EU upload, or before running the v4.139 migration) left the previous region's scorecards + fee breakdown + footnote on screen. `renderPnl` early-returned on empty `sourceData`, so nothing got cleared — visually it looked like EU had CA's numbers.
+- **Fix:** removed the early-return. When `sourceData` is empty, the function now explicitly renders an empty state — zeroed/cleared scorecards with a "No EU SKU Economics data uploaded yet — use the 🇪🇺 EU uploader on Data → Uploads, and make sure `supabase_add_sku_economics_eu.sql` has been run" message, zeroed row count, "— Empty —" tbody, empty fee breakdown, hidden chart, cleared `pnlVisibleMids` / `pnlExportRows`. Same path covers EU error cases (table doesn't exist, RLS denied) — `loadEuPnlTab`'s catch block now also routes through `renderPnl` so the UI clears, then overwrites the tbody with the specific error message.
 
 ## Recent Fixes (v4.139) — Amazon EU SKU Economics: table + uploader + P&L EU toggle
 - **New table `sku_economics_eu`** — separate from `sku_economics` because the EU fee taxonomy is structurally different (Digital Services Fees, Fuel surcharge — no parallel in US/CA; conversely no Inbound/Aged/Removal/Storage Util in EU) and the native currencies are GBP + EUR rather than CAD/USD. `week_start` is kept as the report's native **Sunday** (not Monday-shifted like `sku_economics`) — isolated to this table, documented in the column. Unique key `(asin, region, week_start)`. Run `supabase_add_sku_economics_eu.sql` BEFORE deploying v4.139.
