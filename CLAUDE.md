@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.151**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.152**
+
+## Recent Fixes (v4.152) — P&L category dropdown: derive from products, dedupe
+- **Bug:** Amazon and Shopify P&L category dropdowns were populated by iterating `allCategories` directly. That table has one row per (category, subcategory) pair, so any category with multiple subcategories appeared in the dropdown N times.
+- **Fix:** populate the dropdown from the products catalog instead — take `distinct category_id` values that actually appear on `allProducts` (so unused categories don't clutter the picker), look up each id's `category` name via `allCategories`, dedupe, sort alphabetically. Applied to both the Amazon P&L (`#pnl-cat`) and Shopify P&L (`#spnl-cat`).
+- **Side benefit:** dropdown now also re-runs only once per page session (`dataset.populated` guard on the Amazon side matches the existing Shopify guard) — no more growing list when the user re-opens the P&L tab.
 
 ## Recent Fixes (v4.151) — COGS page: row-click to edit product + one-click BOM apply
 - **Row click opens product modal.** Every COGS table row is now clickable — same UX as the Products tab — so the user can edit title, brand, category, channel IDs, etc. without navigating away. Hover gives a subtle background highlight.
