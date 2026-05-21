@@ -2,7 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.149**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.150**
+
+## Recent Fixes (v4.150) — Chewy Forecasts: Revision Tracker (pre-month lock-in analysis)
+- **New collapsible "📜 Revision Tracker" panel** between the scorecards and the main table on the Chewy Forecasts page. Lets the user pick any forecast month and see how Chewy's forecast for that month evolved from the very first snapshot through the final value locked in by the last snapshot taken BEFORE the month started.
+- **Per-SKU + aggregate breakdown:**
+  - **First Forecast (total)** — earliest snapshot value for the month + the date Chewy first told you that number.
+  - **Final Pre-Month Lock** — last snapshot value with `upload_date < month_start`. If Chewy never sent a forecast for that month before it started, shown as `—` with an explanatory tooltip.
+  - **Net Revision** — `locked − first`, in units and %. Green for upward revision, red for downward, grey for flat.
+  - **Current Latest** — most recent snapshot value (for past months, this is what Chewy is saying NOW about an already-elapsed month — useful for spotting post-month adjustments).
+- **Per-SKU table** sorted by net-change magnitude (biggest revisions on top). Columns: SKU · Product (with brand chip) · First · First date · Locked · Lock date · Net change · % · Latest.
+- **Honors the brand + search filters** at the top of the page — narrowing the table also narrows the Revision Tracker so the analysis matches what you're looking at.
+- **Defaults to the current calendar month** if it's in the data, else the most recent month present. Picker shows every month in the data, newest first.
+- **Summary chip** in the collapsed `<details>` header — shows the picked month + net revision so the headline insight is visible without expanding.
+- **Cheap when collapsed** — `renderChewyRevisionTracker()` writes to hidden DOM whenever the main `renderChewyForecast()` runs, so opening the panel is instant.
 
 ## Recent Fixes (v4.149) — Row-level math reconciliation: Net Proceeds tooltip + honest Margin/Contrib % for zero-sales rows
 - **Reported bug:** an EU row with $0 net sales, $3.72 FBA fees, and -$7.84 Net Proceeds looked unreconcilable in the table. The visible columns only show FBA Fees + Referral + Ad Spend as separate items — for EU, Net Proceeds also subtracts Digital Services Fees that aren't surfaced anywhere in the row. Made the row's math opaque.
