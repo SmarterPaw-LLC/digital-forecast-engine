@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.152**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.153**
+
+## Recent Fixes (v4.153) — P&L category filter actually filters
+- **Latent bug, surfaced after v4.152.** The Amazon P&L and Diagnostics category filters compared `prod.category_id` (integer FK) directly to `cat` (the dropdown's string value — the category NAME). That comparison silently always failed, so selecting any non-default category produced an empty view. v4.152 fixed the *duplicates* in the dropdown but didn't fix this — the underlying filter was broken since v4.62 when the dropdown was first wired.
+- **Fix:** both P&L sites now resolve the FK before comparing — `(allCategories.find(c => c.id === prod.category_id)?.category || '') !== cat`. Mirrors the pattern already used by every other category filter in the codebase (Products / COGS / Forecast / Shopify P&L / Units Sold all use this resolution).
+- **Sites updated:**
+  - `renderPnl` main agg loop (Amazon SKU Economics view)
+  - `renderPnlDiagnostics` per-ASIN aggregator (Diagnostics sub-view)
+- **Shopify P&L unchanged** — its `renderShopifyPnl` already used the correct resolution pattern.
 
 ## Recent Fixes (v4.152) — P&L category dropdown: derive from products, dedupe
 - **Bug:** Amazon and Shopify P&L category dropdowns were populated by iterating `allCategories` directly. That table has one row per (category, subcategory) pair, so any category with multiple subcategories appeared in the dropdown N times.
