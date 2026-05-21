@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.150**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.151**
+
+## Recent Fixes (v4.151) — COGS page: row-click to edit product + one-click BOM apply
+- **Row click opens product modal.** Every COGS table row is now clickable — same UX as the Products tab — so the user can edit title, brand, category, channel IDs, etc. without navigating away. Hover gives a subtle background highlight.
+- **Stop-propagation on interactive cells** so clicking COGS values still triggers the cell editor (turns the td into a number input) and clicking the channel-IDs cell still lets you select-text the ASIN, instead of opening the modal. Existing `✕ dismiss` / `↺ undo` buttons already had `event.stopPropagation()` and continue to work.
+- **One-click "✓ Apply" button** next to "BOM: $X.XX · auto-fillable" for bundle COGS that have a complete BOM sum but no stored value. Clicking writes the BOM total to the stored field via `cogsApplyBom(master_id, channel_field, value)` — no typing required.
+- **"↺ Sync" button** appears next to "BOM: $X.XX ⚠ (delta)" when stored ≠ BOM total. One click overwrites the stored value with the BOM total — useful for catching drift after component COGS changes upstream.
+- **Audit log:** new `cogs.apply_bom` action records master_id, channel, applied value, and the previous value.
 
 ## Recent Fixes (v4.150) — Chewy Forecasts: Revision Tracker (pre-month lock-in analysis)
 - **New collapsible "📜 Revision Tracker" panel** between the scorecards and the main table on the Chewy Forecasts page. Lets the user pick any forecast month and see how Chewy's forecast for that month evolved from the very first snapshot through the final value locked in by the last snapshot taken BEFORE the month started.
