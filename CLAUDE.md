@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.153**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.154**
+
+## Recent Fixes (v4.154) — FBA Inventory snapshots (commit 1 of FBA forecasting expansion)
+- **New `fba_inventory_snapshots` table** + uploader — first piece of the FBA replenishment-forecasting build. Run `supabase_add_fba_inventory_snapshots.sql` before deploying.
+- **Source:** Amazon "Manage FBA Inventory" report (the afn-* flat file — `224166020595.csv` shape). Captures the full position: `afn_fulfillable_quantity` (available to sell), reserved, unsellable, total, warehouse, the three inbound stages (working/shipped/receiving), researching, reserved-future-supply. Keyed `(asin, region, snapshot_date)`.
+- **Uploader** on Data → Uploads tab. Because the report has no internal date or region column, it prompts for both: `promptFbaSnapshotMeta()` (region US/CA + snapshot date, default today), then the existing brand prompt (for auto-creating SP-TEMP products from unknown ASINs). Validates the file actually has `afn-fulfillable-quantity` — rejects the pricing/listings report with a clear error.
+- **Legacy `inventory` table sync:** after writing the snapshot, the parser also pushes `afn_fulfillable_quantity` → `inventory.fba_available` and the summed inbound stages → `inventory.fba_inbound` for matching `(asin, region)`, **preserving** the user's `lead_time_days` / `safety_stock` / `warehouse` (fetched first, merged). So the existing Inventory Planning page immediately reflects the real FBA position without any other change.
+- **Weekly cadence intended** — upload each week to accumulate a burn-down trajectory (Phase 2 uses this for the burn-down chart + inbound→fulfillable transition tracking).
+- **Region/brand model:** the FBA report is per brand-account + marketplace (this account = Meowijuana US). ASIN-matched products inherit their existing brand; the brand prompt only assigns newly auto-created SP-TEMP products.
+- **Still to come:** commit 2 = `fba_shipments` table + per-shipment `.tsv` parser (no bulk Inbound Shipment Items report available in the account). commit 3 = v1 PO planner on the Inventory page (PO-by date + recommended qty, US+CA pooled, 60-90d target).
 
 ## Recent Fixes (v4.153) — P&L category filter actually filters
 - **Latent bug, surfaced after v4.152.** The Amazon P&L and Diagnostics category filters compared `prod.category_id` (integer FK) directly to `cat` (the dropdown's string value — the category NAME). That comparison silently always failed, so selecting any non-default category produced an empty view. v4.152 fixed the *duplicates* in the dropdown but didn't fix this — the underlying filter was broken since v4.62 when the dropdown was first wired.
