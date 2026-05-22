@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.154**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.156**
+
+## Recent Fixes (v4.155) — FBA shipments (commit 2)
+- **New `fba_shipments` table** + per-shipment `.tsv` parser. Run `supabase_add_fba_shipments.sql` before deploying. Source: the packing-list export (e.g. `FBA19CJKP303.tsv`) — key-value header block + item table. No bulk Inbound Shipment Items report exists in the account, so it's one file per shipment.
+- **Parser (`parseFbaShipment`):** reads `Shipment ID` / `Name` / `Ship To` from the header; parses `created_date` from the Name string (`FBA STA (04/29/2026 20:25)-MEM2` → `2026-04-29`); infers region from the destination FC (Canadian FCs use Y-prefix airport codes, else US); reads the item table (Merchant SKU / ASIN / FNSKU / Shipped). Resolves `master_id` by ASIN → sp_sku/shopify_sku → SP-TEMP. Upserts on `(shipment_id, sku)` so re-uploads are idempotent.
+- **Uploader tile** 🚚 on Data → Uploads. This is the cadence-learning source for Phase 2 (typical order size + interval per SKU).
+
+## Recent Fixes (v4.156) — v1 PO planner on the Inventory page (commit 3)
+- **Recommended order quantity** — new `recommendOrderQty(r, targetDays)`: order-up-to = `forwardSeaDemand(r, lead_time + targetDays)` (seasonally-integrated demand) + safety stock (`safety_stock` days × daily velocity), minus current on-hand (available + inbound + warehouse). New **"Order Qty"** column in the PO PLANNING group + a **"Target supply"** selector (60 / 75 / 90 days, default 75).
+- **Burn-down PO-by date** — new `poByDateBurndown(r)`: projects seasonal demand forward, finds the day inventory hits the safety floor, backs off the lead time. Sharper + horizon-independent vs the old flat `poDL` (which is kept as a fallback when velocity/lead is missing). The "PO By" column now uses it.
+- **US+CA pooled planning** — when the region filter is "US + CA" (empty), the inventory table now collapses to **one row per product** via `combineRegionRecords` (sums velocity + inventory across regions, re-derives blended_daily/needs). So the PO recommendation is a single order covering both marketplaces — matching how the same physical product is ordered. "US only" / "CA only" still show per-region rows.
+- **Model notes:** Chewy is excluded from the PO demand (forwardSeaDemand is Amazon/DTC only — Chewy ships separately, not from FBA). Uses all-channel `blended_daily` against total on-hand (FBA + warehouse) — internally consistent pooled model. Lead time + safety stock come from the per-SKU `inventory` fields (preserved by the v4.154 snapshot sync).
+- **FBA forecasting build status:** commits 1-3 complete (snapshot table + uploader, shipments table + uploader, v1 PO planner). **Phase 2** (when shipment history accumulates): cadence learning ("you usually order ~X every Y weeks; this rec is N% off your norm") + inventory burn-down chart from the weekly snapshots.
 
 ## Recent Fixes (v4.154) — FBA Inventory snapshots (commit 1 of FBA forecasting expansion)
 - **New `fba_inventory_snapshots` table** + uploader — first piece of the FBA replenishment-forecasting build. Run `supabase_add_fba_inventory_snapshots.sql` before deploying.
