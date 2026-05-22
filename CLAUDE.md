@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.156**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.157**
+
+## Recent Fixes (v4.157) — Uploads page: de-dupe inventory sections
+- **Removed the redundant legacy Amazon Restock tiles.** The "Weekly Inventory Refresh" section's "Amazon Restock Report" + "Amazon CA Restock Report" tiles (`parseRestock`) updated `inventory.fba_available` / `fba_inbound` from the Restock Inventory report — the same fields the new FBA Inventory Snapshot uploader (v4.154) updates from the richer Manage FBA Inventory report (+ snapshot history). Overlapping; dropped the two tiles.
+- **Kept the Shopify warehouse tile** — it's NOT redundant (populates `inventory.warehouse` / 3PL stock, which the FBA snapshot doesn't touch). Renamed the section "🏪 Warehouse / 3PL Stock", fixed the misleading "saves to browser storage" copy (it writes to Supabase), and pointed users to the FBA Inventory Snapshot section for FBA position.
+- **`parseRestock` + `handleUpload('restock'/'caRestock')` retained** in code but no longer reachable from the UI — left in place to avoid touching unrelated logic; can be deleted in a later cleanup.
+- **Drag-drop dispatch rewritten** to route each tile to its correct handler (`dz-shopify` → `handleUpload`, `dz-fba-inv` → `handleFbaInventoryUpload`, `dz-fba-ship` → `handleFbaShipmentUpload`). Previously the generic handler defaulted unknown tiles to the `caRestock` path.
 
 ## Recent Fixes (v4.155) — FBA shipments (commit 2)
 - **New `fba_shipments` table** + per-shipment `.tsv` parser. Run `supabase_add_fba_shipments.sql` before deploying. Source: the packing-list export (e.g. `FBA19CJKP303.tsv`) — key-value header block + item table. No bulk Inbound Shipment Items report exists in the account, so it's one file per shipment.
