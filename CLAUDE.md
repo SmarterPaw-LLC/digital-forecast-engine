@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.161**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.162**
+
+## Recent Fixes (v4.162) — Reorder controls also editable from the Inventory edit modal
+- **Gap:** v4.160-161 added the four PO-planning controls (reorder threshold, reorder qty days, new-Amazon, deprecated-Amazon) to the Products tab modal — but **not** to the Inventory page's edit modal (`openEditModal` / `saveEditModal`). Users clicking a row on the Inventory page didn't see the new fields. Fixed.
+- **New "🛒 PO planning" section** added between Supplier & Lead Time and Seasonal Index Override in the inventory edit modal. Three controls:
+  - Reorder threshold (days) — number input
+  - Reorder qty (days of supply) — number input
+  - Amazon lifecycle column — 🆕 New + ⛔ Deprecated checkboxes
+  - Footnote: "These values are per product (apply across all regions / channels)."
+- **Save path:** writes the four fields to the `products` row (channel-agnostic, per master_id), separately from the per-region inventory upsert. Also mirrors onto every in-memory `records[]` entry sharing the same `master_id` so the pooled view + the other-region row reflect the change without reload.
+- **Re-render fix:** `saveEditModal` was only calling the legacy `renderSkuTbl` + `renderAll` — neither updates the modern Inventory Planning table. Added a `renderInventoryTbl()` call so badges + Order Qty refresh in place.
 
 ## Recent Fixes (v4.161) — PO planner cross-channel; reorder fields move to products
 - **Scope correction.** v4.160 gated PO recommendations to ASIN products, which was wrong. Manufacturer PO planning should apply to ALL products regardless of channel (Shopify-only, Chewy-only, Amazon, multi-channel). The Amazon-specific consideration — that Amazon has two inventory pools (warehouse + FBA) — is handled automatically by `total_onhand` which already sums fba_available + fba_inbound + warehouse for ASIN products and just warehouse for non-ASIN. Same PO formula, different inventory composition.
