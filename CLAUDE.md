@@ -2,7 +2,32 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.159**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.161**
+
+## Recent Fixes (v4.161) — PO planner cross-channel; reorder fields move to products
+- **Scope correction.** v4.160 gated PO recommendations to ASIN products, which was wrong. Manufacturer PO planning should apply to ALL products regardless of channel (Shopify-only, Chewy-only, Amazon, multi-channel). The Amazon-specific consideration — that Amazon has two inventory pools (warehouse + FBA) — is handled automatically by `total_onhand` which already sums fba_available + fba_inbound + warehouse for ASIN products and just warehouse for non-ASIN. Same PO formula, different inventory composition.
+- **Schema migration.** Run `supabase_v4161_reorder_on_products.sql`. Adds `products.reorder_threshold_days` (default 90) + `products.reorder_qty_days` (default 90) and backfills from any per-inventory values (takes the max across regions if they differ). Old `inventory.reorder_threshold_days` / `inventory.reorder_qty_days` columns stay in place but unused — removable later.
+- **`poByDateBurndown` + `recommendOrderQty`** drop the `!r.asin` gate. They now run for every product with velocity > 0. Reads `reorder_threshold_days` / `reorder_qty_days` from the product (via records-build).
+- **`deprecated_product_amazon` is visual-only now.** v4.160 zeroed the PO recommendation when this was set — wrong, because a product deprecated on Amazon may still sell on Shopify/Chewy and need manufacturer stock. The badge stays; the math doesn't suppress.
+- **`new_product_amazon` unchanged** — visual flag only.
+- **Product modal** writes the four reorder fields to `products` directly via `productData`. The v4.160 separate two-region `inventory` upsert is removed. Load reads from `p.*`.
+- **Modal hint cleaned up** — removed the "only saved with an ASIN" warning since reorder fields now apply universally.
+
+## Recent Fixes (v4.160) — Per-SKU reorder controls + Amazon lifecycle flags
+- **Schema:** run `supabase_add_reorder_fields.sql`. Adds `inventory.reorder_threshold_days` (default 90), `inventory.reorder_qty_days` (default 90), `products.new_product_amazon` (default false), `products.deprecated_product_amazon` (default false).
+- **Reorder model rewritten.** Replaces the global "Target supply" sizing for ASIN products with per-SKU values:
+  - **`poByDateBurndown(r)`** now uses `reorder_threshold_days` (when projected days-of-supply drops to threshold, PO must be in motion) instead of `safety_stock` × `daily_vel` as the floor. PO-by = day stock hits threshold − lead time.
+  - **`recommendOrderQty(r, fallback)`** now computes order qty as `forwardSeaDemand(lead + reorder_qty_days) − forwardSeaDemand(lead)` — i.e., seasonal demand from arrival date for `reorder_qty_days`. Falls back to the global Target supply only when `reorder_qty_days` is unset.
+- **PO planning is ASIN-only now.** Both helpers return `null`/`0` for non-ASIN products (Shopify-only, Chewy-only, bundle parents without ASIN) and for deprecated products. Matches the spec — Amazon FBA replenishment doesn't apply to those rows.
+- **Lifecycle flag behavior:**
+  - **Deprecated** → `recommendOrderQty` returns 0, `poByDateBurndown` returns null, the inventory row gets a "⛔ Deprecated" status badge + faded styling.
+  - **New** → 🆕 badge prefixed to the product name in the inventory row. PO math is unchanged — limited history makes velocity unreliable, operator should eyeball the suggestion.
+- **Product modal additions** (visible regardless of ASIN; the inventory-side reorder fields silently skip save without an ASIN — note shown):
+  - Reorder threshold (days) — number input
+  - Reorder quantity (days of supply) — number input
+  - 🆕 New product (Amazon) — checkbox
+  - ⛔ Deprecated (Amazon) — checkbox
+- **Save path:** product fields land on `products`; the two inventory-side fields upsert to BOTH `inventory(asin,'US')` and `inventory(asin,'CA')` rows (same values — one PO covers pooled US+CA marketplaces), preserving existing fba_available / fba_inbound / warehouse / lead_time_days / safety_stock by fetching first + merging.
 
 ## Recent Fixes (v4.159) — Inventory: Target-supply dropdown impact made visible
 - **Reported:** "changing the target supply dropdown doesn't appear to do anything." The dropdown DID fire `renderInventoryTbl()` and the Order Qty column WAS recomputing — but that column is the rightmost in a wide table (often off-screen), and many rows in the user's current view have Vel=0 (so Order Qty = 0 regardless of target).
