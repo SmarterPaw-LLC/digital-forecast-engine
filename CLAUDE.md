@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.157**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.158**
+
+## Recent Fixes (v4.158) — Inventory Planning: click-to-sort + default 30d-need + frozen header
+- **Click-to-sort on every column.** New `ipSetSort(key)` + `ipSortVal(r, key, targetDays)`. Headers are clickable with ↑/↓/↕ indicators; click toggles direction. Numeric columns sort desc-first, text columns (Brand/Product/ASIN/Rgn) asc-first. Special cases: Status sorts by urgency rank (Order Now → OK), PO By sorts by date (soonest first), Order Qty + Gaps sort numerically.
+- **Default sort = 30d Need descending** — the SKUs that most need a PO float to the top instead of the alphabetical/no-data clutter that was showing first.
+- **Frozen header.** The `thead` was already `position:sticky` but the Inventory `.tbl-wrap` is `flex:1` with no bounded height, so the *page* scrolled instead of the wrapper and the sticky header never engaged. Added `#page-inventory .tbl-wrap { max-height: calc(100vh - 230px); overflow:auto }` so the wrapper is the scroll container — both header rows (group + columns) now freeze on scroll.
 
 ## Recent Fixes (v4.157) — Uploads page: de-dupe inventory sections
 - **Removed the redundant legacy Amazon Restock tiles.** The "Weekly Inventory Refresh" section's "Amazon Restock Report" + "Amazon CA Restock Report" tiles (`parseRestock`) updated `inventory.fba_available` / `fba_inbound` from the Restock Inventory report — the same fields the new FBA Inventory Snapshot uploader (v4.154) updates from the richer Manage FBA Inventory report (+ snapshot history). Overlapping; dropped the two tiles.
