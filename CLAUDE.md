@@ -2,7 +2,11 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.158**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.159**
+
+## Recent Fixes (v4.159) — Inventory: Target-supply dropdown impact made visible
+- **Reported:** "changing the target supply dropdown doesn't appear to do anything." The dropdown DID fire `renderInventoryTbl()` and the Order Qty column WAS recomputing — but that column is the rightmost in a wide table (often off-screen), and many rows in the user's current view have Vel=0 (so Order Qty = 0 regardless of target).
+- **Fix:** added a **"Order (Xd target)"** scorecard to the top scorecard row — sum of recommended order qty across visible SKUs, plus a "N SKUs to order" subline. Updates live with the dropdown, so 60/75/90 differences are immediately visible at the top without scrolling. Orange when total > 0, green when nothing to order.
 
 ## Recent Fixes (v4.158) — Inventory Planning: click-to-sort + default 30d-need + frozen header
 - **Click-to-sort on every column.** New `ipSetSort(key)` + `ipSortVal(r, key, targetDays)`. Headers are clickable with ↑/↓/↕ indicators; click toggles direction. Numeric columns sort desc-first, text columns (Brand/Product/ASIN/Rgn) asc-first. Special cases: Status sorts by urgency rank (Order Now → OK), PO By sorts by date (soonest first), Order Qty + Gaps sort numerically.
