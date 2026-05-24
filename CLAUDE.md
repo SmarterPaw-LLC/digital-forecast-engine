@@ -4,11 +4,13 @@
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
 File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.163**
 
-## Recent Fixes (v4.163) — Recent FBA Shipments viewer on Data Uploads page
-- **Gap:** v4.155 added the FBA shipment uploader (one .tsv per shipment, dedup on shipment_id,sku) but never gave the user a UI to *see* the uploaded shipments. Once the upload-status line scrolled past, the only way to confirm what was in the database was the SQL Query Database sub-view.
-- **New "🚚 Recent FBA Shipments" panel** rendered just below the shipment uploader on the Data Uploads page. Grouped by `shipment_id`; columns = date · ID · name · region · ship-to · SKU count · unit total · delete-button. Click any row to expand into per-SKU line items (sku · ASIN · fnsku · product title · qty). Each expanded line flags `⚠ unmapped` if no product matched on master_id/ASIN — caught typos + missing catalog entries.
+## Recent Fixes (v4.163) — FBA Shipments sub-view under the Forecast nav
+- **Gap:** v4.155 added the FBA shipment uploader (one .tsv per shipment, dedup on shipment_id,sku) but gave the user no UI to *see* the uploaded shipments. Once the upload-status line scrolled past, the only way to confirm what was in the database was the SQL Query sub-view.
+- **New "🚚 FBA Shipments" entry** in the Forecast nav dropdown (alongside Demand Forecast / Inventory Planning / Seasonality / Chewy Forecasts). Lives at `#page-fba-shipments`. Reachable via `switchForecastView('fba-shipments')`.
+- **Initial draft was on Data → Uploads page** (right below the uploader); user pushed back — it didn't belong there. Moved to its own forecast sub-view to keep Uploads tightly focused on data ingestion.
+- **Table:** grouped by `shipment_id`; columns = date · ID · name · region · ship-to · SKU count · unit total · delete-button. Click any row to expand into per-SKU line items (sku · ASIN · fnsku · product title · qty). Each expanded line flags `⚠ unmapped` if no product matched on master_id/ASIN — catches typos + missing catalog entries.
 - **Filters in the header:** free-text search (matches shipment ID, name, ship-to, item SKU/ASIN/master_id) · region (US/CA/all) · time window (90/180/365 days/all). Default window = 365 days.
-- **Lifecycle:** lazy-loaded on first Uploads-page view; force-refreshed after each successful shipment upload so the new row appears immediately. Cached in `fbaShipmentsCache` (full result set in memory).
+- **Lifecycle:** lazy-loaded on first nav into the sub-view; force-refreshed after each successful shipment upload so the new row appears next time the user opens the sub-view. Cached in `fbaShipmentsCache`.
 - **Delete button** per shipment row — confirms, then deletes all line items from `fba_shipments` where `shipment_id = ?`. Logged via `logAudit('delete.fba_shipment', …)`.
 - **Code additions:** `loadFbaShipments(force)`, `renderFbaShipmentsTbl()`, `toggleFbaShipment(id)`, `deleteFbaShipment(id)`. No new tables — reads existing `fba_shipments` from v4.155 schema. No SQL migration needed.
 

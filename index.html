@@ -495,6 +495,7 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
         <button onclick="event.stopPropagation();switchForecastView('inventory')" id="fv-inventory" style="display:block;width:100%;text-align:left;padding:10px 16px;background:transparent;color:var(--text2);border:none;cursor:pointer;font-family:var(--display);font-weight:700;font-size:12px">📦 Inventory Planning</button>
         <button onclick="event.stopPropagation();switchForecastView('seasonality')" id="fv-seasonality" style="display:block;width:100%;text-align:left;padding:10px 16px;background:transparent;color:var(--text2);border:none;cursor:pointer;font-family:var(--display);font-weight:700;font-size:12px">🌊 Seasonality</button>
         <button onclick="event.stopPropagation();switchForecastView('chewy')" id="fv-chewy" style="display:block;width:100%;text-align:left;padding:10px 16px;background:transparent;color:var(--text2);border:none;cursor:pointer;font-family:var(--display);font-weight:700;font-size:12px">🐾 Chewy Forecasts</button>
+        <button onclick="event.stopPropagation();switchForecastView('fba-shipments')" id="fv-fba-shipments" style="display:block;width:100%;text-align:left;padding:10px 16px;background:transparent;color:var(--text2);border:none;cursor:pointer;font-family:var(--display);font-weight:700;font-size:12px">🚚 FBA Shipments</button>
       </div>
     </div>
     <div style="position:relative;display:inline-block" id="dataNavWrap">
@@ -938,6 +939,56 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
       </table>
     </div>
   </div>
+
+  <!-- ── FBA SHIPMENTS sub-view (v4.163) ──
+       Lists uploaded inbound FBA shipments. Grouped by shipment_id; click a
+       row to drill into per-SKU line items. Source table: fba_shipments.
+       Upload happens on the Data → Uploads page. -->
+  <div id="page-fba-shipments" style="display:none;padding:16px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      <div style="font-family:var(--display);font-weight:800;font-size:15px;color:var(--text)">🚚 FBA Shipments</div>
+      <span id="fba-ship-count" style="font-family:var(--mono);font-size:11px;color:var(--text3)">—</span>
+      <div style="flex:1"></div>
+      <input class="srch" id="fba-ship-srch" placeholder="Search ID / Name / SKU / ASIN…" oninput="renderFbaShipmentsTbl()" style="width:240px;font-size:11px">
+      <select id="fba-ship-region" onchange="renderFbaShipmentsTbl()" style="font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:5px;padding:4px 8px">
+        <option value="">All Regions</option>
+        <option value="US">🇺🇸 US</option>
+        <option value="CA">🍁 CA</option>
+      </select>
+      <select id="fba-ship-window" onchange="renderFbaShipmentsTbl()" style="font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:5px;padding:4px 8px" title="Time window">
+        <option value="90">Last 90 days</option>
+        <option value="180">Last 180 days</option>
+        <option value="365" selected>Last 365 days</option>
+        <option value="0">All time</option>
+      </select>
+      <button class="btn-ghost" onclick="loadFbaShipments(true)" style="font-size:11px" title="Reload from Supabase">↻</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px;line-height:1.5">
+      Inbound FBA shipment history — the source for cadence learning (how often you ship + typical quantities per SKU).
+      Upload new shipment <code>.tsv</code> packing-lists on <strong style="color:var(--text2)">Data → Uploads</strong>. Click any row to expand into per-SKU line items.
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <div style="max-height:calc(100vh - 240px);overflow-y:auto" id="fba-ship-wrap">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:var(--mono)">
+          <thead style="position:sticky;top:0;background:var(--surface);z-index:1">
+            <tr style="border-bottom:1px solid var(--border2)">
+              <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px;width:24px"></th>
+              <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Date</th>
+              <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Shipment ID</th>
+              <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Name</th>
+              <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Region</th>
+              <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Ship To</th>
+              <th style="padding:8px 10px;text-align:right;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px">SKUs</th>
+              <th style="padding:8px 10px;text-align:right;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Units</th>
+              <th style="padding:8px 10px;width:32px"></th>
+            </tr>
+          </thead>
+          <tbody id="fba-ship-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- DATA PAGE -->
@@ -1140,49 +1191,6 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
             <div class="dz-sub">Manage FBA Shipments → download the shipment contents<br>Header block with <code style="font-size:10px">Shipment ID</code> · <code style="font-size:10px">Name</code> · <code style="font-size:10px">Ship To</code>, then item table with <code style="font-size:10px">Merchant SKU</code> · <code style="font-size:10px">ASIN</code> · <code style="font-size:10px">Shipped</code></div>
             <div class="dz-st" id="st-fba-ship"></div>
             <div class="dz-last" id="last-fba-ship"></div>
-          </div>
-        </div>
-
-        <!-- ── RECENT SHIPMENTS PANEL (v4.163) ──
-             Lists uploaded shipments grouped by shipment_id. Click a row to
-             drill into per-SKU line items. Filter by region/brand/search.
-             Refreshes automatically after each shipment upload. -->
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:24px;overflow:hidden">
-          <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <div style="font-family:var(--display);font-weight:800;font-size:12px;color:var(--text);text-transform:uppercase;letter-spacing:.5px">🚚 Recent FBA Shipments</div>
-            <span id="fba-ship-count" style="font-family:var(--mono);font-size:10px;color:var(--text3)">—</span>
-            <div style="flex:1"></div>
-            <input class="srch" id="fba-ship-srch" placeholder="Search ID / SKU / ASIN…" oninput="renderFbaShipmentsTbl()" style="width:200px;font-size:11px">
-            <select id="fba-ship-region" onchange="renderFbaShipmentsTbl()" style="font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:5px;padding:4px 8px">
-              <option value="">All Regions</option>
-              <option value="US">🇺🇸 US</option>
-              <option value="CA">🍁 CA</option>
-            </select>
-            <select id="fba-ship-window" onchange="renderFbaShipmentsTbl()" style="font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:5px;padding:4px 8px" title="Time window">
-              <option value="90">Last 90 days</option>
-              <option value="180">Last 180 days</option>
-              <option value="365" selected>Last 365 days</option>
-              <option value="0">All time</option>
-            </select>
-            <button class="btn-ghost" onclick="loadFbaShipments(true)" style="font-size:11px" title="Reload from Supabase">↻</button>
-          </div>
-          <div style="max-height:380px;overflow-y:auto" id="fba-ship-wrap">
-            <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:var(--mono)">
-              <thead style="position:sticky;top:0;background:var(--surface);z-index:1">
-                <tr style="border-bottom:1px solid var(--border2)">
-                  <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px;width:24px"></th>
-                  <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Date</th>
-                  <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Shipment ID</th>
-                  <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Name</th>
-                  <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Region</th>
-                  <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Ship To</th>
-                  <th style="padding:8px 10px;text-align:right;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px">SKUs</th>
-                  <th style="padding:8px 10px;text-align:right;color:var(--text3);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.4px">Units</th>
-                  <th style="padding:8px 10px;width:32px"></th>
-                </tr>
-              </thead>
-              <tbody id="fba-ship-tbody"></tbody>
-            </table>
           </div>
         </div>
 
@@ -7649,13 +7657,7 @@ function switchDataView(view) {
   if (query)   query.style.display   = view === 'query'   ? '' : 'none';
 
   if (view === 'query') initQueryTool();
-  if (view === 'uploads') {
-    renderSkuTbl();
-    refreshUploadDataRanges();
-    // Lazy-load the FBA shipments viewer (v4.163). Cached after first load;
-    // the uploader force-refreshes it after each new shipment upload.
-    if (typeof loadFbaShipments === 'function') loadFbaShipments();
-  }
+  if (view === 'uploads') { renderSkuTbl(); refreshUploadDataRanges(); }
 }
 
 // ══════════════════════════════════════════════════════
@@ -9119,8 +9121,8 @@ function switchForecastView(view) {
   forecastView = view;
   document.getElementById('forecastNavDrop').style.display = 'none';
 
-  const views = { demand: '📊 Demand Forecast', inventory: '📦 Inventory Planning', seasonality: '🌊 Seasonality', chewy: '🐾 Chewy Forecasts' };
-  ['demand','inventory','seasonality','chewy'].forEach(v => {
+  const views = { demand: '📊 Demand Forecast', inventory: '📦 Inventory Planning', seasonality: '🌊 Seasonality', chewy: '🐾 Chewy Forecasts', 'fba-shipments': '🚚 FBA Shipments' };
+  ['demand','inventory','seasonality','chewy','fba-shipments'].forEach(v => {
     const btn = document.getElementById(`fv-${v}`);
     if (!btn) return;
     btn.style.background = view === v ? 'var(--sp-green)' : 'transparent';
@@ -9129,10 +9131,11 @@ function switchForecastView(view) {
 
   document.getElementById('forecastNavBtn').innerHTML = `${views[view] || '📊 Forecast'} <span style="font-size:9px;opacity:.6">▾</span>`;
 
-  document.getElementById('demand-view').style.display              = view === 'demand'      ? '' : 'none';
-  document.getElementById('page-inventory').style.display           = view === 'inventory'   ? '' : 'none';
-  document.getElementById('page-seasonality').style.display         = view === 'seasonality' ? '' : 'none';
-  document.getElementById('page-chewy-forecast').style.display      = view === 'chewy'       ? '' : 'none';
+  document.getElementById('demand-view').style.display              = view === 'demand'        ? '' : 'none';
+  document.getElementById('page-inventory').style.display           = view === 'inventory'     ? '' : 'none';
+  document.getElementById('page-seasonality').style.display         = view === 'seasonality'   ? '' : 'none';
+  document.getElementById('page-chewy-forecast').style.display      = view === 'chewy'         ? '' : 'none';
+  document.getElementById('page-fba-shipments').style.display       = view === 'fba-shipments' ? '' : 'none';
 
   if (view === 'inventory') {
     const catSel = document.getElementById('ip-category');
@@ -9141,6 +9144,7 @@ function switchForecastView(view) {
   }
   if (view === 'seasonality') initSeasonalityView();
   if (view === 'chewy') renderChewyForecast();
+  if (view === 'fba-shipments') loadFbaShipments();
 }
 
 // ══════════════════════════════════════════════════════
