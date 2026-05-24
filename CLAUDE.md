@@ -2,7 +2,25 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.165**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.166**
+
+## Recent Fixes (v4.166) — Inventory Planning: column-visibility + saved views + 3-way Need split (Total / Base / Reorder)
+- **⚠ SQL TO RUN:** `supabase_v4166_inventory_saved_views.sql` — adds `user_profiles.inventory_saved_views` JSONB column. Run BEFORE deploying or saved views won't persist (column toggles still work, they fall back to localStorage).
+- **New IP_COLUMNS registry** mirrors `FC_COLUMNS` on the Forecast page. Each entry has `key, label, group, groupHdr, w, align, default, num, tip, headHtml, sortVal, render`. Drives the header row, category header row, and body cells — single source of truth. 29 columns total across 8 groups.
+- **Three-way Need split** (the key user ask):
+  - **NEED — TOTAL** (default ON): `need30/60/90/120` = Amazon reorder trigger + Shopify continuous + Chewy forecast (v4.164 model unchanged).
+  - **NEED — NO REORDER** (default OFF): `needBase30/60/90/120` = Shopify continuous + Chewy only — what the warehouse needs even if no Amazon FBA replenishment fires. Useful for backing out the Amazon-trigger noise to see baseline demand.
+  - **NEED — REORDER ONLY** (default OFF): `needRO30/60/90/120` = Amazon reorder trigger contribution only — zero when the trigger fires after the horizon end. Useful for seeing the lumpy Amazon-PO impact in isolation.
+  - All three reuse the existing `inventoryNeedBreakdown(r, X)` which already returned `{amazon, shopify, chewy, total}` — no new math, just exposed three views of the same numbers.
+- **📋 View popup** added to the controls bar — mirrors Forecast page pattern:
+  - **Saved Views section**: name a state (cols + sort + brand/region/category/status/horizon/target/search filters), apply / rename / update-to-current / delete. Stored in `user_profiles.inventory_saved_views` JSONB; localStorage cache for first-paint speed.
+  - **Column visibility checkboxes** grouped by category with `all / none` shortcuts per group. Persists to localStorage `ipVisibleCols`.
+  - **Reset to defaults** button.
+- **Sort key falls back to first visible column** if the active sort key is hidden — prevents the table from sorting by an invisible column.
+- **Group header row** is now dynamic — colspans computed from the runs of contiguous visible columns sharing a `groupHdr`. Drop a column from a group and the header band shrinks; hide a whole group and the band disappears.
+- **Region chip** now shows `ALL` (with `.rtag-all` styling) when the row is pooled (region = `US+CA`), instead of leaking the internal `US+CA` string.
+- **New columns added beyond the Need split:** `master_id`, `sp_sku`, `total_onhand` — all default OFF, available via the View popup.
+- **init flow** now calls `ipLoadSavedViewsFromDb()` alongside `fcLoadSavedViewsFromDb()` so views populate as soon as auth resolves.
 
 ## Recent Fixes (v4.165) — FBA Shipments page sortable + readable detail rows
 - **Problem:** v4.163 shipped the FBA Shipments sub-view with a fixed date-desc sort and detail rows that crammed SKU + ASIN + FNSKU + Product Title into a single colspan cell. The result was hard to scan and impossible to sort.
