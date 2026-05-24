@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.169**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.170**
+
+## Recent Fixes (v4.170) — Inventory Planning: Need-group color coding + header tooltips + drop default Vel/day
+- **Group headers are now color-coded** so the relationship between TOTAL and its components reads at a glance:
+  - **NEED — TOTAL** = green (the answer, light green-tinted background band)
+  - **NEED — BASE FORECAST** = blue (component A)
+  - **NEED — REORDER** = orange (component B — matches the `+R n` badge color)
+  - **AMAZON REORDER** + **CHEWY REORDER** = orange-yellow (drill-downs of REORDER)
+- **Each Need group header has a tooltip** (cursor:help on hover) explaining the math:
+  - TOTAL: per-channel breakdown of warehouse drain (Amazon contributes reorder, Shopify contributes base, Chewy contributes reorder) + note that the `+R n` badge surfaces the reorder portion.
+  - BASE FORECAST: explains what each channel's base means (Amazon FBA→customer consumption, Shopify continuous draw, Chewy = 0 today since no consumer-level data).
+  - REORDER: explains the lumpy events (Amazon FBA trigger + Chewy POs; Shopify = 0 because no buffer pool).
+  - AMAZON REORDER: trigger mechanics + reorder qty formula + pointer to product edit modal for tuning threshold/qty.
+  - CHEWY REORDER: source = chewy_forecasts table from Vendor Statement uploads, latest snapshot per month.
+- **Vel/day column now default OFF** — already featured on the Demand Forecast page and not load-bearing for PO planning. Existing users keep their saved visibility (`ipVisibleCols` is persisted); only fresh defaults exclude it. Toggle back on via the View popup if needed.
 
 ## Recent Fixes (v4.169) — Uploads page redesigned: expandable groups with full drop cards inside
 - **v4.167's table layout regressed drag-drop and readability** — user feedback: rows were cramped, status column always empty, last-upload dates not readable, no visible drop target. Fixed.
