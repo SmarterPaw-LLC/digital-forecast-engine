@@ -2,7 +2,40 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.166**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.167**
+
+## Recent Fixes (v4.167) — Uploads page table view + multi-file shipments + new Shipment Summary uploader + Need column architecture rewrite
+- **⚠ SQL TO RUN:** `supabase_v4167_shipment_summaries.sql` — creates `fba_shipment_summaries` table (per-shipment-id rollup: status, last_updated, units_expected, units_located).
+
+### Need architecture rewrite — per-channel base + reorder model
+- **Conceptual fix:** old Need columns conflated channel-level sales velocity with channel-level reorder events. New model treats them as independent:
+  - **`base`** per channel = sales velocity × horizon (seasonal forward) — what each channel will *consume*.
+  - **`reorder`** per channel = lumpy replenishment events — what each channel will *order from the warehouse*.
+  - Amazon contributes its reorder to Total (its base is FBA-internal churn); Shopify contributes its base (no buffer pool); Chewy contributes its reorder.
+- **`inventoryNeedBreakdown(r, X)` now returns** `{amazon:{base, reorder, vel, meta}, shopify:{base, reorder, vel}, chewy:{base, reorder, vel}, base, reorder, total}`. Backward-incompatible — all old `nb.amazon` / `nb.shopify` / `nb.chewy` numeric accesses replaced with `nb.<channel>.<base|reorder>`.
+- **`+R n` badge on Need-Total cells** (orange, mirrors Forecast page `+B n` pattern) — surfaces the reorder portion of the total at a glance. `+R 5,308` means 5,308 of the cell's total came from lumpy reorder events.
+- **NEED — BASE FORECAST** (renamed from "NO REORDER"): sales-velocity forecast across ALL channels (Amazon vel + Shopify vel + Chewy vel × horizon). Today Chewy vel = 0 (we don't have consumer-level Chewy data); framework supports it when/if we do.
+- **NEED — REORDER** (renamed from "REORDER ONLY"): now includes BOTH Amazon trigger AND Chewy POs (was Amazon-only).
+- **New AMAZON REORDER columns** (4 horizons, default OFF) — channel-isolated Amazon trigger qty.
+- **New CHEWY REORDER columns** (4 horizons, default OFF) — channel-isolated Chewy PO forecast.
+- **Walmart** placeholder noted in the doc — channel ready to plug in when sales channel + reorder rules are defined.
+
+### Uploads page reorganization (table view)
+- **Replaced** five stacked card-style sections + the SKU Master table with a single dense **upload table** grouped by category (Sales / Inventory / Shipments / Legacy). Columns: Icon · Type+Description · Last Upload · Status · Action.
+- **Drag-and-drop on table rows** — drop a file on any row to dispatch it to that row's primary input. `initUploadRowDragDrop()` is idempotent + called on Data → Uploads page show.
+- **SKU Master section removed** — the Products page covers product editing and the per-SKU lead time / warehouse fields are reachable via inline editing there. Hidden stub elements (`#skuTBody`, `#skuCount`, `#skuSrch`, `#skuBrand`, `#skuTblCount`, `#f-newsku`, `#salesRefreshBadge`) kept so existing handler code that targets these IDs still finds something. `renderSkuTbl()` now writes into hidden DOM with no visible side effect.
+- **Status/last spans** use the existing `.dz-st` / `.dz-last` class names — scoped CSS overrides inside `.up-tbl` strip the legacy `margin-top:10px` so they sit inline cleanly. All existing handlers (skuecon, shopify, fba-inv, etc.) work unchanged.
+- **Legacy By-Child-ASIN tiles** preserved inside a `<details>` accordion at the bottom of the table — still upload-able for historical backfills, out of the way.
+
+### Multi-file shipment upload + new Summary uploader
+- **`handleFbaShipmentUpload` now accepts multiple files** (the `<input>` carries `multiple`). Processes sequentially: each file runs its own parser, dedup is per-shipment so re-uploads are idempotent. Progress shown in status line ("⏳ 3/12 · FBA19….tsv…"). Failed files don't block the batch; final alert summarizes any failures.
+- **NEW: `handleFbaShipmentSummaryUpload` + `parseFbaShipmentSummary`** — accepts the Manage FBA Shipments → Download CSV (the list view, not per-shipment). Upserts to `fba_shipment_summaries` keyed on `shipment_id`. Captures:
+  - `units_expected` vs `units_located` (shrinkage / extras → Amazon reimbursement claims)
+  - `status` (Closed / Receiving / Working — in-flight tracking)
+  - `last_updated` (when Amazon last touched the shipment)
+  - Region inferred from `ship_to` FC code prefix (Y* = CA).
+  - Status line surfaces shortfall: `✓ 25 shipments · 12,403 expected / 12,196 located · ⚠ 207 units short`.
+- **Viewer integration** (planned): the existing FBA Shipments sub-view can join `fba_shipment_summaries` on `shipment_id` to show status badge + shortfall column. Not wired yet — current iteration just lands the data.
 
 ## Recent Fixes (v4.166) — Inventory Planning: column-visibility + saved views + 3-way Need split (Total / Base / Reorder)
 - **⚠ SQL TO RUN:** `supabase_v4166_inventory_saved_views.sql` — adds `user_profiles.inventory_saved_views` JSONB column. Run BEFORE deploying or saved views won't persist (column toggles still work, they fall back to localStorage).
