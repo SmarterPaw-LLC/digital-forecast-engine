@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.173**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.174**
+
+## Recent Fixes (v4.174) — Demand Forecast: row click opens product modal; selection (checkboxes) drives the detail panel
+- **Click vs check were doing the wrong things.** Clicking a row on the Demand Forecast page was opening the inline `forecastDetailPanel` (a unique behavior different from every other page in the app), while checking a row only added to a hidden `forecastSelected` Set with no visible feedback. Confusing.
+- **New behavior:**
+  - **Click row** → opens the **product modal** (`openProductModal`) — parity with Products / Bundles / Inventory pages.
+  - **Check row(s)** → reveals the detail panel above the table:
+    - **1 selected:** same per-product detail as before (IDs · velocity · per-horizon demand forecast).
+    - **2+ selected:** aggregated summary — brand/region/bundle mix, summed velocities, weighted seasonal multiplier, most-common trend, and summed Units Needed per horizon (30/60/90/120).
+  - **Close (✕)** on the panel → clears the selection entirely + unchecks the rows.
+- **Wiring:** `refreshForecastSelectionPanel()` is the single entry point. Called from `toggleForecastRow`, `toggleForecastAll`, and `renderAll` (so saved-view selections populate the panel on load). The old `openForecastDetail(asin, masterId, region)` is kept as a backward-compat shim — anything that called it still works.
 
 ## Recent Fixes (v4.173) — Stop overstating Shopify upload date; fix Amazon group rollup
 - **Shopify "today" bug:** Shopify aggregates daily → weekly with `week_start = Monday-of-that-week`. A daily upload through (say) Tuesday creates a row with `week_start = Mon` even though only 2 of 7 days are populated. My code then said "Data through Sun" by tacking +6 days on the Monday, overstating the data coverage by up to 6 days. Result: if your latest Shopify upload reached any day in the current week, the dashboard claimed "Data through (today)" even when you'd only uploaded a partial week.
