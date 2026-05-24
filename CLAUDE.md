@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.174**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.175**
+
+## Recent Fixes (v4.175) — FBA Shipments viewer merges in the summary CSV data
+- **The summary CSV uploader was landing rows in `fba_shipment_summaries` but the viewer was only reading `fba_shipments` (per-SKU detail). Result: uploads worked but the data was invisible.** Fixed by joining both tables on shipment_id in `loadFbaShipments` and rendering the merged view.
+- **`loadFbaShipments` fetches both tables in parallel.** Detail rows go into `fbaShipmentsCache`, summary rows into `fbaShipmentSummariesCache` (a Map keyed by shipment_id). If the summaries table doesn't exist yet (migration not run), the fetch fails silently and the page falls back to the prior behavior.
+- **Two new columns:**
+  - **`Located`** — Units located vs Units expected. Shows the located number, with a small delta indicator: `1,200 ✓` when they match, `1,190 ⚠ -10` (orange) when short, `1,210 +10` (green) when extra. Tooltip notes shrinkage > 1% is worth filing a reimbursement claim for.
+  - **`Status`** — colored badge: Closed (green) · Receiving (orange) · Working (blue) · Cancelled (red).
+- **Both columns sortable.** Click the header to sort by status alphabetically, or by located qty numerically.
+- **Summary-only rows** — when a shipment is in the summary CSV but no per-shipment .tsv was ever uploaded, the row still appears (with a small `summary only` chip next to the Shipment ID). No expand caret (no detail to show). All summary fields still rendered. Useful for backfilling visibility without uploading every individual .tsv.
+- **Header status line** updated — shows `25 shipments · 12,403 units · summaries: 25 · expected 12,403 / located 12,196 · ⚠ 207 short` when summaries are loaded. Makes total shrinkage visible at the page level.
+- **Expanded view footer:** when you expand a shipment that has both detail + summary data, a small footer line under the per-SKU table shows `📋 Summary: status Closed · last updated 2026-05-24 · expected 1,200 / located 1,190` so you don't have to scroll up.
+- **Delete now removes both rows** — when you ✕ a shipment, both `fba_shipments` (line items) and `fba_shipment_summaries` (rollup) entries are deleted.
 
 ## Recent Fixes (v4.174) — Demand Forecast: row click opens product modal; selection (checkboxes) drives the detail panel
 - **Click vs check were doing the wrong things.** Clicking a row on the Demand Forecast page was opening the inline `forecastDetailPanel` (a unique behavior different from every other page in the app), while checking a row only added to a hidden `forecastSelected` Set with no visible feedback. Confusing.
