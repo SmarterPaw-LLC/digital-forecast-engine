@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.177**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.178**
+
+## Recent Fixes (v4.178) — Inventory Planning: Status-source dropdown (Warehouse / Amazon FBA / Combined)
+- **Bug pattern:** `getStatus(r)` compared `total_onhand` (FBA + FBA inbound + warehouse) against `r.need30/60/horizon` (cross-channel consumption forecast). A product with 4,141 units at Amazon FBA and 0 in the warehouse would show "Order Soon" — but that's misleading: warehouse is empty so Shopify/Chewy can't fulfill, and the operator can't see that until they drill in.
+- **New `Status by` dropdown** next to the existing Status filter. Three modes:
+  - **🏪 Warehouse stock** (default) — your-warehouse stock vs `inventoryNeed(r, X)` (TOTAL warehouse drain: Shopify base + Chewy reorder + Amazon FBA-replenishment shipments). Answers "do I need a manufacturer PO?"
+  - **📦 Amazon FBA stock** — `fba_available + fba_inbound` vs Amazon-only consumption (`inventoryNeedBreakdown(r, X).amazon.base`). Answers "do I need to send another shipment to Amazon?"
+  - **∑ Combined (legacy)** — the v4.177 behavior, preserved as an option.
+- **Mode is persisted** in localStorage as `ipStatusMode`. Restored on first render so refreshes don't drop the user's preference.
+- **Scorecards relabeled** to reflect the active mode — e.g. with Warehouse mode the subtitle reads "warehouse runs dry within 30d" instead of the generic "Run out within 30d". Tooltip on each scorecard spells out which stock pool vs which demand metric is driving the count.
+- **Status badge column** + the rightmost Action column both pick up the new logic automatically (both call `getStatus(r)`).
+- **Walking the user's screenshot:** Catnip Spray 3oz, FBA=4,141, warehouse=0. Previously "Order Soon" (FBA stock dominated). With Warehouse mode it now correctly flags as "Order Now" since warehouse=0 can't cover even 30d of Shopify+Chewy demand. With Amazon FBA mode it stays "OK" (4,141 covers ~62 days of Amazon consumption at 66/day).
 
 ## Recent Fixes (v4.177) — Inventory Planning: per-row checkboxes + selection bar + line chart with metric picker
 - **Pattern parity with Demand Forecast page** — checkboxes drive a selection set, which surfaces a summary bar + line chart. Row-click still opens the Inventory edit modal (preserves the existing inventory-specific edit flow).
