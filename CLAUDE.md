@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.172**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.173**
+
+## Recent Fixes (v4.173) — Stop overstating Shopify upload date; fix Amazon group rollup
+- **Shopify "today" bug:** Shopify aggregates daily → weekly with `week_start = Monday-of-that-week`. A daily upload through (say) Tuesday creates a row with `week_start = Mon` even though only 2 of 7 days are populated. My code then said "Data through Sun" by tacking +6 days on the Monday, overstating the data coverage by up to 6 days. Result: if your latest Shopify upload reached any day in the current week, the dashboard claimed "Data through (today)" even when you'd only uploaded a partial week.
+- **Fix:** stop computing the Sunday end. Show `week_start` directly with a "Week of" framing — unambiguous. The per-tile message reads `📅 Latest data week starts Mon 2026-05-18`; the group rollup reads `Week of 2026-05-18 (6d ago)`. No more false "today" when partial-week data is loaded.
+- **Amazon group rollup bug (parallel):** the group rollup was showing the latest `week_start` (Monday) verbatim — confusing since the per-tile message showed the Saturday end. Now both show the Saturday end consistently (Amazon's parser validates each upload as a complete Sun-Sat week, so the Saturday is reliable). Reads `thru Sat 2026-05-16 (8d ago)`.
+- **Group-label rename:** "Data Through" → "Latest Data" for both Amazon + Shopify. More honest umbrella — works whether the latest data is a specific day (Amazon) or a partial week (Shopify).
 
 ## Recent Fixes (v4.172) — Wire up `new_product_amazon` (launch override) + `deprecated_product_amazon` (Amazon-only reorder zeroing)
 - **⚠ SQL TO RUN:** `supabase_v4172_new_amazon_daily_units.sql` — adds `products.new_amazon_daily_units NUMERIC(10,2)` so the manual launch rate persists.
