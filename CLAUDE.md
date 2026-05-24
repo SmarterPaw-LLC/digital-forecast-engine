@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.167**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.168**
+
+## Recent Fixes (v4.168) — Inventory edit modal: stop closing on click-drag-out
+- **Bug:** The Inventory Planning row-edit modal had a bare `click` handler on `#editOverlay` that closed the modal whenever the click event's mouseup landed on the backdrop. If a user clicked inside the modal, dragged the cursor out (e.g., during text selection or accidentally), and released on the backdrop, the modal closed and any unsaved edits were lost.
+- **Fix:** Track `mousedown` + `mouseup` independently — only close when BOTH events land on the overlay itself. Drags that start inside the modal are now ignored.
+- **Reference:** the Products page modal has no backdrop-close at all, so click-drag never closed it there. This fix gives the Inventory modal the same drag-safe behavior while still keeping a clean backdrop click as an explicit "close" gesture.
 
 ## Recent Fixes (v4.167) — Uploads page table view + multi-file shipments + new Shipment Summary uploader + Need column architecture rewrite
 - **⚠ SQL TO RUN:** `supabase_v4167_shipment_summaries.sql` — creates `fba_shipment_summaries` table (per-shipment-id rollup: status, last_updated, units_expected, units_located).
