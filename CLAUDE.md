@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.164**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.165**
+
+## Recent Fixes (v4.165) — FBA Shipments page sortable + readable detail rows
+- **Problem:** v4.163 shipped the FBA Shipments sub-view with a fixed date-desc sort and detail rows that crammed SKU + ASIN + FNSKU + Product Title into a single colspan cell. The result was hard to scan and impossible to sort.
+- **Click-to-sort headers** on Date / Shipment ID / Name / Region / Ship To / SKUs / Units. Default sort = date desc. State held in `shipSortKey` + `shipSortDir`; `shipSetSort(key)` toggles direction or switches column. Active column shown in `var(--text)` with arrow indicator; inactive shown as muted `↕`.
+- **Detail rows now use a nested table** inside a single colspan=9 cell so per-SKU columns (SKU · ASIN · FNSKU · Product · Qty) line up cleanly within the group instead of fighting the parent's column widths. Sub-table header keeps the same uppercase mono style at 9px. Detail rows have their own narrow padding (5px vs 7px) so the nesting reads as a sub-section.
+- **Region rendering** switched from emoji flag (`🇺🇸` rendered as text "us" on some setups) to the existing `.rtag` chip style — same as the Inventory Planning region column.
+- **Expanded shipment row** gets a subtle background highlight (`var(--surface2)`) so the open group reads as a unit with its detail block.
+- **Unmapped items** flagged inline with a small orange `⚠ unmapped` badge instead of a separate column entry that disappeared into the parent table's layout.
 
 ## Recent Fixes (v4.164) — Inventory Planning "Need" columns = order volume by channel, not consumption forecast
 - **User feedback:** the old Inventory Planning page reused the Forecast page's consumption-need math (forwardSeaDemand + Chewy forecast), so "30d Need" duplicated what's already on Forecast. Jason called it "not helpful." The Inventory page should answer "how many units must I order across channels in this horizon?" — order volume, not depletion.
