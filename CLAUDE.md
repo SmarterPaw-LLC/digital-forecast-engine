@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.170**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.171**
+
+## Recent Fixes (v4.171) — Uploads page label fix + Inventory CSV export wired
+- **Uploads page label fix:** Shopify DTC + Amazon group rows were labeling the rollup as "Last Upload" but the value was actually the END of the latest data week (week_start + 6 for Shopify, week_start + 5 for Amazon's Sun→Sat report). With the most recent week ending on the current day, "Last Upload: today" was misleading. Renamed:
+  - Amazon group + Shopify group → `Data Through`
+  - Warehouse group → `Last Sync` (matches what refreshLabel actually shows — Sheet sync date, not a true file upload)
+  - Chewy / FBA Inventory / FBA Ship Detail / FBA Ship Summary already accurately labeled (`Last Snapshot` / `Last Shipment` / `Last Refresh`).
+- **Inventory Planning CSV export wired (`downloadInventoryCSV`):** the top-bar ↓ CSV button previously fell through to the Forecast page exporter when you were on Inventory Planning — wrong context, mostly garbage output. Now `exportCSV()` routes `forecastView === 'inventory'` to a dedicated writer.
+  - Respects current filters (brand / region / category / status / horizon / target / search) — same logic as `renderInventoryTbl`.
+  - Respects the user's visible-columns set (`ipVisibleColumns()`) + current sort.
+  - Always prepends `master_id / asin / brand / region / title` for join-back even if those columns are hidden in the view.
+  - Composite cells (status badge, PO-by date) flatten to readable labels (`"Order Now"`, `"2026-08-12"`).
+  - Filename: `smarterpaw-inventory-90d-2026-05-24.csv` (horizon + date).
 
 ## Recent Fixes (v4.170) — Inventory Planning: Need-group color coding + header tooltips + drop default Vel/day
 - **Group headers are now color-coded** so the relationship between TOTAL and its components reads at a glance:
