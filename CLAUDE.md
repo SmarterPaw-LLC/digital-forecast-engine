@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.178**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.179**
+
+## Recent Fixes (v4.179) — Inventory Planning: pooled records resolve correctly in the selection bar + chart
+- **Bug:** v4.177's chart + selection-bar resolved selection keys via `records.find(x => x.master_id === mid && (x.region || 'US') === reg)`. But when the region filter is "US + CA pooled", `combineRegionRecords` produces synthetic rows with `region = 'US+CA'` (or `'CA+US'` if no US listing) that don't exist in the base `records` array. Result: pooled rows silently dropped from the chart + their needs missing from the bar's sum. User saw "4 selected" with only 2 lines on the chart and a `90d need` total that was clearly low.
+- **Fix:** added `ipPooledRecordsByKey` Map — populated at the end of `renderInventoryTbl` with the actual rows currently displayed (post-pooling, post-filter). `ipResolveSelectedRecord(key)` checks this cache first, then falls back to the base-records lookup. Both `refreshInventorySelectionBar` and `updateInventoryChart` use the resolver. The chart now plots every checked row; the bar's totals match what's visible in the table.
+- **Edge case:** if the user changes region mode (e.g. pooled → US only) without clearing selection, keys with the old `US+CA` region won't resolve in the new view's cache. The fallback `records.find` also won't find them. Those rows silently drop from the chart/bar — by design for now; user can clear + re-check if needed. Future: could auto-clear selection on region change.
 
 ## Recent Fixes (v4.178) — Inventory Planning: Status-source dropdown (Warehouse / Amazon FBA / Combined)
 - **Bug pattern:** `getStatus(r)` compared `total_onhand` (FBA + FBA inbound + warehouse) against `r.need30/60/horizon` (cross-channel consumption forecast). A product with 4,141 units at Amazon FBA and 0 in the warehouse would show "Order Soon" — but that's misleading: warehouse is empty so Shopify/Chewy can't fulfill, and the operator can't see that until they drill in.
