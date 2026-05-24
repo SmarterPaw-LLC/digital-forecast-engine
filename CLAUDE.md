@@ -2,7 +2,26 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.176**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.177**
+
+## Recent Fixes (v4.177) — Inventory Planning: per-row checkboxes + selection bar + line chart with metric picker
+- **Pattern parity with Demand Forecast page** — checkboxes drive a selection set, which surfaces a summary bar + line chart. Row-click still opens the Inventory edit modal (preserves the existing inventory-specific edit flow).
+- **New `_chk` column** at the front of `IP_COLUMNS`, locked + default-visible. Header has a select-all that toggles every currently-visible row. Row-level checkbox stops click propagation so it doesn't trigger the modal.
+- **`inventorySelected` Set** — keys are `master_id_region` (handles US/CA/pooled cleanly).
+- **Selection bar** above the table (`#ip-selection-bar`) — appears when ≥1 row is checked. Shows count, brand mix, summed `horizon-day need`, summed on-hand. Two actions:
+  - `⬇ Show selection in table` — filters the table down to just the checked rows (other filters still apply). Toggles to `↑ Show all in table` when active. State held in `ipShowOnlySelectedMode`.
+  - `✕ Clear selection` — clears the set + re-renders.
+- **Line chart** below the selection bar (`#ip-chart-panel`) — Chart.js, hidden when no selection. Metric picker offers 7 options:
+  - Need — TOTAL (warehouse drain)
+  - Need — BASE FORECAST (sales velocity)
+  - Need — REORDER (Amazon + Chewy events)
+  - Amazon REORDER (trigger qty)
+  - Chewy REORDER (their forecast)
+  - Need vs On-hand cover (two-line gap chart)
+  - Inventory cover (days)
+- **Series picker:** Total (sum across selection) vs Per product (one line per selected product, capped to ~10 colors). Mirrors the Forecast page's pattern.
+- **Sync points:** `toggleInventoryRow`, `toggleInventoryAll`, `clearInventorySelection`, `renderInventoryTbl` (when filters change) all funnel through `refreshInventorySelectionBar()` + `updateInventoryChart()`.
+- **`ipVisibleColumns()` updated** to always include locked columns (`_chk`) regardless of the user's saved-view state. Saved views from before v4.177 keep working — they just don't reference `_chk`, but the column shows up anyway because it's locked.
 
 ## Recent Fixes (v4.176) — New (Amazon) launch override: truly flat math on Forecast page
 - **Bug:** v4.172's launch override set `rec.blended_daily = rate` and `rec.sea_idx = 1`, but `forwardSeaDemand` (which actually computes need30/60/90/120 for the Forecast page) integrates the seasonal **curve** day-by-day and ignores `sea_idx`. Result: Forecast page still showed curve-adjusted numbers (e.g., 30/day × 30d came out 918, not 900) and the Sea Index column showed varying values (1.02× / 0.98× / 1.03×) even though seasonality was supposedly disabled.
