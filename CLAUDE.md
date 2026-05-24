@@ -2,7 +2,29 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.171**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.172**
+
+## Recent Fixes (v4.172) — Wire up `new_product_amazon` (launch override) + `deprecated_product_amazon` (Amazon-only reorder zeroing)
+- **⚠ SQL TO RUN:** `supabase_v4172_new_amazon_daily_units.sql` — adds `products.new_amazon_daily_units NUMERIC(10,2)` so the manual launch rate persists.
+- **Background:** since v4.160 both flags were on the model but neither had math effects — v4.161 explicitly removed deprecated's effect because zeroing the cross-channel PO was wrong. With the v4.167 per-channel breakdown in place, we can now drive both flags surgically.
+- **`new_product_amazon` (LAUNCH OVERRIDE):**
+  - New field `new_amazon_daily_units` — manual expected daily rate (number). UI input appears next to the checkbox in BOTH the Inventory edit modal (`ef-new-amazon-rate`) and the Products modal (`pf-new-amazon-rate`), visible only when the flag is checked. Stored on `products`.
+  - When flag is on AND rate > 0:
+    - **Inventory page:** Amazon vel = rate (overrides historical). Amazon base = `rate × horizon` (flat — no seasonality). Amazon reorder = `reorder_qty_days × rate` (flat). Trigger logic (FBA-DOS vs threshold) still applies.
+    - **Demand Forecast page:** `recomputeRecordVelocity` overrides `blended_daily = rate`, `sea_idx = 1`, `adj_daily = rate`. need30/60/90/120 are derived from the flat rate. A 🆕 NEW badge appears next to the product name with a tooltip explaining velocity + seasonality are bypassed.
+    - **Trade-off accepted:** any existing Shopify/Chewy history is ignored on the Forecast page while the override is active. Appropriate for genuine launches; flip the flag off once history is established.
+  - When flag is on but rate is blank/0: silently falls back to historical (the badge still shows but in a muted style indicating "rate not set").
+- **`deprecated_product_amazon` (AMAZON-SUPPRESS):**
+  - When flag is on: Amazon **reorder = 0** in the Inventory model. Amazon **base stays at historical** (models the wind-down sell-through).
+  - Shopify + Chewy unaffected — a product deprecated on Amazon may still be alive on other channels.
+  - Tooltip on AMAZON REORDER column now surfaces the deprecated state explicitly.
+- **Code touchpoints:**
+  - Records-build (line ~2796): pulls `new_amazon_daily_units` from `products` onto each record.
+  - `recomputeRecordVelocity`: branches on the new flag + rate; overrides velocity fields when active.
+  - `inventoryNeedBreakdown` Amazon block: flat-math branch for new override; zero-reorder branch for deprecated. Tooltips updated.
+  - Inventory edit modal load + save (around line 14620 / 14760): reads/writes the new field on both `r` (in-memory record) AND mirrors to peers + recomputes velocity + persists to `products`.
+  - Products modal load + save (around line 15289 / 15483): same. After save, mirrors onto all matching in-memory records + triggers `recomputeRecordVelocity` so changes flow through without a reload.
+  - `toggleNewAmazonRate(prefix)` helper shows/hides the rate input based on checkbox state (works for both `ef-` and `pf-` prefixes).
 
 ## Recent Fixes (v4.171) — Uploads page label fix + Inventory CSV export wired
 - **Uploads page label fix:** Shopify DTC + Amazon group rows were labeling the rollup as "Last Upload" but the value was actually the END of the latest data week (week_start + 6 for Shopify, week_start + 5 for Amazon's Sun→Sat report). With the most recent week ending on the current day, "Last Upload: today" was misleading. Renamed:
