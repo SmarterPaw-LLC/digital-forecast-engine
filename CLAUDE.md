@@ -2,7 +2,34 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.168**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.169**
+
+## Recent Fixes (v4.169) — Uploads page redesigned: expandable groups with full drop cards inside
+- **v4.167's table layout regressed drag-drop and readability** — user feedback: rows were cramped, status column always empty, last-upload dates not readable, no visible drop target. Fixed.
+- **New layout: three section blocks** — 📊 Sales & P&L · 📦 Inventory · 🚚 FBA Shipments. Each section is a card; inside each card, expandable group rows.
+- **Each group row** is collapsed by default. Click to expand → reveals the original full-size `.dz` drop cards with all instructions, click-to-pick, drag-drop, status line, and per-card last-upload date. Multiple groups can be open at once. State held on the DOM (`.open` class).
+- **Group-row summary** shows icon · title · 1-line description · last-upload rollup (e.g. `2026-05-24 (yesterday)`). Group rollup picks the most recent across all sub-tiles in the group.
+- **Drag-drop wired uniformly** via `initUploadDropTargets()` — every `.dz` card on the uploads page gets dragover/drop listeners; drops dispatch through the card's own `<input type=file>` (so multi-file works on the FBA Shipment Detail card). Old per-id drag-drop block at the top of the file removed to avoid double-firing.
+- **`refreshUploadDataRanges` extended** to populate per-group rollups + previously-missing last-upload IDs:
+  - `last-amz-sales-grp` (combined US/CA + EU latest)
+  - `last-shopify-sales-grp`, `last-chewy-sales-grp`
+  - `last-warehouse-grp` (reads from #refreshLabel)
+  - `last-fba-inv-grp`, `last-fba-ship-grp`, `last-fba-ship-sum-grp`
+  - Per-card `last-sales-skuecon-eu`, `last-fba-inv`, `last-fba-ship`, `last-fba-ship-sum`
+  - All show a short relative-time suffix (`today` / `2d ago` / `3w ago` / `2mo ago`).
+
+### Section structure (per user-requested hierarchy)
+- **📊 Sales & P&L**
+  - **Amazon — SKU Economics (US/CA + EU)** — expands to TWO drop cards: one for US/CA (with Folder/Zip multi-week backfill buttons) + one for EU. The Sun→Sat warning lives inside the expanded body.
+  - **Shopify DTC** — expands to 1 drop card.
+  - **Chewy** — expands to snapshot-date prompt + 1 drop card.
+  - **Legacy — Amazon by Child ASIN** — collapsed by default, expands to the 6 per-brand-per-region tiles.
+- **📦 Inventory**
+  - **Warehouse Stock (NOT WIRED)** — expanded body shows a placeholder card: "warehouse-inventory uploader hasn't been added yet — current numbers are whatever was last loaded from the legacy Shopify Inventory export." Legacy Shopify Inventory dropzone retained (dimmed) for rollback / reference. Per user note: no 3PL, no Google Sheet — the real pipeline is TBD.
+  - **Amazon FBA Inventory Snapshot** — expands to 1 drop card.
+- **🚚 FBA Shipments**
+  - **Shipment Detail** (per-shipment .tsv, multi-file) — expands to 1 drop card.
+  - **Shipment Summary** (list CSV, NEW from v4.167) — expands to 1 drop card.
 
 ## Recent Fixes (v4.168) — Inventory edit modal: stop closing on click-drag-out
 - **Bug:** The Inventory Planning row-edit modal had a bare `click` handler on `#editOverlay` that closed the modal whenever the click event's mouseup landed on the backdrop. If a user clicked inside the modal, dragged the cursor out (e.g., during text selection or accidentally), and released on the backdrop, the modal closed and any unsaved edits were lost.
