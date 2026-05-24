@@ -2,7 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.163**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.164**
+
+## Recent Fixes (v4.164) — Inventory Planning "Need" columns = order volume by channel, not consumption forecast
+- **User feedback:** the old Inventory Planning page reused the Forecast page's consumption-need math (forwardSeaDemand + Chewy forecast), so "30d Need" duplicated what's already on Forecast. Jason called it "not helpful." The Inventory page should answer "how many units must I order across channels in this horizon?" — order volume, not depletion.
+- **New per-channel order-volume model** (lives in `inventoryNeedBreakdown(r, X)`):
+  - **Amazon** = trigger-based FBA replenishment. FBA-DOS = `(fba_avail + fba_inbound) / amazon_velocity`. Order-by day = `max(0, FBA-DOS − reorder_threshold_days)`. If `orderByDay ≤ X`, the order fires inside the horizon and counts `forwardSeaDemand(arrival + reorder_qty_days) − forwardSeaDemand(arrival)` toward the Need cell. Else 0.
+  - **Shopify** = continuous warehouse draw, no trigger. `forwardSeaDemand` on Shopify-only velocity over horizon X (seasonally adjusted).
+  - **Chewy** = Chewy's own monthly forecast via existing `getChewyFcUnits(mid, X, region)`.
+  - Total = sum of the three.
+- **Per-channel velocity helpers** (v4.164 new): `getInventoryChannelVel(r, channelTest)` filters `salesData[mid]` by channel + region (pooled records pass region check); `invAmazonVel(r)` matches `/^amazon/`; `invShopifyVel(r)` matches `'shopify'`. Honors the Velocity Window dropdown (30/60/90/120d).
+- **Inventory page rewired** — Need columns, scorecards, gap (30d + active-horizon), and the click-to-sort comparators now call `inventoryNeed(r, X)` instead of reading `r.need30/60/90/120`. **Forecast page untouched** — still uses `rederiveNeeds` (consumption-based) → `r.needX`. `getStatus(r)` also still uses `r.needX` (stockout risk = consumption check, which is the correct semantic for "🔴 Order Now").
+- **Hover tooltips** on every Need cell show the per-channel breakdown including Amazon's trigger meta: vel/day, FBA-DOS, order-by day, arrival day, reorder window. Column-header tooltips explain the new model so the user isn't confused vs Forecast page numbers.
+- **Worked example** (from Jason's note): Catnip Spray 3oz, vel 61.38/d, FBA = 4,141. FBA-DOS = 67d. Threshold = 90 → orderByDay = 0 (already past). With 60d lead, arrival = 60. 30d Need = forwardSeaDemand(60 → 150) ≈ 5,308. Old display was 2,075 (consumption). New display is 5,308.
+- **Trade-off accepted for v1:** one Amazon order per horizon (a 120d horizon with a 30d reorder cycle would technically see 2 triggers — not modeled yet). Can extend to multi-trigger simulation later if it matters.
 
 ## Recent Fixes (v4.163) — FBA Shipments sub-view under the Forecast nav
 - **Gap:** v4.155 added the FBA shipment uploader (one .tsv per shipment, dedup on shipment_id,sku) but gave the user no UI to *see* the uploaded shipments. Once the upload-status line scrolled past, the only way to confirm what was in the database was the SQL Query sub-view.
