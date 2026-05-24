@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.175**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.176**
+
+## Recent Fixes (v4.176) — New (Amazon) launch override: truly flat math on Forecast page
+- **Bug:** v4.172's launch override set `rec.blended_daily = rate` and `rec.sea_idx = 1`, but `forwardSeaDemand` (which actually computes need30/60/90/120 for the Forecast page) integrates the seasonal **curve** day-by-day and ignores `sea_idx`. Result: Forecast page still showed curve-adjusted numbers (e.g., 30/day × 30d came out 918, not 900) and the Sea Index column showed varying values (1.02× / 0.98× / 1.03×) even though seasonality was supposedly disabled.
+- **Fix:** added a short-circuit at the top of `forwardSeaDemand` AND `getForwardSea` — when `r.new_amazon_override` is true, return flat `blended × horizonDays` (and 1.0 for sea respectively). Both functions are now honest about the override.
+- **Inventory page was already flat** (the v4.172 `isNewOverride` branch in `inventoryNeedBreakdown` does its own math without going through `forwardSeaDemand`). This release brings the Forecast page into alignment.
 
 ## Recent Fixes (v4.175) — FBA Shipments viewer merges in the summary CSV data
 - **The summary CSV uploader was landing rows in `fba_shipment_summaries` but the viewer was only reading `fba_shipments` (per-SKU detail). Result: uploads worked but the data was invisible.** Fixed by joining both tables on shipment_id in `loadFbaShipments` and rendering the merged view.
