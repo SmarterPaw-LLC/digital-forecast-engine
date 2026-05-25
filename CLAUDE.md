@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.187**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.188**
+
+## Recent Fixes (v4.188) — Inventory Planning: scorecards split into 3 rows (Status / Metrics / Mode)
+- **Reorganization:** the single 9-tile row was cramped. Now arranged as three logical rows:
+  - **Row 1 — Status counts** (full-width, 4 equal columns): 🔴 Order Now · 🟡 Order Soon · ⚠️ Plan Ahead · 🟢 Covered. Padding + value font bumped (`.scorecards-status .sc` 16px padding, `.sc-val` 32px) for prominence since these are the most-glanced tiles. SELECTION chip moved to the Order Now tile's label so the user can see at a glance whether the numbers reflect filtered vs selected.
+  - **Row 2 — Top metrics** (auto-fit): Total Vel/day · `${h}d` Need · On Hand · `${h}d` Gap · Order (`${target}d` target). Includes in-transit 🚧 chips on On Hand + Gap as before.
+  - **Row 3 — Mode tiles** (auto-fit): Mode-specific tiles (Amazon Vel/day / Amazon Need / FBA Stock / FBA Gap in Amazon mode; Warehouse Need / Stock / Gap / Channel mix in Warehouse mode; an info message in Combined mode).
+- **HTML containers:** `#ip-scorecards-status` (new), `#ip-scorecards` (existing — now just the metrics row), `#ip-scorecards-mode` (existing).
+- **Build helpers split:** `buildInventoryStatusScorecardsHTML` (new) handles the 4 status counts; `buildInventoryTopScorecardsHTML` (renamed semantically) handles the 5 metric tiles. `buildInventoryModeScorecardsHTML` unchanged.
+- `refreshInventoryScorecards()` now updates all three rows. Still fires on every checkbox click and reads from the pool cache (cheap).
 
 ## Recent Fixes (v4.187) — Inventory Planning: left-align body cells for align:'left' columns
 - **Bug:** `td` defaults to `text-align:right` globally (set for the numeric-heavy Forecast / Inventory tables). The IP_COLUMNS registry marked Brand / Region / Product / ASIN / Master ID / SP SKU as `align:'left'`, and headers used that (via `class="tl"` + inline `text-align:left`). But the body cell renders just emitted plain `<td>`s without the class, so short text in those columns floated to the right edge of the column width. Product column was the most visible — short names like "Birthjays Rollies" looked weirdly indented.
