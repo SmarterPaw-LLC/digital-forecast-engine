@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.185**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.186**
+
+## Recent Fixes (v4.186) — Scorecards re-render on every checkbox click
+- **Bug:** v4.184 made the scorecards selection-aware (aggregate over checked rows when present) — but `toggleInventoryRow` + `toggleInventoryAll` only called `refreshInventorySelectionBar()` + `updateInventoryChart()`. The scorecards (top row + mode-specific row) were left stuck on whole-table totals until the next full re-render (filter change, etc.). So checking a row updated the bar + chart but not the scorecards above.
+- **Fix:** added `refreshInventoryScorecards()` — rebuilds both scorecard rows from the existing `ipPooledRecordsByKey` cache (no table re-filter, no body re-render). Called from both `toggleInventoryRow` and `toggleInventoryAll`.
+- Cheap enough to fire on every checkbox flip: just two innerHTML swaps, no DOM diffing on the (potentially 500+) table rows.
 
 ## Recent Fixes (v4.185) — Make Total = Base + Reorder add up cleanly
 - **Confusion:** users reading the Need columns expected Total = Base + Reorder, but it didn't add up. v4.167's Base included Amazon's sales velocity, but Total excluded it (Amazon's contribution to Total came via Reorder only). So Base + Reorder ≠ Total, and Base was conceptually double-counting Amazon's demand alongside the Reorder event that already covers it.
