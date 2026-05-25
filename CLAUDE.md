@@ -2,7 +2,33 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.188**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.189**
+
+## Recent Fixes (v4.189) — Inventory Planning: Status ties to gap horizons; Status ≠ Action (mode vs rollup)
+- **Three coupled problems addressed:**
+  1. **Status was decoupled from the visible Gap.** Old logic (v4.180) used DOS-vs-reorder-threshold tiers, so a row could be "Order Soon" while showing a 30d Gap shortfall. Now tiers tie directly to the gap horizons:
+     - Order Now ↔ need(30d) > stock
+     - Order Soon ↔ need(60d) > stock
+     - Plan Ahead ↔ need(90d) > stock
+     - OK ↔ 90d covered
+  2. **Status label was abstract.** Now mode-specific actionable:
+     - Amazon FBA mode → 🔴 Send to FBA / 🟡 FBA Soon / ⚠️ Plan FBA Ship / 🟢 FBA OK
+     - Warehouse mode → 🔴 Place PO / 🟡 PO Soon / ⚠️ Plan PO / 🟢 WH OK
+     - Combined → unchanged
+  3. **Status + Action columns showed the same value.** Now they answer different questions:
+     - **Status** = "what does the ACTIVE MODE say?" (mode-specific)
+     - **Action** = "what actions are needed across BOTH pools?" (mode-agnostic rollup)
+- **`getActionRollup(r)`** checks warehouse AND Amazon FBA status independently, then combines the verbs at the worst tier. Examples:
+  - Warehouse=order-now + Amazon=order-now → "🔴 PO + Ship FBA"
+  - Warehouse=order-now + Amazon=ok → "🔴 Place PO"
+  - Warehouse=ok + Amazon=order-soon → "🟡 FBA Soon"
+  - Both=plan → "⚠️ Plan PO + FBA"
+  - Deprecated + warehouse=order-now → "🔴 ⛔ + Place PO" (Shopify/Chewy still need fulfilment)
+- **`getStatusFor(r, mode)`** lets any caller compute the tier for any pool, independent of the dropdown. Used by Action rollup + future per-mode tooling. `getStatus(r)` is now a thin wrapper that defers to the active mode.
+- **`getStatusInputs(r, mode)`** factored out so the tier logic + scorecards + gap math can all share the same stock/need inputs.
+- **`getStatusLabelFor(r, mode, tier)`** maps tier → mode-specific verb. Used by the Status column.
+- **Column widths bumped:** Status 104→128px, Action 104→160px (Action labels are longer now with combined verbs like "PO + Ship FBA").
+- **Column tooltips updated** so users can hover and see exactly what Status vs Action mean.
 
 ## Recent Fixes (v4.188) — Inventory Planning: scorecards split into 3 rows (Status / Metrics / Mode)
 - **Reorganization:** the single 9-tile row was cramped. Now arranged as three logical rows:
