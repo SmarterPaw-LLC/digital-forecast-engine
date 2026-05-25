@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.201**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.202**
+
+## Recent Fixes (v4.202) — Direct Seller Central report links on every upload card
+- **User request:** add direct links to each Amazon Seller Central report on the Uploads page so users don't have to navigate through SC's menus to find them.
+- **Links added** (all open in new tab via `target="_blank" rel="noopener"`, click handlers stop propagation so they don't trigger the dropzone file picker):
+  - **SKU Economics US/CA** → `https://sellercentral.amazon.com/sereport`
+  - **SKU Economics EU** → `https://sellercentral.amazon.co.uk/sereport` (UK gateway, but the report covers GB / DE / FR / IT / ES / NL)
+  - **FBA Inventory Snapshot** → `https://sellercentral.amazon.com/reportcentral/FBA_MYI_UNSUPPRESSED_INVENTORY/1` (Amazon's internal report ID — `FBA_MYI_UNSUPPRESSED_INVENTORY` — also added to the description text for grep-ability)
+  - **FBA Shipment Detail** → `https://sellercentral.amazon.com/gp/ssof/shipping-queue.html/ref=xx_fbashipq_dnav_xx#fbashipment` (Manage FBA Shipments queue — click into each shipment to download)
+  - **FBA Shipment Summary** → same URL, with prominent note "press **Export table data**" since that button is what produces the list CSV
+- **Confirmed** the uploaded `224702020598.csv` is the right file for the FBA Inventory uploader — columns (`afn-fulfillable-quantity`, `afn-warehouse-quantity`, `afn-reserved-quantity`, `afn-inbound-*`) match the parser exactly. That's the `FBA_MYI_UNSUPPRESSED_INVENTORY` report.
+- **Visual style** — pill-style buttons with blue accent (`var(--blue)`) to match the info-box color theme. Placed at the end of the colored info block (FBA Inventory, both Shipment cards) or alongside the existing Folder/Zip helper buttons (SKU Economics dropzones).
 
 ## Recent Fixes (v4.201) — Inventory CSV Status + Action columns use mode-specific labels
 - **User flagged:** "the csv export shows the old status codes eg order soon rather than FBA order soon."
