@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.191**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.192**
+
+## Recent Fixes (v4.192) — Inventory Planning: collapsible scorecards + chart for more table real estate
+- **New toggle bar** at the top of the inventory page: two buttons (`▾ Scorecards` and `▾ Chart`) that collapse / expand those sections.
+  - `▾` = expanded (shown). `▸` = collapsed (hidden).
+  - `▾ Scorecards` hides all three scorecard rows together (status counts + top metrics + mode tiles) as a single block.
+  - `▾ Chart` hides the line chart panel below the selection bar. The selection bar itself stays visible (low-effort summary you usually want).
+- **Persistence:** state saved to `localStorage.ipCollapsed` as `{ scorecards: bool, chart: bool }`. Survives view switches + page refreshes.
+- **Chart respects the collapsed flag** — `updateInventoryChart` checks `isIpChartCollapsed()` first and bails early if collapsed, so toggling on the chart re-runs the build.
+- **Restoration:** `applyIpCollapsedState()` runs every time the Inventory sub-view is shown, immediately after `renderInventoryTbl`. The toggle button labels also flip ▾↔▸ so the icon mirrors the current state.
 
 ## Recent Fixes (v4.191) — Multi-event Amazon reorder simulation
 - **Bug surfaced by user:** the Amazon Reorder columns showed the same `2,428` across 30d/60d/90d/120d. Reason: the model only fired the FIRST trigger within the horizon. But for a product with `reorder_qty_days=90`, a SECOND event fires ~90 days later, a THIRD at ~180, etc. Cumulative reorder should grow across horizons.
