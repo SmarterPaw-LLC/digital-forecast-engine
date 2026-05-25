@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.193**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.194**
+
+## Recent Fixes (v4.194) — Channel reorder columns switch to MARGINAL (per-period) for PO planning
+- **User flagged:** "looking 120 days out and thinking we'll need 13,272 of this item doesn't make sense, as the order for 5,617 will already have been placed." Cumulative reorder columns stack the imminent order onto every later horizon, making it hard to see "what's the NEXT order I need to plan for?"
+- **Best practice for PO look-ahead is MARGINAL** (per-period bucket): each column shows just the events firing in that specific window. A product on a 90-day reorder cycle reads `5,617 / 0 / 5,617 / 0` cleanly — you immediately see the cadence and the next-order timing without doing subtraction.
+- **Channel-specific columns updated** (AMAZON REORDER + CHEWY REORDER groups):
+  - Labels renamed `0–30d Amz` / `30–60d Amz` / `60–90d Amz` / `90–120d Amz` (and similarly for Chwy) so the bucket boundaries are explicit
+  - Values computed as the diff between cumulative breakdowns at adjacent horizons (since `inventoryNeedBreakdown(r, X).amazon.reorder` is cumulative through X)
+  - Group header renamed to `AMAZON REORDER (PER PERIOD)` / `CHEWY REORDER (PER PERIOD)` so the marginal semantic is visible at the band
+  - Sort + per-cell tooltips reflect marginal math
+- **Aggregate columns kept CUMULATIVE** — `Need — TOTAL`, `Need — BASE FORECAST`, `Need — REORDER` all still answer aggregate-volume questions over [0, X]. So if you want "total reorder volume over next 90 days," use Need — REORDER. If you want "what fires in each bucket," use the channel-specific columns.
+- **Updated group-header tooltip** lists the four bucket boundaries explicitly + explains why marginal is better for scheduling. Chart metric dropdown labels updated to call out "(per period — marginal)" for these.
 
 ## Recent Fixes (v4.193) — Per-row hover tooltips on Status + Action badges
 - **Issue:** users couldn't tell the difference between "FBA Soon" and "Plan FBA Ship" — both are amber-ish labels in the Status column and the column-header tooltip alone didn't explain WHY a given row landed in one tier vs the other.
