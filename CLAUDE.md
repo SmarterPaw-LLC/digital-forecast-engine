@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.198**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.199**
+
+## Recent Fixes (v4.199) — Multi-region inventory uploads (UK / DE / FR / IT / ES / NL / MX / AU / JP)
+- **User flagged:** "i need to upload inventory for other regions now and see how this rolls up to the inventory planning module."
+- **Schema was already open** — `inventory.region` is unconstrained `TEXT`, so the model accepts any region code. The blocker was UI: the FBA Inventory Snapshot upload prompt only exposed US + CA buttons, and the Inventory Planning + Forecast region filter dropdowns were hardcoded US-only / CA-only / pooled.
+- **`FBA_REGION_OPTIONS` constant** — new lookup list of 11 Amazon marketplaces (US, CA, MX, UK, DE, FR, IT, ES, NL, AU, JP) with flag emoji + display label. Add to this list to surface more options — no DB migration ever needed.
+- **Upload prompt rebuilt as a dropdown** (was 2 buttons) — scales to 11 options without crowding the modal. Region copy clarifies "FBA stock isn't pooled across marketplaces, so each region needs its own upload."
+- **`populateRegionFilters()`** — new helper that scans `records` for distinct non-pooled region values and rebuilds the Inventory Planning + Forecast region dropdowns dynamically. US + CA always included even if records aren't loaded (they're the historical defaults). Decorates known regions with their flag. Preserves current selection across rebuild.
+  - Called after the Supabase records build (next to `populateCatFilter`)
+  - Also called after every FBA Inventory Snapshot upload so a brand-new region appears in the dropdown immediately without a page refresh
+- **Pooled-view label adapts to region count** — "US + CA (combined)" when only 2 regions exist; "All regions (pooled · US + CA + UK + DE)" when more are added.
+- **Upload card description** lists every supported region inline so users see at a glance what's possible without clicking through.
+- **How the rollup works** — unchanged from v4.196's master-level model:
+  - Each FBA snapshot upload writes a per-region row to `inventory` (one per asin × region)
+  - `records[]` build joins products × inventory and produces one record per asin × region with that region's stock + Amazon vel from `velocities` (region-specific sales rate)
+  - Inventory Planning filter set to a specific region → that region's row only
+  - Filter set to pooled → `combineRegionRecords` sums numeric fields (Amazon vel, FBA stock, warehouse, inbound) across all regions; Shopify/Chewy attach to US only (existing region gate)
+  - PO recommendation in pooled view = single order covering aggregate demand across all marketplaces
 
 ## Recent Fixes (v4.198) — Label cumulative vs marginal columns explicitly
 - **User flagged:** "why do the reorder columns not match here? one is cumulative and one is marginal? which is the correct approach?" Looking at `≤90d Reorder = 1,562` next to `60-90d Chwy = 544` and not immediately seeing why the numbers don't tie.
