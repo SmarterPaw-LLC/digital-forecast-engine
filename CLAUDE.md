@@ -2,7 +2,11 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.186**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.187**
+
+## Recent Fixes (v4.187) — Inventory Planning: left-align body cells for align:'left' columns
+- **Bug:** `td` defaults to `text-align:right` globally (set for the numeric-heavy Forecast / Inventory tables). The IP_COLUMNS registry marked Brand / Region / Product / ASIN / Master ID / SP SKU as `align:'left'`, and headers used that (via `class="tl"` + inline `text-align:left`). But the body cell renders just emitted plain `<td>`s without the class, so short text in those columns floated to the right edge of the column width. Product column was the most visible — short names like "Birthjays Rollies" looked weirdly indented.
+- **Fix:** added a post-process step in `renderInventoryTbl`'s cell-render loop. For any column flagged `align:'left'`, inject `text-align:left` into the body cell's inline style (prepended so render-specified styles still override if needed). One-line wrapper around the existing `c.render(r, pre)` call — no need to edit individual render functions.
 
 ## Recent Fixes (v4.186) — Scorecards re-render on every checkbox click
 - **Bug:** v4.184 made the scorecards selection-aware (aggregate over checked rows when present) — but `toggleInventoryRow` + `toggleInventoryAll` only called `refreshInventorySelectionBar()` + `updateInventoryChart()`. The scorecards (top row + mode-specific row) were left stuck on whole-table totals until the next full re-render (filter change, etc.). So checking a row updated the bar + chart but not the scorecards above.
