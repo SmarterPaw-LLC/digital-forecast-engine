@@ -2,7 +2,26 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.183**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.184**
+
+## Recent Fixes (v4.184) — Restore top scorecard row + add mode-specific row below; gap math folds in in-transit
+- **v4.183 mistake:** I replaced the original 9-tile top scorecard row with a mode-dependent set. User wanted the top row to STAY CONSTANT and a NEW row to appear below with mode-specific tiles. Fixed.
+- **Top row** (`#ip-scorecards`, constant across modes): Order Now / Order Soon / Plan Ahead / Covered · Total Vel/day · `${h}d` Need · On Hand · `${h}d` Gap · Order (`${target}d` target). Selection-aware (banner chip in the 🔴 tile reads "SELECTION (N selected)" when aggregating over checked rows).
+- **NEW bottom row** (`#ip-scorecards-mode`, mode-specific):
+  - **🏪 Warehouse:** `${h}d` Warehouse Need · Warehouse Stock · `${h}d` Warehouse Gap · Channel mix (Amazon-reorder / Shopify base / Chewy reorder split).
+  - **📦 Amazon FBA:** Amazon Vel/day · `${h}d` Amazon Need · FBA Stock (incl 🚧 in-transit) · `${h}d` FBA Gap.
+  - **∑ Combined (legacy):** single info tile noting "top row already covers this — switch modes for extra tiles".
+  - Banner header reads `Mode tiles · 📦 Amazon FBA · Scope: 4 selected (selection)`.
+- **Gap math now folds in `ipInTransitFor(r)`** — the shipments we've created in Manage FBA Shipments but Amazon hasn't yet processed (Working/Receiving statuses). Applies to:
+  - **Per-row Gap columns** (`30d Gap` / `Active Gap`) — pre-computed `gapH` / `gap30` now use `(total_onhand + in_transit)` instead of raw `total_onhand`.
+  - **Top-row `On Hand` + `${h}d Gap` scorecards** — effective on-hand includes in-transit.
+  - **Bottom-row FBA Gap scorecard** (Amazon mode) — already used the in-transit-aware FBA Stock.
+- **🚧 badges everywhere in-transit contributes:**
+  - Per-row gap cells: `−2,338 short 🚧` (cell-level chip)
+  - Top-row `On Hand` tile: `🚧 incl` chip in label, sub-text reads `🚧 incl 1,140 in transit`
+  - Top-row `${h}d Gap` tile: `🚧 incl` chip when in-transit applies
+  - Bottom-row FBA Stock tile: `🚧 N` showing the in-transit count
+  - Tooltips on every chip explain that Working/Receiving shipments are folded in.
 
 ## Recent Fixes (v4.183) — Inventory Planning: mode-aware + selection-aware scorecards; gap colors flipped to balance-sheet convention
 - **Scorecards now drive off the active Status mode (Warehouse / Amazon FBA / Combined):**
