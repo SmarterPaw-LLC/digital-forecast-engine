@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.181**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.182**
+
+## Recent Fixes (v4.182) — Saved views: persist selection + deep-link via `?view=Name`
+- **Inventory view selection wasn't being saved.** v4.166 captured columns + sort + filters in `ipCaptureCurrentState` but skipped the checked-row selection (`inventorySelected`). Now persisted as `selection: [...inventorySelected]`. Plus the Status-by mode (`warehouse` / `amazon` / `combined`) which was also slipping.
+- **`ipApplyView`** restores the saved selection — clears the current set then adds each saved key. The checkbox column, selection bar, and chart all reflect the restored selection because `renderInventoryTbl()` re-reads `inventorySelected` on every paint.
+- **Saved views now have URLs.** Format: `#${page}/${sub}?view=${encodedName}`.
+  - `#forecast/inventory?view=My%20View`
+  - `#forecast/demand?view=Export%20Amazon%20only`
+- **Router changes:**
+  - `routeParse()` extracts the `?view=` parameter via `URLSearchParams`.
+  - `routeApply()` first navigates to the right page/sub-view, then defers a `setTimeout(0)` to call the matching `applyView` function (Inventory or Forecast) so the data + DOM are ready.
+  - `routeWriteView(page, sub, name)` is the only way to put `?view=` in the URL — sets `_routerActiveView` and writes a hash with the param.
+  - `routeWrite(page, sub)` (plain nav clicks) explicitly clears `_routerActiveView` so the view URL doesn't leak across pages. So clicking the Demand tab from `#forecast/inventory?view=X` lands you at `#forecast/demand` cleanly.
+  - `clearInventorySelection()` also clears the active view URL (selection IS the view, so emptying it breaks the association).
+- **Both saved-view paths now write the URL on apply:**
+  - `ipApplyView(name)` → `routeWriteView('forecast', 'inventory', name)`
+  - `fcApplyView(name)` → `routeWriteView('forecast', 'demand', name)`
+- **`ROUTE_VIEW_APPLIERS` map** lets the router know which apply function to call for which `(page, sub)` combo when restoring from URL. Easy to extend if/when other pages add saved-view systems.
 
 ## Recent Fixes (v4.181) — Hash-based deep links for every page + sub-view
 - **Pattern:** `#${page}/${subview}` updates `window.location.hash` on every nav action. Single-file HTML on GitHub Pages — hash routing needs zero server config. Browser back/forward, refresh, and bookmarks all work.
