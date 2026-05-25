@@ -2,7 +2,27 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.199**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.200**
+
+## Recent Fixes (v4.200) — Inventory CSV export: restore filtered/all chooser + ASCII headers + UTF-8 BOM
+- **User flagged two issues on the Inventory Planning CSV export:**
+  1. "i no longer have the option on the inventory planning to select what data i want to export (filtered results or all)" — `triggerExport` was routing Inventory directly to `downloadInventoryCSV()` and bypassing the export dialog, which broke the row-scope chooser users had pre-v4.170.
+  2. "the column headings have special characters" — the v4.198 rename added `≤30d Need` / `≤120d Reorder` style labels with non-ASCII chars (`≤` `—` `·`) that Excel renders as mojibake without a BOM.
+- **Row-scope chooser restored** — Inventory now routes through `showExportDialog('inventory')`. The dialog shows:
+  - **Filtered results** (current filters applied — `combineRegionRecords` collapses US+CA into one row when no region pinned)
+  - **Everything** (all SKUs, no filters, pooled by region)
+- **Column-scope chooser added** — same pattern as the Forecast tab now applies to Inventory:
+  - **Visible columns** (default — matches what's in the table)
+  - **All columns** (every column in IP_COLUMNS, useful for one-time dumps)
+- **Header sanitization** — new `sanitizeHeader()` helper inside `downloadInventoryCSV`:
+  - `≤` → `<=`, `≥` → `>=`
+  - `—` (em) and `–` (en) dashes → `-`
+  - `·` middle dot → `-`
+  - Any remaining non-ASCII (flag emojis, etc.) stripped
+  - HTML stripped, whitespace collapsed
+- **UTF-8 BOM prepended** to the CSV (`﻿`) so Excel detects encoding correctly. Belt-and-suspenders — sanitized headers don't need it, but row VALUES (product titles can contain ©/®/smart quotes from copy-paste) sometimes do.
+- **Filename now tags the mode** — `smarterpaw-inventory-90d-filtered-2026-05-25.csv` vs `…-all-…`.
+- **`downloadInventoryCSV(mode='filtered', colScope='visible')`** signature — params default to current behavior so any other caller continues working.
 
 ## Recent Fixes (v4.199) — Multi-region inventory uploads (UK / DE / FR / IT / ES / NL / MX / AU / JP)
 - **User flagged:** "i need to upload inventory for other regions now and see how this rolls up to the inventory planning module."
