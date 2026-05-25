@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.190**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.191**
+
+## Recent Fixes (v4.191) — Multi-event Amazon reorder simulation
+- **Bug surfaced by user:** the Amazon Reorder columns showed the same `2,428` across 30d/60d/90d/120d. Reason: the model only fired the FIRST trigger within the horizon. But for a product with `reorder_qty_days=90`, a SECOND event fires ~90 days later, a THIRD at ~180, etc. Cumulative reorder should grow across horizons.
+- **Fix:** the Amazon block in `inventoryNeedBreakdown` now walks forward and accumulates EVERY event whose order-by day lands within the horizon:
+  - `firstOrderByDay = max(0, fbaDos − threshold)` — when the first event fires
+  - Then each subsequent event fires at `prevOrderDay + reorder_qty_days` (when the prior batch is consumed)
+  - Loop continues while `nextOrderDay ≤ X` (capped at 12 iterations as a safety)
+  - Each event's qty = `forwardSeaDemand(arrival + reorderQty) − forwardSeaDemand(arrival)` (or flat `reorderQty × rate` for new-override products)
+- **`amzMeta.events`** array now carries `[{orderDay, arrival, qty}, …]` for tooltip transparency. The Amazon Reorder cell tooltip lists each event explicitly so the user can see which orders are stacked into the cumulative total.
+- **Example impact (Pawty Mix, FBA-DOS≈95, threshold=90, reorder_qty=90, vel≈24):**
+  - Old: 30d/60d/90d/120d Amz Reorder = 2,428 / 2,428 / 2,428 / 2,428 (single event)
+  - New: 30d/60d/90d/120d Amz Reorder = 2,428 / 2,428 / 2,428 / 4,856 (second event fires at ~day 95, included in 120d horizon)
+- **`fbaStock` in the simulation includes `ipInTransitFor(r)`** (the Working/Receiving shipments we created but Amazon hasn't picked up yet) — consistent with the status/scorecard math.
+- **Deprecated rows still zero out** — multi-event sim returns empty events array, reorder = 0, `fires = false`.
 
 ## Recent Fixes (v4.190) — Status tiers are LEAD-TIME-driven (Reorder Point), not gap-horizon-driven
 - **v4.189 mistake:** I tied Status tiers to the 30d/60d/90d gap columns (Order Now ↔ 30d short, etc.). User correctly pushed back — the urgency of a reorder isn't about coverage, it's about supplier lead time. A product with a 90-day lead time that covers 120 days needs to be marked "Order Soon" (you have 30 days of slack before you MUST place the PO).
