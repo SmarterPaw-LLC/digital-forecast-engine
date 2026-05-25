@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.179**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.180**
+
+## Recent Fixes (v4.180) — Inventory Planning: status uses reorder_threshold_days + Working/Receiving shipments count as in-transit
+- **Status logic was using fixed 30/60/horizon thresholds**, ignoring the per-product `reorder_threshold_days` field. Result: a product with 62-day FBA cover + 90-day reorder threshold showed "Plan Ahead" instead of "Order Now" — even though it's below threshold and should be triggering. Rewrote `getStatus` to use DOS (days-of-supply) vs threshold tiers:
+  - **Order Now**: DOS < threshold (below reorder point)
+  - **Order Soon**: DOS < threshold × 1.25 (approaching threshold)
+  - **Plan Ahead**: DOS < threshold × 1.5
+  - **OK**: DOS >= threshold × 1.5
+- DOS is computed mode-aware:
+  - Warehouse mode: `warehouse / (inventoryNeed(r, horizon) / horizon)`
+  - Amazon FBA mode: `(fba_available + fba_inbound + in_transit) / (amazon_base / horizon)`
+  - Combined: `total_onhand / (r.needX / horizon)`
+- **In-transit visibility (v4.180):** added `loadFbaInTransit()` which pulls `fba_shipments` rows whose linked `fba_shipment_summaries.status` is NOT 'Closed' (Working / Receiving / unknown). Sums `quantity_shipped − quantity_received` per master_id into `ipFbaInTransitByMaster`. This represents shipments YOU'VE created in Manage FBA Shipments that haven't yet been picked up by Amazon's `afn-inbound-*` buckets in the FBA Inventory Snapshot.
+- **Used two places:**
+  - **Status math (Amazon FBA mode):** `fba_inbound` + in-transit folded into the effective FBA position. Catnip Spray at 4,141 + (say) 1,200 in-transit = 5,341 effective → DOS goes from 62 to 80 → still below 90 threshold so still "Order Now", but the math is honest about your pipeline.
+  - **🚧 badge on the FBA In column:** orange `🚧 1,200` next to the regular FBA Inbound number. Tooltip explains what's counted.
+- **Refreshed on demand:** `loadFbaInTransit()` runs when the Inventory page is shown AND after every FBA shipment upload (so newly-created Working shipments show up immediately).
 
 ## Recent Fixes (v4.179) — Inventory Planning: pooled records resolve correctly in the selection bar + chart
 - **Bug:** v4.177's chart + selection-bar resolved selection keys via `records.find(x => x.master_id === mid && (x.region || 'US') === reg)`. But when the region filter is "US + CA pooled", `combineRegionRecords` produces synthetic rows with `region = 'US+CA'` (or `'CA+US'` if no US listing) that don't exist in the base `records` array. Result: pooled rows silently dropped from the chart + their needs missing from the bar's sum. User saw "4 selected" with only 2 lines on the chart and a `90d need` total that was clearly low.
