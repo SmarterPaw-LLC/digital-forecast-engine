@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.197**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.198**
+
+## Recent Fixes (v4.198) — Label cumulative vs marginal columns explicitly
+- **User flagged:** "why do the reorder columns not match here? one is cumulative and one is marginal? which is the correct approach?" Looking at `≤90d Reorder = 1,562` next to `60-90d Chwy = 544` and not immediately seeing why the numbers don't tie.
+- **Math was correct** — Chewy marginals (489 + 529 + 544 + 532 = 2,094) sum to the cumulative `≤120d Reorder = 2,094`. But the column labels (`30d Reorder`, `60d Reorder`, …) didn't make it obvious which was which. The decision to keep both views was deliberate (v4.194 — Jason wanted marginal for PO cadence, cumulative for aggregate planning), so the fix is labeling, not removing.
+- **Group header rename** — explicit semantics at the band:
+  - `NEED — TOTAL` → `NEED — TOTAL (CUMULATIVE)`
+  - `NEED — BASE (CONTINUOUS DRAIN)` → `NEED — BASE (CUMULATIVE · CONTINUOUS DRAIN)`
+  - `NEED — REORDER` → `NEED — REORDER (CUMULATIVE)`
+  - Channel-specific groups keep `(PER PERIOD)` — already explicit.
+- **Column label rename** — single-number labels (`30d Need`) replaced with `≤Nd` form (`≤30d Need`) to visually signal "through this horizon" instead of "just this bucket." Width bumped 76→80 for Need/Base, 86→92 for Reorder to fit the leading `≤`.
+- **Tooltip rewrites** for both column-level + group-level tooltips. Each cumulative tooltip explicitly says "CUMULATIVE through day X" and points users at the PER PERIOD columns for marginal cadence. The reorder group tooltip even includes the math: "Sum of those marginals across all 4 buckets = the ≤120d cumulative here."
+- **No math changed.** Same `inventoryNeedBreakdown` outputs, same `inventoryNeed` aggregator — just the UI distinguishing the two views unambiguously.
 
 ## Recent Fixes (v4.197) — Split Amazon per-period columns into FBA Reorder + FBM Drain
 - **User flagged:** "this item is FBM, so there should be no reorder qty, right? the amazon FBM should go into the base (continuous drain). need to update tooltips etc to indicate this and we need new amazon columns split by FBA vs FBM."
