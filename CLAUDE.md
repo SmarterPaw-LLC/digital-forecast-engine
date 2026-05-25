@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.184**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.185**
+
+## Recent Fixes (v4.185) — Make Total = Base + Reorder add up cleanly
+- **Confusion:** users reading the Need columns expected Total = Base + Reorder, but it didn't add up. v4.167's Base included Amazon's sales velocity, but Total excluded it (Amazon's contribution to Total came via Reorder only). So Base + Reorder ≠ Total, and Base was conceptually double-counting Amazon's demand alongside the Reorder event that already covers it.
+- **Fix:** Base now means "continuous warehouse drain only" — Shopify base + Chewy base. Amazon is excluded because its demand reaches the warehouse via the Reorder event (warehouse → FBA shipment), not via continuous draw. The Reorder qty is already sized to cover ~reorder_qty_days of Amazon velocity, so including Amazon base in Base would double-count.
+  - **Math now adds up:** Total = (Shopify base + Chewy base) + (Amazon reorder + Chewy reorder) = Base + Reorder ✓
+- **Per-channel `amazon.base` still computed** and exposed on the breakdown for tooltips + the Amazon-mode scorecard's `${h}d Amazon Need` tile (which intentionally shows Amazon-only consumption). Just not summed into the aggregated `base`.
+- **Labels updated** so users know what Base means now:
+  - Group header: "NEED — BASE FORECAST" → "NEED — BASE (CONTINUOUS DRAIN)"
+  - Per-column tip: explicitly notes Amazon is excluded and why
+  - View popup section label: "Need — BASE (continuous-drain channels: Shopify + Chewy base)"
+  - Chart metric dropdown: "Need — BASE (continuous drain: Shopify + Chewy)"
+- **Tooltip on each Base cell** lists the per-channel breakdown AND surfaces Amazon's sales velocity as an "(Amazon's sales velocity = Xu — NOT counted here)" footnote so the user can still see it.
+- **Total cell tooltip** now ends with `= ${total}u total = Base (${base}) + Reorder (${reorder}).` making the math obvious.
+- **Expected impact on numbers:** for products with Amazon presence, the displayed 30d/60d/90d/120d Base values will drop substantially (they were carrying ~Amazon vel × horizon previously). The new values reflect only Shopify (and Chewy when we get consumer-level data). Numbers are RIGHT now; old numbers had a hidden semantic bug.
 
 ## Recent Fixes (v4.184) — Restore top scorecard row + add mode-specific row below; gap math folds in in-transit
 - **v4.183 mistake:** I replaced the original 9-tile top scorecard row with a mode-dependent set. User wanted the top row to STAY CONSTANT and a NEW row to appear below with mode-specific tiles. Fixed.
