@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.200**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.201**
+
+## Recent Fixes (v4.201) — Inventory CSV Status + Action columns use mode-specific labels
+- **User flagged:** "the csv export shows the old status codes eg order soon rather than FBA order soon."
+- **Root cause:** `downloadInventoryCSV`'s `valueOf` had a hard-coded tier→label map (`Order Now / Order Soon / Plan Ahead / OK`) from before v4.189 introduced mode-specific labels. It was applied for both the `status` and `status_badge` columns, ignoring the actual labels shown in the table.
+- **Fix — separate paths for the two columns:**
+  - **Status column (`key='status'`)**: now calls `getStatusLabelFor(r, statusMode, getStatus(r))` where `statusMode` comes from the current Status-by dropdown (`getStatusMode()`). So Amazon FBA mode exports "FBA Soon" / "Send to FBA" / "Plan FBA Ship" / "FBA OK", Warehouse mode exports "Place PO" / "PO Soon" / "Plan PO" / "WH OK", FBM rows export "— FBM (no FBA)" when Amazon FBA mode is active.
+  - **Action column (`key='status_badge'`)**: now calls `getActionRollup(r).label` — the rollup verb across both pools ("PO + Ship FBA", "All OK", "PO + FBA Soon", etc.).
+- **`sanitizeCell()` helper** strips badge emoji (🔴 🟡 ⚠️ 🟢 📦 🏪) + collapses whitespace so CSV values are clean ASCII, matching the header sanitization added in v4.200.
+- **Output now matches what's on screen** — the Status column read "FBA Soon" in the UI but "Order Soon" in the export; that mismatch is gone.
 
 ## Recent Fixes (v4.200) — Inventory CSV export: restore filtered/all chooser + ASCII headers + UTF-8 BOM
 - **User flagged two issues on the Inventory Planning CSV export:**
