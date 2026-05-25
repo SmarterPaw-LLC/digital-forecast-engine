@@ -4,6 +4,8 @@
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
 File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.202**
 
+> **⚠ NEXT VERSION = v5.0** (Jason's call on 2026-05-25). Skip v4.203 — the next change of any kind bumps straight to v5.0 in both the HTML header span and the CLAUDE.md heading. Remove this note when you do the bump.
+
 ## Recent Fixes (v4.202) — Direct Seller Central report links on every upload card
 - **User request:** add direct links to each Amazon Seller Central report on the Uploads page so users don't have to navigate through SC's menus to find them.
 - **Links added** (all open in new tab via `target="_blank" rel="noopener"`, click handlers stop propagation so they don't trigger the dropzone file picker):
