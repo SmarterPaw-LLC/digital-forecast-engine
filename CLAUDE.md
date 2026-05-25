@@ -2,7 +2,25 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.194**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.195**
+
+## Recent Fixes (v4.195) — Amazon FBM (Fulfilled By Merchant) support, per-region
+- **User flagged:** "i have some amazon items that are FBM. this has a ripple effect on all of our views for forecast, product, sku economics, and inventory planning. how is the best way to proceed."
+- **Model:** FBM means Amazon orders ship from our own warehouse (no FBA pool, no warehouse→FBA replenishment). So FBM Amazon consumption behaves like Shopify — continuous draw from warehouse — and Amazon FBA tiering doesn't apply to that row.
+- **Granularity:** per-asin **and** per-region (US can be FBM while CA stays FBA — rare, but supported). Stored on `inventory.fulfillment_amazon` (TEXT, default `'FBA'`, CHECK in {`FBA`,`FBM`}).
+- **⚠ SQL TO RUN:** `supabase_v4195_fulfillment_amazon.sql` — adds the column + check constraint + backfills existing rows to `'FBA'`. Run BEFORE deploying or saves will throw.
+- **Math impact** (`inventoryNeedBreakdown`):
+  - FBM Amazon: `amazon.base = amazon_vel × horizon` (continuous draw); `amazon.reorder = 0`; multi-event reorder simulation is **skipped**
+  - FBM Amazon's base is **included in `baseSum`** (it IS a warehouse drain) — was excluded for FBA
+  - Need TOTAL counts FBM Amazon in the warehouse drain (like Shopify)
+- **Status / Action:**
+  - `getStatusInputs(r, 'amazon')` returns `null` for FBM (no FBA pool to score against)
+  - `getStatusLabelFor` shows `— FBM (no FBA)` when in Amazon FBA mode
+  - `getActionRollup` skips the Amazon-pool check for FBM rows (only Warehouse tier matters)
+- **Pooled records** (`combineRegionRecords`): per-region modes are stored on `fulfillment_amazon_by_region`. If all regions agree → that mode. If they differ (e.g. US:FBM, CA:FBA) → `MIXED` (math defaults to FBA for safety; user should drop to a single-region view for precise accounting).
+- **Row UI:** `FBM` (orange) or `MIXED` (amber) badge prefixes the title in the Inventory Planning table. Tooltip on MIXED lists the per-region breakdown.
+- **Edit modal:** new "Amazon fulfillment" dropdown at the top of the Inventory section. Selecting FBM disables + dims the FBA Available / FBA Inbound inputs (forced to 0 on save) and rewrites the hint to call out the warehouse-draw consequence. `toggleFbaFieldsForFulfillment()` handles the disable/enable state.
+- **Persistence:** `saveEditModal` writes `fulfillment_amazon` into the inventory upsert payload. Single-row edit (not mirrored across regions — that's the whole point of per-region storage).
 
 ## Recent Fixes (v4.194) — Channel reorder columns switch to MARGINAL (per-period) for PO planning
 - **User flagged:** "looking 120 days out and thinking we'll need 13,272 of this item doesn't make sense, as the order for 5,617 will already have been placed." Cumulative reorder columns stack the imminent order onto every later horizon, making it hard to see "what's the NEXT order I need to plan for?"
