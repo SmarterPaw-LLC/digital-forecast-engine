@@ -2,7 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.182**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.183**
+
+## Recent Fixes (v4.183) — Inventory Planning: mode-aware + selection-aware scorecards; gap colors flipped to balance-sheet convention
+- **Scorecards now drive off the active Status mode (Warehouse / Amazon FBA / Combined):**
+  - The four status counts (🔴 Order Now / 🟡 Order Soon / ⚠️ Plan Ahead / 🟢 Covered) stay constant across modes (they count rows by `getStatus(r)` which is already mode-aware).
+  - The bottom row of scorecards swaps per mode:
+    - **🏪 Warehouse:** Total Vel/day · ${h}d Warehouse Need · Warehouse Stock · ${h}d Warehouse Gap · Order (${target}d target)
+    - **📦 Amazon FBA:** Amazon Vel/day · ${h}d Amazon Need · FBA Stock (incl 🚧 in-transit) · ${h}d FBA Gap
+    - **∑ Combined (legacy):** Total Vel/day · ${h}d Need · On Hand · ${h}d Gap · Order (${target}d target)
+- **Selection-aware:** when ≥1 row is checked, scorecards aggregate over the SELECTION instead of all visible rows. Banner above the cards reads "Scope: 4 selected SKUs · Status mode: 📦 Amazon FBA · aggregated over selection". No selection → scope is the filtered table (current default).
+- **Save with view:** the Status mode is part of saved views since v4.182 (`statusMode`), and the selection is too (`selection`). So applying a saved view restores both → the scorecards rebuild to match. Nothing new needed on the persistence side.
+- **Gap display flipped to balance-sheet convention (v4.183):**
+  - Old: `+2,232` in yellow when need > on-hand (shortage). Counterintuitive — users read "+" as "extra".
+  - New: `−2,232 short` in red (shortage) or `+800` in green (surplus). Matches a bank-balance readout where positive = good, negative = bad.
+  - Applies to both the per-row 30d/Active Gap cells and the scorecard Gap tiles.
+  - `.gap-warn` is now orange (was yellow); `.gap-ok` is now green (was muted grey); `.gap-crit` still red.
 
 ## Recent Fixes (v4.182) — Saved views: persist selection + deep-link via `?view=Name`
 - **Inventory view selection wasn't being saved.** v4.166 captured columns + sort + filters in `ipCaptureCurrentState` but skipped the checked-row selection (`inventorySelected`). Now persisted as `selection: [...inventorySelected]`. Plus the Status-by mode (`warehouse` / `amazon` / `combined`) which was also slipping.
