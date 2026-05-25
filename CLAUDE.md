@@ -2,7 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.189**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.190**
+
+## Recent Fixes (v4.190) — Status tiers are LEAD-TIME-driven (Reorder Point), not gap-horizon-driven
+- **v4.189 mistake:** I tied Status tiers to the 30d/60d/90d gap columns (Order Now ↔ 30d short, etc.). User correctly pushed back — the urgency of a reorder isn't about coverage, it's about supplier lead time. A product with a 90-day lead time that covers 120 days needs to be marked "Order Soon" (you have 30 days of slack before you MUST place the PO).
+- **Fix:** classic Reorder Point model. ROP = `lead_time + safety_stock` (days). Slack = `DOS − ROP`. Tiers:
+  - 🔴 **Order Now**: slack ≤ 0 (at or past the must-order point)
+  - 🟡 **Order Soon**: 0 < slack ≤ 30 days
+  - ⚠️ **Plan Ahead**: 30 < slack ≤ 60 days
+  - 🟢 **OK**: slack > 60 days
+- **DOS computation** still mode-aware (uses the 90d need divided by 90 to derive daily rate — Amazon mode uses Amazon consumption rate, Warehouse mode uses full warehouse drain rate). The mode picks the stock pool + the demand denominator.
+- **Defaults when fields are blank:** `lead_time || 60` (a reasonable manufacturer turnaround) and `safety_stock || 14` (matches the modal's default). So a row with no explicit lead-time still gets sensible tiering instead of nodata.
+- **Status / Action / Gap are now three different lenses on the same SKU:**
+  - **Gap** = "do I have enough stock to cover horizon X's needs?" (coverage)
+  - **Status** = "given my supplier timeline, do I need to place a PO?" (timing)
+  - **Action** = "what actions are needed across all pools?" (rollup of Status across warehouse + Amazon FBA)
+  - They CAN diverge (gap healthy + status saying Order Soon if lead time is long) — that's the right behavior.
 
 ## Recent Fixes (v4.189) — Inventory Planning: Status ties to gap horizons; Status ≠ Action (mode vs rollup)
 - **Three coupled problems addressed:**
