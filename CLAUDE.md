@@ -2,7 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.192**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.193**
+
+## Recent Fixes (v4.193) — Per-row hover tooltips on Status + Action badges
+- **Issue:** users couldn't tell the difference between "FBA Soon" and "Plan FBA Ship" — both are amber-ish labels in the Status column and the column-header tooltip alone didn't explain WHY a given row landed in one tier vs the other.
+- **Fix:** added per-row hover tooltips to both badges in the inventory table. Cursor changes to `help` on hover.
+- **Status tooltip** shows:
+  - Tier description (e.g. "🟡 0-30d of slack — place FBA shipment within the month")
+  - The actual math for THIS row: stock pool · daily rate · DOS · lead + safety → ROP · slack
+  - The full tier ladder for reference (🔴 ≤0 · 🟡 0-30 · ⚠️ 30-60 · 🟢 >60)
+- **Action tooltip** shows:
+  - The rollup label (e.g., "🔴 PO + Ship FBA")
+  - Per-pool tier for warehouse + Amazon (so the user can see both)
+  - How the rollup verbs are derived from per-pool tiers
+- **Helper functions** `getStatusTooltipFor(r, mode)` and `getActionTooltipFor(r)` live next to the other status helpers; per-row `pre` object now carries `stTip` + `actionTip` strings consumed by the column renders.
 
 ## Recent Fixes (v4.192) — Inventory Planning: collapsible scorecards + chart for more table real estate
 - **New toggle bar** at the top of the inventory page: two buttons (`▾ Scorecards` and `▾ Chart`) that collapse / expand those sections.
