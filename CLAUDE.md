@@ -2,9 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.195**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.196**
 
-## Recent Fixes (v4.195) — Amazon FBM (Fulfilled By Merchant) support, per-region
+## Recent Fixes (v4.196) — `fulfillment_amazon` moves from inventory (per-region) to products (master-level)
+- **Why:** v4.195 stored FBM/FBA per asin+region on `inventory.*`. In practice no SKU in Jason's catalog is FBM in one region and FBA in another (US-only FBM, with `-FBM` SKU suffix). The per-region storage was buying theoretical flexibility we'll never use and forcing a confusing MIXED state in pooled rows.
+- **Move:** column now lives on `products.fulfillment_amazon TEXT DEFAULT 'FBA'` with the same `CHECK (upper(...) in ('FBA','FBM'))` constraint. Editable from BOTH the Product modal (new `pf-fba-mode` dropdown in the "Amazon FBA controls" block) and the Inventory edit modal (existing `ef-fba-mode` dropdown, still wired to the FBA-fields disable behavior).
+- **⚠ SQL TO RUN:** `supabase_v4196_fulfillment_amazon_on_products.sql` — supersedes v4.195. Idempotent: adds `products.fulfillment_amazon`, migrates any existing `inventory.fulfillment_amazon` values (if you ran v4.195) by ORing FBM across all regions of a master_id, then drops the inventory column. Safe whether or not you ran v4.195.
+- **Code changes:**
+  - Records-build now reads `p.fulfillment_amazon` instead of `inv?.fulfillment_amazon` (master-level join, no per-region lookup)
+  - `combineRegionRecords` no longer tracks `fulfillmentByMid` or stamps `MIXED` — the spread on the first record carries the master-level value onto the pooled record
+  - Row badge in Inventory Planning dropped the `MIXED` branch (can't happen anymore)
+  - `saveEditModal` (inventory) now mirrors `fulfillment_amazon` onto every peer-region record sharing the master_id and writes it into the products upsert (removed from inventory upsert)
+  - `saveProductModal` (product modal) writes `fulfillment_amazon` as part of the products upsert
+- **Behavior unchanged for end users:** orange `FBM` badge still appears, FBA Available/Inbound still dim/zero when FBM is selected, status mode "Amazon FBA" still reads `— FBM (no FBA)`, multi-event reorder simulation still skips FBM rows, FBM Amazon consumption still counts in warehouse drain (Base Sum).
+- **Trade-off:** can no longer model "US=FBM + CA=FBA on the same master_id." If that ever comes up, create separate master_ids (already the natural pattern given the `-FBM` SKU suffix convention).
+
+## Recent Fixes (v4.195) — Amazon FBM (Fulfilled By Merchant) support, per-region (SUPERSEDED by v4.196)
 - **User flagged:** "i have some amazon items that are FBM. this has a ripple effect on all of our views for forecast, product, sku economics, and inventory planning. how is the best way to proceed."
 - **Model:** FBM means Amazon orders ship from our own warehouse (no FBA pool, no warehouse→FBA replenishment). So FBM Amazon consumption behaves like Shopify — continuous draw from warehouse — and Amazon FBA tiering doesn't apply to that row.
 - **Granularity:** per-asin **and** per-region (US can be FBM while CA stays FBA — rare, but supported). Stored on `inventory.fulfillment_amazon` (TEXT, default `'FBA'`, CHECK in {`FBA`,`FBM`}).
