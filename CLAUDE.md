@@ -2,7 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.180**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.181**
+
+## Recent Fixes (v4.181) — Hash-based deep links for every page + sub-view
+- **Pattern:** `#${page}/${subview}` updates `window.location.hash` on every nav action. Single-file HTML on GitHub Pages — hash routing needs zero server config. Browser back/forward, refresh, and bookmarks all work.
+- **Routes:**
+  - `#forecast/demand`, `#forecast/inventory`, `#forecast/seasonality`, `#forecast/chewy`, `#forecast/fba-shipments`
+  - `#data/uploads`, `#data/query`
+  - `#products`, `#bundles`, `#sales`
+  - `#pnl/amazon`, `#pnl/shopify`, `#pnl/cogs`
+  - `#settings`
+- **Wiring:**
+  - `routeWrite(page, sub)` — uses `history.replaceState` (not `assign`) so we don't fire our own hashchange.
+  - `routeApply()` — reads hash, dispatches through the existing nav functions (`showPage`, `switchForecastView`, `switchDataView`, `switchPnlView`). Guarded by `_routerSilent` flag to prevent infinite loops.
+  - `hashchange` listener handles browser back/forward + manual edits to the URL bar.
+  - `showPage` + each `switchXxxView` call `routeWrite(...)` after they apply their state.
+  - `init()` calls `routeApply()` at the end of the boot sequence (only when a non-empty hash is present), so deep links work on first paint.
 
 ## Recent Fixes (v4.180) — Inventory Planning: status uses reorder_threshold_days + Working/Receiving shipments count as in-transit
 - **Status logic was using fixed 30/60/horizon thresholds**, ignoring the per-product `reorder_threshold_days` field. Result: a product with 62-day FBA cover + 90-day reorder threshold showed "Plan Ahead" instead of "Order Now" — even though it's below threshold and should be triggering. Rewrote `getStatus` to use DOS (days-of-supply) vs threshold tiers:
