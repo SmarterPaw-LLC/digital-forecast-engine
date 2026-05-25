@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.196**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.197**
+
+## Recent Fixes (v4.197) — Split Amazon per-period columns into FBA Reorder + FBM Drain
+- **User flagged:** "this item is FBM, so there should be no reorder qty, right? the amazon FBM should go into the base (continuous drain). need to update tooltips etc to indicate this and we need new amazon columns split by FBA vs FBM."
+- **Issue:** Inventory Planning's `AMAZON REORDER (PER PERIOD)` columns (`amzReorder30/60/90/120`) always showed "—" for FBM rows because FBM has no replenishment events. But Amazon WAS driving real warehouse drain via the BASE bucket — invisible in the per-channel breakdown. Tooltips also still claimed Amazon was excluded from Base, which is only true for FBA.
+- **Fix — new column group `AMAZON FBM DRAIN (PER PERIOD)`** with 4 marginal columns (`amzFbmBase30/60/90/120`):
+  - For FBM rows: shows the per-period seasonal Amazon draw (`amazon.base` diff between adjacent horizons)
+  - For FBA rows: shows "—" (Amazon's draw is already represented in the FBA Reorder columns at left)
+  - Color-coded blue (new `.thg-channel-base` CSS class) to signal it's a BASE channel-drill-down, paralleling the orange Reorder drill-downs
+- **Existing 4 Amazon columns renamed `AMAZON FBA REORDER (PER PERIOD)`** with labels `0–30d FBA / 30–60d FBA / 60–90d FBA / 90–120d FBA`:
+  - FBM rows now explicitly show a dim "—" cell with hover-tooltip pointing at the FBM Drain columns instead
+  - Sort + per-cell tooltips skip FBM rows cleanly
+- **Tooltip rewrites:**
+  - `NEED — BASE` group tooltip rewrote to call out the FBA-vs-FBM split (FBM included, FBA excluded)
+  - `NEED — REORDER` group tooltip added "Amazon FBM Reorder = 0 always" line
+  - `buildTipBase`, `buildTipTotal`, `buildTipRO`, `buildTipAmz` all reach into `nb.amazon.meta.fulfillment` to branch the message — FBM rows now see "Amazon FBM base: Xu (ships from warehouse — continuous draw, like Shopify)" instead of the FBA-only narrative
+  - New `buildTipAmzFbm` powers the new column tooltips with the per-period draw math
+- **Same data, two views:** the underlying `inventoryNeedBreakdown` already computes `amazon.base` for every row regardless of mode; v4.197 just exposes it correctly in the per-period UI based on mode.
 
 ## Recent Fixes (v4.196) — `fulfillment_amazon` moves from inventory (per-region) to products (master-level)
 - **Why:** v4.195 stored FBM/FBA per asin+region on `inventory.*`. In practice no SKU in Jason's catalog is FBM in one region and FBA in another (US-only FBM, with `-FBM` SKU suffix). The per-region storage was buying theoretical flexibility we'll never use and forcing a confusing MIXED state in pooled rows.
