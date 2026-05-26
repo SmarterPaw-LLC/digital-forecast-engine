@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.20**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.21**
+
+## Recent Fixes (v5.21) — Product image column + Catsy importer writes image URLs
+- **User request:** "also can we add the image into the product table?"
+- **⚠ SQL TO RUN:** `supabase_v5_21_add_product_image.sql` — adds `products.image_url TEXT` (nullable). Run BEFORE deploying.
+- **New "Img" column** at the leading edge of the Products table:
+  - 36×36 thumbnail with `object-fit:contain` so non-square images don't distort
+  - Lazy-loaded (`loading="lazy"`)
+  - Click → opens full-size in a new tab (`event.stopPropagation()` so the row's "open modal" doesn't fire)
+  - `onerror` fallback swaps a broken URL for a 🖼 placeholder rather than showing a broken image
+  - `—` placeholder for products without an image
+- **Catsy importer**: detects the "Main Image" column (also accepts `image`, `image url`, `image_url`, `primary image`, `primary_image`). On approval, writes both `sp_sku` AND `image_url` to the products row in one UPDATE.
+- **Don't overwrite user-curated images** — if the product already has `image_url` set, the import skips that field (only sp_sku gets updated). The Catsy URL is treated as a starting point, not a forced replacement.
+- **Success message** now reports image count separately, e.g., `✓ Applied 47 sp_sku updates. 47 image URLs also set.`
+- **Audit log entry** for `catsy.import` now includes `images_set` count.
 
 ## Recent Fixes (v5.20) — Catsy importer: XLSX support + Catsy MasterItems column mapping
 - **Inspected Catsy export** `MasterItems-20260526-1527-12.xlsx` to confirm the actual format. 5 columns: `Completeness Score` · `Update Date` · `Item ID` · `Main Image` · `Item Description`. The "Item ID" column carries the SP SKU (e.g., `CF2506`). The "Item Description" column is formatted as `<SKU> - <Title>` (e.g., `CF2506 - Naughty List Nip Candy Cane`).
