@@ -2,7 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.14**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.15**
+
+## Recent Fixes (v5.15) — "Amz Inv Updated" column on Inventory Planning (snapshot freshness)
+- **User request:** "i need a new column on the inventory planning module - amazon inventory last updated - this should be exportable via csv. also i want it grouped with the product/sku set of dimensions."
+- **New IP_COLUMN `amazon_inv_last_updated`** in the **SKU** group (sits next to SP SKU / Master ID / ASIN). Label: **"Amz Inv Updated"**. `default:false` so existing layouts don't shift; opt-in via Show all in table.
+- **Cell renders the date + relative age** (`2026-05-25 · 1d ago`). Color codes by staleness:
+  - **Default muted** when ≤7 days old
+  - **Orange** when 8–30 days old
+  - **Red** when >30 days old or never uploaded
+  - Hover tooltip explains how to refresh
+- **Pooled rows show the OLDEST snapshot across regions** — the limiting factor for "are we current?" purposes. A US+CA pooled row where US is fresh but CA is 60d stale will show 60d (CA's date) so the staleness floor is visible at a glance.
+- **Sort works on the date string** — sorting ascending bubbles the most stale to the top (or bottom, with desc), useful for "which products need a re-upload?"
+- **Data load**: paginated query against `fba_inventory_snapshots`, ordered by `snapshot_date DESC`, dedupe to first-occurrence per `(asin, region)`. Pagination critical because snapshots accumulate weekly × N ASINs × N regions can exceed Supabase's 1000-row default.
+- **Records-build** attaches `amazon_inv_last_updated` to every per-region record (null for products without ASIN or without a snapshot).
+- **CSV export** emits the ISO date string as-is — no special formatting, no emoji. Pooled rows export the oldest-across-regions date to match the cell logic.
+- **No DB migration needed** — uses the existing `fba_inventory_snapshots` table written to by the FBA Inventory upload flow.
 
 ## Recent Fixes (v5.14) — Split FBA Inventory uploader into US/CA/MX/AU/JP + EU/UK dropzones (matches SKU Economics pattern)
 - **User request:** "in the inventory upload for amazon, we need to split the uploader for EU like we did the SKU economics report. the EU link to download the report is https://sellercentral.amazon.co.uk/reportcentral/FBA_MYI_UNSUPPRESSED_INVENTORY/1"
