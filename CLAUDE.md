@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.11**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.12**
+
+## Recent Fixes (v5.12) — FBA region picker reflects post-Brexit topology (Pan-EU = one pool, UK separate)
+- **User flagged:** "UK will have one FBA inventory, but the uploader asks me to select a specific country." The v4.199 picker exposed DE/FR/IT/ES/NL as separate fulfillment pools, which is wrong for any Pan-EU enrolled seller — they hold ONE pool that Amazon distributes across country FCs.
+- **Post-Brexit FBA topology** (now reflected in the picker):
+  - **UK** — standalone pool (left the EU FBA network in 2021). One upload from amazon.co.uk Seller Central.
+  - **EU** — single Pan-European pool covering DE/FR/IT/ES/NL plus SE/PL/BE/IE for full Pan-EU sellers. ONE upload from any EU marketplace.
+  - Per-country EU codes (DE/FR/IT/ES/NL) kept available behind an **Advanced** disclosure for the minority of sellers who run EFN or have opted OUT of Pan-EU and hold separate per-country inventory.
+- **`FBA_REGION_OPTIONS`** primary list now: US · CA · MX · UK · EU · AU · JP.
+- **`FBA_REGION_OPTIONS_EU_PER_COUNTRY`** new constant — DE · FR · IT · ES · NL (per-country, advanced).
+- **Prompt UI** adds a blue Pan-EU explanation box at the top, plus a `<details>` disclosure for the per-country EU advanced override. Per-country selection (if set) wins over the main dropdown.
+- **Upload card description** rewrote to call out "fulfillment pool" instead of "region" + list Pan-EU explicitly with the full country roster.
 
 ## Recent Fixes (v5.11) — "Selected only" export option on Inventory Planning CSV
 - **User flagged:** had 1 row checkbox-selected on Inventory Planning but the export dialog only offered "Everything (518 rows)" — no way to export just the selection. The "Filtered results" button was hidden because no page filters were active (filteredCount === totalCount).
