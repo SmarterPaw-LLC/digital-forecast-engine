@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.27**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.28**
+
+## Recent Fixes (v5.28) — Image diff column on Catsy importer (DB → Catsy thumbnails side-by-side)
+- **User flagged:** "for these items, they already have the same image but the uploader thinks they are different." Root cause: the action badge only said "UPDATE IMG" or "NO-OP" without surfacing what the DB actually contained vs what Catsy was offering. Users had no way to verify "this product already has this exact image" visually.
+- **New "Image (DB → Catsy)" column** in the review table:
+  - Two 40×40 thumbnails side-by-side: DB image (current) on the left, Catsy image (proposed) on the right
+  - Arrow indicator between them encodes the comparison state:
+    - `·` muted — no images on either side (or no Catsy image to apply)
+    - `✓` green **same** — URLs match exactly (no change needed)
+    - `+` blue **add** — DB has none, Catsy will set this one (true UPDATE IMG case)
+    - `≠` orange **differ** — both have images but URLs don't match (Catsy URL ignored to protect curated images)
+    - `keep DB` — Catsy row has no image; DB image preserved
+  - Each thumbnail is a click-through link to the full-size image; `onerror` falls back to a "err" placeholder so broken URLs don't break the row.
+- **URL-aware `hasImg` logic** — was `!!(catsyUrl && !dbUrl)` (only true when DB was empty). Now precisely matches the apply behavior: hasImg is true ONLY when Catsy has a URL the DB doesn't. If both URLs match, hasImg is false → action renders NO-OP correctly.
+- **The mismatch that confused the user**: visually identical images can have different URLs (CDN variants, query params, S3 path differences). The diff column now makes this state visible — if you see `≠ differ` but the thumbnails look identical, that's a URL-level mismatch that the importer is conservatively skipping.
 
 ## Recent Fixes (v5.27) — Image displays in the Product edit modal
 - **User request:** "if there is an image, it should appear in the product card when clicked"
