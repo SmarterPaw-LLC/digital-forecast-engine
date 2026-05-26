@@ -2,7 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.17**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.18**
+
+## Recent Fixes (v5.18) — Bundles CSV exports per-component rows (BOM-expanded)
+- **User request:** "on the bundle page, i need the csv export to export a row for every BOM component related to the parent bundle."
+- **Was**: Bundles + Products tabs shared one export branch — both emitted one row per product (bundles got a flat 16-col list identical to a single Products row).
+- **Now**: Bundles has its own branch. Each bundle expands to **N rows = N BOM components**. Bundles with no BOM yet still emit one row (component columns blank) so they remain visible in the export.
+- **New 23-column schema** (4 logical bands):
+  - **Bundle (parent)** — Bundle_Master_ID · Bundle_SP_SKU · Bundle_Brand · Bundle_Title · Bundle_Short_Name · Bundle_ASIN · Bundle_Shopify_SKU · Bundle_MSRP · Bundle_Wholesale · Bundle_Active · Bundle_Notes
+  - **Component (child)** — Component_Master_ID · Component_SP_SKU · Component_Brand · Component_Title · Component_Short_Name · Component_ASIN · Component_Shopify_SKU · Component_Chewy_SKU · Component_Wholesale
+  - **BOM link** — Qty_Per_Bundle · BOM_Verified · BOM_Notes
+- **Stable sort** — bundles alphabetically by title, components alphabetically within each bundle. Predictable for diffs across exports.
+- **Resolves component product data** via a `productById = new Map(allProducts.map(p => [p.master_id, p]))` lookup. Single pass, O(B+C) total.
+- **Filename** now distinct from products: `smarterpaw-bundles-bom-{filtered-?}{date}.csv` (the `-bom-` tag flags this as the expanded form).
+- **Products export unchanged** — refactored the shared branch into separate `tab === 'products'` and `tab === 'bundles'` blocks but the products schema/output is byte-identical to before.
 
 ## Recent Fixes (v5.17) — "Shipments" column + inline viewer on Inventory Planning
 - **User request:** "i need a new inventory planning dimension that lists all shipments the asin is included on and a button to view these shipments."
