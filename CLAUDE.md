@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.12**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.13**
+
+## Recent Fixes (v5.13) — Collapse UK + EU into one "EU/UK" pool (rolls back v5.12 Brexit split)
+- **User pushback:** "what? why did you introduce the brexit complexity? GB is included in the amazon EU/UK." Screenshot from `sellercentral.amazon.co.uk/sereport` showed GB sitting in the same country selector as DE/SE/BE/IT/IE/PL/FR/ES/NL — from the seller's perspective they're one group, accessed from one Seller Central login.
+- **Reverted v5.12**: dropped separate UK and EU options, dropped the per-country EU advanced disclosure, dropped the Brexit explanation panel.
+- **`FBA_REGION_OPTIONS`** is now 6 entries: US · CA · MX · **EU/UK** (region code `'EU/UK'`) · AU · JP.
+- **Prompt UI** trimmed back to the simple region dropdown + snapshot date — no info panels, no advanced disclosures. Cleaner.
+- **Upload card description** rewrote to call out the EU/UK pool as one upload covering GB + DE/FR/IT/ES/NL/SE/PL/BE/IE.
+- **`FBA_REGION_OPTIONS_EU_PER_COUNTRY`** constant deleted entirely.
+- **Migration impact**: zero. The `inventory.region` column is unconstrained text; storing `'EU/UK'` works the same as `'EU'` or any other code. If a v5.12 user uploaded with region `'UK'` or `'EU'` separately, those rows persist with their original codes — they'd show up as filterable values in the Inventory Planning dropdown via `populateRegionFilters()`. Re-upload to `'EU/UK'` if you want them consolidated.
 
 ## Recent Fixes (v5.12) — FBA region picker reflects post-Brexit topology (Pan-EU = one pool, UK separate)
 - **User flagged:** "UK will have one FBA inventory, but the uploader asks me to select a specific country." The v4.199 picker exposed DE/FR/IT/ES/NL as separate fulfillment pools, which is wrong for any Pan-EU enrolled seller — they hold ONE pool that Amazon distributes across country FCs.
