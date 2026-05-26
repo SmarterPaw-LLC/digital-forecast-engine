@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.18**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.19**
+
+## Recent Fixes (v5.19) — Catsy product list import + SP SKU reconciliation
+- **User request:** "i need a way to import a product list from catsy and reconcile items in my database that don't have a SP SKU. i would like a feature under the product page to do this — let me upload a csv and then attempt to match the SP SKU (but require an approve click)."
+- **New button on Products page**: **↑ Import Catsy** (blue accent next to + New Product). Opens a modal-driven 3-step flow.
+- **Step 1 — Upload**: drag-and-drop or click-to-pick. Accepts .csv / .tsv / .txt. Auto-detects tab vs comma separator. Tolerant of column name variants:
+  - **SP SKU column** tried in order: `sp sku`, `sp_sku`, `smarterpaw sku`, `parent sku`, `product sku`, `sku`
+  - **Match keys** (one or more): `asin`, `upc`/`barcode`/`gtin`/`ean`, `shopify sku`, `title`/`name`/`product name`
+- **Step 2 — Review table**: every Catsy row gets matched against products *without* an existing sp_sku (the reconcile target). Match logic, in order:
+  1. Exact ASIN match → **HIGH** confidence (auto-checked)
+  2. Exact UPC/Barcode match → **HIGH** (auto-checked)
+  3. Exact Shopify SKU match → **HIGH** (auto-checked)
+  4. Fuzzy title match (Dice bigram coefficient ≥ 0.85) → **LOW** (requires manual approve)
+- **Per-row checkbox** to approve. **Bulk actions**: "Approve all high-confidence" + "Clear all" + master checkbox in the table head.
+- **SKU collision detection**: if the proposed SP SKU already exists on a DIFFERENT product, the row gets a red **COLLISION** badge and the approve checkbox is disabled. Prevents accidental duplicate sp_sku creation.
+- **Step 3 — Apply**: clicks loop through approved rows and run `UPDATE products SET sp_sku = ... WHERE master_id = ...` one-by-one. Reports applied vs failed counts. Logs to audit trail (`catsy.import` action). Reloads `allProducts` + re-renders the table.
+- **State variables**: `catsyRows` (raw CSV rows) + `catsyMatches` (per-row match + approval state). Reset per modal open.
+- **No DB migration needed** — writes to existing `products.sp_sku` column.
 
 ## Recent Fixes (v5.18) — Bundles CSV exports per-component rows (BOM-expanded)
 - **User request:** "on the bundle page, i need the csv export to export a row for every BOM component related to the parent bundle."
