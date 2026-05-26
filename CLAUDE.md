@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.25**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.26**
+
+## Recent Fixes (v5.26) — Left-align Products table text cells
+- **User request:** "in the product page can you left align the product title?"
+- Global `td` default in this app is `text-align:right` (numeric-heavy convention). The Products table's text cells (Brand chip, Title, SP SKU, ASIN, Category, Sub-cat) hadn't overridden it, so all text was floating to the right side of their wide columns.
+- Added `text-align:left` inline on each of the 6 text columns in `renderProductsTbl`'s row template. Numeric columns (MSRP, Active, Bundle, Edit button) keep their original alignment.
+- Header row was already `text-align:left` so headers stay properly aligned with the (now left-aligned) data.
 
 ## Recent Fixes (v5.25) — Catsy importer: per-row Skip + per-row Apply + bulk Remove unmatched
 - **User request:** "1. i can't remove products that aren't a match. 2. let me click individual rows to update rather than updating all."
