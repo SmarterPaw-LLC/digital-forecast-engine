@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.28**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.29**
+
+## Recent Fixes (v5.29) — Catsy importer: include bundles in matching + search
+- **User flagged:** "none of the bundles are coming up when i try to search for existing products."
+- **Root cause:** v5.19 had `allProducts.filter(p => !p.is_bundle)` in both the auto-matcher (`catsyBuildMatches`) and the search popover (`catsyRenderSearchResults`). The filter was conservative-by-default but wrong — bundles have `sp_sku` and `image_url` like any other product, and the Catsy importer only touches those two fields (never BOM), so excluding bundles served no purpose.
+- **Fix:** dropped the filter in both call sites. Bundles now:
+  - Match by SP SKU exact, ASIN, UPC, Shopify SKU, or title (fuzzy or exact) — same tiers as single products
+  - Appear in the manual search popover results
+- **New BUNDLE chip** in search results — orange pill rendered next to the sp_sku chip so users know they're picking a bundle vs a single product before clicking through.
 
 ## Recent Fixes (v5.28) — Image diff column on Catsy importer (DB → Catsy thumbnails side-by-side)
 - **User flagged:** "for these items, they already have the same image but the uploader thinks they are different." Root cause: the action badge only said "UPDATE IMG" or "NO-OP" without surfacing what the DB actually contained vs what Catsy was offering. Users had no way to verify "this product already has this exact image" visually.
