@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.24**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.25**
+
+## Recent Fixes (v5.25) — Catsy importer: per-row Skip + per-row Apply + bulk Remove unmatched
+- **User request:** "1. i can't remove products that aren't a match. 2. let me click individual rows to update rather than updating all."
+- **Per-row [✕ Skip] button** — always available on every row. Removes the row from `catsyMatches` + re-renders. Use for rows you don't want to act on at all (declutters the table).
+- **Per-row [↓ Apply] button** — appears next to [🔄 Change] on every approvable matched row. Writes only that row's update; on success, the row drops out of the table so the user can iteratively work through remaining items.
+- **Bulk [✕ Remove all unmatched] button** added to the top action bar alongside Approve all / Clear all. One click drops every "no match" row.
+- **`catsyWriteRow(m)`** — new shared helper that builds the payload + does the Supabase write + mirrors changes onto the in-memory `allProducts` entry. Used by both batch Apply and per-row Apply (single source of truth for the write logic).
+- **Batch Apply now also removes applied rows from the table** as it goes (was just leaving them in place). Successful + no-op rows are spliced out; failures stay so the user can investigate.
+- **In-memory `allProducts` mirror** — after a per-row write, the matching `allProducts` entry's `sp_sku` / `image_url` is updated locally so subsequent table re-renders show the new state instantly (no full reload required between row applies).
 
 ## Recent Fixes (v5.24) — Catsy importer: existing SP SKU column + per-row search + create-new-product
 - **User request:** "i need to see the existing SP_SKU on the catsy uploader. i also want to be able to search the product database to grab the db product to match. also give me the option to create new product if none exists."
