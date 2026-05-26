@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.0**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.01**
+
+## Recent Fixes (v5.01) — FBA snapshot upload bug fix: aggregate multi-SKU ASINs
+- **User flagged:** uploading the Doggijuana US FBA Inventory snapshot threw `ON CONFLICT DO UPDATE command cannot affect row a second time` (Postgres error).
+- **Root cause:** Amazon's Manage FBA Inventory report has **one row per SKU**, and a single ASIN can have multiple SKU variants (stickered + stickerless, FBA + FBM, prep variants). When two CSV rows shared the same ASIN, the parser would build two `inventory` payload entries with the same `(asin, region)` conflict key. Postgres rejects this — you can't UPDATE the same target row twice in a single statement.
+- **Fix in `parseFbaInventorySnapshot`** — added an aggregation pass after CSV parse, before any DB write. For each ASIN with multiple SKU rows:
+  - All numeric quantities SUM (separate FBA stock pools share the ASIN → roll up at the ASIN level)
+  - SKU codes are joined with ` · ` in the `sku` column for traceability ("714929800121 · 714929800121-FBM")
+  - Helper fields (`_skuCount`, `_skuList`) are stripped before Supabase upsert
+- **Status message** now reports both ASIN count and aggregation count, e.g., `✓ 88 ASINs · US · 4 ASINs aggregated across multiple SKUs`
+- **Console log** lists the aggregated ASINs + their SKUs for debugging
+- **Snapshots table benefits too** — same `(asin, region, snapshot_date)` unique key, same bug, same fix.
 
 ## Recent Fixes (v5.0) — Expose all PO-math inputs as sortable/exportable columns
 - **User request:** "on the inventory planning module, i need the amazon reorder threshold, reorder qty, new amazon, deprecated amazon available as columns and exportable via csv. add any other columns that go into inventory calculations."
