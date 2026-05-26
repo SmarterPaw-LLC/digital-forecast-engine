@@ -2,9 +2,31 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v4.202**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.0**
 
-> **⚠ NEXT VERSION = v5.0** (Jason's call on 2026-05-25). Skip v4.203 — the next change of any kind bumps straight to v5.0 in both the HTML header span and the CLAUDE.md heading. Remove this note when you do the bump.
+## Recent Fixes (v5.0) — Expose all PO-math inputs as sortable/exportable columns
+- **User request:** "on the inventory planning module, i need the amazon reorder threshold, reorder qty, new amazon, deprecated amazon available as columns and exportable via csv. add any other columns that go into inventory calculations."
+- **Version bump to v5.0** per Jason's call (was v4.202; the v4.203 → v5.0 placeholder note in CLAUDE.md is now resolved).
+- **New columns added to IP_COLUMNS** (all `default:false` — opt-in via Show all in table):
+  - **PO PLANNING band (extended):**
+    - `safety_stock` — Safety (d). Defaults shown as muted "14" when blank.
+    - `reorder_threshold_days` — Reorder Thresh (d). Default 90 shown muted.
+    - `reorder_qty_days` — Reorder Qty (d). Default 90 shown muted.
+    - `moq` — MOQ. Numeric; "—" when blank.
+    - `supplier` — Supplier. Free-text; left-aligned.
+  - **NEW band "AMAZON SETTINGS":**
+    - `fulfillment_amazon` — FBM (orange pill) / FBA (muted). Pulled from products.fulfillment_amazon.
+    - `new_product_amazon` — 🆕 NEW pill / —. Boolean.
+    - `new_amazon_daily_units` — New Rate/day. Numeric, only meaningful when New flag is on.
+    - `deprecated_product_amazon` — ⛔ DEP pill / —. Boolean.
+  - **NEW band "SEASONALITY":**
+    - `sea_override` — Sea Override. Shows `1.25×` when set, `auto` when blank.
+- **CSV export emits readable values** — `downloadInventoryCSV`'s `valueOf` now resolves each new column to its export-friendly form:
+  - Booleans → `Yes` / `No`
+  - `fulfillment_amazon` → `FBA` / `FBM` (uppercase)
+  - `sea_override` → numeric or literal string `auto`
+  - PO defaults (90/90/14) — exported as the effective value even when the underlying field is null, so the CSV always shows what the model is actually using rather than blanks.
+- **Column tooltips** call out the math role of each input (e.g., "ROP = lead + safety", "cycle period = reorder_qty_days", "FBM means Amazon vel goes into Base via continuous draw").
 
 ## Recent Fixes (v4.202) — Direct Seller Central report links on every upload card
 - **User request:** add direct links to each Amazon Seller Central report on the Uploads page so users don't have to navigate through SC's menus to find them.
