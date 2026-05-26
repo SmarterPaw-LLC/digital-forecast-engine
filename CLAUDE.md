@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.1**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.11**
+
+## Recent Fixes (v5.11) — "Selected only" export option on Inventory Planning CSV
+- **User flagged:** had 1 row checkbox-selected on Inventory Planning but the export dialog only offered "Everything (518 rows)" — no way to export just the selection. The "Filtered results" button was hidden because no page filters were active (filteredCount === totalCount).
+- **Fix:** `showExportDialog` now also tracks `selectedCount = inventorySelected.size` and renders an "↓ Selected only (N checked rows)" button at the top of the dialog whenever there's a selection. Independent of the filtered/all buttons — they all coexist.
+- **`downloadInventoryCSV(mode='selected', ...)`** — new mode. Filters records by `inventorySelected.has(\`${master_id}_${region}\`)`. Respects the active region filter: if pinned to US, source records are US-only; if pooled, source is `combineRegionRecords(records)` so the selection keys (which may use `'US+CA'` for pooled rows) resolve correctly.
+- **Filename** now tags `selected` alongside `all` and `filtered` — e.g., `smarterpaw-inventory-90d-selected-2026-05-25.csv`.
+- **Logs `mode: 'selected'`** in the audit trail.
 
 ## Recent Fixes (v5.1) — Per-region Amazon FBA Reorder columns + per-region PO settings
 - **User request:** "For Amazon, I think i am going to need different regions split out - so an Amazon FBA US 30/60/90/120 and a Amazon FBA CA 30/60/90/120. when the region drop down is only US, the rollup amounts should only display for US. I also need separate new, deprecate, reorder threshold, and reorder quantity for US and CA."
