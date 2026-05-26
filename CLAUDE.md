@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.16**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.17**
+
+## Recent Fixes (v5.17) — "Shipments" column + inline viewer on Inventory Planning
+- **User request:** "i need a new inventory planning dimension that lists all shipments the asin is included on and a button to view these shipments."
+- **New column `shipments`** in INVENTORY group:
+  - Cell shows `N active · M total` plus a 📦 View button
+  - "Active" = Working / Receiving / unknown status (anything not Closed)
+  - Sortable by total shipment count
+  - `default:false` — opt-in via Show all in table
+- **New `openIpShipmentsViewer(masterId)` modal**:
+  - Lists every shipment containing this master_id's ASIN(s), split into **Active** + **Closed** sections
+  - Columns: Shipment ID · Status · Region · Shipped · Located (with ±variance badge) · Created · Updated · Open button
+  - Status color-coded (orange Working / blue Receiving / muted Closed)
+  - Each row's **↗ Open** button switches to the FBA Shipments tab with that shipment pre-expanded
+- **Data load** extended `loadFbaInTransit()` to build a second map `ipShipmentsByMaster: Map<master_id, [{shipment_id, status, qty_shipped, qty_received, units_expected, units_located, created_date, last_updated, region, ship_to}]>` while it's already paginating fba_shipments. Zero extra round-trips.
+- **CSV export**: emits pipe-separated `ID:status:qty` triples per shipment (newest first) — one cell, parseable downstream.
+- **No DB migration needed** — uses existing `fba_shipments` + `fba_shipment_summaries` tables.
 
 ## Recent Fixes (v5.16) — Target supply = open numeric input + Forecast+Inventory join preset
 - **User request:**
