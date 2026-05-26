@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.13**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.14**
+
+## Recent Fixes (v5.14) — Split FBA Inventory uploader into US/CA/MX/AU/JP + EU/UK dropzones (matches SKU Economics pattern)
+- **User request:** "in the inventory upload for amazon, we need to split the uploader for EU like we did the SKU economics report. the EU link to download the report is https://sellercentral.amazon.co.uk/reportcentral/FBA_MYI_UNSUPPRESSED_INVENTORY/1"
+- **Two dropzones now**:
+  - 📦 **FBA Inventory — US / CA / MX / AU / JP** — links to `sellercentral.amazon.com/reportcentral/FBA_MYI_UNSUPPRESSED_INVENTORY/1`. Region prompt shows the full list, user picks.
+  - 🇪🇺 **FBA Inventory — EU / UK** — links to `sellercentral.amazon.co.uk/reportcentral/FBA_MYI_UNSUPPRESSED_INVENTORY/1`. Region prompt preselects `EU/UK` so user just confirms + sets date.
+- **`handleFbaInventoryUpload(input, presetRegion=null)`** — extended to accept an optional preset. The EU dropzone passes `'EU/UK'`. Status + last-snapshot DOM IDs are auto-routed based on input id (`f-fba-inv` vs `f-fba-inv-eu`) so each dropzone updates its own labels.
+- **`promptFbaSnapshotMeta(presetRegion=null)`** — extended to accept the same preset. When set, that option is marked `selected` in the dropdown; user can still change it if they grabbed the wrong file.
+- **Card description** rewritten to call out the two-gateway split + which marketplaces each gateway covers.
 
 ## Recent Fixes (v5.13) — Collapse UK + EU into one "EU/UK" pool (rolls back v5.12 Brexit split)
 - **User pushback:** "what? why did you introduce the brexit complexity? GB is included in the amazon EU/UK." Screenshot from `sellercentral.amazon.co.uk/sereport` showed GB sitting in the same country selector as DE/SE/BE/IT/IE/PL/FR/ES/NL — from the seller's perspective they're one group, accessed from one Seller Central login.
