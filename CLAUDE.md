@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.26**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.27**
+
+## Recent Fixes (v5.27) — Image displays in the Product edit modal
+- **User request:** "if there is an image, it should appear in the product card when clicked"
+- **New "Product Image" section** at the top of the product edit modal body (above Product Info):
+  - **120×120 thumbnail** on the left with `object-fit:contain` (no distortion)
+  - **Editable URL input** on the right with field hint explaining the integration with Catsy import
+  - **Click thumbnail** to open the full-size image in a new tab (skipped when URL is blank)
+  - **"No image" placeholder** shown when blank, swaps in for broken URLs via `onerror`
+- **Live preview** — `pfUpdateImagePreview()` runs on every keystroke in the URL field. Paste a new URL and the thumbnail updates immediately (also runs once on modal open to show the saved image).
+- **`openProductModal`** now reads `p.image_url` into the input and triggers the preview.
+- **`saveProduct`** now persists `image_url` (null when blank, keeps the column clean).
 
 ## Recent Fixes (v5.26) — Left-align Products table text cells
 - **User request:** "in the product page can you left align the product title?"
