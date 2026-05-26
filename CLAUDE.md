@@ -2,7 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.21**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.22**
+
+## Recent Fixes (v5.22) — Catsy importer: SP SKU is the PRIMARY match key (was missing entirely)
+- **User flagged:** "this matched 0 existing product db items lol. is it mapping to SP SKU?"
+- **Root cause:** v5.19's matcher only considered products *without* an sp_sku, then tried to assign the Catsy SKU to them via ASIN/UPC/Shopify SKU/title match. But Jason's DB has hundreds of products where `sp_sku` is ALREADY a Catsy-style ID (`CF128`, `DF270`, etc.) — the Catsy "Item ID" column IS the SP SKU. The matcher never looked for that, so every row reported "no match."
+- **Fix — SP SKU exact match is now the primary path** (tier 1, above ASIN/UPC/Shopify/title). Indexes every product (not just sp_sku-less ones).
+- **Two distinct row actions emerge**, each tagged on the match record:
+  - `update_image` — DB product's `sp_sku` already equals the Catsy Item ID. Import refreshes `image_url` only (`sp_sku` is not rewritten). Most common case for Jason's catalog.
+  - `assign_sku` — DB product matched by ASIN/UPC/Shopify/title but had NO `sp_sku`. Import writes both `sp_sku` AND `image_url`.
+- **Action badge per row** in the review table — `UPDATE IMG` (blue), `ASSIGN + IMG` (green), `NO-OP` (grey for sp_sku-matched rows where Catsy didn't provide an image). User sees exactly what each approval will write.
+- **Summary line** now breaks out the action mix: `N refresh image · M assign new SP SKU · K SKU collision`.
+- **Collision detection narrowed** — only flags `assign_sku` rows where the proposed SKU already belongs to a different product. `update_image` rows can't collide (they're operating on the product that already has the SKU).
+- **Apply payload** is action-dependent — `update_image` writes only `image_url` (if Catsy provides one and DB product doesn't already have one); `assign_sku` writes both fields. Skips entirely when nothing would change.
+- **Success message** now breaks counts apart: `✓ Applied N updates. M new SP SKU assignments. K image URLs set.`
 
 ## Recent Fixes (v5.21) — Product image column + Catsy importer writes image URLs
 - **User request:** "also can we add the image into the product table?"
