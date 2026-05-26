@@ -2,7 +2,31 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.15**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.16**
+
+## Recent Fixes (v5.16) — Target supply = open numeric input + Forecast+Inventory join preset
+- **User request:**
+  1. "Target supply — give a tooltip on how this works. Also let it be an open numeric field in days rather than a drop down. Default to 90 days but let another default be set."
+  2. "Give me a new query for the query editor view to join all data from the forecast and inventory planning tables."
+
+### 1. Target supply field
+- **Was**: `<select>` with three options (75 / 60 / 90 days)
+- **Now**: `<input type="number" min="1" max="365">` defaulting to 90. User edits directly — any positive integer 1-365 accepted.
+- **Tooltip** on the label explains: `Order Qty = (seasonal demand over (lead_time + target) days) + safety stock − current on-hand − inbound`. Higher target = larger orders, fewer POs, more capital tied up. Lower target = opposite.
+- **🛟 button** next to the input — clicking SAVES the current value as the user's default for future sessions. Stored to `localStorage.ipTargetDefault`. Live edits go to `localStorage.ipTargetCurrent` (overrides default until cleared); button shows ✓ for 1.2s on save.
+- **`onIpTargetChange()`** — clamps to [1, 365], persists to ipTargetCurrent, re-renders.
+- **`ipRestoreTargetSupply()`** — reads ipTargetCurrent first, falls back to ipTargetDefault, then to 90. Called at top of `renderInventoryTbl()` so the value survives tab switches.
+
+### 2. New query preset: "Forecast + Inventory (joined)"
+- Combined view per `(master_id, region)` — mirrors the data driving both the in-app Demand Forecast + Inventory Planning tables in one CSV-exportable result.
+- **Tables joined**: `products` × `velocity_calculated` × `inventory` × `fba_inventory_snapshots` (latest per `(asin, region)`)
+- **Region union CTE** ensures rows surface even when only one of velocity / inventory exists for a region
+- **Settings columns expose all three layers**:
+  - `..._region` — per-region override on inventory.* (v5.1)
+  - `..._master` — master-level default on products.* (fallback)
+  - `..._eff` — what the model actually uses (`coalesce(inv.X, p.X, default)`)
+- **Snapshot freshness** column: `snapshot_age_days` + categorical `snapshot_freshness` (`fresh` / `stale` / `very stale` / `never`)
+- LIMIT 2000 (vs 100 for most other presets) since this is the "give me everything" join.
 
 ## Recent Fixes (v5.15) — "Amz Inv Updated" column on Inventory Planning (snapshot freshness)
 - **User request:** "i need a new column on the inventory planning module - amazon inventory last updated - this should be exportable via csv. also i want it grouped with the product/sku set of dimensions."
