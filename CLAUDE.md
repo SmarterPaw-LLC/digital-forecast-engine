@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.19**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.20**
+
+## Recent Fixes (v5.20) — Catsy importer: XLSX support + Catsy MasterItems column mapping
+- **Inspected Catsy export** `MasterItems-20260526-1527-12.xlsx` to confirm the actual format. 5 columns: `Completeness Score` · `Update Date` · `Item ID` · `Main Image` · `Item Description`. The "Item ID" column carries the SP SKU (e.g., `CF2506`). The "Item Description" column is formatted as `<SKU> - <Title>` (e.g., `CF2506 - Naughty List Nip Candy Cane`).
+- **XLSX parser added** — reuses the existing SheetJS library (already loaded at line 441 for Chewy Vendor Statement parsing). Detects `.xlsx`/`.xls` extension and reads via `XLSX.utils.sheet_to_json(sheet, {header:1, defval:''})`; CSV/TSV path unchanged. File input now accepts `.xlsx,.xls,.csv,.txt,.tsv`.
+- **Column name detection extended** to recognize Catsy's actual headers:
+  - SP SKU column tries `item id` / `item_id` first, then the original fallbacks
+  - Title column tries `item description` / `item_description` first, then `title` / `name` / etc.
+- **SKU prefix stripped from title** before fuzzy matching — `CF2506 - Naughty List Nip Candy Cane` → `Naughty List Nip Candy Cane`. Uses an anchored regex with the row's own proposed SKU so each row strips its own prefix.
+- **State reset** on each modal open — `catsyRows = []` and `catsyMatches = []` so a second import in the same session starts clean.
+- **Practical implication for Catsy file**: since the Catsy export has no ASIN / UPC / Shopify SKU columns, every match falls to title fuzzy matching (LOW confidence). Each match requires manual review/approve — which is exactly what the user asked for. Bulk "Approve all high-confidence" will do nothing for a pure-Catsy import; user toggles per row or uses the master checkbox.
+- **Drop zone copy** updated to mention .xlsx and "Catsy MasterItems export, or any product list."
 
 ## Recent Fixes (v5.19) — Catsy product list import + SP SKU reconciliation
 - **User request:** "i need a way to import a product list from catsy and reconcile items in my database that don't have a SP SKU. i would like a feature under the product page to do this — let me upload a csv and then attempt to match the SP SKU (but require an approve click)."
