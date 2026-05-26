@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.22**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.23**
+
+## Recent Fixes (v5.23) — Catsy importer: title fallback now searches ALL products, surfaces SP SKU conflicts
+- **User request:** "if it doesn't match based on the ID, it should try to match based on the item title to the title in the product db."
+- **Was:** v5.22's title fuzzy fallback only considered products without an sp_sku. If a Catsy row's Item ID didn't match any sp_sku but the title matched an already-linked product, that match was invisible. Threshold was also 0.85 (too strict for paraphrased Catsy descriptions).
+- **Fix:**
+  - Title match now searches **every** product, not just sp_sku-less ones.
+  - Tries **exact title match first** (after the SKU prefix strip), falls back to fuzzy (Dice bigram).
+  - **Threshold lowered to 0.70** — more candidates surface; user can still eyeball + reject in the review table.
+  - **Confidence tier**: exact title or fuzzy ≥0.85 → HIGH; fuzzy 0.70–0.85 → LOW.
+- **New action `replace_sku`** — surfaces when title matches but the DB product already has a *different* sp_sku set. Distinct from `assign_sku` (no existing sp_sku) and `update_image` (sp_sku already matches Catsy).
+  - **Always default-UNCHECKED** even at high confidence — overwriting a curated sp_sku is high-risk; require explicit user click.
+  - **Red ⚠ REPLACE SKU** badge in the action column with a tooltip showing the existing sp_sku that would be overwritten.
+  - Reason text includes `· existing sp_sku: XXX` so the conflict is visible without hovering.
+  - Bulk "Approve all high-confidence" button explicitly skips replace_sku rows.
+  - Summary row counts replacements separately so the user sees `⚠ N replace SP SKU (review!)` at the top.
+- **Collision detection extended** — applies to both `assign_sku` AND `replace_sku` rows now (anything writing sp_sku).
+- **Apply payload + audit log** now count `sku_replaced` separately from `sku_assigned`.
 
 ## Recent Fixes (v5.22) — Catsy importer: SP SKU is the PRIMARY match key (was missing entirely)
 - **User flagged:** "this matched 0 existing product db items lol. is it mapping to SP SKU?"
