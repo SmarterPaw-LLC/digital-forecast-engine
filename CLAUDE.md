@@ -2,7 +2,39 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.01**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.1**
+
+## Recent Fixes (v5.1) — Per-region Amazon FBA Reorder columns + per-region PO settings
+- **User request:** "For Amazon, I think i am going to need different regions split out - so an Amazon FBA US 30/60/90/120 and a Amazon FBA CA 30/60/90/120. when the region drop down is only US, the rollup amounts should only display for US. I also need separate new, deprecate, reorder threshold, and reorder quantity for US and CA."
+- **⚠ SQL TO RUN:** `supabase_v5_1_per_region_amazon_settings.sql` — adds 5 new columns to `inventory` table (`reorder_threshold_days`, `reorder_qty_days`, `new_product_amazon`, `deprecated_product_amazon`, `new_amazon_daily_units`) and backfills from `products.*` for every existing row. `products.*` columns kept as master-level defaults — records-build reads `inv.X ?? p.X`. Idempotent.
+### Schema + data layer
+- **5 fields migrate from master-level → per-region** on the inventory table. `products.*` versions stay as fallback defaults so a brand-new region (no inventory row yet) still gets the master values until first overridden.
+- **Records build** (line 2912-2928): reads `inv?.X ?? p.X` for every per-region record. Each record carries its own region's settings — no more cross-region bleed.
+- **`combineRegionRecords`** now snapshots each per-region record onto `_byRegion[regionCode]` on the pooled record. Lets per-region columns drill back into per-region state even in the pooled view.
+### Math layer
+- **New helper `regionViewOf(r, region)`** — returns the per-region sub-record for a pooled record, or `r` itself if it's a single-region match, or `null` if the region isn't present on this record. Used by every per-region column's `sortVal` / `render`.
+- **`inventoryNeedBreakdown(r, X, region)`** — optional 3rd arg. When passed, recurses into the per-region sub-record via `regionViewOf` and returns a region-scoped breakdown. When omitted, behaves as before (pooled / single-region default). Used by the new per-region Amazon FBA Reorder columns.
+- **`EMPTY_NEED_BREAKDOWN`** — frozen zero-shape returned when the requested region isn't present on a record (e.g., asking for CA on a US-only product).
+### New IP_COLUMNS (all default:false, opt-in)
+- **8 per-region Amazon FBA Reorder columns** (replaces the 4 single-region columns from v4.197):
+  - `0–30d FBA US` · `30–60d FBA US` · `60–90d FBA US` · `90–120d FBA US`
+  - `0–30d FBA CA` · `30–60d FBA CA` · `60–90d FBA CA` · `90–120d FBA CA`
+  - Single-region filter view: only the matching-region columns populate; the other shows `—`. Pooled view: both populate (drilled from `_byRegion`).
+- **10 per-region settings columns** (replaces the 5 master-level columns from v5.0):
+  - `New (US)` · `New (CA)` · `New Rate/d (US)` · `New Rate/d (CA)`
+  - `Dep (US)` · `Dep (CA)`
+  - `Thresh US (d)` · `Thresh CA (d)`
+  - `Qty US (d)` · `Qty CA (d)`
+- **FBM rows** show `—` in all FBA Reorder columns (existing v4.197 logic preserved).
+### Edit flow
+- **Inventory edit modal save** (line 16780-16842): the 5 settings now write to **inventory.\*** for that asin+region (not products.*). Mirror loop only touches **same-region** peers — editing US no longer overwrites CA's settings. Master-level `fulfillment_amazon` still mirrors to all regions.
+- **Product modal save** (line 17680-17710): broadcasts the 5 settings to **all inventory rows** for the master_id ("set default for all regions"). Per-region overrides set later via Inventory modal will win on the next records-build. This preserves the existing UX where the Product modal acts as a master switch.
+### CSV export
+- New `valueOf` regex matches `^(field)_(us|ca)$` keys and resolves via `regionViewOf`. Boolean fields export as `Yes`/`No`, threshold/qty fall back to defaults (90), rate fields blank when 0.
+### Known limitations
+- **Pooled-view `new` launch override**: when SOME but not all regions are flagged new, the pooled record's `blended_daily` uses the first region's override rate rather than summing effective per-region vels. Edge case (most products are new everywhere or new nowhere); flagged here for future fix. Per-region views are unaffected.
+### Verification
+- 22/22 unit tests passed for `regionViewOf` + `EMPTY_NEED_BREAKDOWN` (smoke test, since deleted). Node `--check` on the extracted script passes.
 
 ## Recent Fixes (v5.01) — FBA snapshot upload bug fix: aggregate multi-SKU ASINs
 - **User flagged:** uploading the Doggijuana US FBA Inventory snapshot threw `ON CONFLICT DO UPDATE command cannot affect row a second time` (Postgres error).
