@@ -2,7 +2,27 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.23**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.24**
+
+## Recent Fixes (v5.24) — Catsy importer: existing SP SKU column + per-row search + create-new-product
+- **User request:** "i need to see the existing SP_SKU on the catsy uploader. i also want to be able to search the product database to grab the db product to match. also give me the option to create new product if none exists."
+- **New "Existing SP SKU" column** in the review table — color-coded:
+  - 🟢 green when DB sp_sku matches the Catsy proposed sp_sku exactly
+  - 🟠 orange when it's set but different (this is a REPLACE candidate)
+  - `(none)` muted italic when product has no sp_sku yet
+  - `—` when no DB product is matched
+- **New "Catsy Title" column** — replaces the cramped "Catsy ID" column. Surfaces the actual product description so the user can eyeball matches visually instead of decoding ASIN/UPC keys.
+- **🔄 Change / 🔍 Search / + Create buttons** in the Match column:
+  - **🔍 Search** (on unmatched rows) — opens a search popover that filters all products by title / sp_sku / master_id / ASIN / Shopify SKU. Multi-token AND-match. Top 50 results. Click to link.
+  - **🔄 Change** (on matched rows) — same popover, lets the user swap to a different product.
+  - **+ Create** (on unmatched rows) — creates a new product from the Catsy row's data: `master_id=SP-TEMP-{sku}`, `sp_sku`, `title`, `image_url`, `brand` inferred from SKU prefix (CF/MTCM→Meowi, DF/MTCD→Doggi, KF/KC→Kitty Ka-Zoom, fallback Meowi), `active=true`, `notes='Auto-created from Catsy import — needs review'`. Promoted to a real SP-XXXX later via the existing product modal flow.
+- **Manual selection re-computes the row's action** automatically:
+  - Picked product has no sp_sku → `assign_sku` (auto-checks Approve)
+  - Picked product's sp_sku == Catsy proposed → `update_image` (auto-checks if there's an image to set)
+  - Picked product's sp_sku != Catsy proposed → `replace_sku` (does NOT auto-check)
+- **Match reason** prefixed with `🔧` for manual picks and `🆕` for newly-created products, distinguishing user actions from auto-matched rows.
+- **"Clear match" button** in the search popover for backing out a wrong match.
+- **Audit log** records create events as `catsy.create_product` with `master_id`, `sp_sku`, `title`, `brand`.
 
 ## Recent Fixes (v5.23) — Catsy importer: title fallback now searches ALL products, surfaces SP SKU conflicts
 - **User request:** "if it doesn't match based on the ID, it should try to match based on the item title to the title in the product db."
