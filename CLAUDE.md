@@ -2,7 +2,28 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.48**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.49**
+
+## Recent Fixes (v5.49) — FBA Shipment Summary CSV: parser handles Amazon's 2026 format + new "Missing detail" filter
+- **User flagged (1):** Shipment Summary upload threw an error on a fresh download. Amazon changed the export format in 2026 — three breaking changes vs the pre-v5.49 parser:
+  1. **"Shipment ID" column is GONE.** The ID now lives inside the "Shipment name" as a trailing parenthesized group, e.g. `"FBA STA (05/26/2026 14:35)-TEB9 (FBA19DZNB2XM)"`. The pre-v5.49 parser required an explicit ID column and rejected the file outright.
+  2. **Column headers renamed.** `Created` → `Created at`, `Last updated` unchanged but exact-match `ci()` lookup wouldn't catch variants like `Updated at`.
+  3. **New "In transit" status** alongside (or replacing) some "Receiving" usage. Status badge fell through to muted grey.
+- **User flagged (2):** "i need a way to see shipments that haven't been uploaded" — meaning shipments that are in the summary list but no per-shipment `.tsv` detail file has been uploaded yet. The v4.175 "summary only" hint chip existed but you had to scroll the table looking for it.
+- **Parser fixes (`parseFbaShipmentSummary`):**
+  - **`ci()` accepts aliases** — each logical field tries multiple header variants. `created at` / `created` / `creation date` / `created date`; `units expected` / `expected units` / `expected`; etc. New Amazon column renames won't break the parser silently — they just slot into the alias list.
+  - **`extractIdFromName()`** — when the explicit `Shipment ID` column is absent, extract from the name's trailing `(FBA…)` paren group. Uses `matchAll` and picks the LAST match so date-style parens earlier in the name (`(05/26/2026 14:35)`) never collide with the ID. Bare-token fallback (no parens) too, just in case.
+  - **Required columns check loosened** — accept either explicit ID column OR a name column (we can extract from). Still requires `Units expected` so a per-shipment packing list isn't mis-uploaded as a summary.
+  - **Status reporting extended** — return includes `extractedFromNameCount` (so the upload status line can mention "ID extracted from name on N rows" if relevant) and `missingDetailCount` (number of uploaded shipments not yet in `fba_shipments`, batched IN-query check).
+- **Status badge (`statusBadge` in `renderFbaShipmentsTbl`):**
+  - New `In transit` value (purple `#a855f7`) — distinct from `Receiving` (orange) and `Working` (blue) so the v5.49 staged transit reads cleanly.
+  - New `Shipped` value (lighter blue, slightly more saturated than `Working`) — the new format surfaces `Shipped` between `Working` and `Receiving`; was previously falling through to muted grey.
+- **"Missing detail" filter on FBA Shipments page (new):**
+  - **New filter dropdown** "Detail" between Region and Time Window: `All shipments` / `📥 Missing detail (need .tsv)` / `📦 With detail uploaded`. Filters the merged table on `g.has_detail`.
+  - **Count line surfaces missing-detail total** inline (`… · 📥 N need .tsv`) so the gap is visible without applying the filter first.
+  - **Upload status line on Data → Uploads** also calls it out: `✓ N shipments · expected/located · 📥 M need detail .tsv (Forecast → FBA Shipments → filter "Missing detail")` — so you see the gap immediately after uploading the summary, not after navigating to the FBA Shipments tab.
+- **No DB migration needed** — uses existing `fba_shipment_summaries` + `fba_shipments` tables. Pre-v5.49 uploaded data still loads correctly (the alias lookup is a strict superset of the old lookup).
+- **Workflow now:** download the summary CSV → upload → see "M need detail .tsv" in the status → switch to FBA Shipments tab → filter "Missing detail" → that's the work queue of shipments you need to grab per-shipment `.tsv` files for.
 
 ## Recent Fixes (v5.48) — Inventory Planning: click-to-open shipments (Shipments column on by default + clickable 🚧 chip)
 - **User flagged:** "i need a way to click to open shipments from the inventory planning module." The v5.17 Shipments column + `openIpShipmentsViewer` modal already existed — but the column was `default:false`, so users with the v4.166 column-visibility default set never saw the 📦 View button. Click-to-open existed but was invisible.
