@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.46**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.47**
+
+## Recent Fixes (v5.47) — BOM view flags inactive bundles + inactive components
+- **User request:** "on the bom module please flag if a sku is inactive." The v5.44 BOM view rendered every parent + component row identically regardless of `products.active` — so a bundle still listed in your BOM might be silently inactive (won't fulfill if a customer orders it) or a component could be inactive (BOM won't physically assemble when the bundle is built). No visual cue meant these only surfaced when something broke downstream.
+- **Fix — two new inline indicators on the BOM view:**
+  - **Parent bundle row** flagged when `p.active === false`: red `⛔ INACTIVE` chip appended to the bundle title, row background tinted red (`rgba(214,63,42,.06)`) with hover state in a stronger red tint, row opacity slightly reduced (0.85) so the row reads as "deprioritized" without disappearing. Click still opens the product modal — tooltip now mentions the inactive state with a fix suggestion (toggle Active in the product modal).
+  - **Component row** flagged the same way: `⛔ INACTIVE` chip next to the component title, same red row tint + reduced opacity. Tooltip suggests two fixes: re-activate the component, or replace it in the bundle's BOM.
+- **Row-count line surfaces totals.** When any inactive row exists, the count appends ` · ⛔ N inactive bundles · M inactive component rows` so you can spot staleness at a glance without scrolling. Hidden when zero (avoids noise on clean catalogs).
+- **Shared `inactiveChip` markup** built once at the top of `renderBundlesBomView`, used by both parent + component sites — keeps the visual language consistent (same icon, same colors, same tooltip text).
+- **Missing-component flag (v5.44) still takes precedence** — if a component's master_id doesn't exist in `products`, the row renders the existing red "⚠ Missing component master_id" treatment instead of an INACTIVE chip (missing is a strictly worse state than inactive).
+- **No DB migration needed** — reads existing `products.active` flag.
+- **Why this matters:** the BOM view is now a fulfillment-health snapshot — at a glance you can see which bundles can't actually be assembled because a component went inactive (need to replace it in the BOM), and which bundles are themselves dead in the catalog (need to either reactivate or stop maintaining their BOM).
 
 ## Recent Fixes (v5.46) — Merge tool search rewritten (tokenized + multi-field + ranked candidate list)
 - **User flagged:** searching for "large joint" in the merge tool returned no result, even though a product titled "Catnip Joints - Large" (or similar) exists. Root cause: the pre-v5.46 search did a sequential `find()` chain doing CONTIGUOUS-substring matches on title / short_name / master_id / ASIN. So "large joint" had to appear as that exact substring in one of those fields — which fails the moment words appear in a different order or with separators between them.
