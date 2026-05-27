@@ -2,7 +2,27 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.45**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.46**
+
+## Recent Fixes (v5.46) — Merge tool search rewritten (tokenized + multi-field + ranked candidate list)
+- **User flagged:** searching for "large joint" in the merge tool returned no result, even though a product titled "Catnip Joints - Large" (or similar) exists. Root cause: the pre-v5.46 search did a sequential `find()` chain doing CONTIGUOUS-substring matches on title / short_name / master_id / ASIN. So "large joint" had to appear as that exact substring in one of those fields — which fails the moment words appear in a different order or with separators between them.
+- **Three structural problems fixed in one pass:**
+  1. **Multi-word queries are now tokenized.** Splitting the query on whitespace and requiring EVERY token to appear in SOME searchable field (any position, case-insensitive) makes word-order irrelevant. "large joint" matches "Catnip Joints - Large" because "large" appears once and "joint" appears once (in the same product).
+  2. **More fields are searched.** Was: title / short_name / master_id / asin. Now: title, short_name, master_id, sp_sku, shopify_sku, chewy_sku, asin, barcode, brand, supplier. So typing "meowi joint" or pasting a Shopify SKU now both work.
+  3. **Multiple candidates are surfaced** when more than one product matches. Up to 6 are shown as clickable rows in the preview panel; user clicks the right one to lock it in. Single match still auto-selects (preserves the v5 paste-id-then-Merge flow). 0 matches gets a clearer message naming what to try next.
+- **Ranked scoring.** Same all-tokens-must-match gate (any field, anywhere) feeds a per-product score:
+  - +1000 for exact master_id match (overrides everything)
+  - +900 for exact ASIN match
+  - +800 for exact sp_sku
+  - +700 for exact shopify_sku / chewy_sku
+  - Per token: +50 in master_id, +40 in sp_sku / asin, +30 in shopify_sku / chewy_sku, +20 in short_name, +10 in title, +5 in brand
+  - Bonus +5 when a token matches as a WHOLE WORD in title (helps "joint" beat "joints" or "jointed" when both exist)
+  - +1 if the product is `active` (inactive products sink in ties)
+  Candidates are sorted by descending score and the top 6 rendered.
+- **Picker UI** — each candidate row shows brand chip + short_name (or title) + a small `BUNDLE` chip when `is_bundle`, plus an `inactive` chip when not active. Second line is mono-font `master_id · sp_sku · asin · Category / Sub` so the user can verify the right product before clicking. Clicking a row swaps the picker for the original single-line preview card (with a "✓ Selected — click another row to change" hint) and stashes the product in `mergeSelected[inputId]`. `runMerge` reads from there unchanged — the upstream flow is intact.
+- **New helper `selectMergeCandidate(inputId, previewId, masterId, autoFromSingle)`** is the bridge between the candidate list and the existing `mergeSelected` state. Called from each row's `onclick`, and also internally when there's exactly one candidate (preserves the paste-id auto-select UX).
+- **More-than-6 hint** — when more candidates exist than fit, the preview shows "… and N more — refine the search to narrow down." So the user knows refinement is necessary rather than assuming the visible 6 are the entire universe.
+- **No DB migration needed** — pure client-side rewrite. Existing `mergeSelected` + `runMerge` integration is unchanged; only the input-side `mergeSuggest` got rewritten.
 
 ## Recent Fixes (v5.45) — Merge tool: backfill every value-bearing column added since the tool was last updated
 - **User flagged:** "can you make sure the merge keeps the image field and other fields we've added." The pre-v5.45 merge backfill list covered only 9 fields (asin, sp_sku, shopify_sku, chewy_sku, barcode, category_id, msrp, wholesale, supplier) — every value-bearing column added to `products` between v4.75 and v5.21 was silently dropped from the survivor even when the survivor row had no value in that column.
