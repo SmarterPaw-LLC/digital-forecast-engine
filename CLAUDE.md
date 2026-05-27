@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.37**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.38**
+
+## Recent Fixes (v5.38) — Saved queries persist to Supabase (per-user, cross-device)
+- **User request:** "does this need to be written to the backend? how will these save long term?" → "yes, that's what i asked for."
+- **⚠ SQL TO RUN:** `supabase_v5_38_user_query_library.sql` — adds `user_profiles.db_user_queries jsonb default '[]'::jsonb`. Same pattern as the existing `inventory_saved_views` / `forecast_saved_views` columns.
+- **Architecture: Supabase canonical, localStorage cached.** Matches the existing saved-views pattern:
+  - `loadUserQueriesFromStorage()` — synchronous local read, primes the UI immediately on page load
+  - `loadUserQueriesFromDb()` — async, fires after init; pulls `user_profiles.db_user_queries` and overwrites local cache when signed in. Server-side is canonical.
+  - `persistUserQueries()` — writes localStorage immediately then fire-and-forget UPDATE to Supabase; failures log without blocking the UI
+- **One-time migration on first Supabase load**: if a user has localStorage queries from before v5.38 but no remote ones yet, the local set gets uploaded to their profile on first sign-in after upgrade. Logged to audit as `query.migrate`. No data loss for existing queries.
+- **Offline-tolerant**: localStorage cache means queries are still loadable when offline; next persist call syncs back when reconnected.
+- **Cross-device**: Jason signs in on his laptop → queries available. Signs in on his phone → same queries.
+- **Future-proof for team sharing**: if/when we want a shared library across team members, add a separate `shared_saved_queries` table (per-team) — the personal library on `user_profiles` stays as-is.
 
 ## Recent Fixes (v5.37) — Query Database: saved user queries + live schema browser
 - **User request:** "give me the option to save my own queries, also do a lookup to see what columns are available in the query editor."
