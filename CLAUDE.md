@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.35**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.36**
+
+## Recent Fixes (v5.36) — New query preset: "Products w/ Amazon ASIN"
+- **User request:** "add a query for all products with an amazon ASIN with title, short title, and ID fields."
+- Added to the Query Database preset list. Filters to `asin is not null and asin <> ''` AND `active = true`.
+- Returns: `master_id` · `sp_sku` · `asin` · `title` · `short_name` · `brand` · `is_bundle` · `active`
+- Ordered by brand, then title. LIMIT 2000 (catalog-friendly cap).
 
 ## Recent Fixes (v5.35) — Catsy importer search: render bundle components inline
 - **User request:** "on the catsy upload, when i search for a product to match, i need to see the components of the bundle."
