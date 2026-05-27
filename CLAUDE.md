@@ -2,7 +2,44 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.29**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.30**
+
+## Recent Fixes (v5.30) — Catsy import "+ Create" prompts for brand / category / sub-category
+- **User request:** "on the catsy upload, let me set the category and sub-category and brand if a match isn't found."
+- **Was:** `catsyCreateProduct` inserted immediately with brand inferred from SKU prefix and no category set. User had to go edit each newly-created product later via the Product modal.
+- **Now:** clicking **+ Create** on a no-match row opens a small dialog with the product details + three editable dropdowns:
+  - **Brand** — Meowijuana / Doggijuana / Kitty Ka-Zoom. Defaults to the SKU-prefix heuristic (CF/MTCM→Meowi, DF/MTCD→Doggi, KF/KC→Kitty Ka-Zoom).
+  - **Category** — populated from `getCategories()` (uses existing `allCategories` cache).
+  - **Sub-category** — cascade dependent on the selected category; disabled until a category is picked. Uses `allCategories.filter(c => c.category === cat)` and writes `category_id` (the FK to the categories row).
+- **Dialog UI** shows the Catsy image preview + title up top so the user verifies what they're creating before committing.
+- **`catsyCreateProductConfirm(rowIdx)`** — actually performs the insert. Inserts `category_id` (from the sub-category select) so the new product lands fully categorized.
+- **Match reason** updated to `🆕 Created from Catsy row · {brand} / {category}` so the table shows the user-selected dimensions.
+- **Audit log** entry includes `category_id` in addition to the existing fields.
+- **No DB migration needed** — uses existing `products.brand` and `products.category_id`.
+
+## Planned Work — Paused
+
+### Amazon SP-API integration (parked 2026-05-26)
+Jason wants to automate the manual uploads (FBA Inventory, FBA Shipments, SKU Economics) via Amazon's Selling Partner API. Discussed in detail and confirmed direction — paused for now, will resume when ready.
+
+**Phased plan when we pick it back up:**
+1. **Phase 1** (~1 day) — Register SP-API developer app in Seller Central (5-7 business-day Amazon approval), set up LWA OAuth, store refresh token in Supabase.
+2. **Phase 2** (~1 day) — FBA Inventory Snapshot automation. Pull `GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA` daily per region, push into existing `fba_inventory_snapshots` + `inventory` tables. Reuse `parseFbaInventorySnapshot` parser as a shared module.
+3. **Phase 3** (~1 day) — FBA Shipments (detail .tsv + summary CSV) on the same daily cadence via the Fulfillment Inbound API + report family.
+4. **Phase 4** (~1-2 days) — SKU Economics via `GET_SALES_AND_TRAFFIC_REPORT` (the 2024 replacement for the older format — may require parser adaptation).
+
+**Architecture choice deferred** — Supabase Edge Functions, Cloudflare Workers, or AWS Lambda. All viable, all free for this volume. Decision when we resume.
+
+**Gotchas to remember:**
+- LWA refresh-token dance + AWS SigV4 signing on every request
+- Async report flow: `createReport` → poll `getReport` until `DONE` → `getReportDocument` → download from S3
+- Region-specific endpoints: NA (US/CA/MX) · EU (UK/EU) · FE (JP/AU)
+- Rate limits + restore rates per endpoint
+- Some reports only cover the last 30 days — no retroactive backfill
+
+**Libraries worth using** — `amazon-sp-api` (Node) or `python-amazon-sp-api` (Python). Solved problem; avoids hand-rolling the auth.
+
+
 
 ## Recent Fixes (v5.29) — Catsy importer: include bundles in matching + search
 - **User flagged:** "none of the bundles are coming up when i try to search for existing products."
