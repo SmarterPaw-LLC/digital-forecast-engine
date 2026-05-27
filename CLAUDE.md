@@ -2,7 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.52**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.53**
+
+## Recent Fixes (v5.53) — Inventory Planning: Amazon Status mode hides products without an ASIN
+- **User request:** "if a product doesn't have an ASIN it shouldn't appear on the amazon status view of the inventory planning module."
+- **Fix:** when the Status-by dropdown is set to **📦 Amazon FBA stock**, rows without an `asin` are filtered out of the visible table, scorecards, chart, and CSV export. They were rendering as "— No data" rows in Amazon mode anyway (Shopify-only / Chewy-only products have no FBA pool to score against), so the change removes pure visual noise.
+- **Other modes unchanged:** 🏪 Warehouse mode and ∑ Combined mode still show every record regardless of ASIN — those are about cross-channel warehouse drain + total on-hand math, where no-ASIN products are very much in scope.
+- **FBM rows stay visible in Amazon mode** (existing v4.195 behavior): they HAVE an ASIN but ship from the warehouse. Status column reads "— FBM (no FBA)" — meaningful info, not noise.
+- **Filter applied at all four IP filter sites** so the change is consistent across:
+  - `renderInventoryTbl` — the main table render
+  - `inventoryVisibleRecords` — select-all sync + selection bar
+  - `downloadInventoryCSV` — filtered-scope CSV export
+  - `showExportDialog` — the row-count shown in the export-scope dialog
+  Each site caches `getStatusMode()` once per filter pass so the per-row callback doesn't re-read the DOM N times.
+- **Mode-change re-render** was already wired (v4.178 `setStatusMode` calls `renderInventoryTbl`), so flipping the dropdown immediately applies the new filter.
 
 ## Recent Fixes (v5.52) — P&L: FBM badge on the Product cell, matches Inventory Planning treatment
 - **User request:** "can you indicate on the P&L page if an item is FBM the same way you list in on inventory page?"
