@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.56**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.57**
+
+## Recent Fixes (v5.57) — FBA Shipments: Brand filter dropdown + left-align text cells (expanded SKU detail + parent row)
+- **User flagged two issues:**
+  1. "you keep right-aligning text, it's hard to read like this" — the expanded per-shipment SKU detail table (SKU / ASIN / FNSKU / Product columns) was right-aligning because the global `td { text-align: right }` (set in CSS for the numeric-heavy main tables) bled through to body cells that didn't explicitly override it. Same issue on some parent-row text cells (Date / Shipment ID / Name / Brand / Ship To / Status).
+  2. "i do not see all the shipments from this list. but i'm not able to filter by brand which i should be able to" — with multiple brand uploads accumulating in `fba_shipment_summaries`, the user wants to focus on one brand at a time. v5.50 added the Brand column but never wired a filter.
+- **Fix #1 — explicit `text-align:left` on every text body cell:**
+  - **Expanded SKU detail table** (nested under each expanded parent row): SKU / ASIN / FNSKU / Product → all `text-align:left`. Qty stays right-aligned (numeric).
+  - **Parent row text cells**: Date / Shipment ID / Name / Region chip / Brand chip / Ship To / Status badge → all `text-align:left`. Numeric cells (SKUs / Shipped / Located) keep their explicit right alignment. Delete button keeps `text-align:right`.
+- **Fix #2 — Brand filter dropdown** added to the FBA Shipments filter strip, between Region and Detail. Options: `All Brands` / `Meowijuana` / `Doggijuana` / `Kitty Ka-Zoom` / `Mixed (multi-brand items)` / `🏷 Untagged`. Filter applies AFTER the search filter so the user can combine search + brand. Resolution uses the same `shipGroupBrand(g)` helper as the column render → behavior matches what's visible.
+  - **`Untagged` option** is particularly useful right after a Shipment Summary upload to quickly find rows that still need the brand tagged. Pairs with the v5.56 bulk-tag button (filter to Untagged → click Tag N).
+- **No DB migration needed** — reads existing `fba_shipment_summaries.brand` (added by `supabase_v5_50_fba_shipment_brand.sql`).
+- **No regression on saved state** — filter defaults to `All Brands` so existing users / first-paint behavior is identical until they touch the dropdown.
 
 ## Recent Fixes (v5.56) — FBA Shipments: inline brand setter (per-row + bulk) so summary-only rows can be tagged without re-uploading
 - **User flagged:** screenshot of FBA Shipments page filtered to "Missing detail (need .tsv)" — 18 rows, all showing `—` in the Brand column. The v5.50 BRAND column rendered correctly but every cell was empty because:
