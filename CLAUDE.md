@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.33**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.34**
+
+## Recent Fixes (v5.34) — Category Manager: move sub-categories between top categories + merge into another row
+- **User request:** "under the category manager i should be able to move sub-categories to another top category - this should fix all instances of categories across pages. also, i should be able to merge sub categories into other ones."
+- **Move (via Edit mode)**:
+  - Edit-mode Category input now uses an HTML `<datalist>` with all existing top categories as suggestions. Pick from the dropdown to MOVE the sub-category under that top, or type a new value to rename / create.
+  - Save runs the same `UPDATE categories SET category=?, subcategory=? WHERE id=?` as before — the row's `id` is preserved, so products linked via `category_id` automatically inherit the new top category without any FK re-wiring.
+  - **Duplicate guard:** if the user types a (Category, Sub-category) pair that already exists on a different row, a confirm dialog warns about the duplicate and recommends Merge instead.
+- **Merge (new per-row Merge button)**:
+  - New orange **Merge** button between Edit and Remove on every row
+  - Click → dialog opens with: source row info + product impact count + target dropdown (all OTHER rows, sorted by category)
+  - On confirm:
+    1. `UPDATE products SET category_id = target_id WHERE category_id = source_id` — every product previously categorized under the source is redirected to the target
+    2. `DELETE FROM categories WHERE id = source_id` — source row goes away
+  - Product data itself is never deleted; only the `category_id` FK is rewritten.
+  - Audit log writes `category.merge` with both source and target details for full trace.
+- **No DB migration needed** — uses existing `products.category_id` FK to `categories.id`.
 
 ## Recent Fixes (v5.33) — Category Manager: inline edit per row
 - **User request:** "i need to be able to edit categories here."
