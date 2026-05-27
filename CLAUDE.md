@@ -2,7 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.55**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.56**
+
+## Recent Fixes (v5.56) — FBA Shipments: inline brand setter (per-row + bulk) so summary-only rows can be tagged without re-uploading
+- **User flagged:** screenshot of FBA Shipments page filtered to "Missing detail (need .tsv)" — 18 rows, all showing `—` in the Brand column. The v5.50 BRAND column rendered correctly but every cell was empty because:
+  - These are summary-only rows (no .tsv → no items → auto-derive can't fire)
+  - The upload-time brand prompt didn't persist (v5.50 graceful fallback fired for users who hadn't run the migration; v5.55 fixed the fallback regex, but rows uploaded BEFORE the fix have null brand).
+- **Two new affordances** so users can tag those rows without re-uploading the summary CSV:
+  - **Per-row click-to-set.** Empty brand cells now render a dashed `+ Set` button. Existing brand chips (including `MIXED`) are also clickable so a user can override a wrong auto-derive. Both routes through `setShipmentBrand(shipmentId)` which opens the existing `promptForShipmentBrand` modal, writes `fba_shipment_summaries.brand` for that one row, mirrors into `fbaShipmentSummariesCache`, and re-renders the table. `event.stopPropagation()` on the click so the parent row's expand-toggle doesn't fire.
+  - **Bulk "🏷 Tag N untagged" button** next to the count line, only visible when `≥1` currently-visible row has no brand. Calls `setShipmentBrandsBulkVisible()` which opens the brand picker once → applies the choice to every untagged shipment in the current filter in batches of 200 (avoids IN-clause limits) → one toast at the end. Useful right after a Shipment Summary upload when you have a batch of 18 untagged rows all belonging to one brand — single picker click instead of 18.
+- **Missing-column safety net** on both setters — if the user clicks Set / Tag N before running `supabase_v5_50_fba_shipment_brand.sql`, the alert points at the migration file by name. Uses the same `isMissingBrandColumnError` helper from v5.55 so both Postgres + PostgREST flavors are caught.
+- **`fbaShipUntaggedVisible`** module-level array — populated each render pass with the IDs of currently-visible rows where `shipGroupBrand()` is falsy. The bulk handler reads from this so it acts on exactly what the user sees, respecting all active filters (Region, Time, Detail, Search).
+- **Audit log:** single-row writes log as `shipment.set_brand`, bulk writes log as `shipment.set_brand_bulk` with the count.
+- **No DB migration required for v5.56 itself** — but `supabase_v5_50_fba_shipment_brand.sql` is still required for ANY brand persistence to work. The Set / Tag N affordances surface a clear error if it hasn't been run.
+- **Workflow now:** upload summary CSV → if you didn't pick brand at upload time, click "🏷 Tag N untagged" in the header → pick the brand → all 18 rows tagged in one shot. Or click "+ Set" on individual rows if it's a mixed batch.
 
 ## Recent Fixes (v5.55) — v5.50 brand-fallback regex missed PostgREST's schema-cache error format
 - **User flagged:** the Shipment Summary upload still threw `FBA shipment summary upload error: Could not find the 'brand' column of 'fba_shipment_summaries' in the schema cache` — even though v5.50 added a graceful fallback for "brand column missing". Migration `supabase_v5_50_fba_shipment_brand.sql` hadn't been run, but the fallback was supposed to swallow this case cleanly.
