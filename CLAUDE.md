@@ -2,7 +2,26 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.57**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.58**
+
+## Recent Fixes (v5.58) — FBA Shipment Summary re-upload: brand pick now visibly updates existing shipments
+- **User flagged:** "if i reupload the ship summary list and select a brand, it should update the brand for those shipments." The v5.50 upsert payload included `brand` and should have updated on conflict — but two things conspired against it:
+  1. The pre-v5.58 path put `brand` inside the upsert payload. If the migration wasn't run, the v5.55 fallback regex caught the schema error and silently retried without brand. From the user's perspective the upload "succeeded" but brand wasn't tagged.
+  2. Even when the migration WAS run, the upsert-with-brand path didn't surface per-row brand-persistence info — so the user had no signal whether the tag actually stuck.
+- **Fix — split upsert and brand update into two distinct round-trips:**
+  - **Upsert (without brand)** handles every non-brand field for every row. Same `onConflict: 'shipment_id'` semantics. This step CAN'T fail due to a missing brand column anymore — brand isn't in the payload.
+  - **Explicit `UPDATE … SET brand = ? WHERE shipment_id IN (…)`** runs AFTER the upsert, only when the user picked a brand. Batched in groups of 200 IDs per round-trip. Catches the missing-column error explicitly (via `isMissingBrandColumnError`) and reports it to the user via a loud `alert()` pointing at the migration file.
+- **`parseFbaShipmentSummary` return value extended** with three new fields:
+  - `brandPersistedCount` — integer, number of shipments the brand UPDATE actually wrote to.
+  - `brandColumnMissing` — boolean, true when the column doesn't exist server-side (migration not run).
+  - `uploadBrand` — echoed back for the status line.
+- **Upload status line surfaces brand persistence explicitly:**
+  - On success: `… · 🏷 tagged Meowijuana on 25 rows` (green).
+  - On migration-missing: `… · ⚠ BRAND NOT SAVED — run supabase_v5_50_fba_shipment_brand.sql first, then re-upload` (orange `dz-warn` styling).
+  - Brand-missing case also triggers a modal `alert()` so the user can't miss it — same body explaining the fix steps.
+- **Audit log entry** for `upload.fba_shipment_summary` now includes `brand`, `brandPersistedCount`, and `brandColumnMissing` so the persistence story is traceable.
+- **Re-upload semantics confirmed:** uploading the same CSV again with a NEW brand pick will UPDATE every row's brand to the new value (the upsert refreshes other fields too, but brand is set explicitly by the follow-up UPDATE). Re-upload + pick `Skip` leaves brand untouched (no UPDATE fires).
+- **`isMissingBrandColumnError` helper from v5.55** is reused unchanged — single source of truth for detecting both Postgres + PostgREST error wordings.
 
 ## Recent Fixes (v5.57) — FBA Shipments: Brand filter dropdown + left-align text cells (expanded SKU detail + parent row)
 - **User flagged two issues:**
