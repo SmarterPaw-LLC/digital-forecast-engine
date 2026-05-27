@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.50**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.51**
+
+## Recent Fixes (v5.51) — Inventory Planning CSV: Shipments column now exports the total inbound (+ two new opt-in columns)
+- **User flagged:** "how does the shipments column export on the csv? i'd like to see the total number inbound." The v5.17 Shipments column CSV emitted a pipe-separated list of `ShipmentID:status:qty` triples — useful for downstream parsing, useless for the actual question "how many units are inbound for this product?"
+- **`Shipments` column CSV is now a human-readable summary** matching what's on screen, plus the meaningful in-transit unit total: `N active · M total · K units in transit`. So a row that has 3 Working shipments totaling 4,500 units of inbound exports as `3 active · 7 total · 4,500 units in transit` instead of `FBA19A:Working:2100 | FBA19B:Working:1500 | …`.
+- **NEW `Inbound Units` column** (default OFF — opt-in via View popup, lives in INVENTORY group next to Shipments). Integer-only — same number as the orange 🚧 chip on the FBA Inbound column. Sortable, sums cleanly in Excel with `=SUM(…)`. Useful when you want to filter Top 10 by inbound or do other numeric analysis without parsing the summary string.
+- **NEW `Inbound Detail` column** (default OFF — opt-in via View popup). Carries the pre-v5.51 pipe-separated `ShipmentID:status:qty | …` format for users who want the full per-shipment breakdown in one cell. On-screen render is a short muted preview (`Work:2100 · Work:1500 …+1`); the CSV gets the full list.
+- **Math source for "units in transit"** is unchanged from v4.180: `ipInTransitFor(r)` returns `sum(quantity_shipped − quantity_received)` across every Working / Receiving / In-transit shipment for that master_id, via `ipFbaInTransitByMaster`. Same number the Status tier calc + the 🚧 chip + the `Amazon FBA Stock` scorecard all use, so the CSV column is consistent with everywhere else inbound shows up.
+- **No DB migration needed** — pure JS + column-registry change.
 
 ## Recent Fixes (v5.50) — FBA Shipments: brand tagging (auto-derive from items + prompt on summary upload)
 - **User request:** "i need the shipping detail to indicate which brand the shipment is for. if this can't be detected in the data, ask for in the upload." The shipment summary CSV has no SKU detail → can't detect brand from the data. Per-shipment .tsv detail DOES list items → can derive brand from joined `products.brand`.
