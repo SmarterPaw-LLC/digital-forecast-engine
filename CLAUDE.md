@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.31**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.32**
+
+## Recent Fixes (v5.32) — Catsy importer: separate `noop` action so up-to-date rows don't auto-approve
+- **User flagged:** "this is very confusing - why are the products with no updates preselected and the button shows 'already approved'? what is this doing for the user?" Rows that already had matching sp_sku AND populated image_url were being lumped under `action='update_image'` (same as rows that would actually write an image). Auto-approver swept them all up, inflating the "N approved" count with rows that did nothing.
+- **Root cause:** `update_image` was overloaded — meant both "will refresh image" and "match perfect, nothing to do" depending on a separately-derived `hasImg` flag that the approver didn't see.
+- **Fix — split into two distinct actions:**
+  - **`update_image`** — DB has no image AND Catsy provides one → will actually write `image_url`
+  - **`noop`** — sp_sku already matches AND either (a) DB already has an image, or (b) Catsy doesn't provide one → nothing to write
+- **Updated everywhere this matters:**
+  - `catsyBuildMatches` — new `updateOrNoop(dbProd)` helper resolves the action correctly across all 5 match tiers (SP SKU / ASIN / UPC / Shopify / Title)
+  - Auto-approve excludes `noop` (in addition to `replace_sku`)
+  - `catsyApproveAll(highOnly)` bulk button skips `noop` rows
+  - `catsySelectMatch` (manual pick) re-derives `noop` vs `update_image` correctly
+  - `actionBadge` renders a dedicated grey **NO-OP** chip with tooltip "Already up-to-date — SP SKU matches AND image is already populated"
+  - Summary line breaks them out: `… · N refresh image · M assign new SP SKU · K already up-to-date`
+- **New "Hide NO-OPs" toggle** in the action bar, checked by default. The table filters out `noop` rows by default so the user sees only actionable work. Original row indexes are preserved (the filter just skips rendering) so toggle/apply callbacks still work.
+- **Behavior on Jason's import**: the 226-ish NO-OPs that were inflating "276 approved" now drop out of the auto-approve count + are hidden from the table by default. Toggle the checkbox off to audit them.
 
 ## Recent Fixes (v5.31) — Catsy importer: show full product title (no truncation)
 - **User flagged:** "i can't see the full catsy product title in the uploader." Title cell was being chopped at 50 chars with an ellipsis; long Catsy descriptions (~80-150 chars common) were getting cut.
