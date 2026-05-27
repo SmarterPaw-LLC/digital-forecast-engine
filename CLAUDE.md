@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.42**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.43**
+
+## Recent Fixes (v5.43) — Category Manager: real dropdown for moving a sub-category
+- **User flagged:** "in the category edit menu, i should be able to choose another category from the drop down if i want to move a sub-category." v5.34 used an HTML `<datalist>` on a text input — technically the move-by-picking-existing flow worked, but the suggestions only appeared after the user clicked a tiny dropdown arrow or started typing. Users didn't realize they could browse all categories that way.
+- **Fix:** the Edit-mode Category field is now a proper `<select>` dropdown. Options are every existing top category, with a `+ New top category…` sentinel option at the bottom (rendered in green italic so it stands out). One click opens the dropdown; one more click picks a target.
+- **New top categories via the sentinel:** picking `+ New top category…` triggers a `prompt()` for the new name. The new name is injected as a fresh `<option>` just above the sentinel and selected. If the user cancels the prompt or enters an empty name, the dropdown reverts to its original value (tracked via `data-original` on the SELECT). Case-insensitive collision check: typing the name of an existing category in the prompt just picks the existing one (no duplicate option).
+- **`catmgrHandleCatChange(id)` is the onchange handler.** Lives next to `editCategoryRow` / `cancelCategoryEdit` / `saveCategoryRow`. Mutates only the live SELECT element — no state lifted into a global, no re-render needed.
+- **`saveCategoryRow` guards against the sentinel** leaking through (defense in depth — the handler should always resolve it, but if anything sneaks through, the save aborts with a clear message rather than persisting a literal `__new__` as a category name).
+- **Sub-category field stays free text** — renames are the common edit there, and unlike top categories, sub-categories don't form a constrained vocabulary.
+- **Edit button tooltip rewritten** to describe the new dropdown UX so users learn the move-vs-rename distinction without having to discover it.
 
 ## Recent Fixes (v5.42) — Drag-to-resize columns on Inventory Planning + Demand Forecast
 - **User flagged:** "i can't drag to resize columns anywhere." Column resize was never built — the dashboard rendered every TH with `min-width:<static>` from the column registry and there was no drag handle anywhere.
