@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.32**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.33**
+
+## Recent Fixes (v5.33) — Category Manager: inline edit per row
+- **User request:** "i need to be able to edit categories here."
+- **Was:** Settings → Category Manager only exposed **+ Add** + per-row **Remove**. To rename a category or subcategory, you had to remove + re-add, which broke the foreign-key link from products to categories.
+- **Now:** each row has an **Edit** button next to **Remove**. Click → row flips to two inline `<input>` fields (Category + Sub-category) with **✓ Save** / **Cancel** buttons. Saves run `UPDATE categories SET category=?, subcategory=? WHERE id=?` which preserves the row's `id`, so any products linked via `category_id` keep their link with the new names automatically.
+- **State:** `catMgrEditingIds` Set tracks which row id is currently being edited. `renderCatMgr` reads it and switches the row's render between read-only and edit mode.
+- **Audit log:** writes `category.edit` event with the new (category, subcategory) values.
+- **No DB migration needed** — uses the existing `categories` table.
 
 ## Recent Fixes (v5.32) — Catsy importer: separate `noop` action so up-to-date rows don't auto-approve
 - **User flagged:** "this is very confusing - why are the products with no updates preselected and the button shows 'already approved'? what is this doing for the user?" Rows that already had matching sp_sku AND populated image_url were being lumped under `action='update_image'` (same as rows that would actually write an image). Auto-approver swept them all up, inflating the "N approved" count with rows that did nothing.
