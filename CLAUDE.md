@@ -2,7 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.43**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.44**
+
+## Recent Fixes (v5.44) — Bundles tab: new "📦 BOM" view shows parent + component SKU IDs inline
+- **User request:** "on the bundles view, give me an option to toggle to a BOM view that shows the parent SKU and component SKUs - i need to see the IDs for all component SKUs."
+- **New view toggle** in the Bundles filter strip — pill pair: **🧾 Summary** (default — the existing one-row-per-bundle view) and **📦 BOM** (new — expanded). Active mode persisted to `localStorage.bundleViewMode`; survives tab-switches + reloads.
+- **BOM view layout** — each bundle renders as a grouped block:
+  - **Parent header row** — `surface2` background, prominent `BUNDLE` badge, brand chip + short_name (with full title in muted text), and EVERY parent identifier inline: `master_id` · `SP SKU` · `ASIN` · `Shopify SKU` · `Chewy SKU`. Right-most cell shows the component count. Click the row → opens the bundle's product modal.
+  - **Component rows** beneath the header — one row per BOM entry. `Qty×` on the left (right-aligned, bold), then `↳ Component Title`, then the component's `master_id`, `SP SKU`, `ASIN`, `Shopify SKU`, `Chewy SKU`, and a verified indicator (✓ green when `verified=true`, `⚠ unverified` amber chip otherwise). Click any row → opens that component's product modal.
+- **Missing component rows flagged inline** — when a BOM row references a `component_master_id` that no longer exists in `products` (deleted product, typo, etc.), the row renders in red with `⚠ Missing component master_id: <id>` so the user can spot orphans without opening the bundle modal.
+- **Empty BOM rows flagged inline** — bundles with no BOM defined yet show a single row reading `⚠ No BOM components defined yet — open the bundle to add them.` so they're visible but distinct from no-bundle-at-all.
+- **Sort order** — bundles alphabetically by title; components in their stored order within each bundle. Matches the v5.18 BOM CSV export convention so on-screen scanning agrees with exports.
+- **Single O(1) products lookup** built once per render (`new Map(allProducts.map(p => [p.master_id, p]))`) so component identifier lookups don't cost an O(N) scan per BOM row.
+- **Filters apply at the bundle level** — search + brand filter narrow the bundle list; if a bundle matches, its full BOM shows. So searching for a component title finds nothing in BOM mode — search by the bundle's title / SP SKU / ASIN to drill into a specific BOM.
+- **Row count line** updates per mode — Summary: `N bundles` (unchanged); BOM: `N bundles · M with BOM · K component rows` so the user sees the explosion factor at a glance.
+- **THEAD swap** — the column header row is rewritten per mode (different column set), so toggling modes doesn't leave stale headers above a mismatched body.
+- **No DB migration needed** — reads existing `products`, `bom`, and `allBomData` cache.
 
 ## Recent Fixes (v5.43) — Category Manager: real dropdown for moving + bulk rename for renaming a top category
 - **User flagged (initial):** "in the category edit menu, i should be able to choose another category from the drop down if i want to move a sub-category." v5.34 used an HTML `<datalist>` on a text input — technically the move-by-picking-existing flow worked, but the suggestions only appeared after the user clicked a tiny dropdown arrow or started typing. Users didn't realize they could browse all categories that way.
