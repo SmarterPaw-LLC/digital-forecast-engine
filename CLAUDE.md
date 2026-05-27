@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.53**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.54**
+
+## Recent Fixes (v5.54) — FBA Shipment Summary: handle "Ready to ship" status (parser already handled both old + new format)
+- **User flagged:** "looks like some brands are still on the old version of the amazon shipment list. can the uploader cleanly handle both?"
+- **Parser audit confirmed it already does** — v5.49's alias-tolerant `ci()` helper resolves every column whether the source is the OLD format (explicit `Shipment ID` column, `Created` header, `Status` at the end) or the NEW format (no `Shipment ID` column, `Created at` header, `Status` near the start). The explicit-ID-wins fallback means OLD-format files use the ID column directly, while NEW-format files extract the `(FBA…)` token from the trailing parens in the shipment name. No parser changes needed.
+- **One gap closed:** the OLD format surfaces a `Ready to ship` status (Amazon workflow step between Working and Shipped) that the v5.49 status badge didn't have a color for — it fell through to muted grey. Added a distinct teal `#14b8a6` badge so the lifecycle reads left-to-right across the visible color spectrum: Working (blue) → Ready to ship (teal) → Shipped (bright blue) → In transit (purple) → Receiving (orange) → Closed (green) / Cancelled (red).
+- **In-transit math already covered "Ready to ship"** via the v5.17 logic `if (!status.includes('closed'))` — anything not Closed counts as in-transit when the .tsv detail provides `quantity_shipped > 0`. Cancelled shipments slip past the filter too but contribute zero units (Amazon zeroes both shipped + received on cancellation), so they're effectively excluded.
+- **Verified via headers trace** at deploy time that both column header sets resolve correctly:
+  - OLD: `[shipment name, shipment id, created, last updated, ship to, skus, units expected, units located, status]` → all 9 fields found.
+  - NEW: `[shipment name, status, created at, last updated, ship to, skus, units expected, units located]` → 8 fields found; ID extracted from the trailing `(FBA…)` group in `shipment name`.
+- **No DB migration needed.**
 
 ## Recent Fixes (v5.53) — Inventory Planning: Amazon Status mode hides products without an ASIN
 - **User request:** "if a product doesn't have an ASIN it shouldn't appear on the amazon status view of the inventory planning module."
