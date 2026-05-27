@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.54**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.55**
+
+## Recent Fixes (v5.55) — v5.50 brand-fallback regex missed PostgREST's schema-cache error format
+- **User flagged:** the Shipment Summary upload still threw `FBA shipment summary upload error: Could not find the 'brand' column of 'fba_shipment_summaries' in the schema cache` — even though v5.50 added a graceful fallback for "brand column missing". Migration `supabase_v5_50_fba_shipment_brand.sql` hadn't been run, but the fallback was supposed to swallow this case cleanly.
+- **Root cause:** the v5.50 regex only matched the direct Postgres flavor (`column "brand" of relation "..." does not exist`) — but supabase-js / PostgREST surfaces a DIFFERENT error message when the column isn't in PostgREST's cached schema: `Could not find the 'brand' column of '<table>' in the schema cache`. Different wording, same root cause (column doesn't exist server-side); pre-v5.55 regex didn't catch it, so the error bubbled up as a fatal upload failure.
+- **Fix:** extracted a single source of truth — `isMissingBrandColumnError(msg)` — that checks both flavors. Matches when the message includes the word `brand` AND any of `does not exist` / `schema cache` / `not find`. Both upload sites (`parseFbaShipmentSummary` upsert + `parseFbaShipment` auto-backfill) now route through this helper.
+- **Verified at deploy time** with five unit-test cases covering both error formats + non-matches (unique-constraint violation, empty string, null). All PASS.
+- **Behavior now:** uploads succeed without the `brand` column when the migration hasn't been run, logging a console warning that points at the migration file. Once `supabase_v5_50_fba_shipment_brand.sql` is run, the fallback path simply doesn't fire (the upsert with `brand` succeeds first try) and brand tagging starts working.
+- **No DB migration needed.** This is a client-side regex fix.
 
 ## Recent Fixes (v5.54) — FBA Shipment Summary: handle "Ready to ship" status (parser already handled both old + new format)
 - **User flagged:** "looks like some brands are still on the old version of the amazon shipment list. can the uploader cleanly handle both?"
