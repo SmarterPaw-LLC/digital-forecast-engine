@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.41**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.42**
+
+## Recent Fixes (v5.42) — Drag-to-resize columns on Inventory Planning + Demand Forecast
+- **User flagged:** "i can't drag to resize columns anywhere." Column resize was never built — the dashboard rendered every TH with `min-width:<static>` from the column registry and there was no drag handle anywhere.
+- **Fix — generic `attachColumnResizers` helper** wired to both registry-driven tables:
+  - **6px-wide invisible strip at the right edge of each TH** is the grab target. Hover highlights it green (`var(--sp-green)`). Mousedown captures the live x + starting width; document-level mousemove updates `style.width` AND `style.minWidth` on the live TH so the column resizes in real time and body cells follow via the table's column layout. Mouseup commits to localStorage.
+  - **Double-click on the handle resets** that column to its registry default (`c.w`) — deletes the saved width and re-renders.
+  - **Click on the handle never triggers a sort** — `stopPropagation` on the handle's mousedown / click events. Sort still fires on a normal click anywhere else in the TH.
+  - **Locked columns and the checkbox column (`_chk`) are skipped** — no handle attached. (Resizing the row-selection checkbox doesn't help anyone.)
+- **Persistence:** per-browser via localStorage. `ipColWidths` for Inventory Planning, `fcColWidths` for Demand Forecast. Stored as `{ <col_key>: <pixels> }`. Cross-device sync would mean two more JSONB columns on `user_profiles`; not done yet — column widths are a personal preference more than a shared report state, and the per-browser local cache is fine for the v1.
+- **Apply path:** new helper `resolveColWidthCss(c, savedWidths)` returns the CSS width string for each column — saved override beats the registry default `c.w`. Both `renderInventoryTbl` and `renderTable` (Forecast) now use this in the `<th>` style, setting BOTH `width` and `min-width` so the user's choice is authoritative even when content would normally expand the column.
+- **Tooltips updated** to mention "Drag right edge to resize" on every column header. Sort hint still leads (since that's the more common click target).
+- **Group header row stays aligned automatically** — both tables compute group header colspans from contiguous runs of visible columns, and the group `<th>` doesn't carry a width; it inherits from the runs of underlying column `<th>`s. So resizing a column visually expands its group band without any extra code.
+- **Out of scope for v5.42 (follow-up if needed):**
+  - **P&L Amazon table** — also registry-driven (`PNL_COLUMNS`) but its registry doesn't carry a `w` default per column (widths come from browser auto-layout based on cell content). Wiring resize requires adding `w` defaults to every PNL column first. Easy follow-up; not done yet.
+  - **Other tables (Products / Bundles / Units Sold / COGS / Chewy Forecasts / FBA Shipments)** — bespoke header rendering, no shared registry. Each would need per-table wiring. Skipping for v1 since these aren't the data-dense workhorses the user iterates on most.
+  - **Cross-device sync** — see "Persistence" above.
 
 ## Recent Fixes (v5.41) — Inventory Planning: FBA snapshot freshness visible next to Amazon status
 - **User flagged:** "i don't see where you added the most recent inventory snapshot on the inventory planning module for amazon status." The v5.15 `amazon_inv_last_updated` column existed but was `default:false` and lived in the SKU group, far from the Status column. The Amazon FBA status math uses `fba_available + fba_inbound` from the most recent snapshot — but the user had no way to see how fresh that data was without enabling a column then visually associating it with the Status badge. Trust calibration was missing.
