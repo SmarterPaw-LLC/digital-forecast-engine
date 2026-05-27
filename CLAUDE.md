@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.51**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.52**
+
+## Recent Fixes (v5.52) — P&L: FBM badge on the Product cell, matches Inventory Planning treatment
+- **User request:** "can you indicate on the P&L page if an item is FBM the same way you list in on inventory page?"
+- **Fix:** orange `FBM` chip rendered between the brand chip and the title in the Amazon P&L's Product cell (`PNL_COLUMNS['title']`). Identical visual + tooltip copy to the Inventory Planning badge added in v4.196 — same `rgba(232,96,26,.18)` background, same `var(--sp-orange)` foreground, same `9px 1px 4px` size, same hover tooltip explaining the FBM semantics.
+- **Source of truth** is `allProducts.find(...).fulfillment_amazon` (master-level on `products.*` since v4.196 — one value applies to every region of a SKU). No new state, no new join — just looked up at render time from the cached products array.
+- **CSV export** now tags FBM rows in the Product cell text (`Brand | Title | ASIN | FBM` instead of `Brand | Title | ASIN`). FBA rows omit it to avoid visual noise. Makes spreadsheet filtering by FBM trivial — just search for `FBM` in the column.
+- **Column header tooltip** updated to describe the FBM chip so users discover the convention without having to hover a chip first.
+- **Skipped — Shopify P&L** — DTC-only, FBM doesn't apply (no Amazon listing concept). Same for the COGS page.
+- **Skipped — Diagnostics tables (matched / unmatched / off-week / duplicates)** — those exist for Looker reconciliation, not product decisions. Adding FBM there would clutter the per-ASIN aggregation views. The main P&L table is the right place.
+- **No DB migration needed** — reads existing `products.fulfillment_amazon` (added by `supabase_v4196_fulfillment_amazon_on_products.sql`).
 
 ## Recent Fixes (v5.51) — Inventory Planning CSV: Shipments column now exports the total inbound (+ two new opt-in columns)
 - **User flagged:** "how does the shipments column export on the csv? i'd like to see the total number inbound." The v5.17 Shipments column CSV emitted a pipe-separated list of `ShipmentID:status:qty` triples — useful for downstream parsing, useless for the actual question "how many units are inbound for this product?"
