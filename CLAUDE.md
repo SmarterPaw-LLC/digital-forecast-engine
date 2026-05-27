@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.30**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.31**
+
+## Recent Fixes (v5.31) — Catsy importer: show full product title (no truncation)
+- **User flagged:** "i can't see the full catsy product title in the uploader." Title cell was being chopped at 50 chars with an ellipsis; long Catsy descriptions (~80-150 chars common) were getting cut.
+- **Fix in two places:**
+  - **Review table cell** — removed the 50-char `slice + …` truncation. Now uses `max-width:280px;white-space:normal;word-break:break-word` so long titles wrap naturally inside a constrained column. Row height auto-grows as needed.
+  - **Search popover header** — same fix, removed the 80-char truncation and applied `word-break:break-word`.
+- Both retain a `title=` attribute with the full string as a belt-and-suspenders for hover tooltip.
 
 ## Recent Fixes (v5.30) — Catsy import "+ Create" prompts for brand / category / sub-category
 - **User request:** "on the catsy upload, let me set the category and sub-category and brand if a match isn't found."
