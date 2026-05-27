@@ -2,7 +2,29 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.44**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.45**
+
+## Recent Fixes (v5.45) — Merge tool: backfill every value-bearing column added since the tool was last updated
+- **User flagged:** "can you make sure the merge keeps the image field and other fields we've added." The pre-v5.45 merge backfill list covered only 9 fields (asin, sp_sku, shopify_sku, chewy_sku, barcode, category_id, msrp, wholesale, supplier) — every value-bearing column added to `products` between v4.75 and v5.21 was silently dropped from the survivor even when the survivor row had no value in that column.
+- **Fields the merge was silently dropping until v5.45:**
+  - **`image_url`** (v5.21) — product image URL surfaced on Products tab, Catsy importer, P&L thumbnails, etc. The trigger for this fix.
+  - **`fulfillment_amazon`** (v4.196) — FBA/FBM per-product override. Default is 'FBA' so the falsy-guard would never fire; v5.45 special-cases this to adopt the duplicate's 'FBM' only when the survivor is still at default.
+  - **`forecast_notes`** (v4.99) + `notes` — per-product annotations.
+  - **`reorder_threshold_days`, `reorder_qty_days`** (v4.161) — per-product PO planning overrides.
+  - **`new_product_amazon`, `deprecated_product_amazon`** (v4.160) — Amazon lifecycle flags. Boolean — adopt only when duplicate has `true` AND survivor has `false/null` (never downgrades a deliberately-set survivor flag).
+  - **`new_amazon_daily_units`** (v4.172) — launch-override daily rate.
+  - **Full seasonality bundle** (v4.75 + v4.77 + v4.78): `sea_method`, `sea_curve_calculated`, `sea_curve_manual`, `sea_min_weeks`, `sea_calculated_at`, `sea_weeks_of_data`, `seasonal_type`. Adopted as a unit — if duplicate has done seasonality work (method ≠ 'category-default') AND survivor is still on default, the WHOLE bundle migrates (curve + threshold + provenance) so the analysis isn't half-cut.
+- **Fix structure** — five labeled sections inside the `runMerge` patch block:
+  - **1a. Simple identifier + descriptive fields** — explicit array `SIMPLE_BACKFILL_FIELDS` with the falsy-guard pattern. Adding new value-bearing columns in the future = one entry in the array.
+  - **1b. Boolean lifecycle flags** — explicit array `BOOL_FLAG_FIELDS` with `=== true` guard to avoid accidentally downgrading.
+  - **1c. `fulfillment_amazon`** — special-cased because of the non-null 'FBA' default.
+  - **1d. Seasonality bundle** — atomic adoption when `sea_method` shifts off default.
+  - **`seasonal_type`** — separate adoption because it's independent of `sea_method` (a row can have type='seasonal' but method='category-default').
+- **Intentionally NOT auto-filled** (called out in the comment):
+  - `short_name` — editorial display label, survivor's choice (even if empty) wins. Pre-existing decision.
+  - `brand`, `active`, `is_bundle` — fundamental product-identity fields. The user chose the survivor knowing what they were keeping.
+- **No DB migration needed** — pure JS logic change. Existing merges already in the DB are unaffected; future merges will preserve more state.
+- **Tested mentally for backwards-compat:** every field in the new `SIMPLE_BACKFILL_FIELDS` array was previously falling through to "survivor wins by default" via the old code's omission. Old behavior is a strict subset of new behavior (everything that was preserved before is still preserved; new fields gain proper backfill). No regression risk.
 
 ## Recent Fixes (v5.44) — Bundles tab: new "📦 BOM" view shows parent + component SKU IDs inline
 - **User request:** "on the bundles view, give me an option to toggle to a BOM view that shows the parent SKU and component SKUs - i need to see the IDs for all component SKUs."
