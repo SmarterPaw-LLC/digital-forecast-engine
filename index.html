@@ -20642,11 +20642,16 @@ function renderCatMgr() {
         const catOpts = distinctCats.map(c => `<option value="${esc(c)}"${c===cat?' selected':''}>${esc(c)}</option>`).join('');
         html += `<tr style="border-bottom:1px solid var(--border);background:rgba(96,200,250,.05)">
           <td style="padding:6px 16px">
-            <select id="catmgr-cat-${row.id}" data-original="${esc(cat)}" onchange="catmgrHandleCatChange(${row.id})" title="Pick another top category to MOVE this sub-category there. Choose '+ New top category…' to create a brand new top category."
-              style="width:100%;background:var(--surface2);border:1px solid var(--blue);border-radius:5px;color:var(--text);font-size:12px;padding:5px 8px;outline:none;cursor:pointer">
-              ${catOpts}
-              <option value="__new__" style="font-style:italic;color:var(--sp-green)">+ New top category…</option>
-            </select>
+            <div style="display:flex;gap:4px;align-items:center">
+              <select id="catmgr-cat-${row.id}" data-original="${esc(cat)}" onchange="catmgrHandleCatChange(${row.id})" title="MOVE this sub-category: pick another top category to move it there, or pick '+ New top category…' to create a new top. RENAME the current top everywhere with the ✎ button at right."
+                style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--blue);border-radius:5px;color:var(--text);font-size:12px;padding:5px 8px;outline:none;cursor:pointer">
+                ${catOpts}
+                <option value="__new__" style="font-style:italic;color:var(--sp-green)">+ New top category…</option>
+              </select>
+              <button class="btn-ghost" onclick="catmgrRenameTopCategory(${row.id}, '${esc(cat)}')"
+                title="Rename '${esc(cat)}' EVERYWHERE — every sub-category currently under '${esc(cat)}' gets the new top-category name. Useful for typos or naming-convention updates. (Use the dropdown at left to MOVE just this row to a different top instead.)"
+                style="font-size:10px;padding:4px 8px;color:var(--text2);border:1px solid var(--border2);background:var(--surface);border-radius:5px;cursor:pointer;white-space:nowrap;flex-shrink:0">✎ Rename</button>
+            </div>
           </td>
           <td style="padding:6px 16px">
             <input type="text" id="catmgr-sub-${row.id}" value="${esc(row.subcategory)}" placeholder="Sub-category" style="width:100%;background:var(--surface2);border:1px solid var(--blue);border-radius:5px;color:var(--text);font-size:12px;padding:5px 8px;outline:none" />
@@ -20690,6 +20695,43 @@ function editCategoryRow(id) {
 function cancelCategoryEdit(id) {
   catMgrEditingIds.delete(id);
   renderCatMgr();
+}
+
+// v5.43 — bulk rename a top category across every sub-category that
+// currently lives under it. Triggered by the ✎ Rename button next to the
+// edit-mode dropdown. Different semantic from "MOVE this row to another
+// top" (the dropdown change) — this updates EVERY row where category
+// equals the old name, so renames stay consistent across the whole catalog
+// rather than splitting one top into two with a typo'd half.
+//   • Collision check: if a top category with the new name already exists,
+//     warns explicitly (the result is effectively a merge of the two tops).
+//   • Idempotent: typing the same name as a no-op exits without writing.
+//   • Audit log records `category.rename_top` with from / to / affected count.
+async function catmgrRenameTopCategory(id, oldName) {
+  const newNameRaw = prompt(`Rename the top category "${oldName}" to:\n\nThis updates EVERY sub-category currently under "${oldName}". To move just this one row to a different top, use the dropdown at left.`, oldName);
+  if (newNameRaw == null) return;  // cancelled
+  const newName = newNameRaw.trim();
+  if (!newName) { alert('New name cannot be empty.'); return; }
+  if (newName === oldName) return;  // no change
+
+  const affectedRows = allCategories.filter(c => c.category === oldName);
+  const existingTop  = allCategories.some(c => c.category === newName);
+  const verb = existingTop
+    ? `MERGE "${oldName}" into the existing top "${newName}"?`
+    : `Rename "${oldName}" → "${newName}"?`;
+  const msg = `${verb}\n\n${affectedRows.length} sub-categor${affectedRows.length === 1 ? 'y' : 'ies'} will be updated.${existingTop ? `\n\nAfter this, "${oldName}" no longer exists — every sub-category under it lives under "${newName}".` : ''}`;
+  if (!confirm(msg)) return;
+
+  const sb = await getSB();
+  const { error } = await sb.from('categories').update({ category: newName }).eq('category', oldName);
+  if (error) { alert('Rename failed: ' + error.message); return; }
+  await logAudit('category.rename_top', { from: oldName, to: newName, affected_rows: affectedRows.length, merged_into_existing: existingTop });
+  catMgrEditingIds.delete(id);
+  await loadCategories();
+  renderCatMgr();
+  // Refresh tables whose cells display category labels (Products page reads
+  // via allCategories lookup; the rename flows through on next render).
+  if (typeof renderProductsTbl === 'function') renderProductsTbl();
 }
 
 // v5.42 — handler for the Edit-mode category <select>. Fires onchange.
