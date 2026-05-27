@@ -2,7 +2,30 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.38**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.39**
+
+## Recent Fixes (v5.39) — Query Database: inline cell editing for result rows
+- **User request:** "instead of this [SQL purge approach] — let me edit the rows that appear in query results (for fields that do not upsert to other tables)." Jason wanted a safer + faster way to clean up data than hand-rolled UPDATE/DELETE SQL: run a SELECT, then edit the cells inline. RLS is the safety net — every edit goes through `sb.from(table).update().eq(pk, val)`, so anything the policy would deny is rejected by Postgres.
+- **New "✏ Edit mode" checkbox** in the Query Database results header, next to **📋 Copy CSV**. Off by default. Flipping it on:
+  - Detects the main table from the query's FROM clause (`detectQueryMainTable` — handles `from products`, `from public.products`, `FROM products AS p` and joins where the first table after FROM is the main one)
+  - Resolves the table's PK (`detectMainPk`) from a per-table map: `products → master_id`, `inventory → id`, `categories → id`, `bom → id`, `sales_weekly → id`, `sku_economics → id`, `chewy_forecasts → id`, `fba_inventory_snapshots → id`, etc. Composite-PK tables (or tables not in the map) are flagged disabled — editing won't be offered.
+  - Computes editable columns (`computeEditableCols`) — locks the PK, FK conventions (`*_id`, `master_id` references), managed timestamps (`created_at`, `updated_at`, `updated_by`), and joined columns from other tables. Editable columns appear with a tiny `✎` marker in the cell.
+- **Edit UX:** click an editable cell → replaced with a styled `<input>` pre-filled with the current value. **Enter** saves, **Escape** cancels, **Tab** commits and moves to the next cell. Successful save flashes the cell green via a CSS transition before re-rendering with the new value. Failed save (RLS denial, type error, etc.) flashes red with the error message in a tooltip.
+- **Save mechanism:** `commitCellEdit(rowIdx, col, newVal)` calls `sb.from(queryMainTable).update({[col]: newVal}).eq(queryMainPk, pkVal)` — respects the existing RLS policies (every data table is `authenticated`-only with row-scoped policies, see CLAUDE.md "Setup notes — Supabase RLS"). If the user lacks UPDATE permission on the table or row, Postgres returns 403 and the cell flashes red. No need for the dashboard to whitelist tables — the database enforces.
+- **Edit banner** above the results table (`updateEditBanner`) — when edit mode is on, shows: `Editing table: <name> · PK: <col> · Editable: <col1, col2, ...> · Locked: <col3, col4, ...>`. So the user can see at a glance which columns will accept clicks. For tables with composite PKs or unrecognized tables, the banner reads: `Inline editing not available for this query (no single-column PK detected — use SQL).`
+- **State variables added** at module scope:
+  - `queryMainTable` — the table from the FROM clause
+  - `queryMainPk` — the PK column name (string)
+  - `queryEditableCols` — `Set<string>` of columns the user can click to edit
+  - `queryEditMode` — `boolean`, toggled by the checkbox
+- **`runDbQuery`** now computes these on every query execution AND delegates row rendering to `renderQueryRows()` (was inline). This means the same data can re-render with editable markers turned on/off without re-running the query — toggling Edit mode is instant.
+- **Audit log:** every successful cell edit writes `query.cell_edit` with `{ table, pk_col, pk_val, column, old_value, new_value }` for full trace. Failures aren't logged (Postgres rejected them; no state change occurred).
+- **No DB migration needed** — uses existing tables + existing RLS policies. Safer than ad-hoc SQL because it can't issue DELETEs or multi-row UPDATEs by accident; one cell change = one UPDATE WHERE pk = value.
+- **Out of scope for v5.39 (deferred):**
+  - **Bulk edits across multiple selected cells.** Possible follow-up if Jason hits a use case where one cell at a time is too slow.
+  - **DELETE row** button. Same RLS protection would apply; left out for now because the query results table is a thin wrapper and a Delete button there is a bigger UX change.
+  - **Type-aware inputs** (number/date/boolean pickers). Current implementation uses a text input — Postgres validates types on save (e.g., entering "abc" into a numeric column flashes red with the cast error). Good enough for v1.
+  - **Insert new row.** Different UX entirely; would need column metadata + a form. Out of scope.
 
 ## Recent Fixes (v5.38) — Saved queries persist to Supabase (per-user, cross-device)
 - **User request:** "does this need to be written to the backend? how will these save long term?" → "yes, that's what i asked for."
