@@ -2,7 +2,27 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.49**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.50**
+
+## Recent Fixes (v5.50) — FBA Shipments: brand tagging (auto-derive from items + prompt on summary upload)
+- **User request:** "i need the shipping detail to indicate which brand the shipment is for. if this can't be detected in the data, ask for in the upload." The shipment summary CSV has no SKU detail → can't detect brand from the data. Per-shipment .tsv detail DOES list items → can derive brand from joined `products.brand`.
+- **⚠ SQL TO RUN:** `supabase_v5_50_fba_shipment_brand.sql` — adds `fba_shipment_summaries.brand TEXT` (nullable). Graceful degradation if not run: app catches the "column does not exist" error on upload + falls back to writing the row without the brand field, with a console warning pointing at the migration file.
+- **Three-pronged brand resolution** on the FBA Shipments page (new Brand column, sortable, between Region + Ship To):
+  1. **Explicit summary brand** (`fba_shipment_summaries.brand`) wins — set at upload time via the new prompt.
+  2. **Derive from items** when detail .tsv exists — single-brand items → that brand chip; multi-brand items → orange `MIXED` chip.
+  3. **No data → `—`** (blank, muted) when summary brand is null AND no detail items resolve to any catalog product.
+- **Upload prompt (`promptForShipmentBrand`)** — modal at the start of every summary CSV upload. Five buttons:
+  - Meowijuana (green) · Doggijuana (blue) · Kitty Ka-Zoom (pink) — assigns to every row in this upload.
+  - `Mixed` (orange) — for downloads that span multiple brands; renders as orange `MIXED` chip on the FBA Shipments page.
+  - `Skip — leave brand blank` (muted) — useful when you plan to upload detail .tsv files later and want auto-derivation to fill it in.
+  - `✕ Cancel upload` — aborts cleanly without writing.
+  - Row count for the upload is shown in the prompt header so you know how many shipments will get tagged.
+- **Auto-backfill from detail .tsv** — `parseFbaShipment` (per-shipment .tsv parser) now checks the summary row's brand after upserting items. If `brand` is null AND every matched line item resolves to the same `products.brand`, sets it. Mixed-brand shipments leave the column null (the prompt is the way to tag those). Non-fatal try/catch — the detail upload itself succeeds even if the backfill fails.
+- **Skip semantics preserved on re-upload** — picking `Skip` strips `brand` from the upsert payload entirely (vs sending `brand: null`), so a re-upload doesn't blank out a previously-set brand.
+- **Brand column on FBA Shipments page** — sortable (blanks sort to the bottom), 76px wide, rendered with the same `chip c-meow / c-doggi / c-kkz` brand chips used elsewhere in the app. `MIXED` is an orange chip with tooltip explaining the cause.
+- **`shipGroupBrand(g)` helper** is the single source of truth for the resolution logic — used by the column sort, the row render, AND will be the natural hook for any future filter (e.g., brand-filter dropdown) if needed.
+- **Colspans bumped** from 11 → 12 across loading state / error state / empty state / expanded-detail rows (was easy to miss — all four were caught).
+- **No regression on pre-v5.50 uploads** — the alias-tolerant `ci()` from v5.49 still works; the migration is the only setup step.
 
 ## Recent Fixes (v5.49) — FBA Shipment Summary CSV: parser handles Amazon's 2026 format + new "Missing detail" filter
 - **User flagged (1):** Shipment Summary upload threw an error on a fresh download. Amazon changed the export format in 2026 — three breaking changes vs the pre-v5.49 parser:
