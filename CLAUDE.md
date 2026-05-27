@@ -2,7 +2,28 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.36**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.37**
+
+## Recent Fixes (v5.37) — Query Database: saved user queries + live schema browser
+- **User request:** "give me the option to save my own queries, also do a lookup to see what columns are available in the query editor."
+
+### 1. Saved queries
+- New **💾 Save** button next to **▶ Run Query** in the header.
+- Click → prompt for a name → query stored to `localStorage.dbUserQueries` as `[{ name, sql, savedAt }]`.
+- Saved queries appear in a new **💾 Saved:** chip row above the editor (green tint to distinguish from presets).
+- Each chip has a `×` button to delete (with confirmation).
+- Re-saving with an existing name asks "Overwrite?" so accidental clobbering is caught.
+- Audit log writes `query.save` and `query.delete` events.
+- localStorage scope is per-browser; future cross-device sync would move this to `user_profiles.dbUserQueries` (jsonb).
+
+### 2. Schema browser
+- New collapsible **🔍 Schema browser** above the editor.
+- On first open, calls `loadDbSchema()` — runs `select table_name, column_name, data_type from information_schema.columns where table_schema='public'` via the existing `exec_sql` RPC.
+- Result cached in `dbSchemaCache` for the session.
+- Renders as nested `<details>` elements: one per table, expandable to show every column as a clickable button.
+- Click a column button → text inserts at the editor's cursor (with a leading space if needed to avoid concatenation).
+- Header shows count: "· 18 tables / views · 247 columns · click a name to insert at cursor".
+- Falls back gracefully with a red error message if `exec_sql` isn't installed (links to CLAUDE.md migration note).
 
 ## Recent Fixes (v5.36) — New query preset: "Products w/ Amazon ASIN"
 - **User request:** "add a query for all products with an amazon ASIN with title, short title, and ID fields."
