@@ -2,7 +2,27 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.40**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.41**
+
+## Recent Fixes (v5.41) — Inventory Planning: FBA snapshot freshness visible next to Amazon status
+- **User flagged:** "i don't see where you added the most recent inventory snapshot on the inventory planning module for amazon status." The v5.15 `amazon_inv_last_updated` column existed but was `default:false` and lived in the SKU group, far from the Status column. The Amazon FBA status math uses `fba_available + fba_inbound` from the most recent snapshot — but the user had no way to see how fresh that data was without enabling a column then visually associating it with the Status badge. Trust calibration was missing.
+- **Fix — three new surfaces, all driven by a new `getAmazonSnapshotFreshness(r)` helper:**
+  1. **Inline stale-data chip next to the Status badge** (per-row, Amazon + Combined modes only). Renders ONLY for FBA-relevant rows (has ASIN, not FBM, not deprecated) when the snapshot is older than 7 days OR missing entirely. Three states with distinct icons + colors:
+     - `⏰ 12d ago` (orange) — 8-30 days old
+     - `🔴 45d ago` (red) — older than 30 days
+     - `⚠ no snap` (red) — no FBA snapshot ever uploaded for this region
+     Fresh (≤7d) and irrelevant rows render nothing — keeps the UI clean.
+  2. **New "Snapshot freshness" section in the Status tooltip** (Amazon + Combined modes). Below the tier math, the tooltip now spells out the snapshot date + age + a recommendation:
+     - Fresh: "✓ FBA inventory snapshot: 2026-05-26 · 1d ago. Data is fresh; status tier is trustworthy."
+     - Stale (8-30d): "ℹ Older than 7 days — fine for a quick read but re-upload before placing a real order."
+     - Very stale (>30d): "⚠ Older than 30 days — fba_available + fba_inbound figures driving this tier could be wildly off. Re-upload before trusting the status."
+     - Never: "⚠ No FBA inventory snapshot uploaded yet. Status math is using whatever was loaded from the legacy upload (could be zero)."
+  3. **FBA Stock scorecard tile (Amazon mode bottom row) gets a snapshot freshness sub-line.** Shows the OLDEST snapshot age across all ASIN rows in scope (filtered + selected aware), color-coded by staleness. If any row in scope has no snapshot at all, the line reads `⚠ N rows missing snapshot` in red — so the user sees data gaps without drilling into individual rows.
+- **Pooled rows use the OLDEST snapshot across regions** — staleness on any region is the limiting factor, matching the v5.15 column behavior. A US+CA pooled row where US is fresh but CA is 45d stale flags as 🔴 stale.
+- **Helper `getAmazonSnapshotFreshness(r)`** returns `{ date, ageDays, ageLabel, color, tier }` with `tier ∈ {fresh, stale, very_stale, never}`. Lives next to `getStatusTooltipFor` for proximity. Used in all three surfaces above so the date-arithmetic + color thresholds (7d / 30d) stay in lockstep.
+- **Existing v5.15 column unchanged** — `amazon_inv_last_updated` still available as an opt-in column in the SKU group for users who want the date in the table proper. The v5.41 additions surface it where it matters for trust calibration (the Status column) without forcing users to add a separate column.
+- **FBM + deprecated rows skip the chip** — FBM doesn't use FBA stock (warehouse drain only); deprecated rows have their reorder math suppressed (Status reads "⛔ Deprecated"). Neither benefits from snapshot freshness annotation.
+- **No DB migration needed** — uses the existing `fba_inventory_snapshots` table + the `amazon_inv_last_updated` field already attached to records by v5.15's load logic.
 
 ## Recent Fixes (v5.40) — Query Database: edit a saved query in place
 - **User flagged:** "i can't edit and save a saved query." The v5.37/v5.38 save flow always opened a `prompt()` asking for a name, even when a saved query was already loaded in the editor — so editing meant typing the exact same name back in, then clicking through an "Overwrite?" confirm dialog. Painful, and discouraged iterating on saved queries.
@@ -1480,6 +1500,10 @@ Suggested presets to write: low inventory alert, velocity leaders (top 50 by v30
 ## Setup notes — Supabase RLS + table GRANTs
 
 **Gotcha learned 2026-05-10:** RLS policies are LAYERED on top of Postgres role grants. The `authenticated` role needs explicit `GRANT SELECT/INSERT/UPDATE/DELETE` on the table — without it, PostgREST returns 403 BEFORE RLS gets a chance to evaluate. The first auth setup migration only granted sequences, not tables, so any new table created post-setup (like `product_cogs`) would 403 on read until grants were added. Both `supabase_auth_setup.sql` (5b) and `supabase_product_cogs_setup.sql` now include `grant ... on all tables in schema public to authenticated` + `alter default privileges`. If a NEW table is ever added after this, also run a one-line grant for that table.
+
+**Supabase policy change deadline 2026-10-30:** Supabase announced (email received 2026-05-27) that on Oct 30, 2026, new tables in `public` schema will no longer be exposed to the Data API by default — explicit GRANTs become mandatory. **No action required for existing tables** — they're grandfathered and our 15 existing tables all have full `authenticated` DML grants confirmed via the audit query (see Active Issues #4 below). The `alter default privileges` clause from `supabase_auth_setup.sql` already covers future tables created via SQL Editor by the postgres role, so this aligns Supabase's defaults with what we were already doing. Belt-and-suspenders rule for future migrations: any new `CREATE TABLE` file should include an explicit `grant select, insert, update, delete on table <name> to authenticated;` right after the create, even though default privileges should cover it.
+
+**Anon role gotcha — `supabase_revoke_anon_grants.sql` (recommended for run, 2026-05-27):** the original public-schema defaults (pre-v4.60) granted full DML to the `anon` role on every table. The v4.60 auth migration added RLS policies that gate access to authenticated users at the ROW level, but didn't revoke the underlying table-level grants — so for 8 older tables (`bom`, `categories`, `channel_listings`, `chewy_forecasts`, `inventory`, `products`, `sales_weekly`, `sku_economics`) the anon role still holds dead-weight grants. RLS policies do block anon today, but defense in depth: if any policy is ever accidentally configured as `USING (true)`, the grant means anon would immediately get full access via the publicly-embedded anon key. The migration revokes `SELECT/INSERT/UPDATE/DELETE` from anon on all current + future public-schema tables. Reversible per-table if a specific table ever needs anon access (none does today — the dashboard requires login for every feature). Tables created post-v4.60 (audit_log, fba_*, product_cogs, sku_economics_eu, user_profiles) already have anon properly locked down, so the migration is a no-op for those — it just consolidates the older tables to match. Hard rule going forward: anon access stays revoked unless a specific public-facing surface requires it.
 
 ## Recent Fixes (v4.112) — Forecast search + Velocity Window default/persistence
 - **Forecast search now matches every identifier.** Was `(r.title + r.asin + r.supplier).includes(srchTerm)` — so typing "CF312" (sp_sku) or "SP-0123" (master_id) returned nothing because those fields weren't in the search blob. Expanded the search blob to include `title`, `short_name`, `master_id`, `sp_sku`, `shopify_sku`, `chewy_sku`, `asin`, and `supplier`. Matches the search behavior on the Seasonality / P&L tabs.
