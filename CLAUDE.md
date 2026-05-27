@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.34**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.35**
+
+## Recent Fixes (v5.35) — Catsy importer search: render bundle components inline
+- **User request:** "on the catsy upload, when i search for a product to match, i need to see the components of the bundle."
+- **Now** each bundle row in the Catsy search popover renders its BOM components below the standard product info, indented under a dashed separator:
+  - Format: `↳ <qty>× <component title>`
+  - Component title pulled via `allProducts` lookup (uses `short_name` first, falls back to full `title`, then `master_id` if the component is missing entirely)
+  - Long titles truncated to 50 chars
+  - Unverified BOM rows show a ⚠ amber badge so you know that BOM hasn't been QC'd yet
+  - Bundles with no BOM defined yet show `↳ (no components defined yet)` in italic muted text
+- **Single-pass index:** built `productById = new Map(allProducts.map(...))` once per render so the BOM lookup is O(1) per component, not O(N).
 
 ## Recent Fixes (v5.34) — Category Manager: move sub-categories between top categories + merge into another row
 - **User request:** "under the category manager i should be able to move sub-categories to another top category - this should fix all instances of categories across pages. also, i should be able to merge sub categories into other ones."
