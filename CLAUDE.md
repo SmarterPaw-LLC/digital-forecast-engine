@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.39**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.40**
+
+## Recent Fixes (v5.40) — Query Database: edit a saved query in place
+- **User flagged:** "i can't edit and save a saved query." The v5.37/v5.38 save flow always opened a `prompt()` asking for a name, even when a saved query was already loaded in the editor — so editing meant typing the exact same name back in, then clicking through an "Overwrite?" confirm dialog. Painful, and discouraged iterating on saved queries.
+- **Fix — "active saved query" state.** New `activeSavedQueryIdx` tracks which saved query (if any) is currently loaded into the editor. Clicking a saved-query chip sets active; clicking a preset clears active.
+- **💾 Save button is now state-aware.**
+  - Active query loaded → button reads **`💾 Update '<name>'`** (green fill) and clicking updates that query in place — NO name prompt, NO overwrite confirm. Just saves.
+  - No active query → button reads **`💾 Save`** (neutral fill) and clicking prompts for a name like before (the v5.37 flow).
+  - If the editor SQL is byte-identical to the stored copy → shows a `No changes to save in '<name>'` toast next to the button instead of writing a no-op revision.
+- **New `💾+ Save as…` button** next to Save. Always forks to a NEW saved query regardless of active state — pre-fills the name prompt with `'<current name> (copy)'` when forking from an active query so duplicating is one click + Enter. If you type a name that already exists, the existing overwrite-confirm dialog still fires.
+- **Active chip visually distinct.** The active saved-query chip uses the same green-fill treatment as the selected preset chip (solid `var(--sp-green)` background with white text) — so at a glance you can see which query the Save button will update.
+- **Ephemeral toast instead of `alert()`** for "saved" / "no changes" feedback (`qToast(msg)`). 2-second green pill next to the Save button. Keeps the iteration loop fast — saving doesn't yank focus into a dialog you have to dismiss.
+- **Delete-aware active state.** Deleting the active query clears active; deleting a query at a lower index shifts active down by one so it keeps pointing at the same query.
+- **Audit log:** in-place updates log as `query.update` (new event) instead of `query.save`, so the distinction between "first save of a new query" vs "edit of an existing saved query" is visible in the audit trail.
+- **No DB migration needed** — same `user_profiles.db_user_queries` JSONB column from v5.38.
 
 ## Recent Fixes (v5.39) — Query Database: inline cell editing for result rows
 - **User request:** "instead of this [SQL purge approach] — let me edit the rows that appear in query results (for fields that do not upsert to other tables)." Jason wanted a safer + faster way to clean up data than hand-rolled UPDATE/DELETE SQL: run a SELECT, then edit the cells inline. RLS is the safety net — every edit goes through `sb.from(table).update().eq(pk, val)`, so anything the policy would deny is rejected by Postgres.
