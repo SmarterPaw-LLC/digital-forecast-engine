@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.47**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.48**
+
+## Recent Fixes (v5.48) — Inventory Planning: click-to-open shipments (Shipments column on by default + clickable 🚧 chip)
+- **User flagged:** "i need a way to click to open shipments from the inventory planning module." The v5.17 Shipments column + `openIpShipmentsViewer` modal already existed — but the column was `default:false`, so users with the v4.166 column-visibility default set never saw the 📦 View button. Click-to-open existed but was invisible.
+- **Two access paths now:**
+  - **Shipments column** flipped to `default:true`. New users + anyone resetting to defaults see it. The 📦 View button on each row opens the viewer with the per-shipment breakdown (status · qty shipped / located · dates · destination FC).
+  - **🚧 in-transit chip on the FBA Inbound column** is now a button. Click anywhere you see 🚧 on Inventory Planning and you jump straight to the shipments viewer for that master_id — filtered visually because the chip is only visible when active (Working / Receiving) shipments exist for that row. The chip got a subtle background + border styling to make the click affordance obvious.
+- **One-time migration** so existing users with saved `ipVisibleCols` (which exclude `shipments` because v5.17 shipped it as default-off) auto-pick up the column on first load post-v5.48. Sets `ipShipmentsAutoShownV548 = '1'` in localStorage after the inject so users who DELIBERATELY hide it later don't get it forced back on next page-load.
+- **`event.stopPropagation()`** on both click handlers — the parent inventory row's onclick (which opens the inventory edit modal) doesn't also fire when the user clicks the View button or the 🚧 chip.
+- **Empty-state handling preserved** — the existing v5.17 modal gracefully shows "No FBA shipments found — upload shipment .tsv files via Data → Uploads" if the user lands on a product that has no shipments cached. So even when the column shows `—` (no shipments), clicking through is safe.
 
 ## Recent Fixes (v5.47) — BOM view flags inactive bundles + inactive components
 - **User request:** "on the bom module please flag if a sku is inactive." The v5.44 BOM view rendered every parent + component row identically regardless of `products.active` — so a bundle still listed in your BOM might be silently inactive (won't fulfill if a customer orders it) or a component could be inactive (BOM won't physically assemble when the bundle is built). No visual cue meant these only surfaced when something broke downstream.
