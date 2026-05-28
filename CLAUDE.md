@@ -2,7 +2,26 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.60**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.61**
+
+## Recent Fixes (v5.61) — Global async-load indicator in the header
+- **User feedback:** "i can't tell across this app when things are still updating." Confirmed when an earlier false-positive bug report turned out to be FBA in-transit data finishing 2-3 seconds after first render — there was no visible signal that the numbers on screen could still shift.
+- **Fix — global `_pendingLoads` tracker** wired to a header pill that surfaces in-flight async loads:
+  - **`markLoadStart(key)` / `markLoadEnd(key)`** — push / pop a string key onto the in-flight set. Idempotent counter so nested same-key loads resolve only on the last `markLoadEnd`.
+  - **`trackLoad(key, promise)`** — convenience wrapper that auto-registers/clears via `.finally()`. Returns the original promise so it composes with `await`.
+  - **Header pill `#loadingIndicator`** sits next to the Live clock. Two states:
+    - **Pending (≥1 source in flight):** orange `🔄 loading N…` with a hover tooltip listing every pending source name (e.g., `FBA in-transit shipments`, `products + velocity + inventory`, `Chewy forecasts`).
+    - **All resolved:** briefly flashes green `✓ ready` for 1.5s then fades out. So the user gets a positive confirmation that the latest numbers are now final.
+- **Wrapped these key async loaders:**
+  - `loadProducts` → key `products catalog`
+  - The init's parallel Promise.all (products + velocity + inventory + categories + COGS) → key `products + velocity + inventory`
+  - `loadFbaInTransit` → key `FBA in-transit shipments` (THE one whose 2s delay caused the false-positive bug report)
+  - `loadFbaShipments` → key `FBA shipments + summaries`
+  - `loadProductCogs` → key `product COGS`
+  - `loadChewyFcLatest` → key `Chewy forecasts`
+- **Easily extensible** — any future loader adds one line at start + one in `finally` to participate. The pill auto-updates.
+- **Cheap rendering** — `renderLoadingIndicator()` does one DOM read + a few style writes per state transition. Not called per-row or per-render-pass.
+- **No DB migration needed.**
 
 ## Recent Fixes (v5.60) — Per-region New / Deprecated / Reorder settings now wired for UK (EU/UK pool) alongside US + CA
 - **User request:** "i need the ability to set items that are new vs deprecated by amazon region (US, CA, UK). this needs to be wired so that any forecasting effects work across pages."
