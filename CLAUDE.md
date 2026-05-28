@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.58**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.59**
+
+## Recent Fixes (v5.59) — Shipments modal (Inventory Planning): cancelled shipments now sit in the bottom pane, not "Active"
+- **User flagged:** "on the shipments modal that open on the inventory planning page, i don't want cancelled shipments to appear in the top pane under 'active' - they should appear on the bottom pane."
+- **Root cause:** the v5.17 split rule was `!status.includes('closed')` → ACTIVE, else closed. Cancelled shipments slipped through the filter and showed up in the Active pane even though they're a dead-end state (Amazon won't ship them; they won't reach the FC).
+- **Fix:**
+  - **New `isInactive(s)` predicate**: status contains `closed` OR `cancel`. Active is now everything that isn't inactive.
+  - **Bottom pane renamed `Closed / Cancelled`** with a count breakout: `Closed / Cancelled · N (M closed · K cancelled)`. So the user sees the mix at a glance instead of just "Closed · N".
+  - **Cancelled rows now render in red** (`var(--red)`) in the Status column so they pop out within the inactive group, even when sorted next to closed rows.
+  - **Other status colors expanded for parity with `renderFbaShipmentsTbl`'s badge:** In transit (purple), Ready to ship (teal), Shipped (blue) all get distinct colors in the modal too. Was previously falling through to muted grey.
+- **No DB migration needed** — pure render-time categorization change.
 
 ## Recent Fixes (v5.58) — FBA Shipment Summary re-upload: brand pick now visibly updates existing shipments
 - **User flagged:** "if i reupload the ship summary list and select a brand, it should update the brand for those shipments." The v5.50 upsert payload included `brand` and should have updated on conflict — but two things conspired against it:
