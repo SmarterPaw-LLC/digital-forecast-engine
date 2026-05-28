@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.70**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.71**
+
+## Recent Fixes (v5.71) — Lifecycle view: hide NEW/DEP buttons for products without an ASIN
+- **User flagged:** "why are 'new' and 'dep' showing for products with no asin?" Screenshot showed Hemp Dog Collar variants (no ASIN — Shopify-only) rendering NEW/DEP buttons in the US lifecycle column.
+- **Root cause:** the v5.65 `lifecycleCell` renderer checked `lifecycleByMaster[mid]?.[region]` to decide whether to show buttons. Records-build (v2912) creates a US-region record for any product with at least one channel identifier (`asin || shopify_sku || chewy_sku`) — so Shopify-only products had an entry in the lifecycle cache and the buttons rendered. Logically wrong: lifecycle flags only mean something for Amazon listings.
+- **Fix:** check `product.asin` FIRST in `lifecycleCell`. When absent, render `—` (with tooltip "No ASIN — lifecycle flags only apply to Amazon listings.") regardless of any inventory state. ASIN-bearing products fall through to the existing inventory-presence check.
+- **No DB migration** — one-line guard in the cell renderer.
 
 ## Recent Fixes (v5.70) — Products tab: sortable columns with localStorage-persisted default
 - **User request:** "let me sort the products tables and set the default sort." Headers were static — no click-to-sort and no way to set a default beyond the implicit allProducts iteration order.
