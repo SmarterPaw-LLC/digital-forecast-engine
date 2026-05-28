@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.67**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.68**
+
+## Recent Fixes (v5.68) — Shopify image URL guidance Option C rewritten to handle canvas-rendered admin images
+- **User flagged:** "ugh. there is no html element on the image" — turns out Shopify's admin image editor renders product images on a `<canvas>` element instead of an `<img>`. Two consequences:
+  1. Right-click is suppressed (already known)
+  2. **The HTML inspector shows `<canvas>` with no src** — so v5.66's Option C ("F12 → inspector → find `<img src=…>`") was also a dead end for this surface.
+- **Fix — Option C swapped for the DevTools Network tab path:**
+  - F12 → Network tab → filter by `cdn.shopify` → refresh page → image fetches show up → click any → Headers panel → right-click `Request URL` → Copy URL.
+  - This works even on canvas-rendered images because the underlying fetch still hits cdn.shopify.com — Network captures every request regardless of how the response gets rendered.
+- **Message also explains WHY the other paths fail** ("Shopify renders product images on a `<canvas>` in admin, so right-click AND the HTML inspector both fail") so the user understands the constraint rather than getting frustrated with sequential dead-ends.
+- **Options A and B unchanged** — live storefront + admin Files library are still the cleanest paths when available.
+- **No DB migration / no code logic change** — pure warning-message rewrite.
 
 ## Recent Fixes (v5.67) — Friendly error when v5.1 per-region inventory columns aren't yet migrated
 - **User flagged:** `Save failed: Could not find the 'deprecated_product_amazon' column of 'inventory' in the schema cache` — the v5.1 migration (`supabase_v5_1_per_region_amazon_settings.sql`) hadn't been run, so the 5 per-region columns the inline lifecycle toggle writes to don't exist on `inventory` yet. PostgREST's generic schema-cache error gave no hint that a migration was needed.
