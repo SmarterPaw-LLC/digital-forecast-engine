@@ -2,7 +2,27 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.59**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.60**
+
+## Recent Fixes (v5.60) — Per-region New / Deprecated / Reorder settings now wired for UK (EU/UK pool) alongside US + CA
+- **User request:** "i need the ability to set items that are new vs deprecated by amazon region (US, CA, UK). this needs to be wired so that any forecasting effects work across pages."
+- **Schema was already per-region** — v5.1's `supabase_v5_1_per_region_amazon_settings.sql` moved `reorder_threshold_days`, `reorder_qty_days`, `new_product_amazon`, `deprecated_product_amazon`, `new_amazon_daily_units` to the `inventory` table keyed `(asin, region)`. So no DB migration needed for v5.60. The gap was JS-side: records-build only generated US + CA records, IP_COLUMNS only exposed US + CA columns, and the edit modal couldn't distinguish per-region rows.
+- **Records-build now generates EU/UK records** for ASIN products when inventory or velocity data exists for that region (mirrors the existing CA skip rule). Region code is `'EU/UK'` matching the v5.13/v5.14 FBA Inventory Snapshot upload convention (pooled UK + DE/FR/IT/ES/NL).
+- **9 new UK columns added to IP_COLUMNS** (all default OFF, opt-in via View popup):
+  - 5 settings columns: `New (UK)`, `New Rate/d (UK)`, `Dep (UK)`, `Thresh UK (d)`, `Qty UK (d)` — mirror the existing US + CA settings.
+  - 4 derived FBA Reorder columns: `0–30d FBA UK`, `30–60d FBA UK`, `60–90d FBA UK`, `90–120d FBA UK` — same marginal-per-period math as the US/CA columns, drilled through `regionViewOf(r, 'EU/UK')`.
+- **CSV export regex extended** from `(us|ca)` → `(us|ca|uk)`. `uk` suffix maps to internal region code `'EU/UK'` so the lookup hits the right sub-record.
+- **`openEditModal` + `saveEditModal` fixed to track region** (pre-existing bug v5.60 exposes more sharply). Pre-v5.60 they used `records.find(r => r.asin === asin)` which returns the FIRST match (always US) — meaning clicking a CA or UK row silently edited US's settings. Now:
+  - New module-level `editRegion` state tracks which region's record is loaded.
+  - `openEditModal(asin, region)` accepts an explicit region; matches on `(asin, region)` first, falls back to first-match for pooled rows (region contains `+`).
+  - Inventory row onclick passes `r.region` so single-region clicks land on the right record.
+  - `saveEditModal` uses `editRegion` to find the same record on save.
+- **Forecast-tab math** uses each region's row independently via `regionViewOf` — no changes needed. PO planning (`inventoryNeedBreakdown(r, X, 'EU/UK')`) and the New launch override (`new_amazon_daily_units` driving flat-math velocity when the flag is set) both work for UK rows.
+- **Region filter dropdown** auto-picks up EU/UK via the existing `populateRegionFilters()` helper (v4.199 — scans `records` for distinct non-pooled region values, rebuilds the dropdown). So after v5.60 EU/UK appears in both the Inventory Planning and Forecast region filters without any wiring change.
+- **Known limitation for full forecast math:** UK velocity in `velocity_calculated` lives per-country (GB / DE / FR / IT / ES / NL — v4.144). The records-build looks up `master_id + '_EU/UK'` which won't match a per-country key. UK records get `v30/60/90/120 = 0` until that velocity is pooled into 'EU/UK'. PO planning still works for UK because:
+  - The `new_amazon_daily_units` launch-override drives flat-math velocity when New is set — appropriate for new launches.
+  - For mature UK products, set `new_amazon_daily_units` manually or wait for the per-country → pooled aggregation (future work).
+- **Workflow now:** filter region to `EU/UK` on Inventory Planning → click a row → modal opens with EU/UK settings → toggle New / Deprecated / set rate → Save. Or in pooled view, enable the `New (UK)` / `Dep (UK)` columns via View popup to see UK-specific tags inline alongside US + CA.
 
 ## Recent Fixes (v5.59) — Shipments modal (Inventory Planning): cancelled shipments now sit in the bottom pane, not "Active"
 - **User flagged:** "on the shipments modal that open on the inventory planning page, i don't want cancelled shipments to appear in the top pane under 'active' - they should appear on the bottom pane."
