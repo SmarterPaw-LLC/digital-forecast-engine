@@ -2,7 +2,30 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.71**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.72**
+
+## Recent Fixes (v5.72) — Amazon P&L: COGS now converts to the display currency (USD/CAD/GBP/EUR), fixing Contribution % discrepancy
+- **User flagged:** "on the amazon p&l - why is the contribution % different when i change from USD to CAD?" Screenshots showed Bubbles - 5 Oz: USD view contribution = −17.6%, CAD view contribution = −10.3%. The ratio should be currency-agnostic, so this was a real bug.
+- **Root cause:** `product_cogs.amazon_cogs` is stored in USD per unit. The renderPnl aggregator multiplied every native-currency field (CAD sales, CAD fees, CAD ad spend) by `fxMul` to convert CAD → USD when the display mode was USD. But COGS skipped the conversion entirely — it stayed as USD dollars and sat next to whichever currency the rest of the row was in. In CAD mode the COGS line read $260.26 (USD) against $1357.81 (CAD) sales → contribution % too rosy. In USD mode the COGS line read $260.26 (USD) against $983.28 (USD) sales → correct.
+- **Math check on user's example:** `$260.26 × 1.3809 (FX rate) = $359.39 CAD`. Then `(Net Proceeds $119.76 − $359.39) / Net Sales $1357.81 = −17.6%` → matches USD mode's −17.6%. Confirms the diagnosis.
+- **Fix — new `cogsFxMul()` helper** that returns the right multiplier per display mode:
+  - `usd` → 1 (COGS already in USD)
+  - `cad` → `pnlFxRate` (USD → CAD)
+  - `gbp` → `1 / pnlFxGbp` (USD → GBP)
+  - `eur` → `1 / pnlFxEur` (USD → EUR)
+  Multiplies COGS at every aggregation site so the totals are denominated in the display currency consistently with sales / fees / proceeds.
+- **Wired at 4 sites:**
+  - `pnlTotalsForRange` (prev-period delta totals for the scorecard "vs prev" chips)
+  - `renderPnl` main aggregator (the displayed scorecards + product table)
+  - `renderPnl` selectedAgg (the multi-select aggregation behavior, v4.122)
+  - `updatePnlChart` per-week aggregator (chart's contribution lines)
+- **Verified at deploy time** with 4 unit tests covering each display mode. All PASS:
+  - usd → 1.000000
+  - cad → 1.380900
+  - gbp → 0.787402
+  - eur → 0.925926
+- **No DB migration** — pure JS aggregator fix.
+- **Backward-compatible:** existing data unchanged; only display-time totals shift to the correct denomination. USD mode is unchanged (multiplier = 1 means no math change).
 
 ## Recent Fixes (v5.71) — Lifecycle view: hide NEW/DEP buttons for products without an ASIN
 - **User flagged:** "why are 'new' and 'dep' showing for products with no asin?" Screenshot showed Hemp Dog Collar variants (no ASIN — Shopify-only) rendering NEW/DEP buttons in the US lifecycle column.
