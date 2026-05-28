@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.65**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.66**
+
+## Recent Fixes (v5.66) — Shopify admin URL guidance: drop the broken right-click instruction, list paths that actually work
+- **User flagged:** "i cannot get the image address via this pathway" — v5.64's instruction told the user to right-click the product image in Shopify admin. Shopify admin SUPPRESSES the right-click context menu on product images (anti-scraping / drag-protect behavior), so the instruction was a dead end.
+- **Fix:** rewrote the shopify_admin classifier message with three paths that actually work:
+  - **Option A — Live storefront (easiest):** Open `smarterpaw.com/products/<handle>` → right-click works there → "Copy image address." This is the path that works for any published product.
+  - **Option B — Admin Files library:** `Content → Files` in admin lists every uploaded asset; click the image and copy the URL from the side panel.
+  - **Option C — Browser DevTools:** F12 → inspector → click the image → find the `<img src="https://cdn.shopify.com/…">` attribute and copy it. Catch-all for the unpublished-product case.
+- **No DB migration / no logic change** — pure copywriting fix to the warning panel.
 
 ## Recent Fixes (v5.65) — Product modal gets the per-region matrix (finally); inline lifecycle toggle on Products tab; dropped decorative emojis
 - **User flagged three things bluntly:**
