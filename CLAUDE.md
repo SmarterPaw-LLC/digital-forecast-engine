@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.66**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.67**
+
+## Recent Fixes (v5.67) — Friendly error when v5.1 per-region inventory columns aren't yet migrated
+- **User flagged:** `Save failed: Could not find the 'deprecated_product_amazon' column of 'inventory' in the schema cache` — the v5.1 migration (`supabase_v5_1_per_region_amazon_settings.sql`) hadn't been run, so the 5 per-region columns the inline lifecycle toggle writes to don't exist on `inventory` yet. PostgREST's generic schema-cache error gave no hint that a migration was needed.
+- **Fix:** new `isMissingV51ColumnError(msg)` helper checks for any of the 5 v5.1 column names + either Postgres or PostgREST error wording (matches the v5.55 pattern for `isMissingBrandColumnError`). `toggleLifecycleFlag`'s catch block routes the error through this check; when it matches, the alert reads:<br>`Per-region inventory columns missing — run supabase_v5_1_per_region_amazon_settings.sql in Supabase SQL Editor (adds 5 columns to the inventory table + backfills from products.*). Then try again.`
+- **The migration itself (no change):** `supabase_v5_1_per_region_amazon_settings.sql` adds `reorder_threshold_days`, `reorder_qty_days`, `new_product_amazon`, `deprecated_product_amazon`, `new_amazon_daily_units` to `inventory` and backfills each row from the corresponding `products.*` value. Idempotent. Required for v5.1+ to work end-to-end on a database that pre-dates v5.1.
 
 ## Recent Fixes (v5.66) — Shopify admin URL guidance: drop the broken right-click instruction, list paths that actually work
 - **User flagged:** "i cannot get the image address via this pathway" — v5.64's instruction told the user to right-click the product image in Shopify admin. Shopify admin SUPPRESSES the right-click context menu on product images (anti-scraping / drag-protect behavior), so the instruction was a dead end.
