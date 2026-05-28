@@ -2,7 +2,30 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.63**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.64**
+
+## Recent Fixes (v5.64) — Product Image URL: detect non-image URLs (Shopify admin page, Seller Central) and surface a specific fix path
+- **User flagged:** "when i add this as the image link for a product, nothing renders. https://admin.shopify.com/store/smarterpaw/products/9167388901608" — that's the Shopify admin PAGE URL, not the image URL. The img.src silently failed; user got a broken preview with no clue why.
+- **Fix — `pfClassifyImageUrl(url)` classifier** that detects the common "this is not an image URL" mistakes BEFORE attempting to load:
+  - **Shopify admin URL** (`admin.shopify.com/store/...`) → hard-fail with explicit fix: "right-click the product image → Copy image address. Should start with `cdn.shopify.com/`."
+  - **Amazon Seller Central URL** (`sellercentral.amazon.com/...`) → hard-fail with the same pattern (open the listing on amazon.com, right-click image, copy address).
+  - **Missing protocol** (`cdn.shopify.com/foo.jpg` without `https://`) → hard-fail with prompt to add `https://`.
+  - **Looks plausible** — has an image extension (.jpg/.png/.webp/.gif/.svg/.avif) OR is on a known image CDN (`cdn.shopify.com`, `m.media-amazon.com`, `images-na.ssl-images-amazon.com`, `images-eu.ssl-images-amazon.com`, `catsy.com`) → passes through, preview renders.
+  - **No image extension AND not a known CDN** → soft warn (blue info pill) but still attempts the preview — covers edge cases like a custom CDN URL without a file extension.
+- **`pfUpdateImagePreview` rewritten** to route through the classifier:
+  - Hard-fail verdict → don't set `img.src` at all, keep the "No image" placeholder, show the orange warning pill with the specific fix path + `<code>` example URLs.
+  - Soft-warn verdict → set `img.src` AND show the blue info pill (preview may not render but the user has been warned).
+  - Pass → existing behavior (set src, hide placeholder).
+- **Verified at deploy time** with 7 unit tests covering each branch:
+  - `admin.shopify.com/store/...` → hard-fail (`shopify_admin`)
+  - `sellercentral.amazon.com/...` → hard-fail (`amazon_admin`)
+  - `cdn.shopify.com/foo.jpg` (no protocol) → hard-fail (`no_protocol`)
+  - `https://cdn.shopify.com/s/files/.../foo_1024x.jpg` → pass
+  - `https://m.media-amazon.com/images/I/abc.jpg` → pass
+  - `https://cdn.shopify.com/s/files/.../foo` (known CDN, no ext) → pass
+  - `https://example.com/page` (no ext, unknown host) → soft-warn (`no_extension`)
+  All PASS.
+- **No DB migration needed** — pure client-side validation.
 
 ## Recent Fixes (v5.63) — Per-region lifecycle editing in one modal + Products tab lifecycle view
 - **User flagged two gaps:**
