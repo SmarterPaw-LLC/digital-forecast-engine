@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.61**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.62**
+
+## Recent Fixes (v5.62) — EU/UK velocity now POOLED (matching the FBA pool); Inventory modal text corrected to per-region
+- **User flagged two things:**
+  1. "please stop saying that velocity is per country. all UK regions fulfill out of the same FBA location." Correct — FBA stock is pooled at the 'EU/UK' level, so velocity must be too. My v5.60 entry incorrectly described per-country velocity as a permanent limitation; it's a pooling step I just hadn't done.
+  2. "the modal says it applies to all regions per product" — the Inventory edit modal's PO-planning hint still read "These values are per product (apply across all regions / channels)" — but v5.1 moved those settings to per-region on the inventory table. The hint was outdated and misleading.
+- **Fix #1 — pool EU velocity in records-build (`master_id_<region>` lookup):** when `region === 'EU/UK'`, sum `v30/v60/v90/v120` across every country in `EU_REGIONS` (`GB / DE / FR / IT / ES / NL`). Returns null if none of the six have any rows (preserves the "skip secondary regions with no data" rule). All EU customer sales fulfill from the same FBA pool, so the pooled velocity is what the Status math + Reorder math need.
+- **Fix #2 — modal hint rewritten:** now reads `These values are per region — saving updates the <REGION> inventory row only. To set defaults for ALL regions of this product at once, edit it from the Products tab.` The `<REGION>` span is populated by `openEditModal` (already tracks `editRegion` from v5.60). Color shifted to `var(--sp-orange)` to call out the scope explicitly.
+- **Correction to v5.60 entry:** the "Known limitation for full forecast math" paragraph claiming UK velocity stays at 0 was wrong. With v5.62 the pooled velocity flows through the existing `regionViewOf` + `inventoryNeedBreakdown` math for EU/UK records — no special-case math layer needed.
+- **No DB migration** — pure JS-side aggregation + a hint-text rewrite.
+- **Why this matters end-to-end:** previously a UK row showed `Vel/day = 0` even when GB/DE/FR/IT/ES/NL had real sales — making Status read "FBA OK" regardless of how much inventory or actual demand. Now Vel/day on the UK record reflects total EU pool demand; Status / Need / Reorder math compare it against the EU/UK FBA stock and produce a real verdict. Tagging products as New / Deprecated for UK now visibly affects the math for that record only (not US or CA).
 
 ## Recent Fixes (v5.61) — Global async-load indicator in the header
 - **User feedback:** "i can't tell across this app when things are still updating." Confirmed when an earlier false-positive bug report turned out to be FBA in-transit data finishing 2-3 seconds after first render — there was no visible signal that the numbers on screen could still shift.
