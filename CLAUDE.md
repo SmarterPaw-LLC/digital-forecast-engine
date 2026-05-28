@@ -2,7 +2,33 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.68**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.70**
+
+## Recent Fixes (v5.70) — Products tab: sortable columns with localStorage-persisted default
+- **User request:** "let me sort the products tables and set the default sort." Headers were static — no click-to-sort and no way to set a default beyond the implicit allProducts iteration order.
+- **Fix — full click-to-sort across every column** with a `↑` / `↓` / `↕` arrow indicator. Click any header to sort by it; click again to flip direction.
+  - **Sortable keys** (in column order): `has_image` · `brand` · `title` (uses `short_name || title`) · `sp_sku` · `asin` · `category` (via category_id → allCategories lookup) · `subcat` · `is_bundle` · `msrp` · `active`. Lifecycle-view columns add `lc_us` / `lc_ca` / `lc_uk` — composite ranking that floats NEW above DEP above neither so flagged products bubble up.
+  - **Sensible first-click direction per column type:** numeric / boolean / lifecycle columns start descending (most-interesting first); text columns start ascending. Subsequent clicks toggle.
+- **State persists across reloads** via `localStorage.prodSortKey` + `localStorage.prodSortDir`. The user's last choice IS the default — refresh, navigate away, come back, sort survives. Default on first ever load is `title ascending`.
+- **`prodTh(key, label, opts)` helper** generates each sortable `<th>` with arrow indicator + click handler. Lifecycle columns pass `lifecycle: true` so they keep the `data-lifecycle="1"` marker (preserves the existing render-idempotence pattern).
+- **`prodSortVal(p, key, lifecycleByMaster)` comparator resolver** — one switch covers every column. Lifecycle keys read from the same cache built at the top of `renderProductsTbl` (no extra lookups per row).
+- **Stable-ish sort** — tiebreak on `master_id` so re-renders don't reorder visually-equivalent rows.
+- **No DB migration** — pure client-side sort logic.
+
+## Recent Fixes (v5.69) — Product image: upload local file + re-host from URL (so images survive listing takedowns)
+- **User request:** "i want the ability to upload an image for a product or add an amazon product url to pull the main product carousel for that image and have that upload to the db (bc product listings get taken down and then the image is not available). the image size should be kept very low to not hit db limits."
+- **⚠ SQL TO RUN:** `supabase_v5_69_product_images_bucket.sql` — creates a `product-images` Storage bucket (public-read, 512KB per-file cap, JPEG/PNG/WebP only) plus RLS policies. Idempotent. Stores re-hosted images so the original source (Amazon, Catsy, etc.) becoming unavailable doesn't break the dashboard's image cell.
+- **Two new buttons** on the Product Image section of the modal, next to the URL input:
+  - **`↑ Upload file`** — opens a file picker (`image/jpeg, image/png, image/webp`). Client-side resize via Canvas to 600×600 max, JPEG quality 0.7 → typical 30-80KB output. Uploaded to `product-images/<master_id>.jpg` in Storage. The public URL (with cache-bust query) gets written to `products.image_url` on Save.
+  - **`⤓ Re-host from URL`** — prompts for an image URL, fetches it client-side, runs through the same resize+compress+upload pipeline, drops the new public URL into the input. CORS-permissive sources (Shopify CDN, Catsy, public direct image hosts) work end-to-end; Amazon listing pages BLOCK cross-origin fetches by design.
+- **Image compression pipeline:**
+  - `pfBlobToImage(blob)` — loads a blob into an `Image` element via `URL.createObjectURL` + cleans up.
+  - `pfResizeAndCompress(blob, maxDim=600, quality=0.7)` — Canvas-resize preserving aspect ratio, white background fill (PNG → JPEG transparency), `toBlob('image/jpeg', quality)`. Throws when the source is CORS-tainted (named in the error).
+  - `pfUploadImageBlob(masterId, blob)` — Storage upsert keyed on master_id so re-uploads overwrite cleanly. Returns the public URL with a `?v=<timestamp>` cache-buster so the modal preview shows the new image immediately. Detects missing-bucket errors and surfaces the SQL filename as the fix.
+- **Status indicator** next to the buttons (`pf-image-status`) walks the user through `⏳ resizing… → ⏳ uploading 47KB… → ✓ uploaded 47KB` and back to blank after 3s. Errors render red and stay until the next action.
+- **Honest about Amazon limitation:** the field hint AND the URL-paste prompt both call out that Amazon listing pages can't be auto-scraped (CORS) and direct the user to "save the image to your computer first, then use ↑ Upload file." The fetch handler's catch block also detects "Failed to fetch" / CORS-flavored errors and surfaces the same advice with a specific error path.
+- **No bloat in `products` row** — Storage holds the binary, `products.image_url` just holds the public URL. Existing v5.21 schema unchanged.
+- **Existing Catsy import flow** still works as-is — it writes external URLs directly to `image_url`. Users can opt in to re-hosting any Catsy URL later by clicking `⤓ Re-host from URL` in the modal (most Catsy URLs allow CORS so the fetch should succeed).
 
 ## Recent Fixes (v5.68) — Shopify image URL guidance Option C rewritten to handle canvas-rendered admin images
 - **User flagged:** "ugh. there is no html element on the image" — turns out Shopify's admin image editor renders product images on a `<canvas>` element instead of an `<img>`. Two consequences:
