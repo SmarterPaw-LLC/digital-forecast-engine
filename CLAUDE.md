@@ -2,7 +2,29 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.62**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.63**
+
+## Recent Fixes (v5.63) — Per-region lifecycle editing in one modal + Products tab lifecycle view
+- **User flagged two gaps:**
+  1. "on issue #2 - there is still NO PLACE to set these fields by region." After v5.62's text correction, the modal still only had ONE set of inputs that saved to the row's region. You had to open the modal once per region to set US, CA, and UK separately. Clumsy.
+  2. "on the products tab, give me a view to see new product/deprecated product by amazon region." Products tab had no per-region lifecycle visibility at all.
+- **Fix #1 — Inventory modal PO planning section is now a per-region matrix.** Single table with 3 columns (🇺🇸 US · 🍁 CA · 🇪🇺 EU/UK) showing each setting as a row:
+  - Reorder threshold (days)
+  - Reorder qty (days of supply)
+  - 🆕 New (Amazon)
+  - 🆕 Rate / day (when New is checked)
+  - ⛔ Deprecated (Amazon)
+  - Save fires UPSERTs for each region — existing rows update in place; missing rows are created with zero-stock defaults (FBA Available + Inbound = 0, picked up next time the FBA snapshot uploads for that region). The legacy DOM IDs (`ef-reorder-threshold`, `ef-new-amazon`, etc.) are kept as the US column so any other code reading them still works. CA + UK use `-ca` / `-uk` suffixes.
+  - **Column headers dim to 55% opacity** when no inventory record exists yet for that region — visual cue that you're seeding settings ahead of the first inventory upload.
+- **Fix #2 — Products tab gets a "🏷 Lifecycle view" checkbox** next to the filter dropdown. When on:
+  - **Three new columns appended** between Sub-cat and Bundle: `US 🆕/⛔`, `CA 🆕/⛔`, `UK 🆕/⛔`. Each cell shows a green 🆕 chip (with rate next to it when set) and/or an orange ⛔ chip, or `—` when no flags are set or the inventory row doesn't exist.
+  - **Header injected via `data-lifecycle="1"` markers** so the render is idempotent — re-runs remove and re-add the columns rather than duplicating them.
+- **Filter dropdown also extended** with per-region lifecycle filters:
+  - `🆕 New (Amazon · any region)` / `🆕 New (US)` / `🆕 New (CA)` / `🆕 New (EU/UK)`
+  - `⛔ Deprecated (Amazon · any region)` / `⛔ Deprecated (US)` / `⛔ Deprecated (CA)` / `⛔ Deprecated (EU/UK)`
+  - These work independently of the Lifecycle view checkbox — you can filter to "🆕 New (UK)" without showing the per-region columns, or show the columns without filtering.
+- **`lifecycleByMaster` lookup** built once per Products render from `records` (the inventory-joined cache). Avoids the N×M scan a per-row lookup would cost on a 500-product catalog. Empty when records aren't loaded yet (page-show before init completes — no crashes, just empty cells).
+- **No DB migration** — schema was already per-region from v5.1. Pure UI wiring.
 
 ## Recent Fixes (v5.62) — EU/UK velocity now POOLED (matching the FBA pool); Inventory modal text corrected to per-region
 - **User flagged two things:**
