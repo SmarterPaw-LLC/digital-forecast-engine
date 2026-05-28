@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.64**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.65**
+
+## Recent Fixes (v5.65) — Product modal gets the per-region matrix (finally); inline lifecycle toggle on Products tab; dropped decorative emojis
+- **User flagged three things bluntly:**
+  1. "this is still whats on the product modal (and other places the product modal is invoked). WHY aren't you checking this and updating? I've said this 3 times now." Acknowledged miss — v5.60 fixed the INVENTORY modal but the separate PRODUCT modal (`openProductModal` / `saveProduct`) was untouched and still had single-region inputs.
+  2. "how does this lifecycle view help? i still cannot set new/deprecated by region." v5.63 made the cells READ-ONLY badges; user wanted to edit inline without opening a modal.
+  3. "what's with this ugly icon you keep adding in places?" Flag emojis (🇺🇸 🍁 🇪🇺) and decorative chips (🏷, 🆕/⛔ in column headers) were rendering as mojibake on the user's setup. Removed.
+- **Fix #1 — Product modal `pf-*` PO planning is now the same per-region matrix as the Inventory modal `ef-*`:** Reorder threshold / Reorder qty / New (Amazon) / Rate / Deprecated, with US / CA / EU/UK columns. Save fires UPSERTs to `inventory` for each region (preserving position fields from the existing row when present, defaulting to zeros + safe defaults when seeding a new region). `products.*` columns still get the US values written via the existing upsert as a legacy fallback for older code paths.
+- **Fix #2 — Lifecycle view cells are now click-to-toggle:** `NEW` and `DEP` chips per region act as buttons. Click toggles the flag in `inventory.{new_product_amazon,deprecated_product_amazon}` immediately, re-renders with the new state, and rolls back the in-memory change if the Supabase write fails. New `toggleLifecycleFlag(masterId, region, kind)` handler is the single source of truth. No modal needed for the common case.
+- **Fix #3 — Removed decorative emojis from chrome:**
+  - "🏷 Lifecycle view" → "Lifecycle view"
+  - Column headers "US 🆕/⛔" → "US lifecycle" (same for CA, EU/UK)
+  - Modal column headers "🇺🇸 US" / "🍁 CA" / "🇪🇺 EU/UK" → plain "US" / "CA" / "EU/UK"
+  - Reorder threshold / Rate / Deprecated row labels in the matrix lost their 🆕 / ⛔ prefixes
+  - Per-cell button labels stay as plain `NEW` / `DEP` text (no glyph reliance)
+- **No DB migration** — schema unchanged; pure UI + persistence wiring.
+- **Audit log:** inline toggles write `product.lifecycle_toggle` with `{master_id, region, flag, value}` so the trail captures the click path separately from full modal saves.
 
 ## Recent Fixes (v5.64) — Product Image URL: detect non-image URLs (Shopify admin page, Seller Central) and surface a specific fix path
 - **User flagged:** "when i add this as the image link for a product, nothing renders. https://admin.shopify.com/store/smarterpaw/products/9167388901608" — that's the Shopify admin PAGE URL, not the image URL. The img.src silently failed; user got a broken preview with no clue why.
