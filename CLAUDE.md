@@ -2,7 +2,27 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.79**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.80**
+
+## Recent Fixes (v5.80) — Product image columns added across all product-bearing pages (default on / optional)
+- **User request:** "the product images should appear on the bundles page, chewy forecast page, units sold page, and seasonality page by default and be optional columns on the forecast, inventory planning, and P&L pages."
+- **New shared helpers:**
+  - `prodImgCell(p, opts)` — returns a full `<td>` with the 36px (configurable) image thumbnail. Falls back to a muted `—` when no image. Click → opens full size in a new tab. Lazy-loaded + onerror → 🖼 placeholder.
+  - `prodImgEl(p, opts)` — bare `<img>` variant for callers that already provide the cell wrapper (used by `PNL_COLUMNS` via its existing `cellStyle` pattern).
+  - Both resolve `image_url` from `p.image_url` directly OR via `p.master_id` → `allProducts` lookup. So callers can pass either a product object or a record with just a master_id.
+- **Default-on (shown by default):**
+  - **Bundles page summary view** — new leading Img column; colspan on the no-results row bumped from 8 → 9.
+  - **Chewy Forecast page** — Img column inserted between the row checkbox and the Product cell. Both sub-header rows + loading / error / empty colspans bumped accordingly.
+  - **Units Sold page** — Img column inserted between the checkbox and Brand chip.
+  - **Seasonality page** — Img column inserted between the checkbox and Brand chip; colspan on the no-results row bumped from 8 → 9.
+- **Default-off (opt-in via View popup):**
+  - **Demand Forecast** (`FC_COLUMNS`) — new `image` column in the SKU group, `nosort:true`, `csv: () => null` so it doesn't pollute exports.
+  - **Inventory Planning** (`IP_COLUMNS`) — new `image` column in the SKU group, same nosort/csv conventions.
+  - **Amazon P&L** (`PNL_COLUMNS`) — new `image` column in the `identity` group. Uses `prodImgEl` because the PNL renderer wraps each cell in its own `<td>` via `cellStyle`.
+  - The View popup on each page surfaces these alongside their existing column-visibility controls. User toggles + persists per-page via the existing localStorage system (`fcVisibleCols` / `ipVisibleCols` / `pnlVisibleCols`).
+- **Bundles BOM view skipped** for this pass — that view is the alternate Bundles tab mode and has a more complex bundle-parent + component-rows structure. Default Bundles summary view (the more common mode) does get the column.
+- **Image cell touches every existing layout**: the helper accepts `opts.size` and `opts.padding` so tighter rows (e.g., Seasonality's 32px thumbnails) match their row height without distortion.
+- **No DB migration** — reads existing `products.image_url`.
 
 ## Recent Fixes (v5.79) — Drop the redundant "⤓ Re-host current URL" button on the product modal
 - **User flagged:** "the 're-host current URL' button is redundant. adding the image url and saving the modal hosts the url."
