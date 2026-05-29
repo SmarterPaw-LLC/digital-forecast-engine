@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.78**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.79**
+
+## Recent Fixes (v5.79) — Drop the redundant "⤓ Re-host current URL" button on the product modal
+- **User flagged:** "the 're-host current URL' button is redundant. adding the image url and saving the modal hosts the url."
+- **Root cause analysis:** the button was added in v5.69 to fetch a URL, resize it, and upload to Supabase Storage as a permanent copy. In practice, the most common use case was Amazon CDN URLs — which are CORS-blocked. v5.73 added a fallback that saved the URL as-is when the fetch failed. At that point the button's "saved fallback" path became identical to what `saveProduct` already does (`productData.image_url = pf-image.value`), so the button was duplicative.
+- **Fix — removed:**
+  - The `⤓ Re-host current URL` button from the modal.
+  - The `pfFetchImageFromUrl` function (it had no other callers).
+- **Kept:**
+  - The `↑ Upload file` button — still the single path for truly re-hosting on Supabase Storage (user picks a local file, gets resized + uploaded).
+  - `pfClassifyImageUrl` / `pfUpdateImagePreview` / `pfResizeAndCompress` / `pfUploadImageBlob` helpers — still used by `pfUploadImageFile` and the live preview.
+- **Field-hint rewritten** to call out the two paths cleanly:
+  - "Use ↑ Upload file to compress + host a local image on Supabase Storage (so the image survives even if a source CDN goes away)."
+  - "You can also paste any direct image URL into the field above — it'll persist on save, but lives on the source server."
+- **No DB migration** — UI removal + dead-code prune.
 
 ## Recent Fixes (v5.78) — Add UK Amazon link to product modal ASIN row + the shared ASIN affordance helper
 - **User request:** "on the product modal, i need a link for amazon uk like the us and canada links."
