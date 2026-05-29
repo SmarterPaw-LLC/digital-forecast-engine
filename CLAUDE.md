@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.73**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.74**
+
+## Recent Fixes (v5.74) — Drop the persistent "run supabase_v5_69…sql once" reminder from the product modal
+- **User flagged:** "also i've run supabase, i don't need the reminder in the app." The v5.69 product modal field-hint included a static "Storage bucket required: run `supabase_v5_69_product_images_bucket.sql` once." sentence that always rendered, even after the migration was done.
+- **Fix:** removed that sentence from the field-hint. The rest of the hint (Catsy import note + CORS callout) stays. Error-time messages still surface the migration name if the bucket is ever genuinely missing — those only fire on failure, not as persistent in-UI nags.
+- **Pattern going forward:** persistent "run this SQL" reminders in the UI are noise once the migration is done. Use error-time messages instead (they only fire when the missing-column / missing-bucket condition actually trips). CLAUDE.md tracks the migration in its handoff section.
 
 ## Recent Fixes (v5.73) — Re-host from URL: fall back to saving the URL as-is when fetch/upload fails
 - **User flagged:** `https://m.media-amazon.com/images/I/…jpg` re-host failed but the image preview rendered. They expected the image to be saved.
