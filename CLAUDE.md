@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.82**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.83**
+
+## Recent Fixes (v5.83) — Inventory CSV: exclude UI-only system columns (the empty mystery column F was the row-selection checkbox)
+- **User flagged:** "there is an empty column F that exports now" — attached an inventory CSV showing a `,,` between Product and Img with the value `0` in every data row.
+- **Root cause:** the v5.80 IP `_chk` row-selection checkbox column (`group:'_sys', locked:true, default:true`) was being included in the CSV export. Its `headHtml` returns a checkbox HTML element (which sanitizes to empty string), and it has no `csv` function — so v5.82's `c.csv` fallback skipped it, and `c.sortVal()` returned `0` (the v5.80 default). Result: empty header + value `0` in column F.
+- **Fix:** in `downloadInventoryCSV` finalCols loop, skip any column whose `group === '_sys'` OR whose `key` starts with `_`. Both conventions identify UI-only columns that shouldn't appear in CSV exports. Future system columns (`_chk`, future `_actions`, etc.) auto-excluded.
+- **Forecast + P&L CSVs were already safe:**
+  - `doExportCSV('forecast', …)` filters with `.filter(c => !c.locked)` — the FC_COLUMNS `_chk` column has `locked:true`, excluded.
+  - `doDownloadPnlAmazonCSV` uses a hardcoded column list, doesn't iterate the registry.
+- **No DB migration** — pure exporter fix.
 
 ## Recent Fixes (v5.82) — Image columns now export the URL on CSV (was emitting '0' / blank); generic c.csv() fallback in Inventory CSV exporter
 - **User flagged:** "the img doesn't export on csv exports - the cells show '0'. if img is selected in the export, can the link be passed into the file."
