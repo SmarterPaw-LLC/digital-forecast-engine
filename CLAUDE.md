@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.83**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.84**
+
+## Recent Fixes (v5.84) — Inventory Planning: single-column `Reorder Thresh (d)` + `Reorder Qty (d)` (master-level effective value)
+- **User request:** "i need columns so in the inventory planning module for the following: reorder threshold, reorder supply (the existing dimensions that exist - i need them as columns and exportable)."
+- **Pre-v5.84 state:** v5.1 + v5.60 added per-region columns (`Thresh US (d)` / `Thresh CA (d)` / `Thresh UK (d)` + `Qty US (d)` / `Qty CA (d)` / `Qty UK (d)`) but dropped the master-level single columns. So the user couldn't get a quick "this row's effective threshold" column without picking one of three region variants.
+- **Fix:** added two new columns to IP_COLUMNS in the PO PLANNING group:
+  - **`reorder_threshold_days` → "Reorder Thresh (d)"** — shows the row's effective threshold. Records-build (v5.1 line 3170) already populates this on every record as `inv?.reorder_threshold_days ?? p.reorder_threshold_days ?? 90`, so for a region-pinned row this is that region's value; for a pooled row it inherits from the first peer record. Blank/default 90 renders muted.
+  - **`reorder_qty_days` → "Reorder Qty (d)"** — same pattern.
+- Both `default:false` — opt-in via View popup like the other PO planning columns. Sortable. Explicit `csv: r => r.X ?? 90` so the CSV export emits the effective value (not the raw null) — Excel pivots and SUMIFS work cleanly.
+- Tooltips on both columns mention the per-region variants in AMAZON SETTINGS for users who need the region-specific breakdown.
+- **No DB migration** — reads existing `inventory.reorder_threshold_days` / `inventory.reorder_qty_days` (per-region) with fallback to `products.*` master-level defaults.
 
 ## Recent Fixes (v5.83) — Inventory CSV: exclude UI-only system columns (the empty mystery column F was the row-selection checkbox)
 - **User flagged:** "there is an empty column F that exports now" — attached an inventory CSV showing a `,,` between Product and Img with the value `0` in every data row.
