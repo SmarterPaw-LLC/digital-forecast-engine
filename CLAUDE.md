@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.84**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.85**
+
+## Recent Fixes (v5.85) — Cancelled shipments no longer count as inbound / active
+- **User flagged with screenshot:** Inventory Planning row showed `Inbound Units = 24` for a shipment whose summary status was `Cancelled` (the row's own Inbound Detail cell read `Canc:24`). User correctly asked why a cancelled shipment was inflating inbound.
+- **Root cause:** the v5.17 `loadFbaInTransit` filter only excluded shipments whose summary status contained `closed`. Cancelled shipments slipped through. The detail .tsv recorded `quantity_shipped = 24` at original creation; Amazon (or the user) cancelled later → the row stayed in `fba_shipments` with its shipped qty intact while the summary status flipped to Cancelled. The filter never noticed and the qty kept counting toward in-transit.
+- **The v5.59 modal pane logic** correctly treats Cancelled as inactive (sits in the bottom pane), so the categorization was right in ONE place but inconsistent across the math layer. v5.85 makes everything consistent.
+- **Fix — three sites updated:**
+  - `loadFbaInTransit`'s in-transit accumulator (the source of truth — feeds every downstream consumer via `ipFbaInTransitByMaster`): `if (!status.includes('closed') && !status.includes('cancel'))`.
+  - `IP_COLUMNS['shipments']` cell render (the "active / total" badge): same exclusion via a local `isInactive(s)` helper that matches both `closed` and `cancel`.
+  - `IP_COLUMNS['shipments']` CSV export (the "N active · M total · K units in transit" string): same exclusion.
+- **All downstream consumers fixed automatically** because they read from `ipFbaInTransitByMaster` / `ipShipmentsFor(r)`: the 🚧 chip on the FBA In column, the Inbound Units column, the Amazon FBA Stock scorecard, the Status math (`stock = FBA available + FBA inbound + in_transit`), the Gap math, the Action rollup. All now exclude cancelled qty.
+- **For the user's screenshot row:** Inbound Units flips from 24 → 0 (the only inbound shipment was cancelled). The shipment still shows in the modal viewer's "Closed / Cancelled" bottom pane (v5.59 behavior) for reference, but no longer affects PO planning math.
+- **No DB migration** — pure math-layer fix.
 
 ## Recent Fixes (v5.84) — Inventory Planning: single-column `Reorder Thresh (d)` + `Reorder Qty (d)` (master-level effective value)
 - **User request:** "i need columns so in the inventory planning module for the following: reorder threshold, reorder supply (the existing dimensions that exist - i need them as columns and exportable)."
