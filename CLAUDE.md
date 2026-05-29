@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.77**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.78**
+
+## Recent Fixes (v5.78) — Add UK Amazon link to product modal ASIN row + the shared ASIN affordance helper
+- **User request:** "on the product modal, i need a link for amazon uk like the us and canada links."
+- **Two surfaces updated:**
+  - **Product modal ASIN row** — new quick-open buttons next to the ASIN input: `🇺🇸 US` / `🍁 CA` / `🇬🇧 UK` / `🔍` (search fallback). Each reads the live `pf-asin` value at click time so the buttons follow edits without requiring a save. `pfOpenAsinListing(region)` handler maps regions to marketplace URLs (`amazon.com` / `amazon.ca` / `amazon.co.uk` / `amazon.com/s?k=`).
+  - **Shared `renderAsinAffordances(asin, region)` helper** (used by Products tab + P&L Diagnostics) gains a UK link too — `🇬🇧` between the CA flag and the search icon. Tooltip notes that UK covers the EU FBA pool.
+- **Pre-v5.78 the product modal had ASIN as a plain text input with no quick-open at all** — only the Products tab table had US/CA links via `renderAsinAffordances`. Now the modal has parity with the table, plus UK.
+- **No DB migration** — pure UI addition.
 
 ## Recent Fixes (v5.77) — Product modal save: v5.1 legacy broadcast was overwriting v5.65 per-region settings
 - **User flagged:** "sometimes the new/deprecated boxes don't appear even when the item has an asin and the box is checked in the product modal. it doesn't seem to save the selection." Screenshot showed `Boot, Smore, & Juananip Bundle` (SP-0611, has ASIN B0B1FWXXB5) with Deprecated checked on EU/UK in the modal — but the Products tab lifecycle view showed `—` for every region.
