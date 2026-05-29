@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.72**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.73**
+
+## Recent Fixes (v5.73) — Re-host from URL: fall back to saving the URL as-is when fetch/upload fails
+- **User flagged:** `https://m.media-amazon.com/images/I/…jpg` re-host failed but the image preview rendered. They expected the image to be saved.
+- **Root cause:** the v5.69 `pfFetchImageFromUrl` catch block surfaced a status message but **never set `pf-image.value`** — so when CORS blocked the fetch (Amazon's CDN doesn't allow cross-origin JS fetch even though `<img src>` loads fine), the URL was silently dropped from the modal state. Save Product persisted nothing image-related.
+- **Fix — fallback save:** the catch block now writes `cleanUrl` to `pf-image` regardless of which failure happened, then calls `pfUpdateImagePreview()` so the thumbnail renders. The URL persists to `products.image_url` on Save Product. The image works as long as the source server keeps the URL alive — not as robust as a true re-host, but better than dropping the URL entirely.
+- **Three branches in the catch** with distinct messages:
+  - **CORS** (Amazon CDN, most third-party hosts): "Could not re-host (CORS blocked). URL saved as-is — works as long as Amazon keeps it up. For permanent storage, save the image to your computer with right-click + Save image as…, then use ↑ Upload file."
+  - **Bucket missing** (`supabase_v5_69_product_images_bucket.sql` not run): "Storage bucket missing — run supabase_v5_69_product_images_bucket.sql first. URL saved as-is for now; retry re-host after running the migration."
+  - **Other** (network, parse error): "Re-host failed: \<error\>. URL saved as-is."
+- **`alert()` on failure** ensures the user can't miss the distinction between "re-hosted to Supabase Storage" (the success path) and "URL saved as-is" (the fallback). The inline `pf-image-status` is easy to miss; the modal alert isn't.
+- **Prompt text updated** to set expectations up front — calls out that Amazon CDN URLs will be saved as-is (not re-hosted) because of CORS.
+- **No DB migration** — pure client-side resilience improvement.
 
 ## Recent Fixes (v5.72) — Amazon P&L: COGS now converts to the display currency (USD/CAD/GBP/EUR), fixing Contribution % discrepancy
 - **User flagged:** "on the amazon p&l - why is the contribution % different when i change from USD to CAD?" Screenshots showed Bubbles - 5 Oz: USD view contribution = −17.6%, CAD view contribution = −10.3%. The ratio should be currency-agnostic, so this was a real bug.
