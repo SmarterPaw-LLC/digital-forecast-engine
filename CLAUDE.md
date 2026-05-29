@@ -2,7 +2,29 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.75**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.76**
+
+## Recent Fixes (v5.76) — Products tab: multi-select Categories + Sub-categories with personal default ("hide Apparel" out of the box)
+- **User request:** "on the product and product lifecycle view, i want to be able to multi-select the categories and sub categories drop down. by default, I do not want apparel showing - give me the option to set a global default view."
+- **Fix #1 — Two new popover-driven multi-select filters** in the Products tab filter strip, replacing the single-select Category dropdown:
+  - **Categories** button (shows `Categories: All` or `Categories: 5 of 7`). Click opens a popover with a checkbox per category. Live filter — table re-renders on every toggle.
+  - **Sub-cats** button (same pattern, independent of category selection).
+  - Both buttons tint green when filtered so the active state is visible without opening the popover.
+- **Each popover has four toolbar actions:**
+  - **Select all** / **Select none** — quick mass toggles.
+  - **Reset to default** — loads from the user's saved default (or the built-in default if they haven't saved one).
+  - **Save as default** — overwrites the user's saved default with the current selection. From that point on, "Reset to default" goes back to this state.
+- **Fix #2 — Built-in default excludes Apparel.** `PROD_CAT_EXCLUDE_BY_DEFAULT = ['Apparel']`. On a fresh load with no localStorage state, the Category filter bootstraps to "every category EXCEPT Apparel" so a typical session doesn't show apparel SKUs until the user explicitly toggles them in. Sub-cat default is "all" (no built-in exclusions). User can override either with Save as default.
+- **State + persistence:**
+  - `prodCatFilter` / `prodSubcatFilter`: `Set<string> | null`. `null` means "no filter" (all). A populated Set means "include only these".
+  - `localStorage.prodCatFilterUser` — last active selection (auto-saved on every toggle, restores on next session).
+  - `localStorage.prodCatFilterDefault` — what "Reset to default" reverts to. Empty → falls back to the built-in default. User overrides via "Save as default".
+  - Same shape for sub-cats.
+- **Filter logic in `renderProductsTbl`** — products with `category_id = null` always pass (rare orphans; use the existing "Missing Category" filter to triage). Products with a category fall through `prodCatFilter.has(cat)` and `prodSubcatFilter.has(sub)`.
+- **`✕ Clear filters` button** now also resets the multi-selects (sets both to `null` = all). Active-filter detection accounts for the multi-selects via a `< totalCats` count comparison.
+- **Legacy `<select id="prodCat">` kept** as a hidden state stash so any older code reading its value still functions; the popover is the source of truth.
+- **Lifecycle view inherits everything** — same `renderProductsTbl` so multi-select + lifecycle columns + sort all compose cleanly.
+- **No DB migration** — pure client-side state + UI.
 
 ## Recent Fixes (v5.75) — Re-host button reads the current Image URL field instead of asking again
 - **User flagged:** "the image rehost is making me paste the image twice, i've already pasted it in the modal and the popup asks for it again." `pfFetchImageFromUrl` was unconditionally calling `prompt()` even when the field already had a URL.
