@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.76**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.77**
+
+## Recent Fixes (v5.77) — Product modal save: v5.1 legacy broadcast was overwriting v5.65 per-region settings
+- **User flagged:** "sometimes the new/deprecated boxes don't appear even when the item has an asin and the box is checked in the product modal. it doesn't seem to save the selection." Screenshot showed `Boot, Smore, & Juananip Bundle` (SP-0611, has ASIN B0B1FWXXB5) with Deprecated checked on EU/UK in the modal — but the Products tab lifecycle view showed `—` for every region.
+- **Root cause:** `saveProduct` had two save paths racing each other:
+  1. **v5.65 per-region writes** (correct) — UPSERTs each region's settings from the per-region matrix.
+  2. **v5.1 legacy broadcast** (stale) — re-UPSERTs every existing inventory row with `productData.*` fields, which equal the **US column** (the legacy single-region inputs preserved as the US column for v5.65 backward-compat). This ran AFTER v5.65 and overwrote CA + EU/UK with US's values, silently flattening per-region settings back to master-level defaults.
+- **Fix:** removed the v5.1 broadcast entirely (Supabase UPSERT loop + the in-memory mirror that wrote `productData.*` to every peer). v5.65's per-region writes are now authoritative.
+- **In-memory mirror rewritten** to read per-region settings from the matrix and update each region's record independently. Falls back to seeding a new record (cloned from any existing peer) when the user just CREATED a region's row via the matrix that didn't exist before (records-build wouldn't have an entry yet — without the seed, lifecycle view would still show `—` until the next full data reload).
+- **Also calls `renderProductsTbl()` at the end** so the lifecycle view updates immediately when saving from the Products tab.
+- **Symptom for the user:** save Deprecated on EU/UK → modal closed → table still showed `—`. After v5.77: save → table immediately shows ⛔ DEP chip on EU/UK column.
+- **No DB migration** — pure save-flow fix.
 
 ## Recent Fixes (v5.76) — Products tab: multi-select Categories + Sub-categories with personal default ("hide Apparel" out of the box)
 - **User request:** "on the product and product lifecycle view, i want to be able to multi-select the categories and sub categories drop down. by default, I do not want apparel showing - give me the option to set a global default view."
