@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.74**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.75**
+
+## Recent Fixes (v5.75) — Re-host button reads the current Image URL field instead of asking again
+- **User flagged:** "the image rehost is making me paste the image twice, i've already pasted it in the modal and the popup asks for it again." `pfFetchImageFromUrl` was unconditionally calling `prompt()` even when the field already had a URL.
+- **Fix:** read `pf-image.value` first. If non-empty → use it directly (no prompt). If empty → fall back to the prompt for users who haven't pasted anything yet.
+- **Button label updated** from "Re-host from URL" → "Re-host current URL" so the field-first behavior is discoverable from the label. Tooltip rewritten to match.
+- **Both flows still work:** paste-and-click (the common case Jason was hitting) and click-then-prompt (for users who haven't pasted yet).
+- **No DB migration** — UX wiring fix.
 
 ## Recent Fixes (v5.74) — Drop the persistent "run supabase_v5_69…sql once" reminder from the product modal
 - **User flagged:** "also i've run supabase, i don't need the reminder in the app." The v5.69 product modal field-hint included a static "Storage bucket required: run `supabase_v5_69_product_images_bucket.sql` once." sentence that always rendered, even after the migration was done.
