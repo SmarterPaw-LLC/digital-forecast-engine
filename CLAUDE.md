@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.81**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.82**
+
+## Recent Fixes (v5.82) — Image columns now export the URL on CSV (was emitting '0' / blank); generic c.csv() fallback in Inventory CSV exporter
+- **User flagged:** "the img doesn't export on csv exports - the cells show '0'. if img is selected in the export, can the link be passed into the file."
+- **Root causes (two bugs in one):**
+  - **Inventory Planning CSV exporter** used `c.sortVal(r)` as the fallback when none of its hardcoded `if (c.key === 'X')` branches matched. The v5.80 Img column had `sortVal: () => 0`, so every row exported as `0`.
+  - **Forecast and P&L Img columns** had `csv: () => null` / `csv: () => ''` from v5.80 — they exported blank instead of the URL.
+- **Fix:**
+  - **All three registries** now have a real `csv: r => …` returning `allProducts.find(...).image_url || ''`. For Forecast the `get(r)` also returns the URL so any other code reading the cell value gets the URL too (sort + filter + CSV all consistent).
+  - **Inventory CSV exporter** got a generic `c.csv` check at the top of `valueOf(r, c)`: if the column has a `csv` function and it returns a non-null value, use it. Lets future opt-in columns plug in without adding another `if (c.key === '…')` branch.
+- **Spreadsheet workflow** — exported URLs paste into Google Sheets cells as `=IMAGE(URL)` to render the thumbnail directly in the spreadsheet. Excel doesn't have a native equivalent but you can paste the URL and either Insert → Pictures from URL or use Excel's IMAGE() function (Microsoft 365). Tooltip on the Img column header on all three pages now mentions this.
+- **No DB migration** — pure exporter fix.
 
 ## Recent Fixes (v5.81) — Nav dropdown UX: click ALWAYS opens menu (not jumps to first sub-tab) + hover highlight on dropdown rows
 - **User flagged (with screen recording):** "when i click a drop down, it automatically goes to the first tab of that drop down rather than opening the drop down menu. when already on the drop down page is the only time the menu opens, and when i'm navigating the menu the cursor does not highlight the drop down row."
