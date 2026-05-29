@@ -2,7 +2,26 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.80**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.81**
+
+## Recent Fixes (v5.81) — Nav dropdown UX: click ALWAYS opens menu (not jumps to first sub-tab) + hover highlight on dropdown rows
+- **User flagged (with screen recording):** "when i click a drop down, it automatically goes to the first tab of that drop down rather than opening the drop down menu. when already on the drop down page is the only time the menu opens, and when i'm navigating the menu the cursor does not highlight the drop down row."
+- **Pre-v5.81 behavior** — `handleForecastNavClick` / `handleDataNavClick` / `handlePnlNavClick` had two paths:
+  - Already on that page → toggle dropdown ✓
+  - Anywhere else → auto-navigate to the first sub-view + close dropdown ✗
+  This meant the dropdown was only EVER discoverable when you were already on the page. Backwards: dropdowns exist to GET you somewhere, not to swap inside a place you already are.
+- **Fix #1 — handlers now always toggle the dropdown.** All three handlers (`Forecast` / `Data` / `P&L`) just open or close their dropdown. No navigation side-effect. `closeOtherNavDrops(keepId)` ensures only one is open at a time.
+- **Fix #2 — picking an item activates the parent page if not already on it.** `switchForecastView` / `switchDataView` / `switchPnlView` each got a small block at the top that activates `page-X` + sets the nav button active when `currentPage !== 'x'`. So picking "Inventory Planning" from the Forecast dropdown while on Products correctly navigates to the forecast page AND opens Inventory Planning.
+- **Fix #3 — hover highlight on dropdown rows.** New CSS rule targets `#forecastNavDrop button:hover:not(.dd-active)` (etc.) with `var(--surface2)` background + `var(--text)` color. The `:not(.dd-active)` clause keeps the green-fill ACTIVE item from being overridden on hover. Each `switchXxxView` now toggles a `dd-active` class on the picked button (in addition to the existing inline green background) so the CSS selector can differentiate.
+- **Fix #4 — outside-click closes any open dropdown.** Document-level `mousedown` listener checks if the click landed inside any nav button or any open dropdown; if not, closes all three. So users can dismiss the menu by clicking anywhere else.
+- **Workflow now:**
+  - Click `Forecast` → dropdown opens (regardless of where you are).
+  - Hover any item → grey highlight (active item stays green).
+  - Click an item → page navigates + dropdown closes.
+  - Click `Forecast` again on the same page → dropdown reopens (toggle).
+  - Click `Data` while Forecast dropdown is open → Forecast closes, Data opens.
+  - Click anywhere outside → all close.
+- **No DB migration** — pure UX wiring.
 
 ## Recent Fixes (v5.80) — Product image columns added across all product-bearing pages (default on / optional)
 - **User request:** "the product images should appear on the bundles page, chewy forecast page, units sold page, and seasonality page by default and be optional columns on the forecast, inventory planning, and P&L pages."
