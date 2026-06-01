@@ -4319,7 +4319,16 @@ async function parseShopifySales(text, region) {
       emptySkuRevenue += netSales;
       continue;
     }
-    if (!sku || !day || units <= 0) continue;
+    // v5.98 — keep rows with ANY financial activity. Pre-fix this used
+    // `units <= 0`, which silently dropped returns / refunds (a return is
+    // emitted with negative units + negative net_sales + negative returns).
+    // Returns share the (sku, day, sales_channel) key with the original
+    // sale's row, so the aggregator correctly nets them down. Skip only
+    // when the row is truly empty (zero units AND no $ movement).
+    const hasActivity =
+      units !== 0 || netSales !== 0 || grossSales !== 0 ||
+      returns !== 0 || discounts !== 0 || taxes !== 0 || totalSales !== 0;
+    if (!sku || !day || !hasActivity) continue;
 
     const d = parseLocalDate(day);
     if (!d) continue;

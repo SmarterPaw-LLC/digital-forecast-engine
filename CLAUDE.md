@@ -5,6 +5,9 @@ Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, K
 File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.98**
 
 ## v5.98 Pass A — Shopify moves to daily-grain (`shopify_sales_daily` write path)
+- **Returns fix (caught during validation):** original v5.98 parser had `if (units <= 0) continue;` which silently dropped rows representing returns (Shopify emits returns with negative `Net items sold`, negative `Net sales`, negative `Returns`). Re-gated to `hasActivity = units !== 0 || netSales !== 0 || gross_sales !== 0 || returns !== 0 || discounts !== 0 || taxes !== 0 || total_sales !== 0` — keeps any row with financial activity, skips only truly empty rows. Returns aggregate cleanly into the (sku, day, sales_channel) key shared with the original sale.
+
+
 - **User reframe:** `sales_weekly` was built around Amazon's natively-weekly SKU Economics export. Forcing Shopify into that grain causes monthly P&L misattribution (calendar months cut across weeks) AND blocks the richer ShopifyQL fields (sales_channel, gross_sales, discounts, returns, taxes, total_sales) from being captured. Shopify gets its own daily-grain table; Amazon + Chewy + EU stay on sales_weekly.
 - **Canonical ShopifyQL the v5.98 parser expects:**
   ```
