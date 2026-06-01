@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.0**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.1**
+
+## v6.1 — `loadSalesAnalytics` rewired + SQL for view rewrite / sales_weekly cleanup (v5.98 Pass B.2)
+- **`loadSalesAnalytics` rewritten** to source from TWO tables: `sales_weekly` (filtered to `channel <> 'shopify'`) + `shopify_sales_daily` (mapped to legacy row shape with `week_start = day`, `units_ordered = units_sold`, `channel = 'shopify'`, `region = 'US'`). Both paginated. Downstream consumers (`renderSalesTbl`, `fcSoldByChannel`, seasonality, bundle attribution) work unchanged — they iterate `salesData[master_id]` and filter by `s.week_start` / `s.channel`, which is identifier-only and doesn't care that the underlying grain shifted from weekly to daily.
+  - Forecast tab "Sold (period)" Shopify column now reflects v5.98 daily uploads.
+  - Units Sold tab same loader, so the Shopify checkbox at line 1772 + chart see the same fresh data.
+- **SQL migration (`supabase_v6_1_velocity_view_shopify_cutover.sql`):**
+  - Replaces `velocity_calculated` view with a UNION-based definition: `sales_weekly` (non-shopify) + `shopify_sales_daily`. Aggregates the unified stream into v30/v60/v90/v120 buckets per (master_id, region). `weeks_of_data` computed as count of distinct ISO weeks (handles the daily/weekly mix correctly via `date_trunc('week', day)`).
+  - Deletes `sales_weekly where channel = 'shopify'` — those rows are no longer read by anything (view excludes them, loadSalesAnalytics excludes them, loadShopifyPnlTab moved off them in v6.0).
+  - **Includes a Step 1 diagnostic at the top** to dump the current view definition via `pg_get_viewdef`. Run that read-only first to verify my replacement's column shape matches the existing one. If something doesn't line up, edit the migration before committing. The dashboard reads only `master_id, region, v30, v60, v90, v120` and references `weeks_of_data` in saved SQL — those are preserved.
+- **Cutover state after running the SQL:**
+  - Shopify P&L: fresh daily data ✓ (v6.0)
+  - Forecast salesData / Units Sold: fresh daily data via UNION ✓ (v6.1)
+  - velocity_calculated: includes Shopify from new table ✓
+  - sales_weekly channel='shopify': empty ✓
+  - Architecture Rule #5 fully discharged for Shopify (Shopify writes never touch sales_weekly anymore)
+- **Safe to deploy v6.1 BEFORE running the SQL:** code excludes legacy Shopify rows from sales_weekly via the `.neq('channel', 'shopify')` filter, so even if those rows still exist in the DB, salesData ignores them. velocity_calculated view stays as-is (still reading sales_weekly Shopify rows) until you run the SQL — meaning Inventory Planning velocity for Shopify products is stale until SQL applied. Code-vs-SQL order doesn't matter for correctness, only for closing the velocity gap.
 
 ## v6.0 — Shopify P&L read-side rewired to `shopify_sales_daily` (v5.98 Pass B.1)
 - **`loadShopifyPnlTab` rewritten** to source from `shopify_sales_daily`. Pulls the full rich field set (master_id, shopify_sku, shopify_product_id, variant_title, title_at_time_of_sale, vendor, sales_channel, day, units_sold, gross_sales, discounts, returns, net_sales, taxes, total_sales). Compat aliases (`week_start = day`, `units_ordered = units_sold`, `revenue = net_sales`) keep the legacy aggregator code working without a sweeping identifier rename.
