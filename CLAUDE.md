@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.89**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.91**
+
+## Recent Fixes (v5.91) — Reverted Shopify empty-SKU catch-all (scope: unit sales only)
+- **User clarified scope:** dashboard captures unit sales of catalog products only. Non-product revenue (POS / manual line items / gift cards / shipping fees / discount allocations / refund admin) belongs in Shopify's own P&L reporting, not `sales_weekly`. The v5.89/v5.90 synthetic catch-all (`SP-UNMAPPED-SHOPIFY`) was the wrong abstraction — it created a fake catalog row for line items that aren't products.
+- **Diagnostic that confirmed the call:** user re-ran the Shopify "Sales" report with `Product ID` + `Product type` columns. Of $3,495.58 in empty-SKU revenue, only ~$100 was actual products (2 SKU-less items in the Shopify catalog: MJ'S Sprinkles Food Topper Trio, Get Flyin' Eel) — the other $3,300+ was POS items (`product_id = 0`) and adjustments. Those have no master_id to map to and shouldn't be forced into one.
+- **Revert:** empty-SKU rows now skip cleanly. Stats still surface in the upload status: `ℹ N non-product rows skipped (X units, $Y — POS / manual / shipping / discounts)`. SKU-bearing rows still get the v5.88 vendor→brand auto-create when their SKU isn't yet in `products` (that's the desired behavior — real products get reviewable SP-TEMP placeholders).
+- **No DB cleanup required** — user hadn't uploaded under v5.89/v5.90 yet, so `SP-TEMP-SHOPIFY-UNMAPPED` / `SP-UNMAPPED-SHOPIFY` never landed in the products table. `supabase_v5_90_rename_shopify_unmapped.sql` was deleted from the repo.
+- **Action for the 2 SKU-less real products:** assign variant SKUs to MJ'S Sprinkles Food Topper Trio and Get Flyin' Eel in Shopify admin (one-time fix). Future uploads will then auto-create SP-TEMP placeholders for them with the correct vendor→brand mapping.
+
+## Recent Fixes (v5.90) — Catch-all renamed to `SP-UNMAPPED-SHOPIFY` (drop SP-TEMP- prefix)
+- **Triggered by:** user flagged that v5.89's `SP-TEMP-SHOPIFY-UNMAPPED` would trigger saveProduct's promotion path on first edit — collapsing the mixed unmapped revenue (gift cards + manual orders + deleted products + POS items, lumped together) into a single arbitrary SP-XXXX whose name the operator typed in. That would falsely attribute the bundle to one real product.
+- **Root cause:** `saveProduct` line 21546 keys promotion off `master_id.startsWith('SP-TEMP-')`. The catch-all needs a master_id that bypasses every such check — it's a permanent bucket, not a placeholder awaiting promotion.
+- **Fix:** renamed the catch-all from `SP-TEMP-SHOPIFY-UNMAPPED` → `SP-UNMAPPED-SHOPIFY` in `parseShopifySales`. Audited the six `startsWith('SP-TEMP-')` sites (lines ~18276 / 18424 / 18603 / 21112 / 21298 / 21546 / 21553) — none trigger on the new prefix. The catch-all now:
+  - Does NOT enter saveProduct's promotion flow (master_id stays put; FK migration code is skipped).
+  - Does NOT surface in the "Needs Review" filter (cleaner — it's a permanent bucket, not a TODO).
+  - DOES appear in the regular Products tab where the operator can find it via search if they need to inspect what's accumulating.
+- **Updated notes field** is more explicit about the no-touch rule: `DO NOT MERGE OR PROMOTE — this is many real-world products lumped together; merging would falsely attribute mixed revenue to a single SKU.`
+- **DB migration** (`supabase_v5_90_rename_shopify_unmapped.sql`): for users who already uploaded under v5.89, renames the existing record. Three steps inside a transaction: (1) insert new `SP-UNMAPPED-SHOPIFY` product (idempotent via `on conflict do nothing`); (2) re-point every `sales_weekly` row from `SP-TEMP-SHOPIFY-UNMAPPED` to the new master_id; (3) delete the old `SP-TEMP-` row. Same FK-shuffle pattern as the SP-TEMP → SP-XXXX promotion. No-ops cleanly if v5.89 was never deployed.
 
 ## Recent Fixes (v5.89) — Empty-SKU Shopify rows roll into `SP-TEMP-SHOPIFY-UNMAPPED` catch-all
 - **Triggered by:** user uploaded the Apr 1 – Jun 1 Shopify file and saw the v5.88 warning surface 46 empty-SKU rows (1,000 units, $3,495.58 net sales) being skipped. Asked for parity with the SKU Economics uploader's auto-create-on-unknown pattern so revenue isn't dropped.
