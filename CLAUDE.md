@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.86**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.87**
+
+## Recent Fixes (v5.87) — Unmatched ASIN parity + storeToRegion hardening
+- **User flagged:** Diagnostics tab showed 43 unmatched ASINs in `sku_economics` (US region, all $0 sales / $0 fees / 0 units), but the Products tab "needs review" filter showed only 1 (the EU SP-TEMP). Asked where the 43 were coming from and why they didn't appear on the unmatched-product filter.
+- **Root causes (two related bugs):**
+  1. `parseSkuEconomics` split each CSV row into two aggregators — `agg` (sales-bearing, drives sales_weekly) and `econAgg` (every row, drives sku_economics). The unknown-ASIN auto-create loop walked **only `agg`**, so any ASIN Amazon emitted with `net units sold = 0` (discontinued listings, variation parents, foreign-store rows) landed in sku_economics with `master_id=null` and never got an SP-TEMP placeholder. The parser was asymmetric with `parseEuSkuEconomics`, which auto-creates SP-TEMP for every unknown ASIN regardless of units.
+  2. `storeToRegion` silently defaulted any unrecognized "Amazon store" value to `'US'` (line 6086: `return 'US';`). Rare CSV variants and foreign-store ASINs in the US export got misclassified as US, producing phantom zero-everything rows that fed bug #1.
+- **Fix #1 — zero-unit unknowns auto-create SP-TEMP:** added a follow-up loop after the existing `agg`-walk that walks `econAgg` for any ASIN not already seen by the sales-loop, and pushes to `unknownAsins` if no product/SP-TEMP exists. The downstream auto-create + brand resolution block then handles them like any other unknown — they appear in the Products tab "needs review" filter going forward, with the M/D/K brand quick-chips from the Diagnostics tab also available to bulk-assign. Mirrors the EU parser. Also relaxed the "No valid rows" guard from `Object.keys(agg).length === 0` to `agg.length === 0 && econAgg.length === 0` so econ-only weeks (real fees with zero sales) upload cleanly.
+- **Fix #2 — `storeToRegion` returns null on unknown:** the fallback now returns `null` instead of `'US'`. The main row loop reads `storeToRegion`, and on null adds the raw store value to a `skippedStores` Map and `continue`s — the row is excluded from BOTH tables. Skipped rows surface in the upload status line (`⚠ N rows skipped (unrecognized Amazon store — hover for values)`) with the raw values in the `title` attribute for click-to-inspect. ZIP + folder uploaders aggregate `skippedStores` across all files into a single warning.
+- **`parseSkuEconomics` return signature** now also includes `skippedStores: [{ value, rows }, ...]` — consumers in `handleSkuEconUpload`, `handleSkuEconZipUpload`, and `handleSkuEconFolderUpload` were all updated to surface it.
+- **Net effect on the 43 unmatched ASINs:** next SKU Economics upload will either (a) auto-create SP-TEMP for them and surface in "needs review" → user can brand-assign or delete; OR (b) skip the row entirely if the misclassification was at the `storeToRegion` step → user sees `⚠ N rows skipped` and can investigate the raw store value. Either way they stop being invisible.
 
 ## Recent Fixes (v5.86) — EU `sku_economics_eu.week_start` unified to Monday (matches US/CA)
 - **User flagged:** P&L tab with EU region + "Last 7 days" period showed `0 products · $0.00` while US/CA had full data, even though the UK SKU Economics report had been uploaded for the same week.
