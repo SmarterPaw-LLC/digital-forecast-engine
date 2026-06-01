@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.95**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.96**
+
+## Recent Fixes (v5.96) — Shopify upload was silently duplicating rows (Architecture Rule #5 violation)
+- **User flagged via DB query:** Fruit Sticks (CF130) showing $1,232.58 on the dashboard for May 2026 but only ~$32 on a single Shopify report row. Direct `sales_weekly` query revealed every week had 2–3 identical rows in the DB, one per upload — exactly 3× inflation matching the dashboard total.
+- **Root cause:** `parseShopifySales` used Supabase upsert with `onConflict: 'channel,asin,shopify_sku,week_start'`. The actual unique index on sales_weekly is `(channel, asin, coalesce(shopify_sku, ''), week_start)` — a **functional** index. Postgres `ON CONFLICT` requires the constraint expression to match exactly; plain-column spec doesn't match the functional `coalesce()` expression, so every upsert silently degraded to a plain INSERT. Result: every re-upload appended duplicate rows instead of replacing.
+- **Architecture Rule #5 in CLAUDE.md** has flagged this since v4-era: "SKU Economics upload uses delete+insert (not upsert) for Amazon rows due to functional coalesce index." Shopify was missed when first wired up; same bug applied.
+- **Fix #1 — DB cleanup** (`supabase_v5_96_dedupe_shopify_sales_weekly.sql`): for every `(channel='shopify', shopify_sku, week_start)` group, keep only the most recent `uploaded_at` and delete the rest. Uses `ctid` row pointer + `row_number() over (partition by ...)` so no PK column is required. Idempotent — running twice is a no-op. Scoped to channel='shopify' (Amazon rows untouched).
+- **Fix #2 — parser** (`parseShopifySales`): replaced the upsert block with the same DELETE+INSERT pattern `parseSkuEconomics` already uses (lines ~6352–6371). Step 1: delete every sales_weekly row matching `(channel='shopify', shopify_sku ∈ uploaded SKUs, week_start ∈ uploaded weeks)`. Step 2: plain INSERT the new rows. SKUs are chunked at 100 per `.in()` call to stay under Supabase's querystring length limit.
+- **User must run the SQL** (`supabase_v5_96_dedupe_shopify_sales_weekly.sql`) before re-uploading — otherwise pre-existing dupes persist. After SQL + v5.96 deploy, Fruit Sticks May 2026 total will drop from $1,232.58 → ~$411 (the actual single-instance total). Same for every other Shopify SKU.
+- **Heads-up about partial-week rows:** the user's data also showed rows like `2026-05-18, 10 units, uploaded 2026-05-19` (partial week — Mon–Tue snapshot) coexisting with `2026-05-18, 3 units, uploaded 2026-06-01` (later upload showing fewer net units, likely due to mid-week returns). The dedupe keeps the MOST RECENT upload, so the 3-unit value wins. That's defensible (latest snapshot of reality) but worth noting if some weeks look lower than expected post-cleanup — investigate whether returns happened or whether the later report had a different config.
 
 ## Recent Fixes (v5.95) — Shopify P&L saved views (full Amazon parity)
 - **User flagged a gap:** v5.93 added the column picker but I said "no saved-views feature." User pointed out they had asked for parity with other pages ("save them like on the other pages") — which on Amazon P&L means full named report snapshots, not just column toggle persistence. Built it.
