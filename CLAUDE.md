@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.92**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.93**
+
+## Recent Fixes (v5.93) — Shopify P&L column picker (mirrors Amazon P&L View popup)
+- **User requested:** "change the columns for the shopify export and save them like on the other pages." Amazon P&L has a 📋 View popup that drives both on-screen columns and CSV export, with localStorage persistence; Shopify P&L had a fixed 7-column hardcoded table and no picker.
+- **Added — `SHOPIFY_PNL_COLUMNS` registry** (14 columns, scoped to DTC's data shape): `image, title, master_id, shopify_sku, category, subcategory, units, net_sales, avg_price, cogs_total, cogs_per_unit, net_proceeds, margin_pct`. Each column has `key, group, label, default, align, render(r), csv(r), sortVal(r), headerTitle, cellStyle`. Mirrors the `PNL_COLUMNS` pattern. No Amazon fee taxonomy (no FBA fees / ad spend slots) — Shopify-only fields.
+- **Defaults match the pre-v5.93 fixed table:** title, shopify_sku, units, net_sales, cogs_total, net_proceeds, margin_pct.
+- **Added — localStorage persistence + helpers:** `shopifyPnlVisibleCols` Set, `shopifyPnlGetVisibleCols`, `shopifyPnlPersistVisibleCols`, `shopifyPnlToggleColumn`, `shopifyPnlResetColumns`. Storage key: `shopifyPnlVisibleCols`. Falls back to defaults if storage is empty / corrupt / contains keys that no longer exist in the registry.
+- **Added — 📋 View popup:** `shopifyPnlToggleColsPopup` + `shopifyPnlRenderColsPopup` + `shopifyPnlClosePopupOnOutsideClick`. Same UX as Amazon's: column groups (Identity / Volume / Revenue / Cost / Profit), checkboxes, ↺ Reset defaults, outside-click closes. Button + popup div added to the Shopify P&L controls bar at the end of the filter row.
+- **Refactored `renderShopifyPnl`:**
+  - Hardcoded `HEAD` array deleted; thead now driven by `shopifyPnlGetVisibleCols()`.
+  - Hardcoded `<td>` row HTML replaced with `visibleCols.map(c => col.render(r))`.
+  - `sortVal` switch-statement deleted; sort now uses each column's `sortVal(r)` helper. Legacy `'margin'` sort-key migrated to `'margin_pct'` automatically on first render so persisted state survives the rename.
+  - Row count line now reads `N products · {from} → {to} · DTC · X cols`.
+- **Refactored `downloadPnlShopifyCSV`:** previously dumped a fixed 9-column file. Now walks `shopifyPnlGetVisibleCols()` and emits `col.csv(r)` for each row — what you see in the table is exactly what lands in the CSV. Context-line at top now includes column count.
+- **No saved-views feature yet** (Amazon P&L has full report-state snapshots — columns + sort + filters + selection + region + currency). Shopify P&L's picker is column-only for now. If Jason wants named views later it can mirror Amazon's pattern.
 
 ## Recent Fixes (v5.92) — Top-bar CSV button works on Shopify P&L sub-view
 - **User flagged:** clicking the global top-bar `↓ CSV` button while on the P&L tab → Shopify sub-view popped `No P&L data to export — open the P&L tab and let it render first`, even though the table was clearly rendered with $19,690.75 net sales across 147 products.
