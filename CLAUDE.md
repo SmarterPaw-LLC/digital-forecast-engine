@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.99**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.0**
+
+## v6.0 — Shopify P&L read-side rewired to `shopify_sales_daily` (v5.98 Pass B.1)
+- **`loadShopifyPnlTab` rewritten** to source from `shopify_sales_daily`. Pulls the full rich field set (master_id, shopify_sku, shopify_product_id, variant_title, title_at_time_of_sale, vendor, sales_channel, day, units_sold, gross_sales, discounts, returns, net_sales, taxes, total_sales). Compat aliases (`week_start = day`, `units_ordered = units_sold`, `revenue = net_sales`) keep the legacy aggregator code working without a sweeping identifier rename.
+- **New "Channel" filter dropdown** in the Shopify P&L controls bar. Populated dynamically from the data after load — shows distinct `sales_channel` values plus `(unknown / blank)` if any rows had no channel set. Filters the aggregator + selectedAgg without touching the underlying data. State captured in saved views.
+- **Two new period options:** `This month` (1st of current month → today) and `Last month` (1st → last day of prior month). Calendar-month math is precise now that the underlying grain is daily — no week-alignment compromise. Period dropdown default shifted from "Last 90 days" to "Last 30 days" since calendar-month workflows are the more common use case.
+- **Aggregator captures the new metric fields** so column renderers have direct access: `gross_sales`, `discounts`, `returns`, `taxes`, `total_sales`. Both `agg` (filtered) and `selectedAgg` (selection-only) build the same shape.
+- **7 new column options** added to `SHOPIFY_PNL_COLUMNS`, all default-off so existing users' visible-column sets aren't disturbed: `gross_sales`, `discounts`, `returns`, `taxes`, `total_sales` (revenue group); `variant_title`, `shopify_product_id` (identity group). Toggle on via the 📋 View popup.
+- **Saved-view snapshot extended** to capture the channel filter. Apply restores it alongside the existing dimensions.
+- **CSV export context line** now includes `channel=X` when a channel filter is active.
+- **What's NOT in v6.0 (deferred to B.2):** `velocity_calculated` view rewrite, deletion of legacy channel='shopify' rows from `sales_weekly`, Forecast tab `salesData` UNION, Units Sold tab UNION. Velocity is currently sourced from the stale legacy weekly rows in `sales_weekly` — uploads after v5.98 don't refresh them. Shopify P&L shows the fresh daily data; velocity-driven surfaces (Inventory Planning reorder math, Forecast tab) lag.
 
 ## v5.99 — Returns handling + Shopify uploader UI refresh (follow-on to v5.98 Pass A)
 - **Returns fix in `parseShopifySales`:** the initial v5.98 parser had `if (units <= 0) continue;` which silently dropped rows representing returns / refunds (Shopify emits these with negative `Net items sold`, negative `Net sales`, negative `Returns`). Re-gated to `hasActivity = units !== 0 || netSales !== 0 || gross_sales !== 0 || returns !== 0 || discounts !== 0 || taxes !== 0 || total_sales !== 0` — keeps any row with financial activity, skips only truly empty rows. Returns aggregate cleanly into the `(sku, day, sales_channel)` key shared with the original sale.
