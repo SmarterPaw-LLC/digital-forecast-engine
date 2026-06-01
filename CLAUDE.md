@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.93**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.94**
+
+## Recent Fixes (v5.94) — `sp_sku` column added to Shopify P&L registry
+- **User requested:** "internal sku added as a dimension." The v5.93 registry had `master_id` and `shopify_sku` but not `sp_sku` — the SmarterPaw internal SKU code (e.g. CF2536) that's the catalog's primary product identifier.
+- **Added `sp_sku` to `SHOPIFY_PNL_COLUMNS`** in the Identity group, between master_id and shopify_sku. `default: true` so it appears for new users out of the box.
+- **Captured `sp_sku` in both `agg` and `selectedAgg`** inside `renderShopifyPnl` from `prod.sp_sku` (sourced from the products table catalog).
+- **For existing users with persisted column settings:** localStorage was populated under v5.93 without sp_sku, so it won't auto-appear. They need to either click `↺ Reset defaults` in the View popup (loses any custom toggles) OR open the View popup and tick the `SP SKU` checkbox (preserves other toggles). One-click fix either way.
 
 ## Recent Fixes (v5.93) — Shopify P&L column picker (mirrors Amazon P&L View popup)
 - **User requested:** "change the columns for the shopify export and save them like on the other pages." Amazon P&L has a 📋 View popup that drives both on-screen columns and CSV export, with localStorage persistence; Shopify P&L had a fixed 7-column hardcoded table and no picker.
