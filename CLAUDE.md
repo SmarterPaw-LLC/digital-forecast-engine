@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.87**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.88**
+
+## Recent Fixes (v5.88) — `parseShopifySales` vendor → brand + empty-SKU surfacing
+- **Triggered by:** user uploaded the 2-month "Weekly Sales By Product" export (Apr 1 – Jun 1, 2026; 1,765 rows) and asked me to verify the uploader could handle it. Pre-flight audit caught two silent-data-corruption bugs.
+- **Issue 1 — brand hardcoded:** every auto-created SP-TEMP got `brand: 'Meowijuana'` regardless of the row's Product vendor cell (line 4267, pre-v5.88). The audited file had 1,386 Meowijuana + 304 Doggijuana vendor rows — any Doggi SKU not yet in `products` would have auto-created as Meowijuana-branded, polluting the catalog until the user manually fixed it on Products tab.
+- **Issue 2 — empty-SKU rows silently dropped:** parser's `if (!sku || !day || units <= 0) continue` skipped every row Shopify emitted with no Product variant SKU (manual orders, deleted products, gift cards, etc.). The audited file had **74 such rows totaling 999 units / $3,487.71 net sales** that would have vanished without trace.
+- **Fix 1 — vendor column → brand:** added `ci('product vendor', 'vendor')` lookup and a `vendorToBrand(v)` normalizer that maps "Meowijuana by SmarterPaw®" / "Doggijuana by SmarterPaw®" / "Kitty Ka-Zoom by SmarterPaw®" to the canonical brand strings the products table uses. Per-SKU brand is captured in a `skuVendors` map during aggregation (first non-null wins). The SP-TEMP auto-create now reads `skuVendors[sku] || 'Meowijuana'` — vendor wins, legacy default only on missing/unrecognized.
+- **Fix 2 — empty-SKU stats surfaced:** added `emptySkuRows`/`emptySkuUnits`/`emptySkuRevenue` counters incremented before the skip. Upload status line now reads `⚠ N rows skipped (no SKU — X units, $Y revenue not attributed)` with class `dz-warn` and a `title` tooltip explaining the typical sources (manual orders / gift cards / deleted products). Counts are also returned from `parseShopifySales` for future telemetry hooks.
+- **No DB migration** — pure parser-layer fix. Previously uploaded SP-TEMPs from old Shopify uploads keep their (possibly wrong) brand — those will need manual cleanup or a one-time SQL update if you want to retroactively fix them.
 
 ## Recent Fixes (v5.87) — Unmatched ASIN parity + storeToRegion hardening
 - **User flagged:** Diagnostics tab showed 43 unmatched ASINs in `sku_economics` (US region, all $0 sales / $0 fees / 0 units), but the Products tab "needs review" filter showed only 1 (the EU SP-TEMP). Asked where the 43 were coming from and why they didn't appear on the unmatched-product filter.
