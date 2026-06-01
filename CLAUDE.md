@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.94**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.95**
+
+## Recent Fixes (v5.95) — Shopify P&L saved views (full Amazon parity)
+- **User flagged a gap:** v5.93 added the column picker but I said "no saved-views feature." User pointed out they had asked for parity with other pages ("save them like on the other pages") — which on Amazon P&L means full named report snapshots, not just column toggle persistence. Built it.
+- **Added — `shopifyPnlSavedViews` state** loaded from `localStorage['shopifyPnlSavedViews']` at startup. Schema mirrors `pnlSavedViews` (Amazon) but Shopify-scoped: `{ cols, sort:{key,dir}, period, customFrom, customTo, brand, cat, search, quick, selectedMids }`. No region/currency since Shopify is single-region USD.
+- **Added — helpers + functions:** `shopifyPnlViewCols`, `shopifyPnlPersistSavedViews`, `shopifyPnlSnapshotState`, `shopifyPnlSaveCurrentAsView`, `shopifyPnlApplyView`, `shopifyPnlUpdateView`, `shopifyPnlRenameView`, `shopifyPnlDeleteView`. Each mirrors the corresponding `pnl*` function exactly.
+- **`shopifyPnlApplyView`** restores: column set (filtered to registry-valid keys), sort key + direction, period dropdown value, custom date range inputs + their visibility, brand select, category select, search input, quick filter (both DOM + module state), and the master_id selection (cleared then re-populated). Final `renderShopifyPnl()` paints the restored state.
+- **Updated `shopifyPnlRenderColsPopup`** to mirror Amazon's two-section layout: 💾 Saved views section at top (Apply / Rename / Update via ↻ / Delete via ✕ buttons per view, with compact metadata chip showing col count + brand + period + selection count), then Columns section below with the existing checkboxes + ↺ Reset defaults. "💾 Save current as view" button between them prompts for a name and snapshots state.
+- **localStorage keys** — column visibility under `shopifyPnlVisibleCols` (v5.93), saved views under `shopifyPnlSavedViews` (v5.95). Independent — clearing one doesn't affect the other.
+- **Note on the missed-parity:** user explicitly called out that I should have built saved-views in v5.93 when they said "save them like on the other pages." Acknowledged and corrected.
 
 ## Recent Fixes (v5.94) — `sp_sku` column added to Shopify P&L registry
 - **User requested:** "internal sku added as a dimension." The v5.93 registry had `master_id` and `shopify_sku` but not `sp_sku` — the SmarterPaw internal SKU code (e.g. CF2536) that's the catalog's primary product identifier.
