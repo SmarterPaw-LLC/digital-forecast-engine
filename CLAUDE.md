@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.91**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.92**
+
+## Recent Fixes (v5.92) — Top-bar CSV button works on Shopify P&L sub-view
+- **User flagged:** clicking the global top-bar `↓ CSV` button while on the P&L tab → Shopify sub-view popped `No P&L data to export — open the P&L tab and let it render first`, even though the table was clearly rendered with $19,690.75 net sales across 147 products.
+- **Root cause:** `exportCSV()` at line 17865 routed any P&L tab activity to `doDownloadPnlAmazonCSV()` unconditionally, which reads `pnlExportRows` (populated by the Amazon `renderPnl`). The Shopify sub-view uses `shopifyPnlData` / `shopifyPnlVisibleMids` — separate arrays the Amazon export doesn't know about. So `pnlExportRows` was empty and the function threw its guard.
+- **Fix — pure repair, no scope expansion:**
+  - Added `shopifyPnlExportRows` + `shopifyPnlExportCtx` module-level state, populated at the end of `renderShopifyPnl()` (mirrors the `pnlExportRows` snapshot pattern Amazon already uses).
+  - Added `downloadPnlShopifyCSV()` — exports the on-screen rows with the seven visible columns (Product, Brand, Master ID, Shopify SKU, Units, Net Sales, COGS, Net Proceeds, Margin %). Includes a `# Shopify P&L · {from} -> {to}` context line at the top so the file carries its filter + date scope.
+  - Added a branch in `exportCSV()`: `if (pnlView === 'shopify') return downloadPnlShopifyCSV();` Mirrors the existing COGS-vs-Amazon split.
+- **No column picker / no selected-vs-all mode** — those would be scope expansion. The export matches exactly what's on screen, respects the active Period / Brand / Category / Search / Quick filters, sorted by the current sort key.
 
 ## Recent Fixes (v5.91) — Reverted Shopify empty-SKU catch-all (scope: unit sales only)
 - **User clarified scope:** dashboard captures unit sales of catalog products only. Non-product revenue (POS / manual line items / gift cards / shipping fees / discount allocations / refund admin) belongs in Shopify's own P&L reporting, not `sales_weekly`. The v5.89/v5.90 synthetic catch-all (`SP-UNMAPPED-SHOPIFY`) was the wrong abstraction — it created a fake catalog row for line items that aren't products.
