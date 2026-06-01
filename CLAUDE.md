@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.85**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.86**
+
+## Recent Fixes (v5.86) — EU `sku_economics_eu.week_start` unified to Monday (matches US/CA)
+- **User flagged:** P&L tab with EU region + "Last 7 days" period showed `0 products · $0.00` while US/CA had full data, even though the UK SKU Economics report had been uploaded for the same week.
+- **Root cause:** two-table convention drift since v4.144. `sku_economics` (US/CA) stores `week_start` Monday-shifted via `dateToMondayLocal()`; `sku_economics_eu` stored the **native Sunday** (parseEuSkuEconomics line 6582: `fmtLocalYMD(startD); // keep native Sunday`). `getPnlDateRange()` for "Last 7 days" with today = 2026-06-01 returns `from = 2026-05-25` (a Monday) — US/CA's `2026-05-25` row passes the `row.week_start >= from` filter, EU's `2026-05-24` row fails by 1 day. Bug surfaces at any boundary that lands on a Monday.
+- **Fix — two parts:**
+  - **DB migration** (`supabase_v5_86_eu_week_start_monday.sql`): `update sku_economics_eu set week_start = week_start + interval '1 day' where extract(dow from week_start) = 0;` Shifts every existing Sunday-keyed row to Monday. The dow=0 guard makes it idempotent. Wrapped in a transaction with verify queries.
+  - **Parser** (`parseEuSkuEconomics`, line ~6582): replaced `fmtLocalYMD(startD)` with `dateToMondayLocal(startD, true)` so new uploads write Monday directly. Sister sales_weekly write at line 6763 already used `dateToMondayLocal(startD, true)` since v4.144, so no change there.
+- **Downstream consumers** (`loadEuPnlTab` line 7793, `renderPnl` filter line 8190, latest-week display line 8898, `endOfWeek` helper at line 8861) — all expect Monday week_starts and now get them uniformly. `endOfWeek` was already correct for the US/CA path; the EU branch now produces the same Saturday end-of-week if/when surfaced.
+- **No region-specific date math anywhere** after this — every period filter, week join, and velocity rollup behaves identically across US/CA/EU.
+- **Run order:** Run the SQL in Supabase **before** deploying v5.86 to avoid a window where new uploads write Monday while existing rows are still on Sunday (would just look weird in the latest-week badge, not break anything; but cleaner this way).
 
 ## Recent Fixes (v5.85) — Cancelled shipments no longer count as inbound / active
 - **User flagged with screenshot:** Inventory Planning row showed `Inbound Units = 24` for a shipment whose summary status was `Cancelled` (the row's own Inbound Detail cell read `Canc:24`). User correctly asked why a cancelled shipment was inflating inbound.
