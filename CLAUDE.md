@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.96**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.97**
+
+## Recent Fixes (v5.97) — Full audit + fix of the silent-dedup vulnerability across all sales_weekly upload paths
+- **Trigger:** user (rightly) demanded a codebase audit after v5.96 surfaced the silent-duplication bug in parseShopifySales. "make sure it doesn't happen elsewhere."
+- **Root cause (recap):** `sales_weekly` has a FUNCTIONAL unique index `(channel, asin, coalesce(shopify_sku, ''), week_start)`. Postgres `ON CONFLICT` requires the expression list to match an existing constraint exactly. Any `.upsert(..., { onConflict: 'channel,asin,shopify_sku,week_start' })` call uses plain column names that don't match the functional `coalesce()` expression. PostgREST silently degrades the request to a plain INSERT instead of throwing — every re-upload appends duplicate rows.
+- **Full audit of all 34 `.upsert()` call sites in index.html:** only writes to `sales_weekly` are affected (it's the only table with a functional-expression unique index). All other tables use either single-column PK or plain multi-column indexes that match their `onConflict` specs:
+  - `products` (PK master_id), `bom` (PK id), `product_cogs` (PK master_id), `fba_shipment_summaries` (PK shipment_id) — safe
+  - `inventory` (`asin,region`), `fba_shipments` (`shipment_id,sku`), `sku_economics` + `sku_economics_eu` (`asin,region,week_start`), `chewy_forecasts` (`chewy_sku,forecast_month,upload_date`) — safe (plain multi-column)
+- **Vulnerable sites (3 total — 1 fixed in v5.96, 2 fixed in v5.97):**
+  - ~~`parseShopifySales`~~ — fixed v5.96.
+  - **`parseSalesWeekly`'s Amazon branch (line ~4163)** — fixed v5.97. Handles uploads via the per-brand-per-region Amazon sales SLOTS (not the SKU Economics path). Rows have `shopify_sku=null` per Architecture Rule #1, so the cleanup delete scopes by `(channel, asin)` + `is('shopify_sku', null)`.
+  - **`doRestore`'s sales_weekly block (line ~20092)** — fixed v5.97. Backup restore needs per-channel logic because Amazon-style channels and Shopify use different key fields (asin vs shopify_sku). Splits the backup by channel, then per-channel DELETE+INSERT.
+- **Safe sites (verified DELETE+INSERT, never had the bug):**
+  - `parseSkuEconomics` (line ~6504, Amazon US/CA SKU Economics) — has used DELETE+INSERT since v4. Architecture Rule #5 was written based on this path.
+  - `parseEuSkuEconomics` (line ~6957, EU SKU Economics) — same.
+- **DB cleanup migration** (`supabase_v5_97_audit_sales_weekly_dupes.sql`): supersedes v5.96's Shopify-only dedupe. Audits + cleans ALL channels using the actual functional-index partition key `partition by channel, asin, coalesce(shopify_sku, ''), week_start`. Idempotent — running after v5.96 only touches non-Shopify dupes (if any).
+- **Why PostgREST silently degrades** rather than throwing: best guess is that the JS client / PostgREST treats the unmatched `on_conflict` query param as a hint that's silently dropped when no exact-match constraint exists, falling back to plain INSERT. Postgres's own SQL `INSERT ... ON CONFLICT (cols)` would throw. The Supabase abstraction layer hides the failure mode. **Defense:** never use `upsert` against a table with functional-expression indexes — always DELETE+INSERT.
+- **Architecture Rule #5 status:** now uniformly enforced across every code path that writes to `sales_weekly`. The pre-existing rule wording in CLAUDE.md should be tightened from "SKU Economics upload uses delete+insert" to "ALL sales_weekly writes must use DELETE+INSERT (not upsert) — the table's functional `coalesce()` unique index silently breaks upsert."
 
 ## Recent Fixes (v5.96) — Shopify upload was silently duplicating rows (Architecture Rule #5 violation)
 - **User flagged via DB query:** Fruit Sticks (CF130) showing $1,232.58 on the dashboard for May 2026 but only ~$32 on a single Shopify report row. Direct `sales_weekly` query revealed every week had 2–3 identical rows in the DB, one per upload — exactly 3× inflation matching the dashboard total.
@@ -2182,7 +2199,7 @@ Two ports between the Forecast and P&L tabs:
 2. **master_id is always auto-incremented SP-XXXX** — never derived from sp_sku or any other field
 3. **SP-TEMP-{ASIN}** = auto-created placeholder when ASIN not in products catalog. Promoted to real SP-XXXX when user saves the product
 4. **Supabase default row limit = 1000** — all large queries must use `.range()` pagination
-5. **SKU Economics upload uses delete+insert** (not upsert) for Amazon rows due to functional coalesce index
+5. **ALL `sales_weekly` writes MUST use DELETE+INSERT** (not upsert). The table's unique index is functional (`coalesce(shopify_sku, '')` to handle Amazon's null shopify_sku), and Supabase upsert with plain-column `onConflict` silently degrades to plain INSERT against functional indexes — producing duplicate rows on every re-upload. Audit history: parseSkuEconomics + parseEuSkuEconomics always used DELETE+INSERT; parseShopifySales (fixed v5.96), parseSalesWeekly Amazon branch (fixed v5.97), and doRestore (fixed v5.97) all had the bug. No other table currently uses a functional-expression unique index — if you ever add one, use DELETE+INSERT for that table too.
 6. **Chewy data → chewy_forecasts table only** (not sales_weekly). Velocity uses getChewyFcUnits() forward forecast
 7. **Foreign key order matters**: when promoting SP-TEMP → SP-XXXX, insert new product FIRST, then update references, then delete old temp
 
