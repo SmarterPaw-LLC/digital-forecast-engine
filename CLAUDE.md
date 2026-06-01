@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.1**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.2**
+
+## v6.2 — Seasonality fix for v6.1 daily-grain Shopify rows
+- **Bug caught during post-cutover audit:** `computeProductSeasonality` counted unique `week_start` strings as a proxy for "weeks of data". After v6.1, Shopify rows in `salesData` carry daily dates in `week_start` (alias for `day`). Without normalization a Shopify SKU with 7 daily sales registered as 7 "weeks" — falsely passing the `>= minWeeks` confidence check, and producing per-day-not-per-week `baseline` math for mixed-channel SKUs.
+- **Fix:** added `toMondayKey(dateStr)` helper inside `computeProductSeasonality` that converts any date (daily or weekly) to its Monday-of-week YYYY-MM-DD key. Two consumers normalize through it:
+  1. Channel-stability detection (line ~15878): `channelStats[ch].weeks.add(toMondayKey(r.week_start))` so the `>= 3 weeks` filter counts unique weeks, not unique days.
+  2. ISO-week aggregation (line ~15898): rows aggregate to `weeklyAgg[mondayKey]` first, then bucket by `isoWeekOfYear` per Monday key. `weekTotals[isoKey].count` now increments per WEEK, not per row, so `wkAvg = sum/count` is always weekly regardless of source grain.
+- **Other read paths verified OK without changes:**
+  - Forecast tab + Inventory Planning velocity (line ~12079, ~17073): use `(now - new Date(s.week_start)) / 864e5 <= windowDays` — pure date-range filter, works correctly with daily dates (actually more precise now).
+  - Shopify P&L tab: already date-range based throughout.
+  - Units Sold tab: same date-range filtering.
+  - `velocity_calculated` view: handles both grains via the v6.1 SQL migration.
 
 ## v6.1 — `loadSalesAnalytics` rewired + SQL for view rewrite / sales_weekly cleanup (v5.98 Pass B.2)
 - **`loadSalesAnalytics` rewritten** to source from TWO tables: `sales_weekly` (filtered to `channel <> 'shopify'`) + `shopify_sales_daily` (mapped to legacy row shape with `week_start = day`, `units_ordered = units_sold`, `channel = 'shopify'`, `region = 'US'`). Both paginated. Downstream consumers (`renderSalesTbl`, `fcSoldByChannel`, seasonality, bundle attribution) work unchanged — they iterate `salesData[master_id]` and filter by `s.week_start` / `s.channel`, which is identifier-only and doesn't care that the underlying grain shifted from weekly to daily.

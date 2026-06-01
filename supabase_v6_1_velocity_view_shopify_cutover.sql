@@ -1,119 +1,136 @@
 -- ============================================================================
--- Pass B.2 final cutover — velocity_calculated view + sales_weekly cleanup (v6.1)
+-- Pass B.2 final cutover — velocity_calculated view + sales_weekly cleanup
 -- ============================================================================
+-- VERIFIED against the user's existing view definition (`pg_get_viewdef`
+-- output from 2026-06-01). My v6.1 first-draft was missing 7 columns —
+-- this version preserves the full column set exactly, just adds the
+-- UNION with shopify_sales_daily and switches `week_start` → `day` for the
+-- date window math.
 --
--- ⚠ READ THIS BEFORE RUNNING ⚠
--- ---------------------------------------------------------------------------
--- This migration replaces the `velocity_calculated` Postgres VIEW with a new
--- definition that UNIONs `sales_weekly` (non-shopify) + `shopify_sales_daily`,
--- then deletes the legacy `channel='shopify'` rows from `sales_weekly`.
+-- Original view (snapshot for rollback if needed):
 --
--- The view replacement is the only piece I'm guessing on — I don't have
--- visibility into the CURRENT view's exact definition. Step 1 below dumps it
--- so you can compare. If the existing view has additional columns / different
--- math / different filtering than my replacement assumes, edit the new
--- CREATE OR REPLACE VIEW statement to match BEFORE committing this txn.
+--   SELECT master_id, region,
+--       max(asin) AS asin,
+--       max(shopify_sku) AS shopify_sku,
+--       max(chewy_part_no) AS chewy_part_no,
+--       round(sum(CASE WHEN week_start >= (CURRENT_DATE - '30 days'::interval)  THEN units_ordered ELSE 0 END)::numeric / 30::numeric,  4) AS v30,
+--       round(sum(CASE WHEN week_start >= (CURRENT_DATE - '60 days'::interval)  THEN units_ordered ELSE 0 END)::numeric / 60::numeric,  4) AS v60,
+--       round(sum(CASE WHEN week_start >= (CURRENT_DATE - '90 days'::interval)  THEN units_ordered ELSE 0 END)::numeric / 90::numeric,  4) AS v90,
+--       round(sum(CASE WHEN week_start >= (CURRENT_DATE - '120 days'::interval) THEN units_ordered ELSE 0 END)::numeric / 120::numeric, 4) AS v120,
+--       count(DISTINCT week_start)  AS weeks_of_data,
+--       min(week_start)             AS data_from,
+--       max(week_start)             AS data_to,
+--       sum(units_ordered)          AS total_units,
+--       max(uploaded_at)            AS last_uploaded
+--   FROM sales_weekly
+--   WHERE master_id IS NOT NULL
+--   GROUP BY master_id, region;
 --
--- ──────────────────────────────────────────────────────────────────────────
--- STEP 1 — Dump the current view definition (RUN FIRST, READ-ONLY)
--- ──────────────────────────────────────────────────────────────────────────
--- Run this SELECT on its own (NOT inside the transaction below). Copy the
--- output somewhere safe — it's your rollback if anything breaks.
---
---   select pg_get_viewdef('velocity_calculated', true);
---
--- The output should be a SELECT statement aggregating sales_weekly into v30,
--- v60, v90, v120 buckets. My replacement adds shopify_sales_daily as a second
--- source via UNION ALL. Make sure my version returns the SAME columns + types
--- the original did. The dashboard's hot paths read:
---   • master_id, region, v30, v60, v90, v120 (line ~4192)
---   • + weeks_of_data (referenced in the saved Velocity SQL at ~10635)
---
--- ──────────────────────────────────────────────────────────────────────────
--- STEP 2 — Apply the cutover (transaction-wrapped)
--- ──────────────────────────────────────────────────────────────────────────
+-- Step 2 below replaces the FROM with a UNION CTE that pulls non-Shopify
+-- rows from sales_weekly and Shopify rows from shopify_sales_daily. Every
+-- output column is preserved with the same name + type + math.
+-- ============================================================================
 
 begin;
 
--- 2a. New `velocity_calculated` view — UNIONs sales_weekly (non-shopify)
---     + shopify_sales_daily into a unified per-day stream, then aggregates
---     into the v30/v60/v90/v120 buckets per (master_id, region).
---
---     Shopify rows: region hardcoded to 'US' (Shopify isn't multi-region in
---     this catalog). Day is the bucket date directly.
---
---     Amazon/Chewy/EU rows: week_start cast to day. A weekly row of 100
---     units that started on day D counts the full 100 toward any window
---     where day >= D. This matches the pre-v6.1 view behavior (weekly bucket
---     attributed to its start date).
---
---     `weeks_of_data` is computed as count of distinct ISO weeks the unified
---     stream covers — survives the granularity mix because date_trunc('week')
---     buckets both daily and weekly rows correctly.
+-- 2a. Rebuild `velocity_calculated` as a UNION over both sources.
 create or replace view velocity_calculated as
 with unified as (
+  -- Amazon US/CA, Amazon EU markets, Chewy — from sales_weekly. Shopify
+  -- channel excluded; its rows are deleted in step 2b below and going
+  -- forward will only live in shopify_sales_daily.
   select
     master_id,
     region,
-    week_start::date as day,
-    coalesce(units_ordered, 0) as units
+    asin,
+    shopify_sku,
+    chewy_part_no,
+    week_start::date     as day,
+    coalesce(units_ordered, 0) as units,
+    uploaded_at
   from sales_weekly
   where master_id is not null
     and channel <> 'shopify'
 
   union all
 
+  -- Shopify — from shopify_sales_daily (per-day grain). Region hardcoded
+  -- to 'US' since Shopify isn't multi-region in this catalog. asin and
+  -- chewy_part_no don't exist on this table, so NULL them out (the max()
+  -- aggregate below picks the non-null value if any Amazon/Chewy row for
+  -- the same master_id contributes one).
   select
     master_id,
-    'US'::text as region,
+    'US'::text           as region,
+    null::text           as asin,
+    shopify_sku,
+    null::text           as chewy_part_no,
     day,
-    coalesce(units_sold, 0) as units
+    coalesce(units_sold, 0) as units,
+    uploaded_at
   from shopify_sales_daily
   where master_id is not null
 )
 select
   master_id,
   region,
-  coalesce(sum(units) filter (where day >= current_date - interval '30 days')  / 30.0,  0)::numeric as v30,
-  coalesce(sum(units) filter (where day >= current_date - interval '60 days')  / 60.0,  0)::numeric as v60,
-  coalesce(sum(units) filter (where day >= current_date - interval '90 days')  / 90.0,  0)::numeric as v90,
-  coalesce(sum(units) filter (where day >= current_date - interval '120 days') / 120.0, 0)::numeric as v120,
-  count(distinct date_trunc('week', day))::integer as weeks_of_data
+  max(asin)          as asin,
+  max(shopify_sku)   as shopify_sku,
+  max(chewy_part_no) as chewy_part_no,
+  round(sum(case when day >= (current_date - interval '30 days')  then units else 0 end)::numeric / 30::numeric,  4) as v30,
+  round(sum(case when day >= (current_date - interval '60 days')  then units else 0 end)::numeric / 60::numeric,  4) as v60,
+  round(sum(case when day >= (current_date - interval '90 days')  then units else 0 end)::numeric / 90::numeric,  4) as v90,
+  round(sum(case when day >= (current_date - interval '120 days') then units else 0 end)::numeric / 120::numeric, 4) as v120,
+  -- weeks_of_data: count distinct ISO weeks the unified stream covers.
+  -- For sales_weekly rows day == week_start (a Monday), so date_trunc('week')
+  -- yields that same Monday. For shopify_sales_daily rows day can be any
+  -- date — date_trunc('week') rolls it back to that week's Monday. Both
+  -- contribute consistently to a weeks-not-days count.
+  count(distinct date_trunc('week', day)) as weeks_of_data,
+  min(day)           as data_from,
+  max(day)           as data_to,
+  sum(units)         as total_units,
+  max(uploaded_at)   as last_uploaded
 from unified
 group by master_id, region;
 
 grant select on velocity_calculated to authenticated;
 
--- 2b. Delete legacy Shopify rows from sales_weekly. The dashboard's
---     loadSalesAnalytics (v6.1) and loadShopifyPnlTab (v6.0) both source
---     Shopify exclusively from `shopify_sales_daily` now. The view above
---     also excludes sales_weekly.channel='shopify'. So these rows aren't
---     read by anything — safe to delete.
+-- 2b. Delete legacy Shopify rows from sales_weekly. The new view excludes
+-- them via the `channel <> 'shopify'` filter; the dashboard's
+-- loadShopifyPnlTab + loadSalesAnalytics (v6.0 / v6.1) already source
+-- Shopify exclusively from shopify_sales_daily. So nothing reads these
+-- rows anymore — safe to delete.
 delete from sales_weekly where channel = 'shopify';
 
 -- ──────────────────────────────────────────────────────────────────────────
 -- STEP 3 — Verify (run after commit)
 -- ──────────────────────────────────────────────────────────────────────────
--- Quick sanity checks:
 --
---   -- View returns rows for both Amazon (region='US' or 'CA') AND Shopify-
---   -- contributing master_ids:
---   select region, count(*) from velocity_calculated group by region;
+--   -- View returns rows for both Amazon (US/CA) AND Shopify-contributing
+--   -- master_ids:
+--   select region, count(*) from velocity_calculated group by region order by region;
 --
---   -- Shopify-bearing SKUs should have non-zero v30 if they sold recently:
---   select v.master_id, p.short_name, v.region, v.v30, v.v60, v.v90, v.v120
+--   -- Same shape check as your "before" snapshot — these should be
+--   -- close to the pre-migration values (the underlying data is the same
+--   -- post-dedupe, just sourced from a different table for Shopify):
+--   select v.master_id, p.short_name, p.shopify_sku, v.region,
+--          v.v30, v.v60, v.v90, v.v120, v.weeks_of_data
 --   from velocity_calculated v
 --   join products p on p.master_id = v.master_id
 --   where p.shopify_sku is not null
---   order by v.v30 desc limit 20;
+--     and p.asin is null              -- Shopify-only, no Amazon
+--     and v.v30 > 0
+--   order by v.v30 desc
+--   limit 10;
 --
---   -- sales_weekly should have zero Shopify rows:
---   select count(*) from sales_weekly where channel = 'shopify';
---   -- expected: 0
+--   -- sales_weekly should have zero Shopify rows now:
+--   select count(*) from sales_weekly where channel = 'shopify';  -- expect 0
 --
--- If the Forecast tab or Inventory Planning shows blank velocity after this
--- runs, the view's column shape is the most likely culprit — paste the
--- output of `pg_get_viewdef` above and we can fix it.
+-- ROLLBACK (if anything goes wrong):
+--   Run the full original view definition from the comment block at top of
+--   this file inside a CREATE OR REPLACE VIEW velocity_calculated AS ...
+--   statement. That restores the pre-migration shape exactly.
 -- ============================================================================
 
 commit;
