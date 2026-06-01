@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.88**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.89**
+
+## Recent Fixes (v5.89) — Empty-SKU Shopify rows roll into `SP-TEMP-SHOPIFY-UNMAPPED` catch-all
+- **Triggered by:** user uploaded the Apr 1 – Jun 1 Shopify file and saw the v5.88 warning surface 46 empty-SKU rows (1,000 units, $3,495.58 net sales) being skipped. Asked for parity with the SKU Economics uploader's auto-create-on-unknown pattern so revenue isn't dropped.
+- **Why the v5.88 warning wasn't enough:** Shopify aggregates ALL variantless line items (manual orders, gift cards, deleted products, POS custom items, draft-order conversions) into per-day rows with EVERY field blank (sku/title/vendor/category). The v5.88 fix surfaced the magnitude — but the revenue itself never landed in `sales_weekly`, so the Shopify P&L under-reported by ~$3.5K over the 2-month range.
+- **Why a per-row SP-TEMP doesn't work:** unlike the SKU Economics fix (where each unknown ASIN gets its own `SP-TEMP-{ASIN}`), empty-SKU Shopify rows have NO unique identifier — every row collapses to the same "blank" key. Creating 46 identical placeholders would be useless catalog noise.
+- **Fix — synthetic catch-all SKU:** added `UNMAPPED_SKU = 'SHOPIFY-UNMAPPED'`. Empty-SKU rows now aggregate into `weekMap` under that synthetic SKU keyed by week_start. The existing unknown-SKU detection picks up `SHOPIFY-UNMAPPED` on first upload and auto-creates `SP-TEMP-SHOPIFY-UNMAPPED` with `title: 'Unmapped Shopify Sales'`, `brand: 'Unknown'`, and a long-form note explaining the source. Subsequent uploads upsert into the same `master_id` idempotently (the unique key `(channel, asin, shopify_sku, week_start)` handles re-uploads cleanly).
+- **Negative / zero-unit empty-SKU rows** (Shopify emits these for full-day refunds with no positive offsetting activity) still feed the `emptySkuRows/Units/Revenue` counters so the audit trail is complete, but only `units > 0` rows actually land in sales_weekly — matches the gating already in place for named-SKU rows.
+- **Status line semantics flipped** v5.88 `⚠ N rows skipped` → v5.89 `ℹ N empty-SKU rows rolled into SP-TEMP-SHOPIFY-UNMAPPED (X units, $Y)`. Tooltip explains the typical sources + tells the user to review on Products tab → Needs Review.
+- **Net effect on the user's audit:** 46 rows / 1,000 units / $3,495.58 will land in sales_weekly under `master_id = 'SP-TEMP-SHOPIFY-UNMAPPED'` instead of vanishing. Shopify P&L will reflect the true total. User can investigate root cause in Shopify admin (Reports → Order details → filter for line items with no SKU) and either accept the catch-all as a permanent line or fix the underlying orders.
 
 ## Recent Fixes (v5.88) — `parseShopifySales` vendor → brand + empty-SKU surfacing
 - **Triggered by:** user uploaded the 2-month "Weekly Sales By Product" export (Apr 1 – Jun 1, 2026; 1,765 rows) and asked me to verify the uploader could handle it. Pre-flight audit caught two silent-data-corruption bugs.
