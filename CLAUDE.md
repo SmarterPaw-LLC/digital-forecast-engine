@@ -2,7 +2,36 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.97**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v5.98**
+
+## v5.98 Pass A — Shopify moves to daily-grain (`shopify_sales_daily` write path)
+- **User reframe:** `sales_weekly` was built around Amazon's natively-weekly SKU Economics export. Forcing Shopify into that grain causes monthly P&L misattribution (calendar months cut across weeks) AND blocks the richer ShopifyQL fields (sales_channel, gross_sales, discounts, returns, taxes, total_sales) from being captured. Shopify gets its own daily-grain table; Amazon + Chewy + EU stay on sales_weekly.
+- **Canonical ShopifyQL the v5.98 parser expects:**
+  ```
+  FROM sales
+  SHOW day, net_items_sold, gross_sales, discounts, returns,
+       net_sales, taxes, total_sales
+  WHERE line_type = 'product'
+  GROUP BY day, product_title, product_variant_title, product_variant_sku,
+           product_id, product_title_at_time_of_sale, sales_channel, product_vendor
+  SINCE ... UNTIL ...
+  ORDER BY day ASC
+  LIMIT 50000
+  ```
+- **SQL migration (`supabase_v5_98_shopify_sales_daily.sql`):**
+  - Creates `shopify_sales_daily` with columns: master_id, shopify_sku, shopify_product_id, variant_title, title_at_time_of_sale, vendor, sales_channel (default `''`), day, units_sold, gross_sales, discounts, returns, net_sales, taxes, total_sales, source, uploaded_at.
+  - Plain-column unique index on `(shopify_sku, day, sales_channel)` — NO `coalesce()`. sales_channel defaults to `''` so the index is upsert-safe by plain-column onConflict (lessons learned from v5.96/v5.97). Parser still uses DELETE+INSERT per Architecture Rule #5.
+  - DOES NOT touch `sales_weekly` or `velocity_calculated` yet. Pass B handles the cutover + view rewrite.
+- **`parseShopifySales` rewritten:**
+  - Reads richer ShopifyQL format (all 7 metrics + 7 dimensions). Missing columns degrade gracefully to 0/null so partial-format files still load, but `day` and `net_sales` are required.
+  - Aggregates per `(sku, day, sales_channel)` — daily grain.
+  - Auto-creates SP-TEMP for unknown SKUs with v5.88 vendor→brand mapping. Captures variant_title / product_id / title_at_sale on the daily row.
+  - Conflict dialog reframed to day-level overlap (was week-level).
+  - Writes via DELETE+INSERT keyed by `(shopify_sku, day)` scoped — covers all sales_channels for the affected day-SKU pairs.
+- **Transitional state after Pass A deploy:**
+  - New uploads write to `shopify_sales_daily` only.
+  - Existing Shopify rows in `sales_weekly` are untouched — `velocity_calculated`, Forecast tab's `salesData`, Shopify P&L (old reader), and Units Sold continue reading them. Data goes stale for Shopify (no new writes) but nothing breaks.
+- **Pass B (next code release, not in v5.98):** delete `sales_weekly` channel='shopify' rows, rewrite `velocity_calculated` view, rewire Shopify P&L tab to read from `shopify_sales_daily`, update Forecast `salesData` loader, update Units Sold tab.
 
 ## Recent Fixes (v5.97) — Full audit + fix of the silent-dedup vulnerability across all sales_weekly upload paths
 - **Trigger:** user (rightly) demanded a codebase audit after v5.96 surfaced the silent-duplication bug in parseShopifySales. "make sure it doesn't happen elsewhere."
