@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.3**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.4**
+
+## v6.4 — Units Sold chart bucketing fix for mixed daily/weekly salesData
+- **User flagged:** Units Sold chart for products that sell on both Amazon and Shopify (e.g. "Catnip Spray - 3 Oz") showed a jagged daily-spike pattern after the v6.1 cutover. Amazon rows = one point per Monday; Shopify rows = one point per day. The chart's X-axis collected both types of dates into the same set, producing hundreds of points and a sawtooth visual.
+- **User proposed** writing to sales_weekly again for chart sanity. Rejected — the right fix is at the READ layer.
+- **Fix:** added the same `toMondayKey(dateStr)` helper used by v6.2 seasonality + v5.86 EU. Inside `updateSalesChart` every `r.week_start` value is normalized to its Monday-of-week key before adding to `allWeeks`, `salesRawWeekData`, and `unitsByWeek`. Amazon weekly rows are already Mondays (no-op). Shopify daily rows collapse cleanly into their containing weeks. Result: smooth weekly line on the chart from a daily Shopify source — no schema dual-write, no data drift.
+- **Other consumers verified clean:** `renderSalesTbl` (Units Sold table totals) sums via date-range filter, agnostic to grain. Forecast `fcSoldByChannel` and Inventory velocity (`getInventoryChannelVel`) same. The chart was the only weekly-grain-assumption left.
 
 ## v6.3 — Multi-month revision trend chart on Chewy Revision Tracker
 - **User request:** "i need a way to see how forecasts are changing over time" on the Chewy Forecast Revision Tracker. Specifically a "line chart showing each month's forecast final lock with additional lines showing the relative gain/loss over the preceding period."
