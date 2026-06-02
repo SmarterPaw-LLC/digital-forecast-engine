@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.4**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.5**
+
+## v6.5 — Units Sold chart caps at latest fully-reported week per channel
+- **User flagged:** v6.4 fixed the daily-vs-weekly jagged-line bug, but a new issue emerged. Mixed-channel SKUs (Pawty Mix has Amazon + Shopify) showed a misleading drop at the rightmost week — Shopify uploads daily and was current through 5/31, but Amazon hadn't been uploaded yet for that week. The week's bucket plotted at "Shopify-only" units, looking like a 90% sales crash.
+- **Fix:** `updateSalesChart` now computes per-channel "latest reported week" from `salesData`, identifies which channels are relevant to the selection (including bundle-attribution channels when that toggle is on), and caps the chart's right edge to the EARLIEST of those latest weeks. For Pawty Mix: if Amazon's last upload was for week 5/18 and Shopify ran through 5/25, the chart now ends at week 5/18. Uploading the missing Amazon week extends the chart automatically — no schema or workflow change.
+- **Implementation detail:** `cutoffWeek` is calculated once per chart render and applied at the `allWeeks.add()` step via an `addWeek(wk)` guard that drops weeks beyond the cutoff. Downstream `unitsByWeek` building remains unchanged because the chart consumes only `weeks.map(w => unitsByWeek[w] || 0)`, so any extra unitsByWeek keys silently drop off.
+- **Why not "show partial weeks with a dashed line":** considered but rejected. The principal failure mode here is a clean, decisive misread ("sales crashed!") which dashed lines wouldn't fully prevent. Dropping the week eliminates the false signal entirely; uploading the missing data restores it.
 
 ## v6.4 — Units Sold chart bucketing fix for mixed daily/weekly salesData
 - **User flagged:** Units Sold chart for products that sell on both Amazon and Shopify (e.g. "Catnip Spray - 3 Oz") showed a jagged daily-spike pattern after the v6.1 cutover. Amazon rows = one point per Monday; Shopify rows = one point per day. The chart's X-axis collected both types of dates into the same set, producing hundreds of points and a sawtooth visual.
