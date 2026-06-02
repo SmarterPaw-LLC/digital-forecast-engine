@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.2**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.3**
+
+## v6.3 — Multi-month revision trend chart on Chewy Revision Tracker
+- **User request:** "i need a way to see how forecasts are changing over time" on the Chewy Forecast Revision Tracker. Specifically a "line chart showing each month's forecast final lock with additional lines showing the relative gain/loss over the preceding period."
+- **What's new:** chart panel added inside the existing Revision Tracker `<details>` block (between the tiles and the per-SKU table). Renders three series across all `forecast_month` values in the data:
+  1. **First forecast** (gray): aggregate of each SKU's earliest snapshot per month
+  2. **Final pre-month lock** (green): aggregate of last snapshot before `month_start` per month — explicit gap if a month had no SKU lockable before it began
+  3. **Net revision** (orange dashed line on a right-side Y2 axis): `Lock − First` per month — positive = Chewy raised demand, negative = lowered. This is the "relative gain/loss over the preceding period" series.
+- **Implementation:** added `chewyRenderRevisionChart()` (called at the end of `renderChewyRevisionTracker`). Re-derives the brand/search filter context from the DOM so it stays in lockstep with the panel above it. Chart.js line chart with dual Y-axes; existing `getChart()` helper bootstraps Chart.js lazily.
+- **State:** new module-level `chewyRevisionChartInstance` so the chart destroys + recreates cleanly on every render (avoids stale ghost charts after filter changes).
+- **No table changes:** my earlier attempt to add a per-row 📈 drill-down column was reverted before commit — Jason's ask was for an aggregate chart on the existing tracker, not a per-product drill-in. Table layout is unchanged from v6.2.
 
 ## v6.2 — Seasonality fix for v6.1 daily-grain Shopify rows
 - **Bug caught during post-cutover audit:** `computeProductSeasonality` counted unique `week_start` strings as a proxy for "weeks of data". After v6.1, Shopify rows in `salesData` carry daily dates in `week_start` (alias for `day`). Without normalization a Shopify SKU with 7 daily sales registered as 7 "weeks" — falsely passing the `>= minWeeks` confidence check, and producing per-day-not-per-week `baseline` math for mixed-channel SKUs.
