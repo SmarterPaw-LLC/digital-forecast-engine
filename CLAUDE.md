@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.14**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.15**
+
+## v6.15 — "Non-bundles only" filter option on COGS page
+- Added `<option value="non-bundles">Non-bundles only</option>` to the `cogs-filter` dropdown, between "Bundles only" and "Bundle COGS mismatches" so the bundle-related options sit together.
+- `renderCogsTbl` filter logic gets a matching branch: `if (filter === 'non-bundles') return !p.is_bundle;`
+- Tightened the existing `'bundles'` predicate from `return p.is_bundle` to `return !!p.is_bundle` so undefined values (legacy products without the flag set) fall on the non-bundle side consistently.
 
 ## v6.14 — COGS table width fix (bundle BOM lines were sprawling)
 - **User pushback:** v6.12 + v6.13 still didn't fit at 100% browser zoom. Right edge truncated past Amz EU column.
