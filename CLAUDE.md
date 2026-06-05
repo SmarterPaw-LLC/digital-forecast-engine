@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.19**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.20**
+
+## v6.20 — Landed-cost gate on derived/auto-recompute logic
+- **User flagged:** rows with no landed_cost but other building blocks set (e.g. Fulfill Amz $0.04) were showing amazon_cogs as derived `$0.04 ƒ`. That's misleading — landed_cost is the foundational input; without it the "total" is just fees, not a real COGS.
+- **Fix:** added a `payload.landed_cost != null` / `c.landed_cost != null` gate on EVERY auto-derive site. When landed_cost is null, the derivation is skipped entirely → totals fall back to "— missing" / "n/a" display, prompting the user to enter the foundational input first.
+- **Sites updated:**
+  - `renderTotalCell` in renderCogsTbl — derived display
+  - `cogsEditSave` — inline edit auto-derive
+  - `cogsApplyBom` — bundle BOM apply + non-bundle building-block sync
+  - `cogsBulkApply` — bulk edit auto-derive
+  - `uploadCogsCSV` — CSV upload auto-derive
+- **Bundle BOM logic unchanged** — bundle cells use the BOM (component sum) regardless of the bundle's own landed_cost. That's a different code path that doesn't go through the building-block sum.
 
 ## v6.19 — Stored-vs-building-block sync flag on non-bundle COGS totals
 - **User flagged:** non-bundle product with Landed $1.40 + Fulfill Amz $0.03 (= $1.43 BB sum) but a pre-existing stored amazon_cogs of $1.40 was displayed without any indication that the stored value was stale.
