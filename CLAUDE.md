@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.12**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.13**
+
+## v6.13 — Bundle column on COGS page + building-block BOM auto-sum
+- **User request:** (1) add an exportable "Bundle" column to the COGS page so it's clear which products are bundles, (2) make the COGS bundle auto-sum work for the building-block columns (Landed, Fulfill Amz, Fulfill DTC, Overhead DTC) the same way it already works for channel COGS — except `shipping_cost` which is flat per bundle (not summed from components).
+- **Bundle column added:** new column between Subcategory and the building-block group. Shows orange "Yes" for bundles, dim "No" otherwise. Total table now 18 cols; empty-state colspan bumped 17 → 18.
+- **CSV export expanded to 20 cols:** added `is_bundle` after `subcategory` and before `landed_cost`. Values are `true` / `false`.
+- **`blockCell` made bundle-aware:** for bundles + the 4 BOM-summable fields (`landed_cost`, `fulfillment_amazon`, `fulfillment_dtc`, `overhead_dtc`), renders the same BOM-comparison line + ✓ Apply / ↺ Sync button pattern that the existing `bundleCell` uses for channel COGS. `shipping_cost` always renders single-line (flat per bundle, no BOM sum).
+- **`bundleCogsFromBom` already works for any field** — calls it with the building-block field name and it returns `{ total, missingCount, componentCount }` summed from `cogsByMaster[component_id][field] × qty`. No helper changes needed.
+- **`cogsApplyBom` extended** to preserve building-block fields (pre-v6.13 it only preserved the 4 channel totals → applying a building-block BOM total would clobber the other building blocks). When the applied field is a building block, the function also auto-derives `amazon_cogs` and `dtc_cogs` from the post-apply state — same logic as `cogsEditSave`.
+- **`hasBundleMismatch` extended** so the "Bundle COGS mismatches" filter catches stored-vs-BOM disagreements on building blocks too (excluding shipping_cost).
+- **Cascade behavior note (intentional limitation):** v6.13 doesn't auto-cascade when a COMPONENT's COGS changes (i.e. editing a child product's landed_cost doesn't automatically update parent bundles' landed_cost). The BOM comparison line in the parent bundle's cell shows the recomputed sum next to the (now stale) stored value, with the ↺ Sync button to apply. Considered acceptable for now since SmarterPaw component COGS doesn't change frequently and the visual indicator surfaces the drift.
 
 ## v6.12 — COGS table actually fits at 100% browser zoom (v6.11 wasn't aggressive enough)
 - **User pushback:** "did not fix." v6.11 made the table scrollable but didn't make the 17 columns actually FIT at 100% zoom on a 1920px viewport. The wrap could scroll but every column was still cramped.
