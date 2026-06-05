@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.7**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.8**
+
+## v6.8 — COGS page loads empty until filter toggled (race fix)
+- **User flagged:** opening the COGS page from a fresh navigation showed "0 PRODUCTS · No products match the current filters" until they touched the status dropdown. Toggling re-rendered and the table populated.
+- **Root cause:** `loadCogsTab` awaited only `loadProductCogs()`, then called `renderCogsTbl`. The table-row filter (line ~10492) reads `allProducts`; if the user navigated to COGS before `init()` had finished its product-catalog load, `allProducts.length === 0` → all rows filtered out → empty table. The implicit re-render triggered by changing a filter caught up because by then `allProducts` had populated in the background.
+- **Fix:** `loadCogsTab` now mirrors the loader-priming pattern other tabs use (e.g. `loadSalesAnalytics`): `if (!allProducts.length) await loadProducts();` and `if (!allCategories.length) await loadCategories();` before the product_cogs fetch. Idempotent — if either is already loaded the conditional skips.
 
 ## v6.7 — COGS page: SP SKU column + longer title + full-column CSV export
 - **User asked for three things:** (1) surface SP_SKU on the COGS page, (2) show the longer product name (not just short_name), (3) export ALL columns in the CSV download.
