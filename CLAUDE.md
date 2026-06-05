@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.11**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.12**
+
+## v6.12 — COGS table actually fits at 100% browser zoom (v6.11 wasn't aggressive enough)
+- **User pushback:** "did not fix." v6.11 made the table scrollable but didn't make the 17 columns actually FIT at 100% zoom on a 1920px viewport. The wrap could scroll but every column was still cramped.
+- **Real math:** 17 columns × ~22px padding overhead = 374px. Plus content max-widths summed to ~1730px. Total ~2100px, well over the ~1810px usable viewport.
+- **v6.12 — aggressive compaction:**
+  - **Cell padding:** `7px 10px` (head was `8px 10px`) → `4px 6px` everywhere. Saves ~10px per cell × 17 = ~170px.
+  - **Product max-width:** 280px → 200px (min 160px). Secondary short_name line still shown but at 9px instead of 10px font.
+  - **Channel IDs max-width:** 200px → 140px.
+  - **Category / Subcategory max-width:** 110px → 90px each.
+  - **Header labels shortened:** "Amazon COGS" → "Amz COGS"; "Amazon EU COGS" → "Amz EU"; "Overhead DTC" → "Ovrhd DTC". Tooltips preserve the full names.
+  - **Bundle badge:** "📦 BUNDLE" → just "📦" with reduced padding.
+- **New target width:** ~1700px. Comfortably fits in 1810px viewport. No horizontal scroll needed at 100% zoom on standard monitors.
 
 ## v6.11 — COGS table layout fix (17 cols was overflowing at 100% browser zoom)
 - **Problem:** after v6.10 the COGS table has 17 columns (Brand, Product, SP SKU, Master ID, Channel IDs, Category, Subcategory, 5 building blocks, 4 channel totals, Status). At 100% browser zoom on a 1920px screen, total width is ~1930px+. The table style `width:100%` made it squeeze into the viewport — columns truncated, padding crammed, and the wrap's `overflow-x:auto` never fired because the table never exceeded its parent's width.
