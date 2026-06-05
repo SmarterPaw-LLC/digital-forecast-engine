@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.10**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.11**
+
+## v6.11 — COGS table layout fix (17 cols was overflowing at 100% browser zoom)
+- **Problem:** after v6.10 the COGS table has 17 columns (Brand, Product, SP SKU, Master ID, Channel IDs, Category, Subcategory, 5 building blocks, 4 channel totals, Status). At 100% browser zoom on a 1920px screen, total width is ~1930px+. The table style `width:100%` made it squeeze into the viewport — columns truncated, padding crammed, and the wrap's `overflow-x:auto` never fired because the table never exceeded its parent's width.
+- **Fix #1:** changed `<table id="cogs-tbl" style="width:100%">` → `style="min-width:100%"`. Table now natural-sizes to its content; the wrap scrolls horizontally when total width exceeds the viewport. `min-width:100%` ensures short tables (e.g. after a tight filter) still fill the wrap so they don't look chopped.
+- **Fix #2:** tightened max-widths on three columns to keep total width manageable:
+  - Product cell: `max-width:360px` → `max-width:280px, min-width:200px`
+  - Channel IDs cell: `max-width:260px` → `max-width:200px`
+  - Category/Subcategory cells: `max-width:140px` → `max-width:110px`
+- **Behavior:** at standard 1920px viewport, most columns fit; the rightmost 3-4 columns may need a small horizontal scroll. At smaller viewports, scroll engages earlier. No information hidden — just made the table scrollable rather than crammed.
 
 ## v6.10 — Category + Subcategory on COGS page and export
 - **User request:** add Category and Subcategory columns to the COGS page table and the CSV download.
