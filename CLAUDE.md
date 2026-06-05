@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.6**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.7**
+
+## v6.7 — COGS page: SP SKU column + longer title + full-column CSV export
+- **User asked for three things:** (1) surface SP_SKU on the COGS page, (2) show the longer product name (not just short_name), (3) export ALL columns in the CSV download.
+- **SP SKU column** added between Product and Master ID. Shows `p.sp_sku` (mono, dim text) or em-dash if empty.
+- **Product cell rewritten** to a two-line layout: primary line = `p.title` (longer marketing/catalog name), secondary line = `p.short_name` (dimmer, smaller). When title and short_name are identical (or short_name is blank), only one line shows. Bundle badge still inline at the start. Max-width bumped from 280px → 360px to accommodate the longer title.
+- **`downloadCogsCSV` expanded** to 17 columns: `master_id, sp_sku, brand, short_name, title, asin, shopify_sku, chewy_sku, landed_cost, fulfillment_amazon, fulfillment_dtc, overhead_dtc, shipping_cost, amazon_cogs, amazon_cogs_eu, dtc_cogs, chewy_cogs`. Includes the v6.6 building blocks, the identity columns (sp_sku, short_name) the user needs for cross-reference, and the full set of channel totals.
+- **`uploadCogsCSV` expanded** to recognize all 9 cost columns (5 building blocks + 4 channel totals). Any subset is valid; missing columns leave existing values untouched. If the upload sets a building block but NOT the corresponding total, the parser auto-derives the total in the same merge pass — mirroring the inline `cogsEditSave` behavior so the user can either set totals directly OR work with the building-block decomposition. Direct CSV-supplied total values always win (treated as overrides).
+- **Empty-state colspan** bumped 14 → 15.
 
 ## v6.6 — COGS building blocks (auto-derived Amazon + DTC totals)
 - **User requested:** 5 new cost dimensions on the COGS page — `landed_cost`, `overhead_dtc`, `fulfillment_dtc`, `fulfillment_amazon`, `shipping_cost`. Formulas: `amazon_cogs = landed_cost + fulfillment_amazon`, `dtc_cogs = landed_cost + overhead_dtc + fulfillment_dtc + shipping_cost`.
