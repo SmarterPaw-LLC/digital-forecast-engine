@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.9**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.10**
+
+## v6.10 — Category + Subcategory on COGS page and export
+- **User request:** add Category and Subcategory columns to the COGS page table and the CSV download.
+- **UI:** two new columns added after `Channel IDs` (before the building-block cost columns). Resolved via `allCategories.find(c => c.id === p.category_id)` — falls back to em-dash when the product has no category assigned. Max-width 140px with ellipsis truncation.
+- **CSV export:** download header expanded from 17 → 19 cols. New columns inserted after `chewy_sku` and before `landed_cost`: `category, subcategory`. Values pass through `csvEsc()` to handle category names with commas.
+- **CSV upload:** unchanged behavior. The upload only reads the cost columns + master_id; identity columns including category/subcategory are silently ignored (round-trip download → edit → upload still works without breaking on the new columns).
+- **Empty-state colspan** bumped 15 → 17.
 
 ## v6.9 — Unified CSV download filenames (nav-path based)
 - **User request:** name all CSV downloads based on where they're exported from. Mixed conventions made it ambiguous which tab a file came from when downloads piled up locally.
