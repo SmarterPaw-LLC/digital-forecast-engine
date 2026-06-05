@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.8**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.9**
+
+## v6.9 — Unified CSV download filenames (nav-path based)
+- **User request:** name all CSV downloads based on where they're exported from. Mixed conventions made it ambiguous which tab a file came from when downloads piled up locally.
+- **Convention:** `smarterpaw-{tab}-{subtab}[-{scope}]-{date|range}.csv`. Date ranges use `_to_` (since YYYY-MM-DD already contains dashes); single dates suffix with the day. Tab + subtab segments mirror the nav.
+- **Renames:**
+  - `smarterpaw-cogs-…` → `smarterpaw-pnl-cogs-…`
+  - `smarterpaw-pnl-{region}-…-to-…` → `smarterpaw-pnl-amazon-{region}-…_to_…` (added `amazon` subtab, normalized separator)
+  - `smarterpaw-shopify-pnl-…` → `smarterpaw-pnl-shopify-…` (tab segment first)
+  - `smarterpaw-forecast-{mode}-…` → `smarterpaw-forecast-demand-{mode}-…`
+  - `smarterpaw-inventory-…` → `smarterpaw-forecast-inventory-planning-…`
+  - `smarterpaw-chewy-forecast-…` → `smarterpaw-forecast-chewy-…`
+  - `smarterpaw-bundles-bom-…` → `smarterpaw-bundles-…` (dropped redundant `-bom-` since the Bundles tab is the only export source)
+- **Unchanged:** `smarterpaw-products-…`, `smarterpaw-units-sold-…` (already match the convention), `smarterpaw_*_template.csv` (upload templates, not exports), `smarterpaw-backup-*.json` (global utility).
+- **No behavior changes** — only the file's download name was edited; CSV contents are identical.
 
 ## v6.8 — COGS page loads empty until filter toggled (race fix)
 - **User flagged:** opening the COGS page from a fresh navigation showed "0 PRODUCTS · No products match the current filters" until they touched the status dropdown. Toggling re-rendered and the table populated.
