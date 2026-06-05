@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.20**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.21**
+
+## v6.21 — Commit derived (ƒ) COGS totals to the stored value (so they reach the P&L)
+- **Context:** the Amazon P&L reads `product_cogs.amazon_cogs` via `cogsByMaster` (refreshed by `loadProductCogs()` after every COGS write). But the green italic `ƒ` derived totals on the COGS page are **render-time only** — they're never written to the DB, so a row showing `$1.43 ƒ` (building blocks set, stored total null) reads as **$0 COGS in the P&L** and trips the "⚠ Missing Amazon COGS" banner. User asked for a way to push the ƒ value into the stored value.
+- **Per-row "✓ set" button:** in `renderTotalCell` Case 1 (stored null + derived available), a small green `✓ set` button now renders under the ƒ value. Click → `cogsApplyBom(masterId, 'amazon_cogs'|'dtc_cogs', derivedVal)` writes the derived value straight to the stored channel total (it's not a building-block field, so it stores directly — no re-derivation). Mirrors the existing ↺ Sync affordance from v6.19.
+- **Bulk "✓ Commit derived (ƒ) totals" bar:** new green bar above the table (`#cogs-derived-bar`), shown whenever the current view has ≥1 committable ƒ row. Count reads "N rows with derived (ƒ) totals". One click → `cogsCommitDerivedVisible()` batch-upserts every committable derived total in the current view.
+  - Acts on `cogsDerivedVisible` — a module-level snapshot rebuilt on every `renderCogsTbl` (reset at top, pushed per row inside the row map, gated on `!p.is_bundle && (isAmzDerived || isDtcDerived)`). So it **respects all active filters** — only commits what's visible.
+  - Already-stored totals are never in the snapshot → never touched. Building blocks + the other channels + EU + dismissed flags are all preserved in the payload. Batched 500/upsert. Audit: `cogs.commit_derived`.
+- **After commit:** stored == derived, so on re-render Case 1 no longer fires (Case 3 standard display), the ƒ marker disappears, and the value now flows into the P&L. Bundles are excluded (they use `bundleCell` / BOM sync, a different path).
 
 ## v6.20 — Landed-cost gate on derived/auto-recompute logic
 - **User flagged:** rows with no landed_cost but other building blocks set (e.g. Fulfill Amz $0.04) were showing amazon_cogs as derived `$0.04 ƒ`. That's misleading — landed_cost is the foundational input; without it the "total" is just fees, not a real COGS.
