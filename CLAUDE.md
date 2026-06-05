@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.16**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.17**
+
+## v6.17 — Derived `amazon_cogs` / `dtc_cogs` shown when only building blocks are set
+- **User flagged:** for products with building blocks filled in (Landed $1.38, Fulfill Amz $0.03, Fulfill DTC $0.85, Ovrhd DTC $0.05, Shipping $2.00) but no stored amazon_cogs / dtc_cogs, the table showed "n/a" or "— missing" instead of the derived sums.
+- **Fix:** the row builder now computes a derived total when the stored value is null but inputs exist. Computed via the same formulas the edit / bulk-edit / CSV-upload paths use:
+  - `amazon_cogs = landed_cost + fulfillment_amazon + production_labor`
+  - `dtc_cogs    = landed_cost + overhead_dtc + fulfillment_dtc + shipping_cost + production_labor`
+  - Null inputs are SKIPPED (not treated as 0) — so the derived total is only assigned when at least one input is set. Empty rows still show "n/a" cleanly.
+- **Display:** derived values render in italic green with a `ƒ` suffix and a hover tooltip ("Auto-derived from building blocks. No stored override. Click to set an explicit value."). Visually distinct from stored values (normal text color, no ƒ marker).
+- **`missing` flag suppressed when a derived value exists** — no point screaming "missing" at the user when the math already gives an answer. The cell shows the derived value cleanly instead.
+- **Bundles unchanged behavior:** for bundle rows, `bundleCell` still renders the BOM-comparison line. The "stored" value passed to it is now the derived total (when no explicit override), so the BOM-vs-stored check uses the right number.
+- **No DB writes from this change** — derived values are render-time only. The moment any cell is edited (building block OR total), the existing auto-derive logic writes the computed total to the DB explicitly. Until then, the displayed value is computed on-the-fly each render.
 
 ## v6.16 — `production_labor` building block + bulk edit on COGS page
 - **SQL migration (`supabase_v6_16_production_labor.sql`):** adds `production_labor numeric` column to `product_cogs` via `ADD COLUMN IF NOT EXISTS`. Idempotent.
