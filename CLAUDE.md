@@ -2,7 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.15**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.16**
+
+## v6.16 — `production_labor` building block + bulk edit on COGS page
+- **SQL migration (`supabase_v6_16_production_labor.sql`):** adds `production_labor numeric` column to `product_cogs` via `ADD COLUMN IF NOT EXISTS`. Idempotent.
+- **`production_labor` integrated as a building block:**
+  - New COGS column on the page between Shipping and Amz COGS (with subtle blue tint, like other building blocks).
+  - Feeds **both** total formulas: `amazon_cogs = landed_cost + fulfillment_amazon + production_labor`; `dtc_cogs = landed_cost + overhead_dtc + fulfillment_dtc + shipping_cost + production_labor`.
+  - BOM-summable for bundles (sums from component production_labor × qty). Unlike `shipping_cost` which is flat per bundle, `production_labor` follows the per-unit roll-up convention.
+  - Added to: auto-derive list in `cogsEditSave`, `cogsApplyBom`, `cogsBulkApply`; the BLOCK_BOM_FIELDS Set in `blockCell`; `hasBundleMismatch`; CSV download header + body; CSV upload columns lookup + auto-derive trigger.
+- **Bulk edit on COGS page (new):**
+  - Checkbox column added at the leftmost position. Per-row checkboxes write to a module-scope `cogsSelected` Set. A select-all checkbox in the header drives every visible row.
+  - Selected rows get a green tint and the `cogs-bulk-bar` toolbar appears between the status line and the table — shows the count + "✎ Bulk edit" + "✕ Clear selection" buttons.
+  - Bulk-edit modal: pick a field (any of the 10 cost columns — 5 building blocks + production_labor + 4 channel totals), enter a value (or blank to clear), Apply. The handler `cogsBulkApply` builds one payload per selected master_id (preserving all 10 cost fields and auto-deriving amazon_cogs / dtc_cogs when a building block is being set), then upserts in batches of 500.
+  - Indeterminate state on the select-all checkbox set imperatively after thead is in the DOM (HTML can't express it).
+- **Total columns on screen: 20** (checkbox + brand + product + 3 identity + 2 cat + bundle + 6 building blocks + 4 totals + status). CSV download is now 21 cols.
+- **Selection persistence:** the selection Set is module-level, so it survives filter changes — useful if the user wants to filter to "Bundles only," select some, then switch to a different filter to select more, then bulk-edit the combined set. The toolbar count and select-all state always reflect what's VISIBLE.
 
 ## v6.15 — "Non-bundles only" filter option on COGS page
 - Added `<option value="non-bundles">Non-bundles only</option>` to the `cogs-filter` dropdown, between "Bundles only" and "Bundle COGS mismatches" so the bundle-related options sit together.
