@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.17**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.18**
+
+## v6.18 — Category + Subcategory filters on COGS page
+- **User request:** category filters on the COGS page.
+- Added two new dropdowns to the controls bar (between Status and Search):
+  - **Category** (`cogs-cat`) — populated from distinct categories that any product actually references (same logic as the Amazon P&L / Shopify P&L Category dropdowns)
+  - **Subcategory** (`cogs-subcat`) — cascades from the selected Category. Empty when no category is picked; populated with that category's subcategories when one is selected
+- **`cogsPopulateCategoryFilter`** populates the Category dropdown once per catalog load (guarded by `dataset.populated`). Called from `loadCogsTab`.
+- **`cogsOnCategoryChange`** repopulates the Subcategory dropdown on Category changes and resets the Subcategory selection to clear any orphaned sub from a different category.
+- **Filter logic in `renderCogsTbl`:** resolves each product's `category_id → allCategories` lookup and excludes rows whose category/subcategory doesn't match the active filter. Products without a category_id drop out only when a category filter is active (legacy products without categorization don't disappear from the unfiltered view).
 
 ## v6.17 — Derived `amazon_cogs` / `dtc_cogs` shown when only building blocks are set
 - **User flagged:** for products with building blocks filled in (Landed $1.38, Fulfill Amz $0.03, Fulfill DTC $0.85, Ovrhd DTC $0.05, Shipping $2.00) but no stored amazon_cogs / dtc_cogs, the table showed "n/a" or "— missing" instead of the derived sums.
