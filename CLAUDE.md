@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.5**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.6**
+
+## v6.6 — COGS building blocks (auto-derived Amazon + DTC totals)
+- **User requested:** 5 new cost dimensions on the COGS page — `landed_cost`, `overhead_dtc`, `fulfillment_dtc`, `fulfillment_amazon`, `shipping_cost`. Formulas: `amazon_cogs = landed_cost + fulfillment_amazon`, `dtc_cogs = landed_cost + overhead_dtc + fulfillment_dtc + shipping_cost`.
+- **SQL migration (`supabase_v6_6_cogs_building_blocks.sql`):** adds the 5 columns to `product_cogs` via `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`. Idempotent.
+- **COGS page UI changes:**
+  - 5 new editable cells per row, positioned between Channel IDs and the channel COGS totals. Subtle blue tint (`rgba(96,200,250,0.04)`) on the building-block cells visually groups them as INPUTS distinct from the derived TOTAL columns.
+  - Existing amazon_cogs / dtc_cogs columns stay in place. Tooltips updated to note auto-recompute behavior.
+  - Empty-state colspan bumped from 9 → 14.
+- **Auto-derive in `cogsEditSave`:** when a building block is edited, the post-edit values feed back through the formulas and the affected total(s) get assigned in the same upsert payload. `sumOrNull` guard: if ALL inputs to a total are null, the function returns undefined and the existing total is left alone — protects against clobbering a manual amazon_cogs / dtc_cogs override with 0 when building blocks haven't been populated yet.
+- **Direct edits to amazon_cogs / dtc_cogs** are still allowed and skip the recompute branch. Treated as manual overrides for one-off scenarios.
+- **amazon_cogs_eu and chewy_cogs are unchanged** — they have different cost structures and stay as manually-editable single fields. Not part of the building-block formulas.
+- **Bundle BOM logic untouched** — the existing `bundleCell` / `cogsApplyBom` flow still sums child amazon_cogs / dtc_cogs / chewy_cogs at the BOM level. Building blocks aren't BOM-summed (out of scope for v6.6; revisit if multi-component bundles need decomposition at the input level).
 
 ## v6.5 — Units Sold chart caps at latest fully-reported week per channel
 - **User flagged:** v6.4 fixed the daily-vs-weekly jagged-line bug, but a new issue emerged. Mixed-channel SKUs (Pawty Mix has Amazon + Shopify) showed a misleading drop at the rightmost week — Shopify uploads daily and was current through 5/31, but Amazon hadn't been uploaded yet for that week. The week's bucket plotted at "Shopify-only" units, looking like a 90% sales crash.
