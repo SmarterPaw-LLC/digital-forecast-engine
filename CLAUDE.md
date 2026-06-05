@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.13**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.14**
+
+## v6.14 — COGS table width fix (bundle BOM lines were sprawling)
+- **User pushback:** v6.12 + v6.13 still didn't fit at 100% browser zoom. Right edge truncated past Amz EU column.
+- **Root cause:** the bundle cells (channel COGS + 4 building blocks) render a BOM-comparison line BENEATH the value, e.g. `BOM: $1.17 (partial — 2 comps missing)` with a `✓ Apply` or `↺ Sync` button. That text + button packed in a horizontal flex container forced each bundle cost cell to ~140px instead of the ~80px non-bundle cells. With 4 channel COGS cols × 60px overflow = 240px past viewport.
+- **Fix #1:** compacted `bundleCell` text:
+  - `"BOM: $1.17 (partial — 2 comps missing)"` → `"BOM $1.17 (partial)"`
+  - `"BOM: $1.17 · auto-fillable"` → `"BOM $1.17"`
+  - `"BOM: $1.17 ⚠ (+0.23)"` → `"BOM $1.17 ⚠"`
+  - `"✓ Apply"` button → just `"✓"`
+  - `"↺ Sync"` button → just `"↺"`
+  - Hover tooltips preserve the full context (delta values, missing-component counts).
+- **Fix #2:** added explicit `max-width` to all cost cells so even the BOM-line content respects width:
+  - Amazon COGS / DTC COGS / Chewy COGS: `max-width:110px`
+  - Amazon EU COGS: `max-width:90px`
+  - Building blocks (when bundle, with BOM line): `max-width:100px`
+  - Building blocks (single-line): `max-width:90px`
+- **New estimated total table width:** ~1500px. Comfortable fit at 1810px viewport with margin for browser chrome.
 
 ## v6.13 — Bundle column on COGS page + building-block BOM auto-sum
 - **User request:** (1) add an exportable "Bundle" column to the COGS page so it's clear which products are bundles, (2) make the COGS bundle auto-sum work for the building-block columns (Landed, Fulfill Amz, Fulfill DTC, Overhead DTC) the same way it already works for channel COGS — except `shipping_cost` which is flat per bundle (not summed from components).
