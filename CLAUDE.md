@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.18**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.19**
+
+## v6.19 — Stored-vs-building-block sync flag on non-bundle COGS totals
+- **User flagged:** non-bundle product with Landed $1.40 + Fulfill Amz $0.03 (= $1.43 BB sum) but a pre-existing stored amazon_cogs of $1.40 was displayed without any indication that the stored value was stale.
+- **Root cause:** v6.17's derived-totals display only kicks in when stored is null. When stored is set, it just renders as-is — no comparison to the building-block sum.
+- **Fix — `renderTotalCell` helper for non-bundle rows:** three cases now handled:
+  1. **Stored null, BB sum available** → render derived value italic green with `ƒ` marker (v6.17 behavior, unchanged)
+  2. **Stored set, BB sum set, MISMATCH (≥ $0.01)** → render stored value normally + a sync line beneath: `BB $X.XX ⚠ ↺`. Click ↺ → `cogsApplyBom` writes the BB sum to the stored value (same handler bundles use; auto-derives both totals from the post-apply state)
+  3. **Match or no BB sum** → standard stored-value display
+- **Mirrors the bundle BOM pattern** the user is already familiar with from `bundleCell` (stored vs component-sum). Same red ⚠ + ↺ button affordance, same `cogsApplyBom` handler.
+- **Bundle rows unchanged** — `bundleCell` still handles them with the component-BOM-sum comparison.
 
 ## v6.18 — Category + Subcategory filters on COGS page
 - **User request:** category filters on the COGS page.
