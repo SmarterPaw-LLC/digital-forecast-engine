@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.27**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.28**
+
+## v6.28 — "Sync all bundles to BOM" bar on the COGS page
+- **User request:** after the v6.27 shipping fix, every bundle showed a red `BOM ⚠ ↺` on DTC COGS (stored stale vs corrected BOM). Wanted a one-click "sync all" instead of clicking ↺ per row.
+- **Orange `↺ Sync all bundles to BOM` bar** (`#cogs-bundlesync-bar`) appears above the table whenever ≥1 visible bundle is out of sync. Count reads "N bundles out of sync with BOM".
+- **Snapshot (`cogsBundleSyncQueue`)** built per render in the row loop: for each visible bundle, for each field in `[amazon_cogs, dtc_cogs, chewy_cogs, landed_cost, fulfillment_amazon, fulfillment_dtc, overhead_dtc, production_labor]`, if the bundle BOM is COMPLETE (`missingCount===0`) and stored is null OR differs >$0.01, queue `{field: bomTotal}`. `shipping_cost` excluded (flat per bundle). Partial BOMs skipped.
+- **`cogsSyncAllBundles()`** batch-upserts one payload per queued bundle, setting the out-of-sync fields to their BOM value and preserving everything else (incl. the flat `shipping_cost`). Confirm dialog + `cogs.sync_all_bundles` audit. Respects active filters (only syncs what's visible) since the queue is the render snapshot.
 
 ## v6.27 — Bundle DTC COGS: shipping was being counted once PER COMPONENT
 - **User flagged:** bundle DTC COGS far higher than Amazon COGS; suspected shipping added more than once per bundle. Correct.
