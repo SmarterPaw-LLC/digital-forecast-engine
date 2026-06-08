@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.23**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.24**
+
+## v6.24 — Open the product card from the P&L Diagnostics panel
+- **User request:** be able to open the product card to edit details from the Diagnostics panel.
+- **Matched ASINs table:** the `master_id` cell now carries a `↗ card` button (reuses the v6.22 `pnlCardBtn` helper) → opens the existing product modal.
+- **Unmatched ASINs table:**
+  - **Brand-mismatched rows** (status "BRAND X" — the product exists, it's just hidden by the brand filter): the "already exists" text is replaced with a `↗ card` button → opens the existing product modal (so you can fix the brand inline).
+  - **Truly-unmatched rows** (status "UNMATCHED" — no product yet): the M/D/K quick-create chips stay, plus a new `↗ card` button → `pnlDiagCreateAndOpen(asin)` creates the `SP-TEMP-{ASIN}` product (brand resolved via the active filter or a prompt, so we never insert an invalid brand) and **immediately opens the product card** to edit title, category, COGS, image, lifecycle, etc.
+- **`pnlCardBtn` guard** means brand-mismatched rows always get a real button (product exists); placeholder rows fall back to the create-and-open path (no product to open yet).
+- Off-week / duplicates hygiene tables left unchanged (they're for data reconciliation, not product editing).
 
 ## v6.23 — SKU Economics upload no longer writes COGS (COGS-page-only now)
 - **User decision:** the SKU Economics report must NEVER update COGS. COGS is managed exclusively via the COGS page (P&L → COGS: inline edit, building blocks, bulk edit, CSV upload). COGS still displays on the P&L pages unchanged (they read `product_cogs` via `cogsByMaster`).
