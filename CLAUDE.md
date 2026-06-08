@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.22**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.23**
+
+## v6.23 — SKU Economics upload no longer writes COGS (COGS-page-only now)
+- **User decision:** the SKU Economics report must NEVER update COGS. COGS is managed exclusively via the COGS page (P&L → COGS: inline edit, building blocks, bulk edit, CSV upload). COGS still displays on the P&L pages unchanged (they read `product_cogs` via `cogsByMaster`).
+- **Parser (`parseSkuEconomics`):** removed the `product_cogs.amazon_cogs` write block (and the `cogsByAsin` map that fed it). The report's COGS column is now ignored. `cogsUpdated` removed from the return object.
+- **Upload handlers (single / folder / zip):** removed the `cogsUpdated` tracking + the `· N COGS updated` fragment from every status line. New-product nudge reworded from "set COGS / category in Products tab" → "review in Products tab → Needs Review (set category + COGS on the COGS page)".
+- **Upload card HTML:** dropped COGS from the section header sub ("revenue · fees · COGS" → "revenue · fees"), the group description ("Captures sales + fees + COGS" → "Captures sales + fees (COGS is managed on the COGS page, not here)"), and the Cols line (removed the `COGS` chip).
+- **Product modal hint:** the Amazon COGS field hint no longer claims "Auto-populated from SKU Economics uploads" — now says set it here or on the COGS page; SKU Economics no longer touches COGS.
+- **EU SKU Economics** (`parseEuSkuEconomics`) never wrote COGS — unchanged. The product-modal manual COGS field + the COGS-page edit/upload paths are the only writers to `product_cogs` now (plus merge + restore).
 
 ## v6.22 — "↗ card" button on Amazon + Shopify P&L product rows
 - **User request:** a button on each P&L product row to open the full product card with all details.
