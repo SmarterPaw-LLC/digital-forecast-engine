@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.26**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.27**
+
+## v6.27 — Bundle DTC COGS: shipping was being counted once PER COMPONENT
+- **User flagged:** bundle DTC COGS far higher than Amazon COGS; suspected shipping added more than once per bundle. Correct.
+- **Root cause:** `bundleCogsFromBom(mid, 'dtc_cogs')` summed each component's stored `dtc_cogs`. Every component's `dtc_cogs` already bakes in *that component's* `shipping_cost` (`landed + overhead + fulfill_dtc + shipping + labor`), so summing N components added shipping N times. Amazon COGS has no shipping term (`landed + fulfill_amazon + labor`), so it was correct — which is exactly why DTC read so much higher than Amazon (e.g. SP-0179: DTC BOM $11.57 vs Amazon $2.96; the ~$6 gap was per-component shipping).
+- **Fix (in `bundleCogsFromBom`):** for `channelField === 'dtc_cogs'`, subtract each component's own `shipping_cost` (× qty) from the sum, then add the **bundle's own flat `shipping_cost` once**. A bundle ships as one parcel → one shipping charge regardless of component count. Amazon COGS path unchanged. Building-block BOM sums (landed / overhead / fulfill_dtc / labor) unchanged — they're correctly per-component-summed; only shipping is flat (matches the v6.13 design intent, which had only been applied to the Shipping *cell*, not the dtc_cogs *total*).
+- **Effect on existing data:** bundles whose stored `dtc_cogs` was set from the old inflated BOM now show a **mismatch** (stored ≠ corrected BOM) with the ↺ Sync button; the "Bundle COGS mismatches" filter surfaces them all. Click ↺ per bundle (or review) to write the corrected value. Bundle Shipping cells are currently mostly null (—) → set a flat per-bundle shipping there to include the real one-parcel shipping cost in DTC COGS.
+- **No DB migration** — pure computation fix.
 
 ## v6.26 — Inventory Events (extra-stock drivers, e.g. Prime Day) → fold into Planning Need
 - **User request (part 2 of 2):** set "events" that require extra inventory. Specify the event date, the date the inventory need is affected (drain start, usually earlier), and the extra stock (in days of supply). The extra drain shows in the Planning view with a badge.
