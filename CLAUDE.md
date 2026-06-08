@@ -2,7 +2,27 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.24**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.26**
+
+## v6.26 — Inventory Events (extra-stock drivers, e.g. Prime Day) → fold into Planning Need
+- **User request (part 2 of 2):** set "events" that require extra inventory. Specify the event date, the date the inventory need is affected (drain start, usually earlier), and the extra stock (in days of supply). The extra drain shows in the Planning view with a badge.
+- **⚠ SQL TO RUN:** `supabase_v6_26_inventory_events.sql` — creates `inventory_events` (name, event_start/end, drain_start, extra_days, scope_type [all|brand|channel], scope_value, include_master_ids jsonb, exclude_master_ids jsonb, active). RLS authenticated-all + grants. Run before deploying.
+- **Events manager** lives in a collapsible "📅 Inventory Events" panel at the top of the **Reorder Setup** tab. Lists events (active toggle, edit, delete) + "+ New event". `loadInventoryEvents()` runs in the init Promise.all; `inventoryEvents` is the cache.
+- **Event modal** (`ipOpenEventModal`): name · event start/end · **drain start (required)** · extra stock (days) · scope (All / by Brand / by Channel) · active. **Hand-picked overrides ("Both" scope):** buttons add the current Reorder Setup grid selection to the event's include / exclude lists (exclude wins; explicit include beats scope). CRUD = `ipSaveEvent` (insert/update), `ipDeleteEvent`, `ipToggleEventActive`.
+- **Math (`eventExtraForRecord(r, X)`):** for each active event that applies to the product AND whose `drain_start` falls within [today, today+X], adds `extra_days × velocity` units. Velocity basis is channel-aware: channel-scoped events use that channel's velocity (`invAmazonVel` / `invShopifyVel` / Chewy daily); all/brand use `blended_daily`. So Prime Day (scope channel=amazon, +30d) adds 30 × Amazon daily velocity once the drain date is in range.
+- **Integration:** the extra units are added to `inventoryNeedBreakdown(...).total` (and surfaced as `.events`), so they flow into the Need columns, Gap, Status, scorecards, and the chart automatically. The Need-TOTAL cells render a blue **`+EV n`** badge (next to the orange `+R n`) when an event contributes, with a tooltip naming each event + its unit add.
+- **Worked example (Prime Day 2026):** event Jun 23→26, drain_start May 27, extra_days 30, scope channel=amazon. From May 27 onward (within whichever horizon reaches it) every Amazon product's Need gains 30 × its Amazon daily velocity, badged `+EV`. Toggling the event off (or past the drain window) removes it.
+- **Cost note:** `eventExtraForRecord` short-circuits to zero when there are no events (the common case), so the per-row math cost is unchanged until events exist.
+
+## v6.25 — Inventory Planning: "Reorder Setup" tab (per-platform reorder trigger/qty + bulk edit)
+- **User request (part 1 of 2):** a new view/tab on the Inventory Planning page showing each item's reorder trigger + reorder qty for each platform where eligible, with bulk select/edit. (Part 2 — Events — is v6.26.)
+- **⚠ SQL TO RUN:** `supabase_v6_25_platform_reorder.sql` — adds 4 nullable columns to `products`: `reorder_threshold_days_shopify`, `reorder_qty_days_shopify`, `reorder_threshold_days_chewy`, `reorder_qty_days_chewy`. Amazon per-region reorder already lives on `inventory` (v5.1). Run before deploying.
+- **View toggle:** `page-inventory` now has a tab strip — **📦 Planning** (the existing scorecards/chart/table, wrapped in `#ip-planning-container`) and **⚙ Reorder Setup** (`#ip-reorder-container`). `setIpView(v)` toggles visibility + renders the active view. `ipView` module var; `switchForecastView('inventory')` calls `setIpView(ipView)` so the active tab is applied on entry.
+- **Reorder Setup grid (`renderReorderGrid`):** one row per product (filtered by Brand / Platform-eligibility / search). Columns: checkbox · Brand · Product · then **Trig + Qty per platform** — Amz US, Amz CA, Amz EU/UK, Shopify, Chewy. A platform shows `—` where the product isn't eligible (Amazon = per-region record exists + has ASIN; Shopify = has shopify_sku; Chewy = has chewy_sku).
+- **`REORDER_PLATFORMS`** descriptor maps each platform to storage: `amazon` → `inventory(asin, region).reorder_threshold_days / reorder_qty_days`; `product` (shopify/chewy) → `products.reorder_*_{shopify|chewy}`.
+- **Inline edit:** click any eligible cell → number input (Enter/blur saves, Esc cancels). `reorderWrite()` routes Amazon edits to an `inventory` upsert (preserves FBA/warehouse/lead/safety/etc. from the in-memory record, mirroring `saveEditModal`) and Shopify/Chewy edits to a `products` upsert. In-memory record/product updated so the grid + planning view reflect it without a reload.
+- **Bulk edit:** per-row checkboxes + select-all (drives `reorderSelected`). Bulk bar → modal: pick Platform + Field (trigger/qty) + value (blank = clear) → applies to every selected row eligible for that platform (others skipped, counted in the status line). Audit: `reorder.set` / `reorder.bulk_set`.
+- **Amazon reorder math unchanged** — this is a settings editor. Shopify/Chewy reorder values are stored for operator reference (no trigger-based Shopify/Chewy reorder math wired yet).
 
 ## v6.24 — Open the product card from the P&L Diagnostics panel
 - **User request:** be able to open the product card to edit details from the Diagnostics panel.
