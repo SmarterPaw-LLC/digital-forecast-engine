@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.21**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.22**
+
+## v6.22 — "↗ card" button on Amazon + Shopify P&L product rows
+- **User request:** a button on each P&L product row to open the full product card with all details.
+- **Shared helper `pnlCardBtn(masterId)`** (defined just above `PNL_COLUMNS`) returns a compact `↗ card` button. `event.stopPropagation()` so clicking it doesn't toggle the row's selection checkbox; calls the existing `openProductModal(masterId)` (full product modal — IDs, category, COGS, image, lifecycle, etc.).
+- **Wired into both `title` column renders** — Amazon P&L (`PNL_COLUMNS`) and Shopify P&L (`SHOPIFY_PNL_COLUMNS`). Appended at the end of the title flex row; the title `<span>` got `flex:1;min-width:0` so it truncates cleanly and the button stays visible.
+- **Guarded:** `pnlCardBtn` returns `''` when the master_id isn't a real catalog product — so the synthesized unmatched/placeholder P&L rows (orphan ASINs, brand 'Unknown', `master_id` like `unmatched-<asin>`) don't get a button that would open a blank/erroring modal.
+- No new column added (avoids disturbing saved column sets / CSV); the button lives inline in the existing Product column on both pages.
 
 ## v6.21 — Commit derived (ƒ) COGS totals to the stored value (so they reach the P&L)
 - **Context:** the Amazon P&L reads `product_cogs.amazon_cogs` via `cogsByMaster` (refreshed by `loadProductCogs()` after every COGS write). But the green italic `ƒ` derived totals on the COGS page are **render-time only** — they're never written to the DB, so a row showing `$1.43 ƒ` (building blocks set, stored total null) reads as **$0 COGS in the P&L** and trips the "⚠ Missing Amazon COGS" banner. User asked for a way to push the ƒ value into the stored value.
