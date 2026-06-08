@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.28**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.29**
+
+## v6.29 — Reorder event tooltip shows the arrival-window seasonal multiplier
+- **Context:** user asked why an Amazon reorder Need (~10,000) far exceeded the flat expectation (reorder_qty_days 90 × vel ~70 ≈ 6,300). Root cause investigation (Catnip Spray CF312 / SP-0121): the reorder qty = seasonal demand over the window `[arrival, arrival + reorder_qty_days]` where `arrival = order-by day + lead_time`. That's a FUTURE window, so the seasonal curve THERE (not today's) drives the qty. This SKU's `sea_curve_calculated` is a spiky `mix`-method curve (weekly multipliers swing 0.06↔2.18) and `lead_time_days` is null (→ 60 default), so the window can land on high-multiplier weeks and inflate the order.
+- **Fix (transparency, not logic):** each Amazon reorder event now stores `reorderQty` + `seaMult` (= actual qty ÷ flat `reorder_qty_days × vel`). Surfaced in:
+  - **`buildTipTotal`** (the Need-TOTAL cell tooltip): per event — `order dX → arrives dY → covers Nd from arrival: flat Fu × seasonal M× = Qu`.
+  - **`buildTipAmz`** (Amazon reorder column tooltip): same per-event window + flat × seasonal breakdown.
+- So hovering a Need cell now explains exactly why the number is what it is: you can see the arrival day, the window length, the flat baseline, and the seasonal multiplier the future window applied.
+- **Diagnostic takeaway for the data (not a code change):** the reorder size surprise is driven by (1) a noisy per-SKU seasonal curve (overfit `mix` on sparse weekly data) and (2) null `lead_time_days`. Recommended remediation is on the Seasonality tab (recompute / switch method / smooth) + set real lead times — the reorder math itself is correct.
 
 ## v6.28 — "Sync all bundles to BOM" bar on the COGS page
 - **User request:** after the v6.27 shipping fix, every bundle showed a red `BOM ⚠ ↺` on DTC COGS (stored stale vs corrected BOM). Wanted a one-click "sync all" instead of clicking ↺ per row.
