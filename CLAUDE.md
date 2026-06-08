@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.29**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.30**
+
+## v6.30 — `seasonal_type='flat'` now takes top precedence (one-click "not seasonal")
+- **Context:** Catnip Spray's calculated/`mix` curve was spiky noise (stockouts + growth read as seasonality). Switching it to `category-default` made it WORSE — the category SEED curve is heavily seasonal and this product isn't. There was no clean way to say "this SKU just isn't seasonal."
+- **Root cause:** in `getEffectiveCurveForProduct`, a `calculated`/`mix`/`manual` curve was resolved FIRST; `seasonal_type` (incl. `flat`) only applied when method was already `category-default`. So `flat` was ignored on a SKU with a calc curve, and choosing category-default fell through to the heavy category curve.
+- **Fix:** added a top-precedence short-circuit — if `seasonal_type === 'flat'`, return a flat 1.0 curve (every week) regardless of method. So marking a product **Seasonal type → flat** (Seasonality tab dropdown, one click; or the bulk type-setter) now truly means "velocity × days, no seasonal adjustment," overriding calc/mix/manual AND the category default. Opt-in and reversible; only affects SKUs explicitly marked flat.
+- **Why flat (not category-default) for Catnip Spray:** its 365-day units chart is a growth trend + stockout dips, not a repeating annual pattern. Flat is the honest representation until there's 2+ years of clean (in-stock) data to compute a real curve.
+- **Pairs with:** the stockout-aware seasonality calc (proposed, not yet built) for SKUs that ARE genuinely seasonal; and the v6.29 reorder tooltip (a flat curve makes the reorder seasonal multiplier 1.00×).
 
 ## v6.29 — Reorder event tooltip shows the arrival-window seasonal multiplier
 - **Context:** user asked why an Amazon reorder Need (~10,000) far exceeded the flat expectation (reorder_qty_days 90 × vel ~70 ≈ 6,300). Root cause investigation (Catnip Spray CF312 / SP-0121): the reorder qty = seasonal demand over the window `[arrival, arrival + reorder_qty_days]` where `arrival = order-by day + lead_time`. That's a FUTURE window, so the seasonal curve THERE (not today's) drives the qty. This SKU's `sea_curve_calculated` is a spiky `mix`-method curve (weekly multipliers swing 0.06↔2.18) and `lead_time_days` is null (→ 60 default), so the window can land on high-multiplier weeks and inflate the order.
