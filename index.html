@@ -6371,7 +6371,6 @@ async function parseSkuEconomics(text, fileBrand = null, conflictMode = 'prompt'
   // Aggregate: (asin, region, week_start) → { sales row + economics row }
   const agg     = {};  // for sales_weekly
   const econAgg = {};  // for sku_economics — one-row-per-key (last write wins)
-  const cogsByAsin = {};
   let repeatCount = 0;  // CSV rows whose (asin,region,week_start) collided with a prior row (usually multi-MSKU; summed together)
   const skippedStores = new Map();  // v5.87 — { raw store value → row count } for rows skipped due to unrecognized Amazon store
 
@@ -6467,8 +6466,6 @@ async function parseSkuEconomics(text, fileBrand = null, conflictMode = 'prompt'
     e.net_proceeds_total          += pn(row, colIdx.netProceedsTotal);
     e.net_proceeds_per_unit       += pn(row, colIdx.netProceedsPerUnit);
     e.fba_reimbursement_total     += pn(row, colIdx.fbaReimbursement);
-
-    if (cogsUsd > 0) cogsByAsin[asin] = cogsUsd;
   }
 
   const sb = await getSB();
@@ -6706,29 +6703,11 @@ async function parseSkuEconomics(text, fileBrand = null, conflictMode = 'prompt'
     econUpserted += econRows.slice(i, i+500).length;
   }
 
-  // Update Amazon COGS in the dedicated product_cogs table (v4.62+).
-  // The SKU Economics report's COGS column is Amazon-only; DTC and Chewy COGS
-  // come from their own sources (CSV upload via the COGS page).
-  let cogsUpdated = 0;
-  const cogsEntries = Object.entries(cogsByAsin);
-  if (cogsEntries.length > 0) {
-    const cogsUpserts = [];
-    for (const [asin, cogs] of cogsEntries) {
-      const prod = allProducts.find(p => p.asin === asin)
-                || allProducts.find(p => p.master_id === `SP-TEMP-${asin}`);
-      if (!prod) continue;
-      cogsUpserts.push({ master_id: prod.master_id, amazon_cogs: cogs });
-    }
-    if (cogsUpserts.length > 0) {
-      for (let i = 0; i < cogsUpserts.length; i += 500) {
-        const { error } = await sb.from('product_cogs').upsert(cogsUpserts.slice(i, i+500), { onConflict: 'master_id' });
-        if (!error) cogsUpdated += Math.min(500, cogsUpserts.length - i);
-        else console.warn('product_cogs upsert error:', error.message);
-      }
-      // Refresh local cache so renderPnl sees the new values immediately
-      await loadProductCogs();
-    }
-  }
+  // v6.23 — SKU Economics no longer writes COGS. COGS is managed EXCLUSIVELY
+  // via the COGS page (P&L → COGS: inline edit, building blocks, bulk edit,
+  // CSV upload). The report's COGS column (if present) is ignored here. The
+  // P&L still reads COGS from product_cogs (cogsByMaster) exactly as before —
+  // this only stops the upload path from overwriting it.
 
   const uniqueWeeks = new Set(salesRows.map(r => r.week_start)).size;
   const uniqueAsins = new Set(salesRows.map(r => r.asin)).size;
@@ -6748,7 +6727,7 @@ async function parseSkuEconomics(text, fileBrand = null, conflictMode = 'prompt'
 
   return {
     rows: salesRows.length, weeks: uniqueWeeks, asins: uniqueAsins,
-    cogsUpdated, created: createdCount, econRows: econUpserted, repeatCount,
+    created: createdCount, econRows: econUpserted, repeatCount,
     skippedStores: skippedStoresArr,
   };
 }
