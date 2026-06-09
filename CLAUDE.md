@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.40**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.42**
+
+## v6.42 — "Seasonal items" filter on the Products page
+- Added a **Seasonal items** option to the Products `prodFilter` dropdown (after "Has forecast notes"): `if (filt === 'seasonal' && !p.seasonal) return false;` in `renderProductsTbl`. Filters to products flagged seasonal (the v6.39 `products.seasonal` flag / checkbox). Composes with the brand / category multi-select filters like the other options.
+
+## v6.41 — Fix: Seasonality category dropdown blank (v6.38 regression)
+- **Cause:** `seaPopulateCategoryFilter` set its `dataset.populated='1'` lock even when it found zero categories (e.g. it ran via initSeasonalityView before `allProducts`/`allCategories` finished loading, esp. when Seasonality was the landing route) — so it never refilled once data arrived. It was also only called from `initSeasonalityView`, not on list re-renders.
+- **Fix:** (1) only set the populated lock once categories were actually added (`if (!names.length) return;` first); (2) also call `seaPopulateCategoryFilter()` at the top of `renderSeasonalityList`, which runs with data loaded — so the dropdown fills on the first real render and recovers from any early empty init.
 
 ## v6.40 — Seasonality chart projection extrapolates the growth trend (was flat)
 - **User flagged:** the v6.37 forward projection held the de-seasonalized trend FLAT, so a growing product showed no projected growth.
