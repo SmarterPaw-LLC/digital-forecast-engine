@@ -2,7 +2,25 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.30**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.32**
+
+## v6.32 — Stockout correction in the seasonality calc (Seasonality tab setting)
+- **User request:** a setting to correct for stockouts so out-of-stock weeks don't get read as low seasonal demand (Catnip Spray's curve was being dragged down by the Aug–Dec 2025 OOS crashes).
+- **New "Stockout floor %" input** in the Bulk Seasonality bar (next to Min weeks), default **30**, persisted to localStorage (`seaStockoutFloor`). Helpers: `seaStockoutFloor()` / `seaPersistStockoutFloor()` / `seaRestoreStockoutFloor()` (restored in `initSeasonalityView`).
+- **`computeProductSeasonality(masterId, minWeeks, opts)`** gained an `opts.stockoutFloorPct`. Detection is **LOCAL, not global**: a week is flagged a stockout if its units fall below `floorPct%` of the **median of its ±6 neighboring weeks**. Local comparison means a growth trend (early weeks genuinely low) doesn't trip it — only SHARP drops relative to surrounding weeks (the V-crash OOS signature) are caught. Flagged weeks are excluded from the curve buckets AND from `weeksOfData` (so a mostly-OOS product correctly reads as thin). Returns `stockoutWeeksExcluded`.
+- **Wired into every recompute path:** `seaCalculateCurve` (preview), `seaBulkApplyMids` (bulk apply), `seaSetMethod` (on-the-fly). `recommendSeasonalitySettings` left uncorrected (it prefers the stored curve anyway).
+- **Status surfaces it:** preview reads `N clean weeks … · 🚫 M stockout weeks excluded`; bulk reads `… · 🚫 M stockout wks excluded`.
+- **Why local-median (not a global threshold):** a global "% of average" floor would also drop legitimately-low early-growth weeks for a trending SKU. Comparing each week to its immediate neighbors isolates true supply gaps regardless of trend.
+- **Default 30%** = drop weeks selling below 30% of their local norm (catches near-zero OOS crashes; keeps real seasonal dips, which are usually >40%). 0 = off. Recompute a product after changing it.
+- **Not yet built (future):** full de-trending (remove growth before extracting the seasonal shape). Stockout correction is the bigger win and is the piece the user asked for.
+
+## v6.31 — Seasonality product list went blank after a large SKU Economics backfill
+- **User flagged:** after uploading ~84 weeks of history, the Seasonality page showed "No products match the current filters" with all filters wide open.
+- **Root cause:** `renderSeasonalityList` calls `recommendSeasonalitySettings(p)` for EVERY row, which called `computeProductSeasonality(p.master_id, 1)` per product per render. With 80+ weeks loaded that's heavy, and if it throws for any single product the whole `rows.map(...)` throws → `tbody.innerHTML` assignment never runs → the list stays stuck on the stale empty-state message.
+- **Fix (two guards):**
+  1. `recommendSeasonalitySettings` now **prefers the already-stored `sea_curve_calculated`** and only recomputes when there isn't one — much cheaper per render — and wraps the compute in try/catch.
+  2. The per-row call in `renderSeasonalityList` is wrapped in try/catch with a safe fallback rec, so one product's failure can't blank the entire list.
+- **No data/migration change** — pure render hardening. The seasonality math itself is unchanged.
 
 ## v6.30 — `seasonal_type='flat'` now takes top precedence (one-click "not seasonal")
 - **Context:** Catnip Spray's calculated/`mix` curve was spiky noise (stockouts + growth read as seasonality). Switching it to `category-default` made it WORSE — the category SEED curve is heavily seasonal and this product isn't. There was no clean way to say "this SKU just isn't seasonal."
