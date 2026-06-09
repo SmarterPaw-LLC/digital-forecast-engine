@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.36**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.37**
+
+## v6.37 — Seasonality chart: stockout-aware trend + 120-day forward projection
+- **User flagged two things on the v6.34/36 fit chart:** (1) the de-seasonalized Trend line was still dragged down by stockout dips; (2) no forward view of seasonality.
+- **(1) Stockout-aware trend:** the chart now flags stockout weeks (same local-median ±6 test as the calc, using the Stockout floor %) and **excludes them from the ±26-week trend mean** + the fit. The green Actual line still shows the real crashes, but the gray Trend + orange Fit no longer dip at supply gaps.
+- **(2) Forward projection:** added a **"Projected (next 120d)"** dashed-orange line — 17 future weeks. Holds the recent de-seasonalized run-rate flat (mean of the last 8 non-stockout weeks) and applies the seasonal curve forward, so you can read projected demand by month. The gray trend extends flat into the future too. X-axis dates make the months readable.
+- Series are padded to history+future length; the projection connects from the last historical fit point. Run-rate held flat (not extrapolated) to match the dashboard's velocity-based forecast convention.
 
 ## v6.36 — Fix: seasonality fit chart grew unbounded (too tall)
 - **User flagged:** the v6.34 fit chart filled the whole viewport.
