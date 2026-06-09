@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.35**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.36**
+
+## v6.36 — Fix: seasonality fit chart grew unbounded (too tall)
+- **User flagged:** the v6.34 fit chart filled the whole viewport.
+- **Cause:** Chart.js `maintainAspectRatio:false` + `responsive:true` on a `<canvas>` whose parent has no fixed height → the canvas grows to fill the parent, the parent grows to fit the canvas → unbounded feedback loop.
+- **Fix:** wrapped the canvas in `#sea-canvas-box` (`position:relative; height:300px`); the canvas is now `width:100%; height:100%` inside it. Visibility toggling moved from the canvas to the box. Matches the existing inventory/forecast chart wrapper pattern.
 
 ## v6.35 — "↗ card" button on Seasonality rows (open product modal / mark inactive)
 - **User request:** open the product card from the Seasonality page to mark products inactive.
