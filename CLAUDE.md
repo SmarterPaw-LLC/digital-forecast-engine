@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.43**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.44**
+
+## v6.44 — Products table: bulk select/edit + sortable "90d Units" column
+- **User request:** (1) checkboxes to bulk select/edit product dimensions; (2) 90-day sales as a sortable column.
+- **90d Units column:** sortable column (after MSRP) showing all-channel units sold in the last 90 days (reuses `sea90dUnits`). Cached per render into `_prodU90` (Map) so the sort comparator + row render don't recompute; `prodSortVal` gets a `units90` case reading the cache.
+- **Bulk select:** leftmost checkbox column + select-all header (indeterminate state). `prodSelected` Set persists across filter changes; `prodVisibleMids` drives select-all. `prodToggleRow` / `prodToggleAll` / `prodClearSelection`. Green bulk bar (`#prod-bulk-bar`) above the table shows the count + Bulk edit + Clear when ≥1 selected.
+- **Bulk edit modal (`prodOpenBulkEdit` → `prodBulkApply`):** pick a field — **Brand / Category (category_id) / Active / Seasonal / MSRP / Wholesale / Supplier** — set a value, apply to all selected via batched `products` UPDATE (`.in('master_id', chunk)`, 200/batch). Value input is field-aware (`prodBulkFieldChange`: brand/active/seasonal/category dropdowns, msrp/wholesale/supplier inputs; blank = clear). Mirrors into `allProducts` so the table updates without a reload; `product.bulk_edit` audit. Identifiers (title/SP SKU/ASIN) intentionally not bulk-editable (unique per product).
+- No SQL (uses existing product columns; `seasonal` already added in v6.39).
 
 ## v6.43 — Seasonality list: sortable + "90d Units (all channels)" column
 - **User request:** sort the Seasonality page by 90-day units sold (all channels).
