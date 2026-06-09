@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.34**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.35**
+
+## v6.35 — "↗ card" button on Seasonality rows (open product modal / mark inactive)
+- **User request:** open the product card from the Seasonality page to mark products inactive.
+- Added a `↗ card` button in the Product cell of each Seasonality list row → `openProductModal(master_id)` (where the Active checkbox lives). `event.stopPropagation()` so it doesn't also fire the row's `seaSetActive` (detail-view) click.
+- **`saveProduct` now also refreshes the Seasonality list** when the Seasonality view is active, so a product marked inactive immediately drops out of the default "Active only" filter (mirrors the existing inventory/products refresh at the end of saveProduct).
 
 ## v6.34 — Seasonality validation chart (fit vs actual sales)
 - **User request:** a visual chart on the Seasonality page to see the calculated forecast against ~1.5 years of sales.
