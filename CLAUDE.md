@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.32**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.33**
+
+## v6.33 — De-trend setting in the seasonality calc (removes growth bias)
+- **User flagged:** even after v6.32 stockout correction, Catnip Spray's calculated curve was still wrong — a high block at W16–21 (1.3–1.4×) and low everywhere else. Root cause: **growth-trend recency artifact**. The data spans ~2 years + a partial 3rd (Jun 2024 → Jun 2026), so weeks W16–23 have THREE occurrences (incl. the high-sales 2026 one) while the rest have two. Dividing each week-of-year average by the GLOBAL baseline (which the recent high weeks inflate) makes weeks-with-a-recent-point read high and all others read low — pure growth bias, not seasonality.
+- **New "De-trend" checkbox** in the Bulk Seasonality bar (default ON, persisted to localStorage `seaDetrend`). Helpers `seaDetrend()` / `seaPersistDetrend()` / `seaRestoreDetrend()` (restored in `initSeasonalityView`).
+- **`computeProductSeasonality` `opts.detrend`:** when on, instead of `weekAvg ÷ globalBaseline`, each week is measured against its **own local level** — a centered ±26-week mean (≈ one annual cycle, which averages OUT seasonality and leaves the trend). `ratio = units ÷ localLevel`; ratios averaged per ISO-week-of-year; curve normalized to mean 1.0. Removes the growth/decline trend so a fast-growing SKU's recent weeks don't masquerade as a seasonal peak. Stable products barely change (local level ≈ global). Returns `detrended`.
+- **Wired into every recompute path** (preview / bulk / on-the-fly), same as the stockout floor. Preview status shows `… · 📉 de-trended`.
+- **Stack:** stockout correction (v6.32) + de-trend (v6.33) together give a curve that reflects the real repeating shape rather than supply gaps + growth. For genuinely steady/uncertain SKUs, `flat` (v6.30) is still the simplest call.
 
 ## v6.32 — Stockout correction in the seasonality calc (Seasonality tab setting)
 - **User request:** a setting to correct for stockouts so out-of-stock weeks don't get read as low seasonal demand (Catnip Spray's curve was being dragged down by the Aug–Dec 2025 OOS crashes).
