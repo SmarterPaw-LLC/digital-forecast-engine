@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.45**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.46**
+
+## v6.46 — Seasonality "Weeks data" counted rows, not weeks (Shopify daily-grain overcount)
+- **User flagged:** a Seasonality row (Zoom Sticks, method=default) showed "✓ ready (85 wk)" / Weeks data 85 when the product has only ~23 weeks of real history.
+- **Cause:** the "Weeks data" fallback for uncalculated products was `p.sea_weeks_of_data || (salesData[mid].length || 0)`. Since the v6.1 Shopify cutover, `salesData` rows are DAILY for Shopify (one row per day) and weekly for Amazon/Chewy — so `.length` counts daily rows, not weeks (~85 daily Shopify rows ≈ 23 weeks). Only bit `category-default` rows (no stored `sea_weeks_of_data`); calculated products store an accurate distinct-week count from `computeProductSeasonality` (v6.2 fix).
+- **Fix:** new `seaWeeksOfData(mid)` (next to `sea90dUnits`) buckets each `salesData[mid]` row to its Monday-of-week key (via `parseLocalDate` + local Monday shift) and returns the distinct-bucket count. Replaced the `.length` fallback in all three sites: `renderSeasonalityList` weeks-sort `wkOf`, the per-row `wkData` (drives the eligibility badge), and `recommendSeasonalitySettings`. Now Zoom Sticks reads ~23 wk and the eligibility/recommendation reflect real weeks.
 
 ## v6.45 — Products page: Active only / Inactive only filter options
 - Added **Active only** and **Inactive only** to the Products `prodFilter` dropdown (after "Singles only"). Logic in `renderProductsTbl`: `active` drops `p.active === false`; `inactive` drops `p.active !== false`. Default remains "All Products" (unchanged).
