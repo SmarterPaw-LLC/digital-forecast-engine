@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.42**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.43**
+
+## v6.43 — Seasonality list: sortable + "90d Units (all channels)" column
+- **User request:** sort the Seasonality page by 90-day units sold (all channels).
+- Added a **90d Units** column (all-channel units in the last 90 days via new `sea90dUnits(mid)` — sums `salesData[mid]` rows within 90 days, no channel filter). Cached once per render (`u90` Map) so the comparator + row render don't recompute.
+- **Click-to-sort headers:** Brand, Product (brand→name), **90d Units**, Weeks data. `seaSortKey`/`seaSortDir` state + `seaSetSort(key)` (toggles dir; numeric cols default desc, text cols asc). Arrow indicator (▲/▼) on the active column. Default sort unchanged (name = brand→product).
+- Empty-state colspan bumped 9 → 10.
 
 ## v6.42 — "Seasonal items" filter on the Products page
 - Added a **Seasonal items** option to the Products `prodFilter` dropdown (after "Has forecast notes"): `if (filt === 'seasonal' && !p.seasonal) return false;` in `renderProductsTbl`. Filters to products flagged seasonal (the v6.39 `products.seasonal` flag / checkbox). Composes with the brand / category multi-select filters like the other options.
