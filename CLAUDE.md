@@ -2,7 +2,27 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.37**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.40**
+
+## v6.40 — Seasonality chart projection extrapolates the growth trend (was flat)
+- **User flagged:** the v6.37 forward projection held the de-seasonalized trend FLAT, so a growing product showed no projected growth.
+- **Fix:** the forward level now **extrapolates the recent trend** — least-squares regression over the last ~26 weeks of the de-seasonalized level gives a slope; `futureLevel(w) = lastFittedLevel + slope·w` (clamped ≥ 0). The gray Trend line and the dashed Projected line both ride that growing (or flat, if slope≈0) level, then the seasonal curve is applied on top. Auto-handles both growing and steady products — no setting needed.
+- Replaces the prior "hold the last 8-week run-rate flat" logic.
+
+## v6.39 — Product "seasonal" flag (checkbox) → flows into seasonality calc
+- **User request:** a flag for seasonal items (sold during a season, e.g. Christmas toys) — checkbox on the Products table — that flows into the seasonality calculation.
+- **⚠ SQL TO RUN:** `supabase_v6_39_product_seasonal_flag.sql` — adds `products.seasonal boolean not null default false`. Run before deploying.
+- **UI:** inline **Seasonal** checkbox column on the Products table (between Active and Edit; `toggleProductSeasonal(masterId, checked)` — optimistic update, rollback on error, `stopPropagation` so it doesn't open the modal). Also a **Seasonal?** checkbox in the product modal (next to Active); `openProductModal` reads it, `saveProduct` persists it. Sortable (prodSortVal `seasonal` case).
+- **Calc integration (two effects):**
+  1. **Stockout correction DISABLED** for seasonal products — `computeProductSeasonality` forces `stockoutFloorPct = 0` when `products.seasonal` is true, because a seasonal item's off-season near-zero weeks (and the sharp season-end drop) are REAL demand, not supply gaps, and must not be excluded. Same applied to the seasonality chart (`seaRenderFitChart`).
+  2. **Fallback → seasonal_limited:** `resolveFallbackCurve` returns the `seasonal_limited` SEED template for a `seasonal` product when no explicit `seasonal_type` is set and no own curve applies — so thin-data seasonal items get a concentrated-peak default instead of the flat category curve.
+- Reads `products.seasonal` directly from `allProducts` in the calc, so the flag takes effect on the next recompute with no extra plumbing.
+
+## v6.38 — Seasonality: real-category filter + category→curve-template mapping
+- **Problem:** the Seasonality "pick category" dropdown listed SEED curve-TEMPLATE names (spray/consumables/treats/toys/bundles/seasonal_limited/bubbles), not real product categories — and didn't filter the list. Worse, the category-default fallback mapped a product's real category NAME straight into `SEED.curves[name]` (case-sensitive), so almost everything fell through to the generic `consumables` curve.
+- **#1 — Real category filter:** the dropdown now populates from real product categories (`seaPopulateCategoryFilter`, mirrors `cogsPopulateCategoryFilter`) and **filters the product list** by category (added to both the list filter and the select-all-visible helper). Default "All categories". onchange → `renderSeasonalityList()`.
+- **#2 — `CATEGORY_CURVE_MAP`:** new lowercased category/subcategory → SEED-template map (DRAFT, editable; near `getEffectiveCurveForProduct`). `resolveFallbackCurve` now resolves: `seasonal_type` (flat/seasonal/seasonal_limited) → `CATEGORY_CURVE_MAP[subcategory]` → `CATEGORY_CURVE_MAP[category]` → literal `SEED.curves[category]` → `consumables`. Subcategory wins over category; consumables is the true last resort. Incorporates the SmarterPaw toy taxonomy (cigars/Teasers/Jump n Jambs/Kickers → toys; blends → consumables; stick-n-licks → spray).
+- **Note:** `CATEGORY_CURVE_MAP` is a best-guess draft from known category/subcategory names — review/extend it for the full catalog (one object, clearly commented).
 
 ## v6.37 — Seasonality chart: stockout-aware trend + 120-day forward projection
 - **User flagged two things on the v6.34/36 fit chart:** (1) the de-seasonalized Trend line was still dragged down by stockout dips; (2) no forward view of seasonality.
