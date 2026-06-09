@@ -2,7 +2,10 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.44**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.45**
+
+## v6.45 — Products page: Active only / Inactive only filter options
+- Added **Active only** and **Inactive only** to the Products `prodFilter` dropdown (after "Singles only"). Logic in `renderProductsTbl`: `active` drops `p.active === false`; `inactive` drops `p.active !== false`. Default remains "All Products" (unchanged).
 
 ## v6.44 — Products table: bulk select/edit + sortable "90d Units" column
 - **User request:** (1) checkboxes to bulk select/edit product dimensions; (2) 90-day sales as a sortable column.
