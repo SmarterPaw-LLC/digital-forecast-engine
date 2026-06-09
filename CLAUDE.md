@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.33**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.34**
+
+## v6.34 — Seasonality validation chart (fit vs actual sales)
+- **User request:** a visual chart on the Seasonality page to see the calculated forecast against ~1.5 years of sales.
+- **Reused the existing (previously hidden) `sea-canvas`** in the active-product detail panel. New `seaRenderFitChart(mid, chartCurve)` renders a Chart.js line chart above the 52-week curve table whenever a product row is active.
+- **Three lines** over the last ~80 weeks of weekly sales (`salesData[mid]`, bucketed to Monday weeks):
+  1. **Actual units/wk** (green) — the real history.
+  2. **Trend (de-seasonalized)** (gray dashed) — centered ±26-week mean = the growth level.
+  3. **Seasonal fit** (orange) = trend × curve[isoWeek] — the model's reconstruction. When it tracks the actuals' week-to-week shape, the curve is good; when it doesn't, the curve is wrong.
+- **Curve shown is context-aware:** the **preview** curve when a Preview calc is active for that product (so you see the fit before applying), else the saved/effective curve.
+- Lazy-loads Chart.js via the existing `getChart()`; `seaFitChartInstance` destroyed/recreated each render. Hidden when no product is active.
 
 ## v6.33 — De-trend setting in the seasonality calc (removes growth bias)
 - **User flagged:** even after v6.32 stockout correction, Catnip Spray's calculated curve was still wrong — a high block at W16–21 (1.3–1.4×) and low everywhere else. Root cause: **growth-trend recency artifact**. The data spans ~2 years + a partial 3rd (Jun 2024 → Jun 2026), so weeks W16–23 have THREE occurrences (incl. the high-sales 2026 one) while the rest have two. Dividing each week-of-year average by the GLOBAL baseline (which the recent high weeks inflate) makes weeks-with-a-recent-point read high and all others read low — pure growth bias, not seasonality.
