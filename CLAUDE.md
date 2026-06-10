@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.48**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.49**
+
+## v6.49 — Inventory Planning: Hide bundles toggle + exportable Bundle Need columns
+- **User request:** (1) a Hide-bundles toggle on Inventory Planning (like the Demand page); (2) make sure the recent (bundle) columns export.
+- **Hide bundles:** new `#ip-hide-bundles` checkbox next to `+ bundle components` (off by default). Drops bundle PARENT rows from the view; their component demand is still attributed to component rows when `+ bundle components` is on (so hiding declutters without losing bundle-driven Need). Wired into all 4 IP filter sites — `renderInventoryTbl`, `inventoryVisibleRecords` (selection bar/chart), `downloadInventoryCSV` (filtered mode only — 'all'/'selected' export modes ignore it), and `showExportDialog` (filtered count). Filter is self-contained per row: `document.getElementById('ip-hide-bundles')?.checked && allProducts.find(p=>p.master_id===r.master_id)?.is_bundle`. Captured/restored in IP saved views (`filters.hideBundles`).
+- **Exportable Bundle Need columns:** the Need TOTAL + Need BASE columns already export bundle-inclusive totals (CSV `valueOf` falls through to their `sortVal` → `inventoryNeedBreakdown`). Added a dedicated `NEED — BUNDLE COMPONENTS (CUMULATIVE)` group (4 horizons: `bundleNeed30/60/90/120`, default OFF, opt-in via View popup) that isolates the bundle-attributed slice (`nb.bundle.base`) — sortable + CSV-exportable via `sortVal`. Lets you see/export "how much of this component's demand is bundle-driven" — the key number when a component is Amazon-deprecated but its bundle stays live. Group styled `thg-need-base` (blue, base-type) with a header tooltip; values gated by the `+ bundle components` toggle (0 when off).
+- No SQL, no new data — reads the v6.48 `bundle` field on the breakdown.
 
 ## v6.48 — Inventory Planning: bundle-component attribution + survives component deprecation
 - **User request:** (1) a toggle (default on, like the Demand page) to fold bundle-component demand into Inventory Planning — bundles are assembled in the warehouse, so component stock matters; (2) deprecate a component on Amazon while keeping its bundle live, with the bundle-driven demand still reflected in the Need columns (the "we only sell the two-pack now / switched to a bundle" case).
