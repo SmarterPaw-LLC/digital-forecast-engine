@@ -2,9 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.50**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.51**
 
-## v6.50 — Walmart 1P — Phase 1: ingest + name→product mapping + Units Sold
+## v6.51 — Walmart: item # as product ID + product_name matching (revises v6.50)
+- **User got a richer export** — it now includes `walmart_item_number` (stable ID, e.g. 678996643), `product_name` (full proper name), and `product_description`. Asked to "use walmart item # as the ID field in the product table and use the product name for better match."
+- **⚠ SQL TO RUN:** `supabase_v6_51_walmart_item_id.sql` — **supersedes v6.50** (the v6.50 sql file was deleted). DROPS `walmart_item_map` + `walmart_sales_weekly` (safe — no real data imported yet), adds **`products.walmart_item_id text`** (+ index), and recreates `walmart_sales_weekly` with `walmart_item_number` + `product_name` columns. RLS + policy + anon revoke on the table.
+- **Architecture change:** dropped the separate `walmart_item_map` table. The item # is now a real product identifier on `products.walmart_item_id` (like asin / shopify_sku / chewy_sku). Matching keys on it; the importer writes it onto the chosen product (UPDATE products SET walmart_item_id) so future uploads auto-match with zero remapping. `loadProducts` (`select *`) picks the column up; no map-table loader.
+- **Better fuzzy match:** `wmSuggest(productName, itemName)` now scores the FULL `product_name` (e.g. "Kitty Ka Zoom Catnip Bubbles for Cats 5 oz") against catalog short_name/title — far better than the truncated `item_name`. Brand boost retained.
+- **Parser** keys aggregation on item # (falls back to name when absent), captures product_name. **Importer modal** gains an ITEM # column + a WALMART PRODUCT column (full name over truncated); row selects use array index (no string-escape risk). **Apply** writes walmart_item_id to products, then DELETE+INSERTs sales keyed on (item #, week) [+ name fallback]. `loadSalesAnalytics` walmart source unchanged (still reads master_id/week_start/units).
+- **Not yet:** `walmart_item_id` isn't shown in the Product modal / Products table UI yet — the importer populates it, but a visible/editable field + merge-backfill is a small follow-up. Phases 2 (Forecast+Inventory) and 3 (P&L) unchanged from the v6.50 plan.
+
+## v6.50 — Walmart 1P — Phase 1: ingest + name→product mapping + Units Sold (SCHEMA SUPERSEDED BY v6.51)
 - **User request:** use the Walmart "Ecom Sales" CSV to start building Walmart into demand forecast, inventory, units sold, and a new Walmart P&L. **Answers:** 1P vendor (Retail Link) · map item names once then auto-match · P&L = Net Sales − COGS with fee placeholders. Phased build — **this is Phase 1** (data foundation + matching + Units Sold). Phase 2 = Forecast + Inventory wiring; Phase 3 = Walmart P&L page.
 - **The data:** weekly export, one row per (item, walmart_calendar_week YYYYWW). Columns: vendor #, item_description_2 ("ONLINE ONLY"), **item_name (truncated all-caps, the ONLY identifier — no ASIN/UPC/GTIN)**, net sales ($, can be negative = returns), quantity. ~40 KKZ + Doggijuana items, wk 202546 (Nov 2025) → 202619 (May 2026).
 - **⚠ SQL TO RUN:** `supabase_v6_50_walmart.sql` — creates `walmart_sales_weekly` (master_id, walmart_item_name, calendar_week, week_start, units, net_sales, …) + `walmart_item_map` (walmart_item_name PK → master_id). **Both have RLS enabled + authenticated-all policy + anon revoke** (v6.47 lesson). Idempotent.
