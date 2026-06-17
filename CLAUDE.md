@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.55**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.56**
+
+## v6.56 — Walmart importer shows real date range + flags stale exports
+- **User confusion:** the Walmart export's `walmart_calendar_week` is an opaque `YYYYWW` code (202546…), so you can't tell at a glance whether recent weeks are included. Their dashboard data ended at 202619 (≈ May 4) because the imported file was an older pull, even though the Scintilla report (refreshed Jun 17, last-52-weeks filter) had newer weeks available. Format decode: `YYYY` + ISO week-of-year; the dashboard's `walmartWeekToMonday` converts correctly (e.g. 202624 → Jun 8 2026).
+- **Fix (importer modal `walmartRenderImportModal`):** replaced the raw `(202546→202619)` week-code range in the header with the **actual date range** from `week_start` — e.g. `2026-03-09 → 2026-05-04 (latest 45d ago)`. When the latest week is **>14 days old**, a prominent orange warning renders: "⚠ Latest week in this file is N days old … re-pull from Scintilla with a current date range so recent weeks (and the 30-day columns) import." So data recency is obvious at import time instead of surfacing later as a mysteriously-empty 30d column.
+- **Verified in preview** (drove `walmartRenderImportModal` with mock imports, no login needed): stale file (max 2026-05-04) → header "… → 2026-05-04 (latest 45d ago)" + warning shown; fresh file (max 2026-06-08) → "… → 2026-06-08 (latest 10d ago)" + no warning. Syntax clean.
+- No SQL. The underlying "Walmart 30d Sold empty" is correct when data is genuinely stale — this just makes the staleness visible. Re-importing a current export populates the 30d columns.
 
 ## v6.55 — Global busy indicator: fetch-instrumented "Saving / Loading" for the whole app
 - **User:** "across the app, when something is saving or loading, it often doesn't communicate this to the user." The v5.61 `_pendingLoads`/`trackLoad` system only covered ~6 named loaders — saves and most operations never called it, so they were silent.
