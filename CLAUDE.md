@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.54**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.55**
+
+## v6.55 — Global busy indicator: fetch-instrumented "Saving / Loading" for the whole app
+- **User:** "across the app, when something is saving or loading, it often doesn't communicate this to the user." The v5.61 `_pendingLoads`/`trackLoad` system only covered ~6 named loaders — saves and most operations never called it, so they were silent.
+- **Fix — instrument `fetch` once** (`installFetchBusyTracker` IIFE, runs at script-eval before `getSB()` creates the client). Every Supabase request (`supabase.co` URL) increments `_sbWrites` (POST/PATCH/PUT/DELETE) or `_sbReads` (GET) and decrements in `.finally()`. So ALL saves + loads + RPC + storage + auth across the app drive the indicator automatically — no per-call-site wiring. Non-Supabase fetches (Chart.js CDN, FX APIs) pass through untouched. Fully defensive (try/catch, `Math.max(0,…)`, restores count on synchronous throw).
+- **Two surfaces** via the rewritten `renderLoadingIndicator()`:
+  - **Top progress bar** (`#globalBusyBar`, lazily created on `document.body`): thin fixed 3px green→orange bar at the top of the viewport — the unmistakable app-wide "something's happening" cue. Holds at 85% while busy, completes to 100% + fades on idle.
+  - **Header pill** (`#loadingIndicator`, existing): now shows **💾 Saving…** when any write is in flight (writes take label priority), **🔄 Loading…** for reads/named loads, then flashes **✓ ready** and hides. Tooltip lists named sources + in-flight read/write counts.
+  - Debounced: 300ms idle delay before settling (bridges rapid sequential requests so the bar doesn't flicker); the existing 1.2s "✓ ready" flash.
+- The named `_pendingLoads` / `markLoadStart` / `trackLoad` system is kept and folds into the same indicator (counts as "loading", names show in the tooltip). Inline per-action notes (e.g. saveProduct's "✓ Saved") are unaffected — the global indicator is additive.
+- **Verified in preview** (python static server on :8770, added a `forecast` config to `~/.claude/launch.json`): page boots clean with the wrapped fetch (no console errors, v6.55 rendered), `__sbBusyWrapped=true`, counters init 0 with no leak after the no-network auth boot; forcing a write state rendered the bar (opacity 1 / 85%) + pill "💾 Saving…" — confirmed in a screenshot.
 
 ## v6.54 — Walmart ID on the Products page + edit re-attributes sales (fix mismappings)
 - **User had mismapped `walmart_item_id`s** (import wrote the item # to the wrong products) and wanted to fix them on the Products page.
