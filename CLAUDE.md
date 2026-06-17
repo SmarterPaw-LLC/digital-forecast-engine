@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.49**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.50**
+
+## v6.50 — Walmart 1P — Phase 1: ingest + name→product mapping + Units Sold
+- **User request:** use the Walmart "Ecom Sales" CSV to start building Walmart into demand forecast, inventory, units sold, and a new Walmart P&L. **Answers:** 1P vendor (Retail Link) · map item names once then auto-match · P&L = Net Sales − COGS with fee placeholders. Phased build — **this is Phase 1** (data foundation + matching + Units Sold). Phase 2 = Forecast + Inventory wiring; Phase 3 = Walmart P&L page.
+- **The data:** weekly export, one row per (item, walmart_calendar_week YYYYWW). Columns: vendor #, item_description_2 ("ONLINE ONLY"), **item_name (truncated all-caps, the ONLY identifier — no ASIN/UPC/GTIN)**, net sales ($, can be negative = returns), quantity. ~40 KKZ + Doggijuana items, wk 202546 (Nov 2025) → 202619 (May 2026).
+- **⚠ SQL TO RUN:** `supabase_v6_50_walmart.sql` — creates `walmart_sales_weekly` (master_id, walmart_item_name, calendar_week, week_start, units, net_sales, …) + `walmart_item_map` (walmart_item_name PK → master_id). **Both have RLS enabled + authenticated-all policy + anon revoke** (v6.47 lesson). Idempotent.
+- **Matching:** map table (not a products column) because the truncated names drift; handles N names → 1 product. Importer fuzzy-suggests via `wmSuggest` (reuses `catsyTitleScore` bigram scorer + a `wmBrandHint` brand boost from the KKZ/JUANANIP/TUFFER prefixes), user confirms per row, saves to `walmart_item_map`. Future uploads auto-match by name.
+- **Week conversion:** `walmartWeekToMonday(yyyyww)` → ISO Monday of that week (verified contiguous across year boundary: W52→W01 one week apart). Stored as `week_start` so it aligns with every other channel.
+- **Import flow:** Data → Uploads → new **🛒 Walmart 1P — Ecom Sales** card → file picker → `handleWalmartFile` → `parseWalmartCSV` → `openWalmartImport` builds a **mapping modal** (`#wm-import-overlay`, dynamically injected) listing each item with units/$/weeks + a preselected product `<select>`. "Save mappings + import" → upserts `walmart_item_map`, resolves master_id per row, DELETE+INSERT into `walmart_sales_weekly` (Architecture Rule #5), reloads `salesData`. Items left "skip" store with null master_id (hidden until mapped). Audit: `upload.walmart`.
+- **Units Sold integration:** `loadSalesAnalytics` gained a 3rd source (walmart_sales_weekly → salesData rows with `channel='walmart'`, region US, master_id resolved). `getSelectedChannels` channel list + the by-channel chart `CHANNELS` map + a `chk-walmart` checkbox (Walmart blue #0071dc) all gained `walmart`. Units Sold totals (`sumUnits`) are channel-agnostic, so Walmart flows in once mapped.
+- **NOT in Phase 1 (deferred):** Forecast tab velocity (uses `velocity_calculated` DB view — needs the view UNION'd with walmart, OR compute walmart velocity from salesData) and Inventory Planning (1P → fold as warehouse continuous-draw base, like Shopify/FBM) = **Phase 2**. Walmart P&L page (Net Sales − COGS, fee placeholders, COGS basis = landed_cost for 1P) = **Phase 3**.
+- **Can't end-to-end test from here** (needs the migration run in Supabase + a logged-in session). Week-math + JS syntax verified.
 
 ## v6.49 — Inventory Planning: Hide bundles toggle + exportable Bundle Need columns
 - **User request:** (1) a Hide-bundles toggle on Inventory Planning (like the Demand page); (2) make sure the recent (bundle) columns export.
