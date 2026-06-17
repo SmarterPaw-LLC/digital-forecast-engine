@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.53**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.54**
+
+## v6.54 — Walmart ID on the Products page + edit re-attributes sales (fix mismappings)
+- **User had mismapped `walmart_item_id`s** (import wrote the item # to the wrong products) and wanted to fix them on the Products page.
+- **Products table column:** added a sortable **Walmart ID** column (after ASIN; header + cell + `prodSortVal` case `walmart_item_id`). Lets you scan/sort to spot blanks or wrong tags. (The editable field was already on the product card since v6.52.)
+- **Editing the tag now actually fixes a mismapping** (the key part): attribution on Units Sold / Forecast / Inventory is keyed on `walmart_sales_weekly.master_id` (stamped at import), NOT on `products.walmart_item_id` — so editing the product alone used to leave the old sales mis-attributed. `saveProduct` now, when `walmart_item_id` is set AND changed: (1) clears that # off any other product (one item # → one product), (2) re-points `walmart_sales_weekly` rows for that # to this master_id, (3) reloads `salesData` + recomputes record velocities so the frontend reflects it without a manual refresh. Gated on change, so normal saves are unaffected. **To fix a SWAP, edit both products** (each re-points its own item #'s sales) — or just re-run the importer.
+- **Promotion-path gap fixed:** the SP-TEMP→SP-XXXX promotion FK migration re-pointed every dependent table except `walmart_sales_weekly` — added it, so promoting a temp with Walmart sales no longer orphans them.
+- **DB-edit note for the user:** direct edits in the Supabase SQL Editor (in-app Query tab is read-only) reflect on the frontend after a hard refresh; must update BOTH `products.walmart_item_id` and `walmart_sales_weekly.master_id` (or re-sync the latter from the former with one UPDATE join).
+- No SQL migration; no version-label-only change. Verified: JS syntax.
 
 ## v6.53 — Forecast-by-channel: anchor extrapolation to latest data (Walmart lag fix)
 - **User flagged:** with FORECAST BY = Walmart, the Walmart 30d Sold column AND all Forecast-by-channel Walmart numbers were blank.
