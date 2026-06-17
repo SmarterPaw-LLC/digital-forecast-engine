@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.51**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.52**
+
+## v6.52 — Walmart Phase 2: Forecast + Inventory wiring (+ v6.51 leftovers)
+- **No SQL** — uses `products.walmart_item_id` + `walmart_sales_weekly` (v6.51) + `salesData` (channel='walmart' from v6.50's loader). Phase 3 (Walmart P&L page) still pending.
+- **Demand Forecast — full Walmart wiring:**
+  - **Header:** `Walmart ID` radio in SHOW ID (value `walmart_item_id`); `Walmart` checkbox in FORECAST BY (`#fChan-walmart`, blue #0071dc, enabled with the others on data load, folded into `onChanChange` 5-channel sync + the none-checked reset).
+  - **Per-channel columns:** added `{key:'walmart',label:'Walmart',channels:['walmart']}` to `FC_CHANNEL_GROUPS` → auto-generates **Walmart 30/60/90/120 in both SOLD BY CHANNEL and FORECAST BY CHANNEL** (both families loop FC_CHANNEL_GROUPS×FC_HORIZONS) with auto tooltips. `fcSoldByChannel`/`fcForecastByChannel` already channel-generic; Walmart rows (channel='walmart', region US) flow through.
+  - **Total forecast:** new `fcWalmartVel(rec, w)` (salesData channel='walmart', region-gated US-only) is added into `blended_daily` in `recomputeRecordVelocity` alongside bundle attribution — so "Total (all)" Need now includes Walmart. No double-count: `velocity_calculated` (the DB view feeding `daily_vN`) is Amazon+Shopify only. New `rec.walmart_daily` surfaced; Total-mode Need tooltip relabeled "Amazon + DTC + Walmart" with a per-day note.
+  - **Records** carry `walmart_item_id` (added to the records-build object) so SHOW ID + the ID column (`headHtml` map gained `walmart_item_id:'Walmart ID'`) work. Saved views capture/restore `channels.walmart`.
+  - **Custom-channels mode:** `getSelectedChannelConfig` adds `chanWalmart`→`'walmart'` to selectedChans + chanLabel; `getChannelVelocityForRecord` is already channel-generic (region-gates Walmart out for CA). `chanNameMap` tooltip gained walmart.
+- **Inventory Planning — Walmart as 1P warehouse draw:** new `invWalmartVel(r)`; `inventoryNeedBreakdown` gets a Walmart block — 1P means we ship from our warehouse to Walmart's DCs against POs, so it's a **continuous warehouse draw (into `base`, like Shopify / Amazon FBM), NOT a reorder pool**. `wmartBase = forwardSeaDemand(walmartVel, X)` added to `baseSum`; returns `walmart:{base,reorder:0,vel}`; Need-TOTAL + Need-BASE tooltips gained a Walmart line. Flows into Need/Gap/scorecards/CSV automatically. Region-gated (0 on CA rows). Surfaces in the v6.49 `NEED — BASE` column; could add a dedicated Walmart Need column later if wanted.
+- **v6.51 leftovers folded in:**
+  - **Remapping hardening:** `walmartApplyImport` now clears `walmart_item_id` from any OTHER product before assigning it to the chosen one — an item # can never live on two products (fixes the correct-a-mapping edge).
+  - **Product modal field:** added **Walmart Item #** input (`#pf-walmart`, next to Chewy SKU); `openProductModal` reads it, `saveProduct` persists `walmart_item_id`. Not yet a Products-table column or in merge-backfill — small follow-ups.
+- **Behavior note:** Total-mode Forecast Need + Inventory Need numbers will RISE for products with Walmart sales (Walmart now counted) — intended. Verified: JS syntax. Full flow needs the v6.51 migration + login.
 
 ## v6.51 — Walmart: item # as product ID + product_name matching (revises v6.50)
 - **User got a richer export** — it now includes `walmart_item_number` (stable ID, e.g. 678996643), `product_name` (full proper name), and `product_description`. Asked to "use walmart item # as the ID field in the product table and use the product name for better match."
