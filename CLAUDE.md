@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.52**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.53**
+
+## v6.53 — Forecast-by-channel: anchor extrapolation to latest data (Walmart lag fix)
+- **User flagged:** with FORECAST BY = Walmart, the Walmart 30d Sold column AND all Forecast-by-channel Walmart numbers were blank.
+- **30d Sold = "—" is correct, not a bug:** the Walmart export's latest week (202619 → ~May 4 2026) is >30 days before today (June 17), so the trailing-30-calendar-day window is genuinely empty (1P vendor reports lag). 60/90/120 populate because they reach back to early May. Left truthful — it fills in with a fresher upload.
+- **Forecast-by-channel = "—" was a real bug:** `fcForecastByChannel` extrapolated off `fcSoldByChannel(…, 30)` (last 30 *calendar* days) ÷ 30 — empty due to the reporting lag, so every Walmart projection came out 0. Fix: new `fcChannelDailyRate(r, channels, windowDays)` computes the rate over a window anchored to the **channel's latest data date**, not `now`. So a channel that's weeks behind still projects off its real recent rate. Current channels (Amazon/Shopify, latest≈today) are unchanged. `fcForecastByChannel` now calls it.
+- **Note:** the Total-mode Walmart contribution (via `fcWalmartVel` in blended_daily) still respects the Velocity Window dropdown (now-anchored, like every other channel) — at a 30d window with 6-week-stale data it reads 0; at 60/90/120d it picks the data up. That's the intended velocity-window semantics, not a bug; the per-channel *forecast* column is the one that needed the lag-robust anchor since it has no window control.
 
 ## v6.52 — Walmart Phase 2: Forecast + Inventory wiring (+ v6.51 leftovers)
 - **No SQL** — uses `products.walmart_item_id` + `walmart_sales_weekly` (v6.51) + `salesData` (channel='walmart' from v6.50's loader). Phase 3 (Walmart P&L page) still pending.
