@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.58**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.59**
+
+## v6.59 — Walmart week_start recomputed on READ (so the v6.58 fix repairs existing rows w/o re-import)
+- **Why:** v6.58 fixed `walmartWeekToDate` but `week_start` is computed + STORED at import time, so rows already in `walmart_sales_weekly` kept their old (≈May, ISO-mapped) dates after a reload — 30d still empty unless re-imported. User (reasonably) didn't want to re-import.
+- **Fix:** `loadSalesAnalytics` now also selects `walmart_calendar_week` and recomputes `week_start` via `walmartWeekToDate` on every read. So correcting the week→date mapping repairs ALL existing rows on the next reload — no re-import, no SQL. Override is conditional: only when the stored date is **>10 days** off the recomputed date (the stale-mapping migration case); a close stored date (date-column import from v6.57, or already-correct) is preserved. Falls back to stored `week_start` if the code is missing/unparseable.
+- **Net:** deploy v6.59 + hard-refresh → existing Walmart rows (week codes 202615–202619) re-date to May/June → 30d column + Total-mode Walmart velocity populate. (Stored DB `week_start` stays old/cosmetic until a re-import overwrites it; reads are correct regardless. A read query on `walmart_sales_weekly.week_start` will still show old dates — the dashboard recomputes in JS.)
+- Makes the week→date mapping a pure read-time transform of the stored raw code — future mapping tweaks never need a re-import.
 
 ## v6.58 — FIX: Walmart week→date used ISO weeks; Walmart's retail calendar starts in February
 - **THE root cause** of the "Walmart 30d empty / data looks stale" saga (chased across v6.53/6.56/6.57). The user confirmed their export uses the same current settings, so `202619` is genuinely ~mid-June — meaning the dashboard was mis-dating it. v6.50's `walmartWeekToMonday` assumed **ISO** weeks (week 1 = week of Jan 4), but **Walmart's retail calendar** has fiscal year ending Jan 31 and **Week 1 begins the first Saturday of February** (weeks Sat–Fri). So every Walmart week was dated **~5–6 weeks too early** (202619 → May 4 instead of ~June 13), making current data look 6 weeks stale and emptying the 30-day window.
