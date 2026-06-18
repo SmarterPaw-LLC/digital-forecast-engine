@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.63**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.64**
+
+## v6.64 — Walmart P&L: multi-select line chart (parity with Amazon / Shopify P&L)
+- **User:** "on walmart p&l, i should be able to click multiple products to show a line chart like on amazon p&l." v6.63 shipped the Walmart P&L lean (no chart); this adds the multi-select weekly-trend chart.
+- **Multi-select:** new leading checkbox column (select-all in the header with indeterminate state) + per-row checkbox; **row-click now toggles selection** (was: open product modal). The product modal is still reachable via a `↗ card` button (`pnlCardBtn`) added to the Product cell — same affordance the Amazon/Shopify P&L use. Selected rows get a blue tint (`rgba(0,113,220,0.10)`). State in `walmartPnlSelectedMids` (Set) + `walmartPnlVisibleMids`.
+- **Chart panel** (`wmpnl-chart-panel`, hidden until ≥1 selected) sits between scorecards and the table — mirrors `updateShopifyPnlChart` exactly: one Chart.js line per selected product, x-axis = Walmart `week_start` (weekly 1P data), `tension:.3`, `spanGaps:true`, 10-color cycle (Walmart blue first). Metric dropdown: Net Sales / Net Proceeds / COGS / Contribution % / Units. `✕ Clear` button in the chart header. COGS basis = `walmartPnlCogs(mid)` (landed → dtc → amazon), so Net Proceeds + Contribution % lines match the table/scorecards.
+- **Helpers:** `walmartPnlToggleProduct` / `walmartPnlClearSelection` / `walmartPnlToggleSelectAllVisible` / `updateWalmartPnlChart` (all call `renderWalmartPnl` which ends with `updateWalmartPnlChart()`). Row-count line now shows the selected count + a "check rows to chart" hint. Loading/empty/error colspans bumped 9 → 10 for the checkbox column.
+- **No SQL, no new data.** **Verified in preview** (v6.64, mock 2-product weekly data): chart shows on selection, 2 lines with correct weekly Net Sales (400/560/495), metric switch to Contribution % computes right (85% = (400−40×$1.50)/400), select-all + indeterminate + clear (destroys instance, hides panel) all correct, no console errors.
+- **Deferred from Walmart P&L (could still port from Shopify P&L if wanted):** column-picker + saved-views. Chart was the requested piece.
 
 ## v6.63 — Walmart 1P P&L page (Walmart Phase 3 — DONE; completes the 4-page Walmart build)
 - **The final Walmart phase.** Phase 1 (v6.50/51) = ingest + ID mapping + Units Sold; Phase 2 (v6.52–62) = Forecast + Inventory wiring + the week-calendar fix; **Phase 3 (this) = the Walmart P&L page.** Mirrors the **Shopify DTC P&L v1 pattern** Jason chose at the start: **Net Proceeds = Net Sales − COGS, with Walmart fees as a labeled placeholder** until a fee/settlement report is wired.
