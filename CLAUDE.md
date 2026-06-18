@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.59**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.60**
+
+## v6.60 — Inventory Planning: exportable "Walmart Need" columns (validate 1P draw without the tooltip)
+- **Context:** validating Phase 2's Inventory side meant hovering a Need cell to read the "Walmart base" tooltip line — but native `title` tooltips can't be screenshotted. So the Walmart 1P contribution to inventory Need had no visible/exportable surface.
+- **Fix:** added a `NEED — WALMART (1P)` column group (`wmNeed30/60/90/120`, default OFF, opt-in via View popup) — mirrors the v6.49 Bundle Need columns. Reads `inventoryNeedBreakdown(r, X).walmart.base` (the Walmart slice already folded into Need TOTAL + BASE). Sortable + CSV-exportable. 0 on CA-pinned rows (Walmart US-only). Group styled `thg-need-base`.
+- **Verified in preview:** v6.60 live, `IP_COLUMNS` includes wmNeed30/60/90/120, `inventoryNeedBreakdown` returns `walmart:{base,reorder,vel}`. Syntax clean.
+- **Validation use:** Inventory Planning → View popup → enable `≤90d Walmart` → the column shows each product's Walmart warehouse-draw demand directly (no hover needed). Confirms Phase 2's 1P inventory model end-to-end.
 
 ## v6.59 — Walmart week_start recomputed on READ (so the v6.58 fix repairs existing rows w/o re-import)
 - **Why:** v6.58 fixed `walmartWeekToDate` but `week_start` is computed + STORED at import time, so rows already in `walmart_sales_weekly` kept their old (≈May, ISO-mapped) dates after a reload — 30d still empty unless re-imported. User (reasonably) didn't want to re-import.
