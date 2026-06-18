@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.61**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.62**
+
+## v6.62 — PERF: Inventory Planning column-toggle was very slow (O(n log n) breakdowns + uncached bundle scan)
+- **User flagged:** selecting a column in the Inventory View popup was VERY slow. Each toggle → `ipToggleCol` → full `renderInventoryTbl()`, and two compounding costs made that render expensive (worsened by v6.48 bundle attribution + v6.52 Walmart, which both run inside every Need breakdown):
+  1. **Sort comparator recomputed the breakdown O(n log n) times.** `vis.sort((a,b)=> sortCol.sortVal(a) - sortCol.sortVal(b))` — for a Need column `sortVal` runs the full `inventoryNeedBreakdown`, so a 568-row table did ~10k breakdowns JUST to sort, every render.
+  2. **`getBundleAttrDailyVelocity` scanned ALL of `allBomData`** on every breakdown call (4× per row), and channel-vel scans likewise — recomputed thousands of times.
+- **Fixes (both standard, low-risk):**
+  1. **Sort-key memoization** — precompute `sortCol.sortVal(r)` once per row into a Map, then sort by the cached value → O(n) instead of O(n log n). Applied to `renderInventoryTbl` AND `downloadInventoryCSV`.
+  2. **Velocity memo (`_velMemo`)** — cache `getInventoryChannelVel` (via a `cacheKey` arg on the inv* wrappers) + `getBundleAttrDailyVelocity`, keyed by `master_id|region|window[|channel]`. Pure w.r.t. (mid, region, velocity-window) + salesData/allBomData; NOT dependent on the bundle-attr toggle / seasonality / flags / events, so safe. Cleared via `clearVelMemo()` only on data/window change: `loadSalesAnalytics`, `loadProducts`, `applyVelocityWindow`. Dedups the 4-identical-scans-per-row within a render AND reuses across renders (so column toggles, which change no data, skip all velocity computation).
+- **Net:** sort breakdowns ~10k → ~568 per render; bundle/channel scans cached. Column toggles should be near-instant.
+- **Verified in preview:** v6.62 boots clean (no console errors), `_velMemo` Map + `clearVelMemo` present, `getInventoryChannelVel` takes the cacheKey arg. (Real render timing needs auth+data, not reachable from the sandbox — but the algorithmic fix is the textbook O(n log n)→O(n) sort-key memoization.)
+- **Same pattern lives in the Forecast sort** (`fcCompare` / sortChain walks `col.get(r)` per comparison) — if the Forecast table feels slow on large sets, apply the same precompute-sort-keys fix there.
 
 ## v6.61 — FIX: Inventory column popup hid new column groups (Walmart + Bundle Need unreachable)
 - **User flagged:** the v6.60 Walmart Need columns weren't in the Inventory View popup.
