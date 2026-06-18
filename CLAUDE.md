@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.60**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.61**
+
+## v6.61 — FIX: Inventory column popup hid new column groups (Walmart + Bundle Need unreachable)
+- **User flagged:** the v6.60 Walmart Need columns weren't in the Inventory View popup.
+- **Root cause:** `openIpColumnsPopup` rendered checkboxes from a HARDCODED `groupOrder` array (`['sku','velocity','need-total','need-base','need-reorder',…]`) that was never updated when new column groups were added — so `need-bundle` (v6.49) AND `need-walmart` (v6.60) had columns in `IP_COLUMNS` but no checkbox to enable them (and they default OFF → permanently unreachable). The Bundle Need columns had silently been broken the same way since v6.49.
+- **Fix:** added `need-bundle` + `need-walmart` to `groupOrder` (positioned after `need-base`) with labels, and — to prevent recurrence — the render loop now appends **any** group present in `IP_COLUMNS` but missing from `groupOrder` (unlabeled groups fall back to their `groupHdr`). So a newly-added column group can never silently disappear from the picker again. Also corrected the stale `need-base` label ("Shopify + Chewy" → "Shopify + Walmart 1P + Amazon FBM + Chewy").
+- **Verified in preview:** v6.61, popup opens and lists the WALMART (1P) group (≤30/60/90/120d Walmart) + the BUNDLE COMPONENTS group. Syntax clean.
+- **Lesson:** the Forecast popup (`FC_COLUMNS`) uses `groupOrder` too — check it the same way if a Forecast column group ever goes missing. (It currently includes its groups, but apply the same append-extras pattern if extending.)
 
 ## v6.60 — Inventory Planning: exportable "Walmart Need" columns (validate 1P draw without the tooltip)
 - **Context:** validating Phase 2's Inventory side meant hovering a Need cell to read the "Walmart base" tooltip line — but native `title` tooltips can't be screenshotted. So the Walmart 1P contribution to inventory Need had no visible/exportable surface.
