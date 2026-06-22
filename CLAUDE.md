@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.70**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.71**
+
+## v6.71 — "Loading sales" cue + auto re-render when bundle attribution settles
+- **User:** after a refresh, the bundle `+B` badges (and velocity) take a beat to appear, and nothing on screen indicated the table was still settling.
+- **Why the lag:** `loadSalesAnalytics` fetches sales (async) THEN recomputes every record's velocity + bundle attribution (the v6.69 fix, CPU-bound). The global busy bar (v6.55) only tracks the fetch, not the recompute, and it's easy to miss. Worse, `renderAll()` only re-renders the Demand table — NOT the Inventory table — so on the Inventory view the recomputed `+B`/velocity didn't show until a manual toggle (a second, separate lag the user was hitting).
+- **Fix 1 — visible cue:** `showSalesLoadingCue()` / `hideSalesLoadingCue()` — a yellow floating spinner pill ("Loading sales — velocity & bundle attribution updating…", fixed top-center). Shown at the START of every `loadSalesAnalytics` (init, ↺ Refresh, post-upload), hidden after the recompute + re-render. Covers the whole fetch→recompute→render window, so the "still settling" state is unmistakable. Defensive hide in the init `.catch` so a failed load can't leave it stuck. New `salesDataReady` flag (false during the window).
+- **Fix 2 — auto re-render the active view:** at the end of `loadSalesAnalytics`, re-render whatever forecast sub-view is showing (`renderInventoryTbl()` when `forecastView==='inventory'`, else `renderAll()`) so the recomputed bundle attribution appears WITHOUT a manual interaction. Closes the Inventory-lags-silently gap.
+- **No SQL.** Verified in preview (v6.71): both cue functions present, pill shows the spinner + text and hides cleanly, `salesDataReady` boolean defined, no console errors.
 
 ## v6.70 — "Hide inactive" toggle on Demand Forecast + Inventory Planning
 - **User:** another toggle on Forecast + Inventory to hide/show inactive products.
