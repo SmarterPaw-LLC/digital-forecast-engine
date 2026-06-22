@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.66**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.67**
+
+## v6.67 — Inventory Planning: optional "Full Title" column (full catalog title alongside the short-name Product column)
+- **User:** "on the inventory planning page, i would like to be able to include the product title in addition to the short name." The existing "Product" column shows `short_name` (or a truncated title); there was no way to surface the full untruncated catalog title.
+- **Fix:** added a `full_title` column to `IP_COLUMNS` (SKU group, right after `title`), **default OFF** — opt-in via the View popup (the popup iterates IP_COLUMNS by group, so it appears under SKU automatically; no popup change). Renders `r.title` with ellipsis + a `title=` hover tooltip showing the whole thing (keeps row heights uniform in the dense table); width 300px. Sortable (`sortVal` = lowercased title). `csv: r => r.title || ''` so the Inventory CSV exports it **untruncated + proper-case** (the exporter checks `c.csv` first, line ~21341). Distinct from "Product" — enable both to see short name + full title side by side.
+- **No SQL, no data change** — `records` already carry `title`. **Verified in preview** (v6.67): column registered (label "Full Title", group sku, default false), sits after `title` in SKU order, render produces the full-title `<td>` + tooltip, `csv()` returns proper-case full title, no console errors.
 
 ## v6.66 — PERF + UX: Inventory column toggle still slow + no visual cue (memoize the breakdown + spinner pill)
 - **User flagged (again, post-v6.62):** toggling a column in the Inventory View popup still takes a long time AND gives no visual feedback that anything is happening.
