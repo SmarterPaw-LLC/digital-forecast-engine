@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.68**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.69**
+
+## v6.69 — FIX: bundle attribution silently vanished (regression vs v6.05) — init recompute ran before salesData loaded + v6.62 memo cached the 0
+- **User proved it's a regression, not data:** same data, an older **v6.05** build (saved earlier the same day, AFTER the Shopify upload) showed bundle attribution CORRECTLY — `+B` badges on Need TOTAL, populated Bundle Need columns, AND a higher Vel/day (63.23 incl. bundle) — while **v6.67** showed none of it (Vel/day 61.17, no `+B`, blank Bundle columns). My earlier "data re-mapping from the Shopify upload" theory was WRONG.
+- **Root cause (two compounding):**
+  1. **Ordering bug (pre-existing, latent):** `init()` runs the finalization `records.forEach(recomputeRecordVelocity)` at ~line 3507 — which folds bundle-component demand in via `getBundleAttrDailyVelocity(salesData[bundleId])` — **BEFORE `loadSalesAnalytics()` is called (~line 3536)**. So `salesData` was EMPTY → `bundle_daily = 0`, baked into every record's `blended_daily`. Nothing recomputed the records after salesData loaded.
+  2. **v6.62 memoization removed the safety net:** earlier builds (v6.05) had no `_velMemo`, so EVERY render recomputed `getBundleAttrDailyVelocity` fresh — once salesData was loaded, renders self-healed and bundle showed up. v6.62 cached the result, so the init-time **0 got locked in** and never recovered. That's the exact regression window (v6.05 ok → v6.62+ broken).
+- **Fix 1 (systemic) — recompute records at the END of `loadSalesAnalytics`:** after `salesData` is populated, `records.forEach(recomputeRecordVelocity)` so bundle demand folds into `blended_daily` + `bundle_daily` with real data. Runs on EVERY call (init, ↺ Refresh, post-upload) → can't drift out of sync again. This is what fixes the **Vel/day bundle slice + Forecast `+B`**, and (via the repopulated velocity cache) the **Inventory Bundle Need columns + `+B` badge**.
+- **Fix 2 (defense in depth) — don't cache a pre-load 0:** `getBundleAttrDailyVelocity` now gates BOTH the cache read and write on `salesReady = Object.keys(salesData).length > 0`. A bundle velocity computed before salesData exists is returned but NOT stored, so it can never poison `_velMemo` again.
+- **Verified in preview** (v6.69): with empty salesData → returns 0 and does NOT cache; after salesData loads → returns the correct 2.33 (not a stale 0) and caches it. Syntax clean, no console errors. **No SQL.** After deploy + refresh, bundle attribution returns across Vel/day, Forecast `+B`, and the Inventory Bundle columns. (Resolves the "+B badge missing" thread — it was this regression all along, not the upload.)
 
 ## v6.68 — Freeze columns (Demand + Inventory) + Walmart in Need-group tooltips
 - **User asks (3):** (1) Walmart missing from the "NEED — TOTAL (CUMULATIVE)" + "NEED — BASE (CUMULATIVE · CONTINUOUS DRAIN)" group-header tooltips; (2) Inventory Planning Status shows "— No Data" everywhere ("not calculating velocity status"); (3) freeze columns up to a chosen one on Demand + Inventory.
