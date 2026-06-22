@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.64**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.65**
+
+## v6.65 — FIX: upload conflict dialog called daily Shopify overlaps "week(s)" (alarming "742 new weeks")
+- **User flagged:** updating the Shopify report (a 2024-04-01 → 2026-06-30 daily export) popped the "Existing Data Found" dialog reading "1012 rows … across **71 overlapping week(s)** and **742 new week(s)**" — "742 weeks" = ~14 years, clearly wrong, looked like a bug. **It was a pure labeling bug — the data was fine.** Since v6.1 Shopify is daily-grain (`shopify_sales_daily`); the conflict check at `parseShopifySales` (line ~4709) correctly computes overlapping **days** vs new **days** (71 days already loaded from prior partial uploads, 742 genuinely-new days in the file), but `showUploadConflictDialog`'s template hardcoded the noun "week(s)" in 4 spots, so days were printed as weeks.
+- **Fix:** `showUploadConflictDialog` gained a `unit` param (default `'week'`) — the visible grain noun. Template now renders `${unit}(s)` in the body + both buttons ("Add new ${unit}s only", "overwrite overlapping ${unit}s"). The `*Weeks` param names stay for back-compat. Callers:
+  - **Shopify daily** (parseShopifySales) → `unit:'day'`, region simplified `'Shopify (daily — N days overlap)'` → `'Shopify (daily)'` (the unit carries the grain now, no double "days"). weekLabels reworded to "overlap spans X → Y".
+  - **Inventory** (checkInventoryConflict) → `unit:'ASIN'` (it counts ASINs, was also calling them "weeks").
+  - **Amazon sales_weekly** (parseSalesWeekly ~4424, SKU-economics ~6839) + **EU** (~7163) → keep the default `'week'` — they genuinely are weekly. No change.
+- **No data was ever wrong.** "Add new days only" adds the 742 new days + keeps the existing 71; "Replace all" overwrites those 71 overlapping days with the file's values (scoped to days×SKUs in the file — never touches data outside the file's range). For a fresh comprehensive export, **Replace all** is the clean choice.
+- **Verified in preview** (v6.65): with Jason's exact numbers the dialog reads "71 overlapping day(s) and 742 new day(s)" + "Add new days only (742 new days, skip 71 existing)"; the Amazon path still correctly reads "week(s)". No SQL.
 
 ## v6.64 — Walmart P&L: multi-select line chart (parity with Amazon / Shopify P&L)
 - **User:** "on walmart p&l, i should be able to click multiple products to show a line chart like on amazon p&l." v6.63 shipped the Walmart P&L lean (no chart); this adds the multi-select weekly-trend chart.
