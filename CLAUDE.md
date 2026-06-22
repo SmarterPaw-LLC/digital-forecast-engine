@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.69**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.70**
+
+## v6.70 — "Hide inactive" toggle on Demand Forecast + Inventory Planning
+- **User:** another toggle on Forecast + Inventory to hide/show inactive products.
+- **Forecast:** `#fHideInactive` checkbox (next to Hide bundles, **default ON**). `getVisible()` drops rows where `allProducts.find(p=>p.master_id===r.master_id).active === false` — folded into the existing `hideBundles` lookup so it's still ONE `allProducts.find` per record (no extra per-render scan). Captured/restored in Forecast saved views (`filters.fHideInactive`; restore guarded by `!== undefined` so pre-v6.70 views are unaffected).
+- **Inventory:** `#ip-hide-inactive` checkbox (next to Hide bundles, **default ON**). Same predicate added at all 4 IP filter sites (`renderInventoryTbl`, `inventoryVisibleRecords`, `downloadInventoryCSV`, `showExportDialog`) right after the v6.49 Hide-bundles line. Captured/restored in IP saved views (`filters.hideInactive`).
+- **Default ON** because inactive = deprecated/discontinued and shouldn't drive demand/PO planning — uncheck to see them. Resolves `active` via `allProducts` (records don't reliably carry the flag), matching the Hide-bundles convention. `active !== false` = active (null/undefined treated as active, for legacy rows).
+- **No SQL.** Verified in preview (v6.70): both checkboxes present + checked by default; `getVisible()` with Hide-inactive ON returns only the active record, OFF returns both. No console errors.
 
 ## v6.69 — FIX: bundle attribution silently vanished (regression vs v6.05) — init recompute ran before salesData loaded + v6.62 memo cached the 0
 - **User proved it's a regression, not data:** same data, an older **v6.05** build (saved earlier the same day, AFTER the Shopify upload) showed bundle attribution CORRECTLY — `+B` badges on Need TOTAL, populated Bundle Need columns, AND a higher Vel/day (63.23 incl. bundle) — while **v6.67** showed none of it (Vel/day 61.17, no `+B`, blank Bundle columns). My earlier "data re-mapping from the Shopify upload" theory was WRONG.
