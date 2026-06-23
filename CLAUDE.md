@@ -2,7 +2,10 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.74**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.75**
+
+## v6.75 — Favicon swap (sunglasses cat + red chart on grid)
+- Replaced the v6.74 teal-circle favicon with the new icon: **cat-in-sunglasses + red rising-chart line on a grid background**. Source `C:\Users\Jason\Downloads\smarterforecast_favicon2-256x256.png`. Same pattern: PIL → 64×64 (`rel=icon`) + 180×180 (`apple-touch-icon`), inline base64 PNG data URIs in `<head>`, swapped via Python regex. Verified by decoding the embedded base64 back through PIL.
 
 ## v6.74 — Final favicon (sunglasses cat on teal circle)
 - Final favicon swap: **cat-in-sunglasses on a teal circular background**. Source `C:\Users\Jason\Downloads\smarterforecast_favicon-256x256 (1).png`. Same embed: PIL → 64×64 (`rel=icon`) + 180×180 (`apple-touch-icon`), inline base64 PNG data URIs in `<head>`, swapped via Python regex. Verified by decoding the embedded base64 back through PIL: icon 64×64 PNG, apple-touch 180×180 PNG.
