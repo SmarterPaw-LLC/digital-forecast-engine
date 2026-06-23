@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.71**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.72**
+
+## v6.72 — Rebrand to "SmarterForecast" + embedded favicon
+- **User:** rename the app to **SmarterForecast** and use the new cat-with-chart icon as the favicon.
+- **Rename (4 surfaces):** `<title>` → `SmarterForecast`; header `.logo-tag` "Forecast Engine" → "SmarterForecast"; login `.pw-sub` "Inventory Forecast Engine — Sign in" → "SmarterForecast — Sign in". The SmarterPaw / Meowijuana-Doggijuana brand SVG logos in the header + login box are kept (company brand); only the app-name text changed.
+- **Favicon:** source `C:\Users\Jason\Downloads\smarterforecast_fav-1080x1080.png` (1080² cat-in-sunglasses + red chart). Resized with PIL → **64×64** `<link rel="icon">` (6.5KB PNG, ~8.7KB base64) + **180×180** `<link rel="apple-touch-icon">`, both embedded as `data:image/png;base64,…` **inline** in `<head>` — no separate file, so it works on GitHub Pages with zero extra assets. (To regenerate at a different size: PIL `Image.open(src).resize((N,N), LANCZOS)` → base64 → replace the data URI.)
+- **Note on editing this file:** the embedded base64 logo/favicon lines are very long, which makes the Read/Edit tools choke ("exceeds max tokens") — used a small Python `str.replace` script for the in-`<head>` text + version edits instead. Grep still works for locating lines.
+- **No SQL.** Verified in preview (v6.72): `document.title` = "SmarterForecast", header tag + login subtitle updated, `link[rel=icon]` present as a PNG data URI, apple-touch-icon present, login screen screenshot shows "SmarterForecast — Sign in". Syntax clean.
 
 ## v6.71 — "Loading sales" cue + auto re-render when bundle attribution settles
 - **User:** after a refresh, the bundle `+B` badges (and velocity) take a beat to appear, and nothing on screen indicated the table was still settling.
