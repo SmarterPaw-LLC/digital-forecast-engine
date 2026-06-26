@@ -1,0 +1,22 @@
+# Google Drive upload staging — Drive creates this folder while syncing other
+# files on the machine; zlib-compressed binary chunks with numeric names. Not
+# part of the project. Drive usually cleans it up itself when uploads finish.
+.tmp.driveupload/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Local-only / scratch
+*.log
+*.tmp
+.env
+.env.local
