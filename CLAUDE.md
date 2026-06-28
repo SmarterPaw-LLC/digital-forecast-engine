@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.76**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.77**
+
+## v6.77 — Visible per-ad-type breakdown in the P&L Fee Breakdown sidebar
+- **User flagged after v6.76 deploy:** "i don't see the ad spend types broken out at all" — the v6.76 fold added the spend to the scorecards correctly, but the Fee Breakdown sidebar still had a single `Sponsored Products` bar. With SB/SD/DSP/TV silently folded into `view.sponsored`, that one bar got mislabeled. Also, no on-screen signal told the user whether any Amazon Ads data was loaded yet.
+- **Fix (Fee Breakdown — US/CA only; EU uses sku_economics_eu):**
+  - Inline scan of `amazonAdSpendData` filtered by the active `(from, to, region, brand)` produces `perSlugSpend = { sponsored_brands, sponsored_display, sponsored_tv, dsp }`.
+  - `spOnlySpend = max(0, view.sponsored − sum(perSlugSpend))` — back out SP from the total.
+  - Five separate fee-breakdown rows replace the old single line: **Sponsored Products / Sponsored Brands / Sponsored Display / Amazon DSP / Sponsored TV**. Each filters out at `Math.abs(val) > 0.01` so accounts that don't run all types stay compact. Existing sort-by-magnitude logic groups them correctly within the breakdown.
+- **No-data hint:** when `amazonAdSpendData` is empty (no upload yet OR `supabase_v6_76_amazon_ad_spend.sql` not run), a small orange line appears at the bottom of the Fee Breakdown: `⚠ Only Sponsored Products counted above. Sponsored Brands / Display / DSP / TV not yet uploaded — see Data → Uploads → 📢 Amazon Ads to add them.` Hidden once any row exists.
+- **Verified in preview** (v6.77 with synthetic spend data): per-slug splits compute exactly — SB $3.90, SD $0.85, TV $3.20, DSP $1.10, sum $9.05, SP-only correctly backs out from `view.sponsored`. Syntax clean, no console errors.
 
 ## v6.76 — Amazon Ads non-SP per-ASIN spend in the P&L (SB / SD / DSP / TV)
 - **User flagged the gap:** the SKU Economics report only covers Sponsored Products (`sponsored_products_total`). Sponsored Brands, Sponsored Display, Amazon DSP and Sponsored TV are billed through Amazon Ads (separate from Seller Central) and have been invisible in the P&L. For Jason's accounts that's ~$14k of unrecorded ad spend per 60-day window (~25% of total ad cost), which silently overstates Net Proceeds.
