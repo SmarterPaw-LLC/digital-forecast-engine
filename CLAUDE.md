@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.78**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.79**
+
+## v6.79 — Digital Sales: multi-year ingestion + YoY + pacing + channel/type filters
+- **User asks after v6.78:** compare against forecast with pacing, show year-over-year (2025 data is in the tracker), select a specific channel/brand combo (e.g. "Meow × Chewy") to drill in.
+- **Multi-year parser** — v6.78 only read `LookerData` which today carries only the current year. Added `dsParseWideSheet` to also read the wide-format `Sales Tracker NN` sheets (year extracted from sheet name: "Sales Tracker 25" → 2025). Dedupes by `(channel, year, month)` with LookerData winning when both have the same row, so the normalized source stays canonical for years it covers. **Rollup-row filter**: skips "Total"/"Grand Total"/"Subtotal"/"Total …" rows in the wide sheets — without this the wide sheet's visual TOTAL row was leaking through dedup (LookerData has no equivalent) and ~doubling 2025/2026 totals. Verified against the real file: 468 rows / 22 channels / 2 years (2025 + 2026); Walmart picked up from Tracker 26 (LookerData doesn't have it yet).
+- **Three new filters in the top bar:**
+  - **Type** dropdown — All / DTC / Amazon / Chewy / Wholesale
+  - **Channel** dropdown — narrows dynamically by Brand + Type; lets the user drill to a single channel (e.g. "Meow Chewy" → only that row + scorecards isolated to it)
+  - **vs Year** dropdown — populated from every year in data except the active one; auto-selects the prior year when available so YoY appears by default
+- **YoY columns** in the grid (when compare-year is set): `Prior YTD` + `YoY %`. The Prior-YTD sum is windowed to the SAME months as the current-year YTD (e.g., comparing 2026 thru-Jun against 2025 Jan-Jun, not full-year 2025) so the YoY % is apples-to-apples. Footer adds matching cells. In live mode, prior-year actuals also come from the live tables (`buildLiveSalesAggregate(compareYear)`), so YoY in live mode is consistent on both sides.
+- **Pacing scorecard** (new 4th tile): `Annualized Pace = YTD Actual × (12 / months elapsed)`. For the active year, "months elapsed" = current calendar month if it's the current year, else 12. Tile subtitle: `X% of FY forecast ($N)` using the sum of forecast across all 12 months for the filtered channels. YTD Difference card moved to position 5; `vs YYYY` card appears as a 6th tile only when comparing.
+- **Header markers:** YTD column header now says `YTD (thru Jun)` (current month) when viewing the current year; future months in the row get dimmed in the column header (`opacity:0.55`) so it's obvious which months are unrealized.
+- **Channel narrowing:** picking Brand or Type now repopulates the Channel dropdown live (`onDigitalSalesFilterChange` → `populateDigitalSalesChannelFilter` → `renderDigitalSales`). Picking a specific channel collapses the grid to a single row; scorecards stay accurate. Filter summary line lists every active dimension.
+- **Row count line** now reads e.g. `1 channel · 2026 thru June · spreadsheet mode · brand: Meow · type: Chewy · channel: Meow Chewy · vs 2025` so the active scope is visible at a glance.
+- **Verified in preview** with Jason's real file: 22 channels parsed, "Total" rollup correctly filtered, scorecards show YTD Actual $1,040,619 / Forecast $2,688,581 / % to Plan 38.7% / Annualized Pace $2,081,239 (77.4% of FY) / Diff -$1,647,961 / **vs 2025 +1.6%** (math checks: $1.04M Jan-Jun 2026 vs $1.02M Jan-Jun 2025 = +1.6%). Channel drill (Meow × Chewy → 1 row → $178,648 YTD) works. No console errors. Syntax clean.
 
 ## v6.78 — New "Digital Sales" page (spreadsheet ↔ live toggle, channel × month grid)
 - **User request:** new top-nav page "Digital Sales" leftmost of Forecast. Reads from Jason's weekly Excel `Updated - SmarterPaw Digital Sales Tracker By Channel.xlsx`. Source toggle to switch between spreadsheet uploads and live aggregation from `sales_weekly` + `shopify_sales_daily`. Eventually switch to pure live once channel separation is figured out.
