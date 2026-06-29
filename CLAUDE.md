@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.77**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.78**
+
+## v6.78 — New "Digital Sales" page (spreadsheet ↔ live toggle, channel × month grid)
+- **User request:** new top-nav page "Digital Sales" leftmost of Forecast. Reads from Jason's weekly Excel `Updated - SmarterPaw Digital Sales Tracker By Channel.xlsx`. Source toggle to switch between spreadsheet uploads and live aggregation from `sales_weekly` + `shopify_sales_daily`. Eventually switch to pure live once channel separation is figured out.
+- **⚠ SQL TO RUN:** `supabase_v6_78_digital_sales_tracker.sql` — creates `digital_sales_tracker (channel, channel_type, brand, year, month, forecast, actual, …)` with `(channel, year, month)` unique. RLS + grants + anon revoke (v6.47 hard rule).
+- **Source format:** the workbook has 4 sheets but the parser reads ONLY the `LookerData` sheet — it's already normalized (one row per channel × month with Forecast + Actual). Verified against Jason's file: 252 rows × 21 channels × 12 months × 4 channel types (DTC / Amazon / Chewy / Wholesale) × 3 brands (Meow / Doggi / Kazoom).
+- **Channel labels are brand+region specific** (`"Meow DTC"`, `"Doggi Amazon CA (USD)"`, `"Kazoom Chewy"`, `"Meow Wholesale (w/Faire)"`, etc.). The parser stores them verbatim as the join key. `DS_CHANNEL_MAP` maps each label to its sales-table source for live mode — handles FX (`(USD)` labels get CAD→USD or GBP→USD conversion using the existing `pnlFxRate` / `pnlFxGbp` vars), region filters, and `source: 'none'` for channels with no native data (Wholesale/Faire, Amazon AUS/JP/MX/SG — they show "—" in live mode so the gap is visible).
+- **New nav button** `💵 Digital Sales` first in the nav-tabs row (leftmost of Forecast). Wired into `showPage('digital-sales', ...)` → `loadDigitalSalesData()`. New page id `#page-digital-sales`.
+- **Page UI:** Source toggle (📊 Spreadsheet | 🗄 Live), Year picker (populated from data), Metric picker (Actual / Forecast / Difference / Both), Brand filter, ↑ Upload Tracker button. Source banner explains current mode + warns when no upload yet. 4 scorecards: YTD Actual / YTD Forecast / YTD Difference / % to Plan. Channel × 12-month grid + YTD column + sticky tfoot with column totals. Channel-type color tags: DTC green / Amazon orange / Chewy blue / Wholesale orange.
+- **Module:** `parseDigitalSalesTracker(arrayBuffer)` (XLSX via existing `window.XLSX`), `handleDigitalSalesUpload(input)` (DELETE+INSERT scoped to uploaded years × channels — surgical, doesn't clobber other years), `loadDigitalSalesData()` (paginated), `buildLiveSalesAggregate(year)` (joins sales_weekly + shopify_sales_daily into the same channel × month shape via `DS_CHANNEL_MAP` + product brand lookups), `renderDigitalSales()`, `setDigitalSalesSource()`, `populateDigitalSalesControls()`.
+- **Live mode notes** (when source = `live`):
+  - DTC channels → `shopify_sales_daily` aggregated by brand × month
+  - Amazon channels → `sales_weekly` filtered by `channel` + `region` + product `brand`
+  - Chewy channels → `sales_weekly` channel='chewy' (today this table is empty; row shows $0)
+  - Wholesale + missing Amazon markets (AUS/JP/MX/SG) → "—" (no native source)
+  - FX conversion: CA → USD via `1/pnlFxRate`; UK → USD via `pnlFxGbp`
+  - Forecast values continue to come from the spreadsheet table — only Actuals get derived from live data.
+- **Verified in preview** (v6.78 + Jason's real file): parser returns 252 rows × 21 channels matching the sheet, render fills 21 rows with correct month cells, footer totals roll up correctly ($178k Jan → $112k Jun, $0 Jul–Dec), YTD scorecards show Actual $1,028,959 / Forecast $2,686,781 / Diff −$1,657,821 / 38.3% to Plan. Syntax clean (one unbalanced-paren bug caught + fixed pre-deploy). No console errors.
 
 ## v6.77 — Visible per-ad-type breakdown in the P&L Fee Breakdown sidebar
 - **User flagged after v6.76 deploy:** "i don't see the ad spend types broken out at all" — the v6.76 fold added the spend to the scorecards correctly, but the Fee Breakdown sidebar still had a single `Sponsored Products` bar. With SB/SD/DSP/TV silently folded into `view.sponsored`, that one bar got mislabeled. Also, no on-screen signal told the user whether any Amazon Ads data was loaded yet.
