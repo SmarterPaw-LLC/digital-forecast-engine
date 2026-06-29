@@ -2,7 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.81**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.82**
+
+## v6.82 — Digital Sales: clearer scorecards + monthly YoY + click-to-select + dedicated live loader
+- **User flagged four issues on the Digital Sales page:** (1) "Annualized Pace" was opaque; (2) picking a compare year wasn't producing per-month YoY in the cells; (3) clicking a row/month did nothing — should compute that scope into the scorecards; (4) Live (sales_weekly) mode was empty. All four fixed.
+- **(1) Rename "Annualized Pace" → "FY Projection"** with clearer subtitle: `if pace holds · X% of FY plan ($Y)`. Tooltip explains the formula explicitly ("YTD Actual × (12 ÷ months elapsed) — if pace continues, FY total lands here").
+- **(2) Inline YoY in every month cell** when compare-year set. `fmtCell` now optionally takes a prior-year value and appends a small color-coded arrow + percent (e.g. `↑11% YoY`). Skipped on `forecast` metric (comparing forecast across years is meaningless) and skipped when prior or current is null/zero.
+- **(3) Click-to-select rows + month columns:**
+  - **Click any row** → scorecards scope to that single channel. Row highlighted green; clicking again clears.
+  - **Click any month header** → scorecards scope to that month (across all visible channels). Month column highlighted; clicking again clears.
+  - **Both selected** → cell-level value (intersection of row × month). FY Projection card hidden when a month is selected (annualizing one month is misleading).
+  - Scorecard labels flip with selection: `YTD Actual` → `April Actual`; sub-text shows scope ("Meow DTC · April 2026" / "Meow DTC · 2026 · 6mo" etc.).
+  - **`✕ Clear selection` button** in the row-count line when either selection is active. State variables `dsSelectedRow` / `dsSelectedMonth` persist across re-renders until cleared. New handlers `dsSelectRow / dsSelectMonth / dsClearSelection`. Channel names with parens/slashes ("Meow Wholesale (w/Faire)") are safely escaped for the JS string-literal onclick.
+- **(4) Live mode now has its own loader** — `loadDigitalSalesLiveData()` fetches shopify_sales_daily + sales_weekly + walmart_sales_weekly directly via paginated Supabase calls (no longer dependent on the user having visited Forecast / Shopify P&L / Walmart P&L first, which was v6.78's silent failure mode). Cached in `dsLiveData`. Triggered automatically when `setDigitalSalesSource('live')` is called; banner shows a "loading…" state until the fetch completes. Adds **Walmart** to live mode (was completely missing in v6.78). Banner copy clarifies: DTC from `shopify_sales_daily`, Amazon + Chewy from `sales_weekly` (Chewy is empty — surfaces as $0), Walmart from `walmart_sales_weekly`, Wholesale + Amazon AUS/JP/SG = "—" (no native source). FX rates (CA→USD via `pnlFxRate`, UK→USD via `pnlFxGbp`) are best-effort — they load when the user visits Amazon P&L. Live mode acknowledges this explicitly in the banner.
+- **Verified in preview** (v6.82 with Jason's real file): all label changes correct ("FY Projection" present, "Annualized Pace" gone), April Meow DTC cell shows `$10,606 ↑11% YoY` (matches 2025 Apr $9,539 → +11.2%), click Meow DTC row → scorecards narrow to $44,413 / sub "Meow DTC · 2026 · 6mo", click April → labels flip to "April Actual / Forecast / % to Plan / Difference / vs 2025" + FY Projection card hidden + value $10,606, clear restores. No console errors. Syntax clean.
 
 ## v6.81 — Digital Sales: replace per-marketplace Channel dropdown with Region picker (matches Amazon P&L)
 - **User flagged:** the Channel dropdown was listing every Amazon marketplace as its own entry (Meow Amazon US, Meow Amazon CA (USD), Meow Amazon UK (USD), Meow Amazon AUS, …). Amazon should be one channel; region should be a separate picker — same as the Amazon P&L page.
