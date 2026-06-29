@@ -2,7 +2,28 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.83**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.84**
+
+## v6.84 — Amazon P&L EU/UK: stop US/CA Amazon Ads brand-pool from leaking into EU scorecards + don't attribute brand-pool to single-product drills
+- **Bug Jason flagged**: On the EU/UK Amazon P&L page, drilling into ASIN B0DQF8R5XL (Catnip & Silvervine Spray) showed Ad Spend = $2,716.56 (762% of net sales) on the scorecard, while the per-product table row for the same ASIN showed Ad Spend = $56.26. Net Proceeds tanked to -$2,387.72 as a result. The Fee Breakdown sidebar labeled the inflated number "Sponsored Products" misleadingly.
+- **Root cause** — two compounding bugs in the v6.76 Amazon Ads layer:
+  1. **`buildAdSpendBuckets` was called with `region: null` for the EU page** (the comment said EU uses sku_economics_eu so "no overlap" — but the brand-pool summation later in the render path doesn't honor that; it iterates every `byBrand` entry regardless). Result: every US, CA, MX Amazon Ads row (DSP, Sponsored TV, unmatched SB/SD) flowed into `adsBuckets.byBrand`. On Jason's data, that summed to ~$2,660.
+  2. **`brandPoolSpend` was added to `view.sponsored` even when the user had drilled into exactly one product.** Brand-level DSP/TV/unmatched SB is, by definition, NOT attributable to a single ASIN — it's brand-wide spend. But the prior code added the entire brand pool on top of the single product's per-ASIN Sponsored Products figure, making one product look catastrophically unprofitable.
+- **Fixes (v6.84)**:
+  1. **`buildAdSpendBuckets` `region` option now accepts an array** in addition to a string. The function uses a Set lookup when array is passed; falls back to string-equality when a single string. Backwards-compatible with US/CA call sites.
+  2. **EU call sites pass `['EU/UK','GB','DE','FR','IT','ES','NL']`** — the EU region codes. Restricts the bucket loader to actual EU rows in `amazon_ad_spend`. Today there are none (Jason hasn't uploaded EU Amazon Ads reports), so the brand pool on EU page correctly drops to $0. When EU Amazon Ads data is uploaded later (e.g. UK SB or DSP), those rows will surface naturally.
+  3. **Single-product drill excludes the brand pool** in BOTH the main render path AND `pnlTotalsForRange` (so the prev-period delta chip stays apples-to-apples). Comparison uses `selectedRows.length === 1` in render, `comparisonMids.size === 1` in prev-period totals.
+  4. **`perSlugSpend` (Fee Breakdown per-ad-product loop)** now EU-scopes the same way instead of the prior "skip all rows" stub. Future-proofs Fee Breakdown for EU Amazon Ads uploads.
+- **Numerical proof in preview** (synthetic dataset mirroring Jason's case):
+  - Pre-v6.84 EU leak: brand pool sum = **$2,660.30** (= $1,200 US DSP + $900 US TV + $500 CA DSP + $60.30 unmatched US SB).
+  - v6.84 EU-scoped: brand pool sum = **$0**. Only the $12.40 matched UK SB (synthetic) survives, attributed per-row.
+  - US regression check: passing `region: 'US'` (string) still works correctly — string-path unchanged.
+- **What Jason should see after this fix**:
+  - EU/UK page, drilled into the Spray: Ad Spend scorecard ≈ **$56.26** (matches the table row exactly).
+  - Net Proceeds scorecard turns positive (was -$2,387.72, should land near +$272.58 — matches the table row's per-product Net Proceeds).
+  - Contribution % flips from -680.8% to roughly +65.4% (matches the table row's Contrib %).
+  - Fee Breakdown sidebar's Sponsored Products line drops from $2,716.56 to ~$56.26.
+  - US/CA pages unaffected (regression check passed).
 
 ## v6.83 — Digital Sales: canonical sort, Walmart as type, totals YoY, intra-month pacing, row-click line chart
 - **User listed five gaps on the Digital Sales page; this version addresses all of them.**
