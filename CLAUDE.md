@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.85**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.86**
+
+## v6.86 — Hotfix: Amazon P&L EU page blank — ReferenceError from v6.84 brand-pool guard
+- **Bug**: After deploying v6.84, the Amazon P&L EU page rendered blank with `✗ comparisonMids is not defined` in red below the product table. Other regions (US/CA) unaffected.
+- **Root cause**: v6.84 added a guard `const tfrIsSingleProductDrill = (comparisonMids instanceof Set) && comparisonMids.size === 1;` inside `pnlTotalsForRange()`. But `comparisonMids` is defined in the render path's local scope (line 9708), NOT inside `pnlTotalsForRange`. The function receives the set as its third parameter, conventionally named `midSet` (line 9253). Referencing the wrong name threw a ReferenceError every time `pnlTotalsForRange` ran, which is every render (prev-period comparison). US/CA worked because the brand-pool block only executed when `_adsBuckets.byBrand.size > 0` — and on US/CA the brand pool exists. Wait, no — actually the EU page broke because the v6.84 EU-region scoping made `byBrand` empty there, so the bad-name guard was the only line reached after the empty-bucket branch. Either way: the guard throws → render bails → blank page.
+- **Fix (v6.86)**: replace `comparisonMids` with the function's actual parameter name `midSet`. One-line correction. v6.84's intent stands — brand pool still gets skipped on single-product drill, just via the right variable now.
+- **Verified in preview**: direct call `pnlTotalsForRange('2026-06-01','2026-06-29', new Set())` returns successfully (was throwing); same with `new Set(['__some_mid__'])` (single-product path). Syntax clean. No console errors on either US/CA or EU regions.
 
 ## v6.85 — Digital Sales: Reports view (YOY summary + grouped bar chart) + seasonality-adjusted FY projection
 - **Jason wanted three things on the Digital Sales page**, modeled on his 2026 Business Digital deck slide: (1) a Reports view comparing each channel's TY vs LY with pace-to-plan, (2) pacing normalized for seasonality (later months heavier), (3) a grouped bar chart like the slide.
