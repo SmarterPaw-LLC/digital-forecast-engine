@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.80**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.81**
+
+## v6.81 — Digital Sales: replace per-marketplace Channel dropdown with Region picker (matches Amazon P&L)
+- **User flagged:** the Channel dropdown was listing every Amazon marketplace as its own entry (Meow Amazon US, Meow Amazon CA (USD), Meow Amazon UK (USD), Meow Amazon AUS, …). Amazon should be one channel; region should be a separate picker — same as the Amazon P&L page.
+- **Replaced `ds-channel` with `ds-region`** dropdown. Fixed-list options: All Regions / 🇺🇸 US / 🍁 CA / 🇬🇧 UK / 🇦🇺 AUS / 🇯🇵 JP / 🇲🇽 MX / 🇸🇬 SG. Channel filtering is now Brand × Type × Region (no redundant per-channel pick — those three fully describe any row in the tracker).
+- **Region rules (mirrors Amazon P&L):**
+  - **US**: shows US Amazon + every non-Amazon channel (DTC / Chewy / Wholesale are US-only by SmarterPaw convention; keeping them in scope matches what the user expects to see for "US sales")
+  - **CA / UK / AUS / JP / MX / SG**: shows ONLY Amazon channels for that marketplace; non-Amazon channels are excluded (they don't exist in those markets)
+  - **All Regions** (default): everything
+- **New helper `dsChannelToRegion(ch)`** parses the marketplace token out of channel strings ("Meow Amazon UK (USD)" → "UK"). Normalizes GB→UK and AU→AUS so the dropdown labels match Amazon's actual marketplace codes. Returns `null` for non-Amazon channels.
+- **Removed `populateDigitalSalesChannelFilter`** (no longer needed — the new Region dropdown is fixed-list, no dynamic repopulation). `onDigitalSalesFilterChange` simplified to just re-render. Row-count summary line tag changed `channel: X` → `region: X`.
+- **Verified in preview** (v6.81 with Jason's real file): Region=UK → 2 rows (Meow Amazon UK, Doggi Amazon UK); Region=US → 12 rows (all DTC + US Amazon + Chewy + Wholesale + Walmart); Region=CA → 3 rows (Meow/Doggi/Kazoom Amazon CA, no DTC/Chewy). Helper parses all 6 test channels correctly. Old `ds-channel` element removed from DOM. No console errors. Syntax clean.
 
 ## v6.80 — Digital Sales Tracker also uploadable from Data → Uploads
 - **User request:** the Sales Tracker should also be uploadable on the Uploads page (parity with every other weekly upload).
