@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.79**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.80**
+
+## v6.80 — Digital Sales Tracker also uploadable from Data → Uploads
+- **User request:** the Sales Tracker should also be uploadable on the Uploads page (parity with every other weekly upload).
+- **Added `grp-digital-sales` card** in the Sales & P&L section of Data → Uploads (right before Chewy). 💵 icon, collapsible group, file input wired to the same `handleDigitalSalesUpload` that powers the in-page button. No new schema, no new parser — same flow, two entry points.
+- **Inline status / last-data lines.** Updated `handleDigitalSalesUpload` to detect inline mode (presence of `st-digital-sales` element) vs page-button mode. Inline mode now writes status to `.dz-st`/`.dz-last`/`.up-grp-last` like every other uploader and skips the `alert()`. Page-button mode keeps the alert (no inline status panel on the Digital Sales page itself). Same handler, both entry points get appropriate feedback.
+- **Status now surfaces YoY totals on success**: e.g. `✓ 468 rows · 22 channels · 2025 + 2026 · actual 2025: $2,019,687 · 2026: $1,040,619` — confirms multi-year ingest at a glance.
+- **Verified in preview** (v6.80): card present in DOM, title "Digital Sales Tracker — Channel × Month Forecast + Actual", file input accepts .xlsx, status + last-data + group-last elements all present, handler resolves. No console errors. Syntax clean. No SQL.
 
 ## v6.79 — Digital Sales: multi-year ingestion + YoY + pacing + channel/type filters
 - **User asks after v6.78:** compare against forecast with pacing, show year-over-year (2025 data is in the tracker), select a specific channel/brand combo (e.g. "Meow × Chewy") to drill in.
