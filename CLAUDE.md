@@ -2,7 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.92**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.93**
+
+## v6.93 — Shopify P&L: Metric dropdown (Gross / Net / Total) so the headline scorecards can match whichever sales definition the Digital Sales Tracker uses
+- Jason wanted a one-click way to flip the Shopify P&L headline between Gross / Net / Total so it can be reconciled against the tracker without doing per-channel gross-vs-net math by hand.
+- **New Metric dropdown** in the filter bar (next to Channel): Net Sales (default) / Gross Sales / Total Sales. Subtitle on the headline card explains each: Net = post-discount, post-return (Shopify canonical); Gross = before discounts/returns; Total = Net + taxes + shipping.
+- **Switches the entire scorecard view**, not just a label — Net Proceeds = chosenSales − COGS, Margin % = NetProceeds ÷ chosenSales, and the period-over-period delta chips compare apples-to-apples on whichever metric is active. The row table is unchanged (still has Gross/Net/Total/Discounts/Returns/Taxes available via the 📋 View column picker).
+- **Subtitle line surfaces the OTHER two metrics** so you can see all three at a glance without flipping: `15,234 units · post-discount, post-return (Shopify's canonical)` + tooltip showing the alternates.
+- **Persists per-browser** via `localStorage.spnlSalesMetric`, so the user's preferred convention sticks across reloads. State variable `spnlSalesMetric`, helpers `SPNL_METRIC_LABEL` / `SPNL_METRIC_SUB`, setter `shopifyPnlSetMetric(m)`.
+- **Reconciliation against Jason's real data** (Jan–Jun 2026, all channels): scorecards by metric:
+  - Net Sales: $99,481 (default)
+  - Gross Sales: $121,019 — matches Shopify Admin "Sales over time / Gross sales"
+  - Total Sales: $100,560 — matches Shopify Admin "Sales over time / Total sales"
+  - Tracker DTC + Wholesale = $133,950. Closest to Gross. Remaining ~$13k delta is the Faire-vs-Shopify wholesale gap (Faire's own dashboard counts platform fees + a few out-of-platform orders Shopify doesn't see) — not a dashboard issue.
+- **Architecture**: `TOT_FIELDS` constant carries `[units, gross_sales, net_sales, total_sales, cogs_total, net_proceeds]` through the totals + selection sums + prevView so the scorecard math has every column it needs without re-aggregating. Row-level `net_proceeds` is still net_sales-based (preserves CSV exports + saved-view consumers). Scorecard `viewProc = viewSales − cogs_total` computed at render-time from whichever metric is active.
 
 ## v6.92 — Shopify parser: map `sales_reversals` → `returns` (every Shopify upload since v5.98 had returns silently dropping to 0)
 - **Diagnosis trail**: Jason flagged a ~$34k discrepancy between the Digital Sales Tracker ($133,950 DTC + Wholesale Jan–Jun 2026) and Shopify P&L Net Sales ($99,481). A Query DB breakdown turned up: gross $121,019, discounts -$20,572, **returns $0**, taxes $1,079, total $100,560. The $0 returns was suspicious for 6 months of real sales activity. Spot-check on `shopify_sales_daily where returns < 0` returned 0 rows / NULL sum across the entire table.
