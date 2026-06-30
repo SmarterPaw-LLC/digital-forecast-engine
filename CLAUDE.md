@@ -2,7 +2,25 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.86**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.87**
+
+## v6.87 — Uploads page freshness probes: consistent "data thru" date + "last upload" timestamp on every card; fix EU/Shopify/Walmart/Amazon Ads/Digital Sales gaps
+- **Jason flagged three issues on the Uploads page**: (1) the EU SKU Economics card showed dates 5 days "older" than US/CA for the SAME uploaded week (`2026-06-22` vs `2026-06-27`); (2) the Shopify card always said "No Shopify data loaded yet" even after a real upload; (3) Walmart, Amazon Ads, and Digital Sales Tracker cards had no "latest data" badge at all. Plus a meta-ask: every card should consistently show BOTH a "data through" date AND a "last uploaded" timestamp so you can scan freshness across all sources at a glance.
+- **Root causes**:
+  1. **EU vs US/CA date drift** — US/CA card mapped `week_start` (Monday) → `endOfWeek(wk, 5)` (Saturday) before rendering, but the EU card showed `week_start` verbatim. Same data, different display convention → same week looked 5 days behind on EU.
+  2. **Shopify dead probe** — `refreshUploadDataRanges` queried `sales_weekly where channel='shopify'`. After v5.98 / v6.1, Shopify data writes to `shopify_sales_daily` (daily grain) — `sales_weekly.shopify` rows haven't been created in months, so the query always returned empty.
+  3. **Walmart / Amazon Ads / Digital Sales** — never had a freshness probe wired into `refreshUploadDataRanges`. The cards' DOM nodes existed (`#last-sales-walmart`, `#last-amazon-ads`, `#last-digital-sales`) but nothing populated them.
+- **Fix (v6.87)** — rewrote the freshness loop with one consistent format on every card:
+  - `📅 Data thru {date} · uploaded {N ago}` (with `ago()` formatter: just now / Nm ago / Nh ago / Nd ago / Nw ago / Nmo ago).
+  - Empty-state messages are explicit: `📅 No {source} data loaded yet`.
+  - All 8 cards (Amazon US/CA, Amazon EU, Shopify, Chewy, Walmart, Amazon Ads non-SP, Digital Sales Tracker, plus FBA Inventory + Shipments which were already working) now follow the same pattern.
+- **EU date convention** — now applies `endOfWeek(wk, 5)` like US/CA. The EU card showing `2026-06-22` will now show `2026-06-27` for the same data (matches US/CA). The displayed format is `GB: thru Sat 2026-06-27 · DE: thru Sat 2026-06-27 · …`.
+- **Shopify card** — now queries `shopify_sales_daily` (`max(day)` + `max(uploaded_at)`). The "Latest data week starts Mon …" copy is gone; it now reads `📅 Data thru 2026-06-27 · uploaded 2h ago`.
+- **Walmart card** — new probe queries `walmart_sales_weekly.walmart_calendar_week` and converts to Saturday via the existing `walmartWeekToDate(yyyyww)` helper. Shows `📅 Data thru Sat 2026-06-27 · uploaded 1d ago`.
+- **Amazon Ads (non-SP) card** — new probe queries `amazon_ad_spend.date` (daily grain). Shows `📅 Data thru 2026-06-27 · uploaded 3h ago`.
+- **Digital Sales Tracker card** — new probe queries `digital_sales_tracker.year, month` (sorted desc), converts to last day of that month via `new Date(y, m, 0)`. Shows `📅 Data thru 2026-06-30 (end of 2026-06) · uploaded 5h ago`.
+- **`uploaded_at` is read on every probe** — selected alongside the data field for each source so we always have a timestamp for the freshness chip. (All 7 tables already had `uploaded_at timestamptz default now()` in their schemas — no migration needed.)
+- **Verified**: syntax clean (1.65MB JS). Functional behavior verified by source review against the schemas (`sku_economics`, `sku_economics_eu`, `shopify_sales_daily`, `walmart_sales_weekly`, `amazon_ad_spend`, `digital_sales_tracker`, `chewy_forecasts` — all have the queried fields). Preview server is owned by another chat session; Jason will see the changes on reload of his open preview.
 
 ## v6.86 — Hotfix: Amazon P&L EU page blank — ReferenceError from v6.84 brand-pool guard
 - **Bug**: After deploying v6.84, the Amazon P&L EU page rendered blank with `✗ comparisonMids is not defined` in red below the product table. Other regions (US/CA) unaffected.
