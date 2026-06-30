@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.89**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.90**
+
+## v6.90 — Upload History: derive Brand column via products catalog when the table has master_id but no direct brand
+- Jason: "The upload history does not show the brand for reports that need it." Screenshot showed FBA Inventory Snapshots with no Brand column even though every row is clearly tied to one brand via its ASIN.
+- Root cause: my v6.88 config only populated the Brand column when the table had a direct brand column (`amazon_ad_spend.advertiser_brand`, `digital_sales_tracker.brand`). FBA Inventory, SKU Economics, Walmart, Shopify all carry `master_id` (FK to `products`) but no brand column — brand is supposed to resolve via the catalog.
+- Fix: added `masterIdField: 'master_id'` to UH_SOURCES for the 5 tables that have it. `loadUploadHistory` now lazy-loads `allProducts` if needed, builds a `master_id → brand` lookup, and uses it whenever the row has no direct brand value. New helper `showBrandColumn = !!(cfg.brandField || cfg.masterIdField)` controls when the Brand column appears.
+- UX rule: the ✎ Brand edit button still only shows for tables with a DIRECT brand column. For derived-brand tables (FBA Inv, SKU Economics, Walmart, Shopify), brand is an attribute of the product itself — change it on the Products page, not in this view. The Brand column is read-only there.
+- Sources that get a Brand column now: SKU Economics US/CA, SKU Economics EU/UK, Amazon Ads (direct), FBA Inventory Snapshots, Walmart 1P, Shopify DTC, Digital Sales Tracker (direct). Chewy still has no Brand (no master_id, no brand column).
 
 ## v6.89 — Remove the "Legacy — Amazon by Child ASIN" upload group from the Uploads page
 - Jason flagged the SUPERSEDED tile group as no longer useful. Removed the entire `#grp-amz-legacy` block (6 dropzones — Meow/Doggi/KKZ × US/CA — pointing at `handleSalesUpload` / `undoSalesUpload`). SKU Economics replaces it for new uploads; historical backfills can use the Upload History view (v6.88) to inspect/correct old rows directly.
