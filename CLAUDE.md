@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.90**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.91**
+
+## v6.91 — Digital Sales Reports: YoY % now compares same-window vs same-window (Jan–Jun 2026 vs Jan–Jun 2025, not 6mo vs 12mo)
+- **Jason's ask**: "Should the %YOY amount be based on the time of the year vs the total for the year? It doesn't seem fair to compare against a whole year when we are only halfway through 2026." Right call — the deck-slide pattern (Jan–Dec vs Jan–Dec) doesn't apply when the current year is partial.
+- **Before**: 2025 column = full-year 2025 ($2,019,687), 2026 column = 2026 YTD ($1,148,219), % YOY = -43.15% → mostly just "we're halfway through the year." Meow DTC read -57% YoY while showing 97% Seasonal Pace (= on plan) — the two numbers contradicted because they were measuring different things.
+- **After**: both columns use the SAME window (months 1..pacingThruMonth). For 2026 (current year), `pacingThruMonth = 6` (June), so both columns show Jan–Jun. Headers annotate the window: `2025 (Jan–Jun)` / `2026 (Jan–Jun)`. YoY % is now apples-to-apples and stops contradicting Seasonal Pace.
+- **Full-year LY discoverability**: the deck-slide number ($2,019,687 for full 2025) hasn't disappeared — it's surfaced in the footnote as `For reference — 2025 full-year total: $2,019,687` whenever the window is partial. So you can still answer "what did 2025 do in total?" without leaving the view.
+- **Bar chart aligned**: both datasets now sum the SAME window. Legend labels show the window (`2025 (Jan–Jun)` / `2026 (Jan–Jun)`) so the visual comparison is also obviously apples-to-apples.
+- **Past-year mode unchanged**: when the user picks a fully-elapsed year (e.g., year=2025, compareYear=2024), `pacingThruMonth = 12`, `windowLabel` is empty, columns show `2025` / `2024`, no footnote reference line. The deck-slide layout still works for retrospective annual reviews.
+- **Explanatory line added** to the footnote: `% YOY compares the SAME window in both years (Jan–Jun). Apples-to-apples — not 6 months vs 12.` So future viewers don't get tripped up by the same question.
 
 ## v6.90 — Upload History: derive Brand column via products catalog when the table has master_id but no direct brand
 - Jason: "The upload history does not show the brand for reports that need it." Screenshot showed FBA Inventory Snapshots with no Brand column even though every row is clearly tied to one brand via its ASIN.
