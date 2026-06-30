@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.88**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.89**
+
+## v6.89 — Remove the "Legacy — Amazon by Child ASIN" upload group from the Uploads page
+- Jason flagged the SUPERSEDED tile group as no longer useful. Removed the entire `#grp-amz-legacy` block (6 dropzones — Meow/Doggi/KKZ × US/CA — pointing at `handleSalesUpload` / `undoSalesUpload`). SKU Economics replaces it for new uploads; historical backfills can use the Upload History view (v6.88) to inspect/correct old rows directly.
+- `handleSalesUpload` / `undoSalesUpload` functions left in place — no other UI surfaces invoke them, but removing them is dead-code cleanup that can happen later if needed (they're not blocking anything).
+- Syntax clean.
 
 ## v6.88 — Upload History sub-view: list past upload sessions per source, retroactively fix region/brand, or delete an entire upload
 - **Jason's ask**: "I'd like to be able to look at a history of the uploads, and if needed, change the brand or region (in case I make a mistake when uploading the csv)." Specific painpoint: SKU Economics and FBA Inventory both have a region picker at upload time — if you pick wrong, today the only fix is to delete via SQL or re-upload after manually cleaning. He wanted a UI-level fix.
