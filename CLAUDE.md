@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.94**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.95**
+
+## v6.95 — "Shipments for {Product}" modal: use per-SKU quantity_received for Located + tooltips on every column
+- **Bug**: Jason opened the Shipments-for-Product drill-down for Pawty Mix and saw absurd deltas — Shipped 665 / Located 1,594 (+10), Shipped 570 / Located 1,274 (-3). Located was way higher than Shipped for the same row.
+- **Root cause**: the renderer mixed two grains. `Shipped` correctly used `qty_shipped` (per-SKU, from `fba_shipments.quantity_shipped` on the .tsv) but `Located` used `units_located` from `fba_shipment_summaries` — the WHOLE-SHIPMENT total across every SKU in the box. For a mixed-SKU shipment, the two numbers aren't comparable at all. Confirmed against Jason's data: the 665 / 1,594 shipment had ~1,584 units of other SKUs alongside 665 of Pawty Mix, so total_located ~1,594 while per-SKU received was much smaller.
+- **Fix (v6.95)**: Located column now renders `qty_received` (per-SKU, from `fba_shipments.quantity_received`) — same grain as Shipped. Variance badge (+/-) is now `qty_received − qty_shipped`, the per-SKU delta only. The whole-shipment total is preserved in a cell tooltip for context.
+- **Tooltips added on every column header** explaining source + scope: Shipment ID (destination FC + delivery window on hover), Status, Region (Y/X-prefix derivation), Shipped (per-SKU declared, with whole-shipment total in cell tooltip), Located (per-SKU located, with whole-shipment total in cell tooltip), Created, Updated. Ship-to string surfaces on hover of the Shipment ID cell.
+- **No data change**: this is purely a rendering fix. Underlying `fba_shipments.quantity_received` was already being fetched into `qty_received` — the renderer just wasn't using it.
 
 ## v6.94 — FBA Shipment Summary parser: recognize XYY as a Canadian FC + expose the summaries table in Upload History
 - **Bug**: Jason uploaded fresh FBA shipment CSVs and shipment `FBA19H99F8C6` (destination `XYY4`) landed with `region='US'`. Amazon Seller Central's CA flag confirmed it's Canadian. Every other CA shipment in the upload was tagged correctly (YYC4, YYZ4, YYZ7, YEG2 all matched the existing regex).
