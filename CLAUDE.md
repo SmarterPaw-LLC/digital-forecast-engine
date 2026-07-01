@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.93**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.94**
+
+## v6.94 — FBA Shipment Summary parser: recognize XYY as a Canadian FC + expose the summaries table in Upload History
+- **Bug**: Jason uploaded fresh FBA shipment CSVs and shipment `FBA19H99F8C6` (destination `XYY4`) landed with `region='US'`. Amazon Seller Central's CA flag confirmed it's Canadian. Every other CA shipment in the upload was tagged correctly (YYC4, YYZ4, YYZ7, YEG2 all matched the existing regex).
+- **Root cause**: `parseFbaShipmentSummary` at line 5896 tests destinations against `/^(YYZ|YVR|YOW|YHM|YEG|YXX|YYC|YUL)/i`. XYY4 doesn't start with any of those prefixes so it fell through to the default `'US'`. XYY is Amazon's newer Toronto-area code (added in the last year or so as their Canadian network expanded).
+- **Fix**: expanded the pattern to `/^(YYZ|YVR|YOW|YHM|YEG|YXX|YYC|YUL|XYY|YHZ|YWG|YOO|YQB|YQR)/i`. Added XYY plus five more Canadian airport codes for future-proofing as Amazon adds FCs (Halifax, Winnipeg, Oshawa, Quebec City, Regina). Y-prefix codes are ICAO-reserved for Canada, so no risk of falsely matching a US FC.
+- **Retroactive fix path**: also added `fba_shipment_summaries` to the Upload History source list (v6.88), with both **✎ Region** and **✎ Brand** edit buttons since the table has both a direct `region` column and a `brand` column. So Jason can retroactively fix any past mis-tagged shipment session from the UI without re-uploading. For the specific F8C6 row he flagged today, the simplest path is just to re-upload the same CSV — `parseFbaShipmentSummary` uses `upsert onConflict:'shipment_id'`, so the region will overwrite to CA on the second pass.
+- **No SQL migration needed** — the `region` column already exists in `fba_shipment_summaries` (from v4.167).
 
 ## v6.93 — Shopify P&L: Metric dropdown (Gross / Net / Total) so the headline scorecards can match whichever sales definition the Digital Sales Tracker uses
 - Jason wanted a one-click way to flip the Shopify P&L headline between Gross / Net / Total so it can be reconciled against the tracker without doing per-channel gross-vs-net math by hand.
