@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.96**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.97**
+
+## v6.97 — Bundles: expose UPC on both Summary + BOM views and in the CSV export
+- Jason wanted UPC visible on the BOM module for both bundle parents and component items, exportable to CSV. `products.barcode` is the UPC field.
+- **Summary view** — added UPC column between ASIN and Components on the header + a matching cell (`p.barcode||'—'`) in the tbody row.
+- **BOM view** — added UPC column between Chewy SKU and Verified on the shared header. Bundle-parent row now includes a `headerCell(p.barcode, true)` cell. Component row now includes a `cellMono(comp.barcode)` cell. Colspan on the "no BOM defined" row bumped 7 → 8; colspan on the "missing component master_id" error row bumped 6 → 7; "No bundles match" empty-state colspan stayed at 9 (columns went from 8 → 9).
+- **CSV export** — added `Bundle_UPC` (after `Bundle_Shopify_SKU`) and `Component_UPC` (after `Component_Chewy_SKU`). The no-BOM padding row bumped from 12 blank component cells to 13 to match the new header count. Values pass through `csvEsc()` in case a barcode has an embedded comma/quote (defensive).
+- **Fields touched**: only `products.barcode`. No DB migration needed.
 
 ## v6.96 — "Shipments for {Product}" modal: split Located into two clearly-labeled grain-aware columns (revert v6.95's broken per-SKU fix)
 - **v6.95 was a bad fix.** I switched Located to `qty_received` (per-SKU) not realizing that field is NEVER populated by the parser. Result: every Located value dropped to 0 with a huge negative delta.
