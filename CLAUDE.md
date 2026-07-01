@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.95**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.96**
+
+## v6.96 — "Shipments for {Product}" modal: split Located into two clearly-labeled grain-aware columns (revert v6.95's broken per-SKU fix)
+- **v6.95 was a bad fix.** I switched Located to `qty_received` (per-SKU) not realizing that field is NEVER populated by the parser. Result: every Located value dropped to 0 with a huge negative delta.
+- **Root cause of the underlying issue**: `parseFbaShipment` only reads `Merchant SKU`, `ASIN`, `FNSKU`, and `Shipped` from Amazon's per-shipment .tsv (Contents.tsv). There is no `Received` column in that export — Amazon puts per-SKU received quantities in a separate Reconcile.tsv download that this app doesn't ingest. So `quantity_received` writes null on every row, and the pipeline has ZERO per-SKU received data.
+- **The right UX**: don't pretend one column can compare across grains. Two columns instead:
+  - **This SKU Shipped** — per-SKU declared qty (from `fba_shipments.quantity_shipped`) — this product only. For Pawty Mix in shipment `FBA19DZNB2XM`: 665.
+  - **Shipment (Exp → Loc)** — whole-shipment reconciliation from the summary CSV, rendered as `expected → located ±variance`. For the same shipment: `1,584 → 1,594 (+10)`. Variance is shipment-wide, not attributable to any single SKU.
+- **Tooltips explicitly call out grain** on both column headers and every cell. Header for the shipment column: "Whole-shipment totals across ALL SKUs from the summary CSV… shipment-wide reconciliation, not attributable to this product alone." Cell tooltip: "This product contributed 665 units of the expected total."
+- **Missing-summary fallback**: if `fba_shipment_summaries` doesn't have a row for the shipment (summary CSV never uploaded), the second column shows `—` with a tooltip explaining to upload the summary CSV.
+- **Future work** (not in this ship): if we wanted per-SKU received, we'd need to add a Reconcile.tsv upload path that writes to `fba_shipments.quantity_received`. That's a separate feature — flagging here for reference.
 
 ## v6.95 — "Shipments for {Product}" modal: use per-SKU quantity_received for Located + tooltips on every column
 - **Bug**: Jason opened the Shipments-for-Product drill-down for Pawty Mix and saw absurd deltas — Shipped 665 / Located 1,594 (+10), Shipped 570 / Located 1,274 (-3). Located was way higher than Shipped for the same row.
