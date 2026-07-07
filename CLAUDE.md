@@ -2,7 +2,26 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.98**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.99**
+
+## v6.99 — Merge History + Undo (full pre-merge snapshot lets any merge be reversed with one click)
+- **SQL migration** — new `merge_history` table with `src_product_snapshot` + `tgt_product_before` (full JSONB), `tgt_backfill_patch` (fields patched onto survivor), `reassigned_ids` (per-table PK arrays of rows we UPDATE'd), `deleted_rows` (per-table full JSONB of rows we destructively removed), `reversed`/`reversed_at`/`reversed_by`. **Run `supabase_v6_99_merge_history.sql` in the Supabase SQL Editor before using this version.** RLS + authenticated grants match every other table (v6.47 hard rule).
+- **`runMerge` refactor**:
+  - Before ANY writes: snapshot the src product row, tgt product row (pre-backfill), src's inventory rows, both src/tgt product_cogs rows, all BOM rows involving either master_id.
+  - Every master_id reassignment now goes through a new `reassignMasterId(table)` helper that first SELECTS the affected row PKs, records them in `capturedIds`, then UPDATEs those specific PKs. Undo can UPDATE the exact same PKs back to src.master_id — never accidentally touches survivor's legitimate rows.
+  - BOM reassignments now also work by PK (not by `.eq('bundle_master_id', ...)`) so undo can reverse them precisely. Tracks `bomOutcome` state (`src_deleted` / `tgt_deleted` / `migrated` / `none`) so the undo path knows which rows to re-INSERT.
+  - After all destructive steps succeed, INSERTs the history row. If the INSERT fails (e.g. table doesn't exist because migration hasn't been run), the merge still succeeds — a warn is logged saying "undo will not be available for this merge."
+- **`runUndoMerge(historyId)`** reverses everything in the opposite order:
+  1. INSERT the duplicate product row back from `src_product_snapshot`.
+  2. Reverse every table's UPDATE by SELECTing PKs from `reassigned_ids` and UPDATEing master_id back to src's. BOM uses `component_master_id` or `bundle_master_id` depending on which key it was tracked under (`_bom_component_ids` / `_bom_bundle_ids_from_src`).
+  3. Revert survivor's backfilled fields — UPDATE the survivor row with the pre-merge values for every field that appeared in `tgt_backfill_patch`.
+  4. Re-INSERT destructively-removed rows: inventory, BOM (both src's bundle rows and tgt's bundle rows, depending on `bom_outcome`), product_cogs (both src's and tgt's pre-merge values via upsert).
+  5. Mark the history row `reversed = true` so a second undo attempt fails cleanly.
+- **UI** — new Merge History panel below the existing Merge tool on the Products page. Table columns: When | Duplicate (deleted) | → | Survivor (kept) | Status (● ACTIVE / ↶ REVERSED) | Actions. Undo button disabled once reversed. Refresh button reloads. Auto-refreshes on tab open + after every merge.
+- **Safety notes**:
+  - Snapshots are stored as JSONB, so future schema changes on `products` / child tables don't retroactively break the ability to undo old merges (worst case: unknown columns get ignored on insert).
+  - Undo is idempotent-safe: if the duplicate row already exists (partial undo), the insert error is logged as a warn and undo continues with the reassign reversals.
+  - Individual per-table failures during undo are logged as warns rather than aborting — the operator sees "✓ Merge undone" but the console has details on any specific step that didn't complete (usually a schema mismatch on an old environment).
 
 ## v6.98 — Merge tool: reassign 5 missing tables + backfill walmart_item_id (fixes silent data loss on Tuna→Seafood-style merges)
 - **Trigger**: Jason wanted to merge duplicate products (Tuna Treats SP-0203 → Seafood Treats SP-0522) where the duplicate had image + Chewy SKU + barcode + Shopify SKU + ASIN and the survivor had the Walmart Item #. Merge tool hasn't been touched since we shipped several new master_id-bearing tables — Tuna's Shopify daily rows and FBA inventory snapshots would have been silently dropped on merge, and the Walmart field wasn't in the backfill list at all.
