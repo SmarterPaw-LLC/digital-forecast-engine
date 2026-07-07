@@ -2,7 +2,30 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.97**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v6.98**
+
+## v6.98 — Merge tool: reassign 5 missing tables + backfill walmart_item_id (fixes silent data loss on Tuna→Seafood-style merges)
+- **Trigger**: Jason wanted to merge duplicate products (Tuna Treats SP-0203 → Seafood Treats SP-0522) where the duplicate had image + Chewy SKU + barcode + Shopify SKU + ASIN and the survivor had the Walmart Item #. Merge tool hasn't been touched since we shipped several new master_id-bearing tables — Tuna's Shopify daily rows and FBA inventory snapshots would have been silently dropped on merge, and the Walmart field wasn't in the backfill list at all.
+- **Gap audit**:
+  - `SIMPLE_BACKFILL_FIELDS` was missing **`walmart_item_id`** (added v6.51). If duplicate had a Walmart ID and survivor didn't → silently lost during merge.
+  - Five master_id-bearing tables were never wired into the merge path — all added AFTER the merge code was last touched:
+    - **`fba_inventory_snapshots`** — `on delete cascade`, so step 8's product delete would CASCADE-nuke the duplicate's snapshots instead of migrating them. **Silent data loss.**
+    - **`fba_shipments`** — `on delete set null`, so master_id would be nulled on duplicate's shipments — they'd survive the delete but disappear from the survivor's "Shipments for {Product}" modal and any product-scoped analytics.
+    - **`walmart_sales_weekly`** — soft ref, rows survive but stay tagged with old master_id → don't roll up to survivor's Walmart revenue.
+    - **`shopify_sales_daily`** — soft ref, all Shopify daily orders for the duplicate stay orphaned → survivor's Shopify P&L undercounts by the duplicate's history.
+    - **`amazon_ad_spend`** — soft ref, SB/SD/DSP/TV attribution stays orphaned → survivor's Ad Spend scorecard undercounts.
+- **Fix (v6.98)**:
+  - Added `walmart_item_id` to `SIMPLE_BACKFILL_FIELDS` (falsy-guarded — only fills when survivor's field is empty).
+  - Added five `sb.from(table).update({ master_id: tgt.master_id }).eq('master_id', src.master_id)` calls before the product-delete step. Each wrapped in try/catch so a schema-missing table on an early-deploy environment doesn't blow up the whole merge — logs a warn instead. None of these tables unique-index against master_id, so plain UPDATE is safe.
+  - Updated the confirm dialog to enumerate every table that participates (was missing Shopify, Walmart, Amazon Ads, both FBA tables) so the operator sees the full blast radius before confirming.
+- **For Jason's Tuna→Seafood specifically**:
+  - Seafood keeps its own `walmart_item_id=679011572` (survivor wins).
+  - Seafood picks up Tuna's `image_url`, `chewy_sku=1365718`, `barcode=850061361028`, `shopify_sku=KKZTR002`, `sp_sku=KF401`, `asin=B0D4379H26` (survivor's ASIN was already set to the same value, so no change).
+  - All of Tuna's Shopify daily rows (via SP-0203) get remapped to SP-0522 → the merged product's Shopify P&L history is complete.
+  - Any Chewy forecasts + Amazon SKU Economics for Tuna already got reassigned by the pre-existing logic — no change there.
+  - Tuna's FBA inventory snapshots (if any) get migrated instead of CASCADE-deleted.
+  - No Walmart history for Tuna to migrate (Tuna had no Walmart ID), so `walmart_sales_weekly` step is a no-op.
+- **Backwards-compat**: try/catch on each new table means the tool works cleanly on any Supabase environment regardless of which migrations have been run. Silent failures log to console instead of aborting the merge.
 
 ## v6.97 — Bundles: expose UPC on both Summary + BOM views and in the CSV export
 - Jason wanted UPC visible on the BOM module for both bundle parents and component items, exportable to CSV. `products.barcode` is the UPC field.
