@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.00**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.01**
+
+## v7.01 — `products.in_house_production` flag + filter + column on Inventory Planning
+- **Ask**: Jason wanted a flag saved to the products table to indicate which SKUs are manufactured in-house (vs sourced from an external supplier). Requirements: filterable on Inventory Planning, exportable via CSV, selectable as a column.
+- **SQL migration** — `supabase_v7_01_in_house_production.sql` adds `in_house_production boolean not null default false` to `products`, plus a partial index `where in_house_production = true` (so in-house scans stay fast even when most SKUs are external). **Run this once in Supabase → SQL Editor before deploying.** Defaults false so no existing product changes behavior.
+- **Product edit modal** — new checkbox `🏭 In-house production?` next to Bundle? / Active? / Seasonal?. Loaded from `p.in_house_production` on modal open; persisted via saveProduct.
+- **Inventory Planning filter** — new dropdown next to Hide Inactive with three states: `All (in-house + external)` (default), `🏭 In-house only`, `External only`. Persists per-browser in `localStorage.ipInHouseFilter` and restores on tab open. Mirrored in both `getVisibleInventory` (drives the grid) AND the CSV-export filter path (so `Filtered` mode exports what the user's actually looking at).
+- **Inventory Planning column** — new IP_COLUMNS entry `in_house_production` under the PO PLANNING group, default off (opt-in via 📋 View). Renders as an orange `🏭 IN` chip when truthy, dashed cell when falsy. Sortable (in-house floats to top or bottom depending on sort direction). CSV emits `TRUE` / `FALSE` via the column's `csv()` handler so spreadsheets auto-classify.
+- **Record plumbing** — `p.in_house_production` flows through the same records.push block that carries brand / supplier / seasonal / fulfillment_amazon, so it's present on both US and CA region records for every SKU.
+- **Verified**: syntax clean. Behavior in pre-migration environments: `p.in_house_production` reads as `undefined` → `=== true` check evaluates false → every product shows as external until the operator opts in per SKU. No breakage.
 
 ## v7.00 — Delete Product: full purge across all child tables + pre-count preview + component-in-other-bundle warning
 - **Bug**: Jason clicked Delete on SP-0619 (Catnip and Silvervine Spray - 3 oz) and hit `update or delete on table "products" violates foreign key constraint "inventory_master_id_fkey"`. The old delete only removed the product row + BOM-as-bundle rows; every other master_id-carrying table was left orphaned, and `inventory` has a hard FK (not ON DELETE CASCADE) that blocks the product delete outright. So "delete" both silently corrupted data AND failed on any product with inventory rows.
