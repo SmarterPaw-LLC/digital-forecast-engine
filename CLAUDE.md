@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.05**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.06**
+
+## v7.06 — Chewy P&L: Month-over-Month by Category pivot with directional delta
+- **Ask**: Jason couldn't tell whether Chewy rebate costs were trending up or down. The Trailing-30 scorecard shows one number in isolation; the by-category bars show composition but not time. Needed a MoM view.
+- **Added**: new "Month-over-Month by Category" panel between the by-category bars and the detail table. Rows = categories (sorted by descending total), columns = months (YYYY-MM, ascending, grouped by `invoice_date`), plus a Total column and a "Δ vs prev" chip comparing the latest month to the penultimate.
+- **Directional coloring**: rebates are a COST, so up = bad. The Δ chip is red-with-↑ when the latest month exceeded the prior, green-with-↓ when it dropped, gray-with-→ flat when unchanged, and gray "new" when the category didn't appear in the prior month. Also shows the % change and an absolute-$ delta.
+- **Footer**: totals row across all months + grand total + latest-vs-prior chip so you can scan the bottom-right corner for the "am I paying more or less this month" answer at a glance.
+- **Filter awareness**: uses the same `filtered` row set as the other panels, so Period / Brand / Category / Search all narrow the MoM view too. If the current filter yields only one month of data, the panel still renders that month but the Δ column shows `—` until a second month exists.
+- **Empty-state**: on a zero-row page (no PDFs uploaded yet), the MoM container clears alongside the scorecards and category panel.
+- **Header hint** underneath the title spells out the comparison window (e.g. `Δ column = 2026-07 vs 2026-06`) so nobody has to guess what "prev" means. Cell tooltips on the Δ chip show both raw values.
 
 ## v7.05 — Chewy Rebate parser: third invoice shape (rate-only, no transaction type) + `autoship` category
 - **Bug**: Jason uploaded 8 rebate PDFs; REB00174410 (Auto Ship 5% $1,476.97) failed with `Could not parse any rebate lines out of REB00174410`. Root cause: it's a third invoice shape my v7.03 parser didn't know about.
