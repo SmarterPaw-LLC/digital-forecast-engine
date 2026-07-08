@@ -2,7 +2,26 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.04**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.05**
+
+## v7.05 — Chewy Rebate parser: third invoice shape (rate-only, no transaction type) + `autoship` category
+- **Bug**: Jason uploaded 8 rebate PDFs; REB00174410 (Auto Ship 5% $1,476.97) failed with `Could not parse any rebate lines out of REB00174410`. Root cause: it's a third invoice shape my v7.03 parser didn't know about.
+- **The three shapes now covered**:
+  - **A. Multi-line allowance** (has Transaction Type column): `Rebate Name | Rebate % Rate | Transaction Type | Vendor Name | Rebate Amount`. Example: REB00175503 with Damages/Freight/MDF/Satisfaction lines.
+  - **B. Single-line with rate but NO transaction type** (v7.05 — the one Jason just hit): `Rebate Name | Rebate % Rate | Vendor Name | Rebate Amount`. Example: REB00174410 (Auto Ship 5%).
+  - **C. Lumpsum**: `Rebate Name | Vendor Name | Rebate Amount` (no rate, no transaction type). Example: REB00162368 (HG EverGreen B3G1 $1,181.42).
+- **Fix**: added a middle detector between the multi-line and lumpsum patterns:
+  ```js
+  norm.match(/Rebate\s*Name\s*Rebate\s*%\s*Rate\s*Vendor\s*Name\s*Rebate\s*Amount\s+(.+?)\s+([\d\.]+)%\s+SMARTERPAW\s+LLC\s+\$([\d,]+\.\d{2})/i)
+  ```
+  Anchored on the exact header text so it can't false-match. Only fires when the multi-line detector returned zero hits.
+- **New category `autoship`** — added to `chewyDeriveCategory` (matches `/AUTO\s*SHIP|AUTOSHIP/`) and to `CHEWY_PNL_CATEGORY_LABELS` as `🔁 AutoShip Subscription`. So the Auto Ship rebate lands in its own bucket on the Chewy P&L category breakdown instead of `❓ Other`.
+- **Verified against REB00174410's actual PDF text**:
+  - Pattern 1 (multi-line): correctly MISS (no PURCHASE keyword).
+  - Pattern 2 (v7.05 rate-only): HIT — extracts `("Auto Ship", 5%, $1,476.97)` cleanly.
+  - Pattern 3 (lumpsum): correctly MISS (header has the extra `Rebate % Rate` column).
+  - Category derivation: resolves to `autoship`.
+- **Re-uploading REB00174410** will now succeed. Upsert on `(invoice_number, line_number)` means retrying the same PDF is idempotent — no dupe rows.
 
 ## v7.04 — Amazon P&L: "📥 Last report" period preset (auto-scopes to the last SKU Economics upload's week range)
 - **Ask**: Jason wanted a period preset on Amazon P&L that pulls the date range from the last SKU Economics upload, so the view matches what he just downloaded from Seller Central without hand-picking dates.
