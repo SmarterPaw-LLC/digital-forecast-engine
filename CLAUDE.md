@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.06**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.07**
+
+## v7.07 — Hotfix: Chewy P&L page stuck on "Loading Chewy rebates…" (v7.06 typo)
+- **Bug**: after v7.06 shipped, the Chewy P&L page rendered the scorecards + coverage correctly ($37,760.30 total, 34 lines, 31 invoices) but the detail table stayed pinned to `⏳ Loading Chewy rebates…` and never showed rows.
+- **Root cause**: v7.06's new `deltaChip` helper referenced `prvMo` in a tooltip template literal, but the actual variable is `prevMo`. Every call to `deltaChip` threw `ReferenceError: prvMo is not defined`, aborting `renderChewyPnl` mid-execution — after the scorecards and category panel rendered, but BEFORE the tbody / footer / row-count updates ran. Hence the stuck "Loading" placeholder from earlier in the function.
+- **Fix**: rename to `prevMo` (one-character corner). Standalone syntax check + regex verification against Jason's data.
+- **Lesson noted**: the MoM code path only executes when 2+ months of data exist, so my earlier syntax check didn't catch this. A single-month test would still miss it. When adding template-literal-heavy helpers in the future, prefer named parameters over closed-over outer names for the display-only bits.
 
 ## v7.06 — Chewy P&L: Month-over-Month by Category pivot with directional delta
 - **Ask**: Jason couldn't tell whether Chewy rebate costs were trending up or down. The Trailing-30 scorecard shows one number in isolation; the by-category bars show composition but not time. Needed a MoM view.
