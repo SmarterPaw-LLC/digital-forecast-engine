@@ -2,7 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.01**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.02**
+
+## v7.02 — Chewy Forecasts: clearer tooltips on every cell + column header (self-documenting math)
+- **Ask**: Jason zoomed into a single `832 / 1,021` current-month cell and said "I'm confused about these values — I need tooltips explaining what they are."
+- **What was confusing**: the current-month cell shape (`REMAINING / PEAK`), the future-month arrow shape (`1,123 ↑53`), and how those feed the 30/60/90/120 rolling windows. Previous tooltips existed but were long, single-line, and buried in a column-level header — didn't explain the numbers you were actually staring at.
+- **Fixes**:
+  - **30/60/90/120 column headers** now carry a `ⓘ` icon and a structured tooltip explaining "rolling forward window starting NOW" + the prorate formula + the "current-month uses REMAINING not PEAK" detail (the key thing that surprised Jason yesterday).
+  - **Current-month cell tooltip** (per-SKU) is now multi-line with LEFT / RIGHT / GAP breakdown: LEFT = REMAINING (latest snapshot), RIGHT = PEAK (highest across snapshots), GAP = units already shipped. Explicitly calls out that the 30/60/90/120 columns use LEFT (not PEAK).
+  - **Future-month cell tooltip** (per-SKU) — brand new. Explains value (latest snapshot) + ↑/↓ arrow (delta vs previous snapshot) + why no consumption netting.
+  - **Current-month header cell** (`2026-07 ⓘ`) tooltip rewritten with clearer LEFT / RIGHT / GAP structure matching the per-cell tooltip.
+  - **Future-month header cell** tooltip rewritten to explain latest-snapshot value + delta shape.
+  - **Footer total-row cells** get their own tooltips too. Current-month total explains REMAINING vs PEAK sum across the visible set; future-month totals explain the sum + the net revision delta.
+  - **Monthly Forecast → column-group header** — fixed the `{latestSnap}` / `{prevSnap}` placeholders I'd left as literal text, now interpolates the actual snapshot dates.
+  - Every tooltip target has `cursor:help` so the hovering affordance is discoverable at a glance.
 
 ## v7.01 — `products.in_house_production` flag + filter + column on Inventory Planning
 - **Ask**: Jason wanted a flag saved to the products table to indicate which SKUs are manufactured in-house (vs sourced from an external supplier). Requirements: filterable on Inventory Planning, exportable via CSV, selectable as a column.
