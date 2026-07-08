@@ -2,7 +2,31 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.02**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.03**
+
+## v7.03 — Chewy P&L (Rebates view) + PDF rebate-invoice ingest
+- **Ask**: Jason wants a Chewy P&L page. No sales feed exists for Chewy yet (their portal only exposes monthly demand forecasts + rebate invoices — no per-order sell-through like Amazon SKU Economics). What he can upload today is REBATE INVOICES in PDF form. Sample invoices: REB00162368 (HG EverGreen B3G1 $1,181), REB00169108 (Chewy Onsite Ads DOGGIJUANA $174), REB00175503 (multi-line Damages/Freight/MDF/Satisfaction $11,030).
+- **SQL migration** (`supabase_v7_03_chewy_rebates.sql`) — new `chewy_rebates` table with one row per rebate LINE (a multi-line invoice with 4 allowance lines becomes 4 rows). Unique key `(invoice_number, line_number)` — re-uploading the same PDF upserts cleanly. Fields: invoice number/date/due/currency, agreement number/name, period start/end/label (parsed from either `3.1.26-3.31.26-LUMPSUM` or `Billing Period: P5-26 (01/Jun/2026 - 05/Jul/2026)`), rebate name/pct/transaction type, brand, category, amount, raw extracted text (audit). **Run once in Supabase → SQL Editor before uploading.**
+- **PDF parser** — `parseChewyRebatePdfText(text)`:
+  - Lazy-loads pdf.js (cdnjs 3.11.174) on first use; extracts raw text from each page.
+  - Regexes out invoice number (`REB\d+`), invoice/due dates (M/D/YYYY), agreement no + name, and one of two period formats.
+  - Detects multi-line allowance shape via `RebateName + N% + PURCHASE/CHARGEBACK/BILLBACK + SMARTERPAW LLC + $amount`; falls back to lumpsum shape (`Rebate Name Vendor Name Rebate Amount + captured name + SMARTERPAW LLC + $amount`).
+  - Post-processes the first multi-line match to strip the `Rebate Name Rebate % Rate Transaction Type Vendor Name Rebate Amount` table-header prefix (verified against REB00175503 — the first line otherwise landed as `"…Rebate Amount Damages"`; after strip: `"Damages"`).
+  - Sanity-checks the sum of parsed lines against the invoice's `Total: $N.NN`; logs a warn if it drifts >$0.02.
+  - Derives brand (Meowijuana / Doggijuana / Kitty Ka-Zoom / null) + category (ad_spend / trade_allowance / coop_marketing / promo_bxgx / promo_lumpsum / evergreen_promo / damages / freight / satisfaction_guarantee / other) from the rebate + agreement text via pattern rules.
+- **Upload dropzone** — new `💸 Chewy Rebate Invoices (PDF)` card on the Uploads page. Multi-select drop supported; processes files sequentially so the status line stays readable. Each successful PDF upserts N rebate rows; failures accumulate and surface via alert. Refreshes the Chewy P&L page + the Uploads-page freshness probe automatically.
+- **Chewy P&L page** — new sub-view under 💰 P&L → 🐾 Chewy Rebates:
+  - Filter bar: Period (rolling 90/180/365 days, YTD, All time) · Brand · Category · Search · Refresh · CSV.
+  - Callout at the top explaining that this is REBATES ONLY (no sell-through yet), so every line shown is money Chewy is deducting.
+  - Scorecards: Total Rebates · Trailing 30 Days · Avg per Invoice · Coverage (earliest → latest invoice date).
+  - Breakdown-by-category panel with horizontal bars (proportional to max) + $ amount + share%.
+  - Detail table: Invoice Date · Invoice # · Rebate Name · Category · Brand · Rate% · Period · Amount. Sortable via CSV; per-row hover shows the agreement name for context.
+  - Footer sums the visible set; CSV export mirrors the visible filter state.
+- **Wire-ups**:
+  - `switchPnlView('chewy')` routes to `renderChewyPnl`; top-bar `↓ CSV` respects the active P&L sub-view so it exports `chewy_rebates` when Chewy P&L is showing.
+  - Uploads-page freshness probe now covers `chewy_rebates` too (📅 Data thru {invoice_date} · uploaded {N ago}).
+  - **Upload History** (v6.88) source list includes `chewy_rebates` with retroactive brand-edit (region is null for this table — invoice content is US-only). Categories editable via the retroactive brand editor's second selector if we extend `UH_SOURCES` later.
+- **Verified against Jason's real files** (static regex simulation): invoice numbers extracted, dates parsed, both period formats resolve, multi-line allowance rows all captured with correct amounts summing to the total, lumpsum rows extract cleanly, header-row consumption bug fixed. Syntax clean (1.67MB JS).
 
 ## v7.02 — Chewy Forecasts: clearer tooltips on every cell + column header (self-documenting math)
 - **Ask**: Jason zoomed into a single `832 / 1,021` current-month cell and said "I'm confused about these values — I need tooltips explaining what they are."
