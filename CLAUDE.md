@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.03**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.04**
+
+## v7.04 — Amazon P&L: "📥 Last report" period preset (auto-scopes to the last SKU Economics upload's week range)
+- **Ask**: Jason wanted a period preset on Amazon P&L that pulls the date range from the last SKU Economics upload, so the view matches what he just downloaded from Seller Central without hand-picking dates.
+- **UI** — new `📥 Last report` option at the top of the Amazon P&L period dropdown + a small green pill next to it showing the resolved range (e.g. `2026-05-04 → 2026-05-31`) with hover-tooltip showing the upload timestamp, row count, region, and source table. Turns orange with `⚠ no SKU Economics rows yet` if the table is empty.
+- **Region-aware resolution** — US/CA queries `sku_economics` filtered to the active region; EU queries `sku_economics_eu` (all EU countries share one upload session). When the operator switches region while `📥 Last report` is active, the range re-resolves for the new region automatically.
+- **Logic** (`resolvePnlLastReport`):
+  1. Find the most recent `uploaded_at` in the region-appropriate table.
+  2. Find the min and max `week_start` for rows in that 1-second upload session.
+  3. Extend `max_week_start` (Monday) to its Saturday end so the displayed range matches what the operator saw on Amazon's report (Sun–Sat weeks).
+  4. Cache the result keyed by `(table, region)` — repeated selections are instant.
+- **Cache invalidation** — `refreshUploadDataRanges()` (called after every upload) clears the cache so a fresh SKU Economics upload immediately reflects on the next `📥 Last report` selection.
+- **Fallback** — if the async resolve hasn't landed yet, `getPnlDateRange` returns `today → today` so rendering shows the empty state cleanly rather than throwing. Once the resolve completes, `onPnlPeriodChange` calls `renderPnl()` again with the real range.
 
 ## v7.03 — Chewy P&L (Rebates view) + PDF rebate-invoice ingest
 - **Ask**: Jason wants a Chewy P&L page. No sales feed exists for Chewy yet (their portal only exposes monthly demand forecasts + rebate invoices — no per-order sell-through like Amazon SKU Economics). What he can upload today is REBATE INVOICES in PDF form. Sample invoices: REB00162368 (HG EverGreen B3G1 $1,181), REB00169108 (Chewy Onsite Ads DOGGIJUANA $174), REB00175503 (multi-line Damages/Freight/MDF/Satisfaction $11,030).
