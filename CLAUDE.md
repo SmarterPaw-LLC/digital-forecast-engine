@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.08**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.09**
+
+## v7.09 — ⭐ Top Product one-click toggle from the product modal header (persists immediately, no Save required)
+- **Ask**: Jason wanted to flag Top Products from any place the product modal is invoked — not have to scroll to the flags row + Save.
+- **Added**: a big ⭐ star button in the modal header (left of the title, above the master_id line). Filled + gold when the SKU is flagged; hollow + gray when not. Clicking it:
+  1. Snaps the UI immediately (star toggles gold ↔ gray).
+  2. Writes `products.is_top_product` to Supabase directly — no need to hit Save.
+  3. Updates the in-memory `allProducts` cache so downstream reads (all Top Products chip panels, IP / Products / Amazon P&L filters) reflect the change without a page reload.
+  4. Refreshes every mounted Top Products chip panel via `refreshAllTopProductsPanels()`.
+  5. On failure, rolls back the UI and alerts the operator.
+- Kept the `⭐ Top product?` checkbox in the flags row for consistency with the other boolean flags (Bundle? / Active? / Seasonal? / In-house?). The star and the checkbox stay in sync: `syncTopStarUI(bool)` is called from `openProductModal` and `quickToggleTopProduct` writes to both.
+- New-product modal (no master_id yet) — star still toggles the checkbox locally; the full save writes the flag along with everything else.
+- Since the product modal is opened from every page that shows product rows (Products, Bundles, Inventory Planning, P&L pages, Chewy Forecasts, Digital Sales, Units Sold, etc.), the Top-Product flag is now one click away from anywhere.
 
 ## v7.08 — ⭐ Top Products shortlist: per-page collapsible chip panel + one-click filter (Phase 1: Inventory Planning + Products + Amazon P&L)
 - **Ask**: Jason wants a way to flag "top products" and see them as a collapsible chip menu at the top of every page, so he can filter to a favorite SKU (e.g. Pawty Mix) in one click without typing in a search field.
