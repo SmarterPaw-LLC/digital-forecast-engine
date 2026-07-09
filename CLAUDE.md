@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.07**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.08**
+
+## v7.08 — ⭐ Top Products shortlist: per-page collapsible chip panel + one-click filter (Phase 1: Inventory Planning + Products + Amazon P&L)
+- **Ask**: Jason wants a way to flag "top products" and see them as a collapsible chip menu at the top of every page, so he can filter to a favorite SKU (e.g. Pawty Mix) in one click without typing in a search field.
+- **SQL migration** (`supabase_v7_08_top_products.sql`) adds `products.is_top_product boolean not null default false` + a partial index. **Run once in Supabase → SQL Editor before pushing this version.** Defaults false so no existing product changes behavior.
+- **Product edit modal**: new `⭐ Top product?` checkbox next to the v7.01 In-house / Active / Seasonal set. Loaded via `openProductModal`, persisted via `saveProduct`.
+- **Reusable panel component** (`renderTopProductsPanel(hostId, {onRerender})`) matches the visual pattern of Inventory Planning's existing Scorecards / Chart collapse bar:
+  - Header row has a chevron toggle (▾ expanded / ▸ collapsed) + `⭐ Top Products (N)` count + active-filter badge on the right when a chip is selected.
+  - Expanded body renders one pill per top product with the brand chip embedded. Active chip is green with an ✕ affordance; inactive chips are neutral.
+  - Empty state hint tells the user how to flag a product (open modal → ⭐ Top product?).
+  - Header click toggles collapse; state persisted in `localStorage.topProductPanelCollapsed`.
+- **Global filter state** — `topProductFilterId` (single master_id or null), persisted in `localStorage.topProductFilterId`. `setTopProductFilter(mid)` writes state, re-renders every mounted panel, and calls whatever page's re-render hook is active (`renderInventoryTbl` / `renderProductsTbl` / `renderPnl`).
+- **Wire-ups (Phase 1)**:
+  - **Inventory Planning** — panel container at the top of the planning view (below the Scorecards/Chart bar); `getVisibleInventory` filters by `master_id === topProductFilterId`. CSV export path uses the same filter.
+  - **Products page** — panel at the top of the data-wrap; `renderProductsTbl` filters by master_id.
+  - **Amazon P&L** — panel at the top of the Amazon sub-view; row-aggregation loop in `renderPnl` bails when `prod.master_id !== topProductFilterId`. Runs BEFORE the "show selected only" branch so the chip filter takes precedence.
+- **Merge tool alignment**: added `is_top_product` (and the previously-missing `in_house_production`) to the `BOOL_FLAG_FIELDS` list in `runMerge`, so a merge preserves the Top Products flag onto the survivor when the duplicate had it.
+- **Future** (Phase 2, when needed): Shopify P&L, Walmart P&L, Bundles, Digital Sales, Units Sold, Chewy Forecasts. Each takes ~3-4 lines: add a container div, call `renderTopProductsPanel` inside its render function, and add one `topProductFilterId` guard in its filter block.
 
 ## v7.07 — Hotfix: Chewy P&L page stuck on "Loading Chewy rebates…" (v7.06 typo)
 - **Bug**: after v7.06 shipped, the Chewy P&L page rendered the scorecards + coverage correctly ($37,760.30 total, 34 lines, 31 invoices) but the detail table stayed pinned to `⏳ Loading Chewy rebates…` and never showed rows.
