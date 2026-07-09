@@ -2,7 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.09**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.10**
+
+## v7.10 — Fixes: Top Product filter now works on Inventory Planning + boolean-flags row layout (checkbox-left + separators + no orphan wrap)
+- **Bug 1 — filter chip didn't actually filter the IP table**. v7.08 patched `getVisibleInventory` (used elsewhere) and the CSV-export filter path, but MISSED the main table renderer's own row filter block at line ~17234. Same shape as the other two, just a different function. Added the `topProductFilterId` guard there too. Clicking a chip on Inventory Planning now narrows the grid as designed.
+- **Bug 2 — modal boolean-flags row layout was cramped and confusing**. Three specific complaints:
+  - Checkbox appeared AFTER its label (should be BEFORE — "checkbox-left" convention).
+  - `flex-wrap: wrap` let labels wrap to the next line WITHOUT their checkbox (the `⭐ Top product?` label orphaned from its checkbox in Jason's screenshot).
+  - No visual separator between checkbox-label pairs — one long visually-flat row.
+- **Fix**: rewrote each pair as a single `<label>` wrapping BOTH the checkbox and the text, with:
+  - `display: inline-flex; white-space: nowrap` — pair cannot separate; label always stays with its checkbox even on wrap.
+  - Checkbox rendered FIRST inside the label, text SECOND — matches the checkbox-left convention.
+  - `border-right: 1px solid var(--border)` on all pairs except the last — subtle vertical dividers between pairs, matching the toolbar / tab-strip patterns elsewhere in the app.
+  - `padding: 2px 14px` per pair + `gap: 0` on the container — dividers hug pairs cleanly.
+  - `row-gap: 8px` — when wrap happens (small screens), rows stay readable.
+  - `cursor: pointer` on the label — clicking the text toggles the checkbox (native behavior).
+- **Verified**: existing IDs (`pf-bundle`, `pf-active`, `pf-seasonal`, `pf-in-house`, `pf-top-product`) preserved so `openProductModal` / `saveProduct` / `quickToggleTopProduct` still work. The `toggleBomSection` onchange handler on `pf-bundle` still fires.
 
 ## v7.09 — ⭐ Top Product one-click toggle from the product modal header (persists immediately, no Save required)
 - **Ask**: Jason wanted to flag Top Products from any place the product modal is invoked — not have to scroll to the flags row + Save.
