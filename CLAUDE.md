@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.10**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.11**
+
+## v7.11 — ⭐ Top Products chips: open the product modal directly from any chip (edit anything from anywhere)
+- **Ask**: Jason wanted to edit Top Products (or any field on the product card) from anywhere the product card modal is invoked. Chips previously only toggled the filter — no way to jump to the product's modal from a chip. So un-flagging a top product required: click chip → filter page → click product row → open modal → toggle star. Three clicks + a filter side-effect.
+- **Fix**: rewrote each chip as a two-region container:
+  - **Main body** (left, wide): click to toggle the filter for this page — same as before.
+  - **✎ edit button** (right, narrow): click to open the product modal directly. Uses `event.stopPropagation()` on both buttons so the two clickable regions don't cross-fire.
+  - Visual separator between the two regions via `border-left` — subtle when the chip is inactive (uses `var(--border)`), a whitened divider when the chip is active on the green background.
+- **Modal invocation everywhere**: verified `openProductModal(masterId)` is already the entry point for row clicks on Inventory Planning, Products, Bundles (Summary + BOM parent + BOM components), Chewy Forecasts, and via the ↗ card affordance on Amazon P&L, Shopify P&L, Walmart P&L. Chips are now the last piece — any chip lets you jump straight to the card.
+- **Everything else on the card is still editable** from the modal (title, IDs, category, image, COGS, notes, boolean flags including ⭐ Top / 🏭 In-house / Bundle / Active / Seasonal) — that's the v7.09 star + normal Save button.
 
 ## v7.10 — Fixes: Top Product filter now works on Inventory Planning + boolean-flags row layout (checkbox-left + separators + no orphan wrap)
 - **Bug 1 — filter chip didn't actually filter the IP table**. v7.08 patched `getVisibleInventory` (used elsewhere) and the CSV-export filter path, but MISSED the main table renderer's own row filter block at line ~17234. Same shape as the other two, just a different function. Added the `topProductFilterId` guard there too. Clicking a chip on Inventory Planning now narrows the grid as designed.
