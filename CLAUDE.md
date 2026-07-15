@@ -2,7 +2,11 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.11**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.12**
+
+## v7.12 — P&L page: remove 1400px max-width cap so wide monitors use the full viewport
+- **Bug**: the P&L page (Amazon / Shopify / Walmart / Chewy / COGS) had `max-width:1400px` inline on its `.data-wrap`. On Jason's 27"+ monitor, that left ~500px of unused whitespace on the right. Every other page's `.data-wrap` has no cap.
+- **Fix**: removed the `style="max-width:1400px"` attribute. The base `.data-wrap` class stays as-is (padding 22px 20px, flex column). Content now flows to the viewport edge like every other page.
 
 ## v7.11 — ⭐ Top Products chips: open the product modal directly from any chip (edit anything from anywhere)
 - **Ask**: Jason wanted to edit Top Products (or any field on the product card) from anywhere the product card modal is invoked. Chips previously only toggled the filter — no way to jump to the product's modal from a chip. So un-flagging a top product required: click chip → filter page → click product row → open modal → toggle star. Three clicks + a filter side-effect.
