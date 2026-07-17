@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.15**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.16**
+
+## v7.16 — Inventory Planning: let pre-launch in-house-production products through the record-build gate
+- **Bug**: Jason created SP-0640 "Paw Natural OG Jar" with `in_house_production = true`, marked it as New Amazon with a launch Rate/day of 1, but it never appeared on Inventory Planning (even with Status by → 🏭 In-house production active).
+- **Root cause**: `records`-build loop skips any product with no channel identifier (`!p.asin && !p.shopify_sku && !p.chewy_sku`). SP-0640 is pre-launch — no ASIN yet, no Shopify SKU, no Chewy SKU — so it got filtered out before any record was built, and consequently was invisible to every Status mode regardless of flags.
+- **Fix (v7.16)**: extend the gate so in-house-production items get through even without a channel ID: `if (!p.asin && !p.shopify_sku && !p.chewy_sku && p.in_house_production !== true) return;`. Rationale: in-house SKUs may legitimately be pre-launch — they need production planning BEFORE the channel goes live. Their demand comes from the `Rate/day` launch override (v4.172's `new_amazon_daily_units`); velocity from `sales_weekly` stays zero until real sales land.
+- **Effect**: Jason's SP-0640 now renders as a US-only row on Inventory Planning (the existing `regions = p.asin ? ['US','CA','EU/UK'] : ['US']` line covers regionality — no ASIN = US-only, correct). With Status by → 🏭 In-house production active, it shows up alongside the other in-house rows.
+- **No regression risk**: non-in-house pre-launch products (no ASIN, no Shopify, no Chewy, `in_house_production` false) are still filtered out — they legitimately have no channel path to sell through, so no forecast makes sense.
 
 ## v7.15 — Inventory-edit modal: expose master-level flags (⭐ Top / 🏭 In-house) + jump-to-full-card button
 - **Ask**: opening a product from Inventory Planning launches the INVENTORY modal (per-region inventory settings), which didn't expose the master-level boolean flags (Top Product, In-house Production, etc.) that live on the full product-edit modal. Jason wanted those toggleable from here without opening a second modal.
