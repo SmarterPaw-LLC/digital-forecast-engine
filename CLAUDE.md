@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.13**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.14**
+
+## v7.14 — Inventory Planning: 🏭 In-house production Status-by mode (scoped grid + placeholder Status until warehouse counts land)
+- **Ask**: on Inventory Planning, add a `Status by → In-house production` option that scopes the grid to SKUs flagged in-house (`products.in_house_production`), respects the same horizon + target-supply inputs, and exports via CSV. Warehouse-stock numbers aren't wired yet, so the Status column is a placeholder that becomes live when those land.
+- **Dropdown**: added `🏭 In-house production` as the third option in `Status by` (after Warehouse stock, Amazon FBA stock; before Combined legacy). Tooltip explains the scope.
+- **Filter integration**: added `if (_ipMode === 'in_house' && r.in_house_production !== true) return false;` to all four IP filter blocks: main `renderInventoryTbl` filter, `getVisibleInventory` (drives selection + downstream code), and the two CSV export paths (filter respects the mode so exports are scoped to in-house SKUs too). Same pattern as Amazon mode's `!r.asin` guard.
+- **Status computation**: new `mode === 'in_house'` branch in `getStatusInputs` reuses warehouse-mode math (finished goods live in the warehouse once produced). Returns `null` when the SKU isn't flagged in-house so those rows drop cleanly. When `r.warehouse` is 0/null (today's state — no warehouse counts uploaded), the slack calc falls through to `nodata` and the Status column reads `— WH Stock Missing` so operators know why. Once warehouse counts land, the same slack-vs-lead-time logic kicks in and Status starts firing.
+- **Status labels for in_house mode**: new label set — `🏭 Produce Now`, `🟡 Produce Soon`, `⚠️ Plan Production`, `🟢 Production OK`, `— WH Stock Missing`. Verbs speak to producing in-house rather than ordering from a supplier.
+- **CSV export**: no changes needed — export paths already read `getVisibleInventory` and share the same filter block, so switching to in-house mode + hitting `↓ CSV` naturally exports the scoped in-house set with the mode's Status labels.
+- **Deferred (waiting on data)**: the actual warehouse-stock ingest. When that lands (external upload / integration / manual entry into `inventory.warehouse`), the in-house mode's Status column becomes fully live automatically.
 
 ## v7.13 — 📊 Data currency bar at the top of every metrics-driven page
 - **Ask**: Jason couldn't easily tell whether the metrics he was looking at reflected fresh data or stale uploads. Needed a per-page indicator of source-table currency.
