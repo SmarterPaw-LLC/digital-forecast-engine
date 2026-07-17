@@ -2,7 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.14**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.15**
+
+## v7.15 — Inventory-edit modal: expose master-level flags (⭐ Top / 🏭 In-house) + jump-to-full-card button
+- **Ask**: opening a product from Inventory Planning launches the INVENTORY modal (per-region inventory settings), which didn't expose the master-level boolean flags (Top Product, In-house Production, etc.) that live on the full product-edit modal. Jason wanted those toggleable from here without opening a second modal.
+- **Added**:
+  - **Big ⭐ star in the modal header** (left of the title), mirroring the v7.09 pattern from the products modal. Filled gold when flagged; hollow gray when not. One-click save — writes `products.is_top_product` directly, no need to hit Save Changes. Rollback on failure.
+  - **Two-toggle flags row** just below the header — `⭐ Top product?` and `🏭 In-house production?` checkboxes matching the layout convention from v7.10 (checkbox-left, single `<label>` wrapper, vertical divider between pairs). Both persist immediately to `products` on change.
+  - **`🔧 Edit full product card →` button** at the far right of the flags row — closes the inventory modal and opens the full products modal for everything else (title, IDs, category, image, COGS, other flags).
+- **Handlers**:
+  - `syncInvModalTopStar(bool)` — keeps the header star + checkbox visually in sync.
+  - `_persistInvModalProductFlag(field, next, rollback)` — writes the flag to Supabase, updates `allProducts` + every matching `records[]` row (so filters that scope by these flags — v7.14 In-house Status mode, v7.01 In-house column, v7.08 Top Products chips — reflect immediately), refreshes chip panels + re-renders the IP grid.
+  - `quickToggleTopProductFromEditModal()` — header-star click.
+  - `onEditModalTopFlagChange(bool)` / `onEditModalInHouseFlagChange(bool)` — checkbox change handlers.
+  - `jumpToFullProductCard()` — closes this modal + opens the full products modal via `openProductModal(master_id)`.
+- **State load**: `openEditModal` now resolves the product from `allProducts` (records only carry a subset of columns) and initializes both checkboxes + the star from the authoritative flag values.
+- **Result**: from Inventory Planning → any row click, the flags are toggleable inline. For anything else — title, category, image, COGS, bundle, active, seasonal, notes — the `🔧 Edit full product card →` button is one click away.
 
 ## v7.14 — Inventory Planning: 🏭 In-house production Status-by mode (scoped grid + placeholder Status until warehouse counts land)
 - **Ask**: on Inventory Planning, add a `Status by → In-house production` option that scopes the grid to SKUs flagged in-house (`products.in_house_production`), respects the same horizon + target-supply inputs, and exports via CSV. Warehouse-stock numbers aren't wired yet, so the Status column is a placeholder that becomes live when those land.
