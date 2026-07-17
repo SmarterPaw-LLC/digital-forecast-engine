@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.20**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.21**
+
+## v7.21 — Inventory: disambiguate "confirmed 0" vs "no snapshot" on FBA Avail / FBA In / Warehouse
+- **Ask (Jason, looking at KKZ Catnip Spray - 4 OZ)**: FBA Avail rendered "—" but the Gap columns showed +6,602 (30d) / +7,356 (90d) surplus. "What is this showing as available? I can't tell." Legitimate confusion — the dash was overloaded across three distinct semantic states, and the math treats all three as zero without saying so.
+- **Root cause**: `records`-build (line 3904) coerces `inv?.fba_available || 0`, collapsing three cases into one indistinguishable `0` at render time:
+  1. Snapshot exists AND value is genuinely 0 (Amazon confirms nothing available)
+  2. Snapshot exists but the field is null
+  3. No snapshot has ever been uploaded for this ASIN
+  All three rendered as `—`, so the operator couldn't tell whether they were looking at "confirmed empty" or "no data yet." Downstream math (`fba_available || 0`) was identical either way, which made the confusion worse — Gap columns compute cleanly against `0` regardless of provenance, giving a false sense that "available = 0" was a known value.
+- **Fix**: use the v5.15 `amazon_inv_last_updated` field (populated at records-build from `snapMap[asin + '_' + region]`, or across `_byRegion` for pooled records) as the "has-snapshot" signal, then branch the render:
+  - **value > 0** → show the number (green `num-hi` styling — unchanged)
+  - **value = 0 AND snapshot exists** → show dim `0` with tooltip "FBA snapshot confirms 0 units available for this ASIN"
+  - **value = 0 AND no snapshot** → show `—` with tooltip "No FBA inventory snapshot has been uploaded for this ASIN — the model treats this as 0 for math, but the reading has never actually been reported. Upload via Data → Uploads → FBA Inventory Snapshot."
+  Applied identically to `fba_available` and `fba_inbound` (both live on the same snapshot). Same snapshot detection handles pooled records via `_byRegion`.
+- **Warehouse**: applied the same treatment but there's no "warehouse snapshot" table wired yet (see v4.169 note — warehouse-stock uploader is a known gap). So the tooltip on the dash reads: "Warehouse-stock uploader isn't wired yet — the model treats warehouse as 0 for math, but the reading has never actually been reported. This affects PO planning + Warehouse Status mode." A value > 0 renders normally (came in from Shopify Inventory legacy upload).
+- **In-transit `🚧` chip unchanged** — the shipments viewer is still one click away from any FBA In cell.
+- **Effect for KKZ Catnip Spray 4 OZ**: FBA Avail will render `0` (dim) with the confirming tooltip, so Jason knows the snapshot has been uploaded and it's genuinely zero. The +7,356 30d Gap makes sense once you see it that way: FBA In 4,080 + in-transit 3,600 − 30d Need 324 ≈ +7,356. Math was always right; the display just wasn't telling the operator whether "available" was a known value or a missing one.
 
 ## v7.20 — Inventory Planning CSV filename tags the Status-by mode
 - **Ask**: Jason noticed CSV exports of Inventory Planning didn't encode which Status mode was active. `smarterpaw-forecast-inventory-planning-90d-filtered-2026-07-17.csv` doesn't tell you whether that's the Warehouse view, Amazon FBA view, or In-house Production view — and since each mode filters the row set differently (In-house scopes to `in_house_production=true`; Amazon FBA excludes non-FBA rows; etc.), the file's contents depend heavily on it. Bulk-exporting across modes was landing collision-prone filenames in Downloads.
