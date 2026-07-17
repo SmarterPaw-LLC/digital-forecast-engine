@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.16**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.17**
+
+## v7.17 — Inventory Planning: pre-launch new-Amazon products also show in Amazon FBA Status mode
+- **Ask (follow-on to v7.16)**: SP-0640 was newly-created, flagged `new_product_amazon` for US with `Rate/day = 1`. v7.16 made it visible in the In-house Status mode, but Jason correctly pointed out it should ALSO surface in Amazon FBA mode — that's exactly the mode you'd use to plan the initial inbound shipment.
+- **Bug**: `getStatusInputs('amazon')` gate was `if (!r.asin) return null;` — hard-required an ASIN. Pre-launch product = no ASIN yet = filtered out of Amazon mode, even though the operator explicitly declared launch intent + supplied a launch rate. Same guard was replicated on all four IP filter blocks (`_ipMode === 'amazon' && !r.asin`).
+- **Fix (v7.17)**: expanded the exception in five places (1 in `getStatusInputs`, 4 in filter guards) to allow pre-launch new-Amazon rows through:
+  ```js
+  const isNewLaunching = r.new_product_amazon === true && (r.new_amazon_daily_units || 0) > 0;
+  if (!r.asin && !isNewLaunching) return null;   // getStatusInputs
+  // filter guards:
+  if (_ipMode === 'amazon' && !r.asin && !(r.new_product_amazon === true && (r.new_amazon_daily_units || 0) > 0)) return false;
+  ```
+  Rationale: `new_product_amazon = true` + a positive `Rate/day` is a self-declaration of Amazon launch intent. The demand signal exists (via the launch-rate override that `inventoryNeedBreakdown` already honors). Stock reads 0 for a pre-launch SKU → Status computes `🔴 Send to FBA` → operator can size the initial inbound.
+- **No regression**: products with neither ASIN nor `new_product_amazon` flag stay filtered out of Amazon mode (correct — no path to sell on Amazon).
+- **Verified plumbing**: `records.push` at line 3932/3934 already includes `new_product_amazon` + `new_amazon_daily_units` (with inventory-row override, falling back to product-level default). No further changes needed.
 
 ## v7.16 — Inventory Planning: let pre-launch in-house-production products through the record-build gate
 - **Bug**: Jason created SP-0640 "Paw Natural OG Jar" with `in_house_production = true`, marked it as New Amazon with a launch Rate/day of 1, but it never appeared on Inventory Planning (even with Status by → 🏭 In-house production active).
