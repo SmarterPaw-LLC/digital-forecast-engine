@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.17**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.18**
+
+## v7.18 — Top Products filter: session-only (fixed stuck Meowi-Waui auto-select on every reload)
+- **Bug**: Jason refreshed Inventory Planning and it kept auto-selecting Meowi-Waui as the active Top Products filter chip. He'd clicked the chip once at some point and the v7.08 `localStorage.topProductFilterId` persistence made that selection permanent across sessions.
+- **Root cause**: v7.08 wrote the active filter chip to `localStorage.topProductFilterId` and re-hydrated it on module load. Meant to make chip selections carry across pages within a session — but survived page reloads AND browser closes, so a filter picked days ago kept auto-applying with no obvious signal (the green chip + badge WERE visible, but easy to miss on a busy page).
+- **Fix (v7.18)**: `topProductFilterId` is now session-only. Module init sets it to `null` regardless of what's in localStorage. `setTopProductFilter` no longer WRITES to localStorage — instead, it REMOVES any stale key from the v7.08–v7.17 era so returning users get a clean state on first load. Panel-collapse preference (`topProductPanelCollapsed`) stays persisted since that's a durable UI preference, not a temporary investigation state.
+- **UX now**: click a chip → it filters the current session (persists across page nav within the app, e.g. Inventory Planning → Products → Amazon P&L all stay filtered). Reload the browser → chip clears, table shows everything. Matches the mental model that filters are transient investigation state.
 
 ## v7.17 — Inventory Planning: pre-launch new-Amazon products also show in Amazon FBA Status mode
 - **Ask (follow-on to v7.16)**: SP-0640 was newly-created, flagged `new_product_amazon` for US with `Rate/day = 1`. v7.16 made it visible in the In-house Status mode, but Jason correctly pointed out it should ALSO surface in Amazon FBA mode — that's exactly the mode you'd use to plan the initial inbound shipment.
