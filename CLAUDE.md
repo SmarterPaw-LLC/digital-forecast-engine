@@ -2,7 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.19**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.20**
+
+## v7.20 — Inventory Planning CSV filename tags the Status-by mode
+- **Ask**: Jason noticed CSV exports of Inventory Planning didn't encode which Status mode was active. `smarterpaw-forecast-inventory-planning-90d-filtered-2026-07-17.csv` doesn't tell you whether that's the Warehouse view, Amazon FBA view, or In-house Production view — and since each mode filters the row set differently (In-house scopes to `in_house_production=true`; Amazon FBA excludes non-FBA rows; etc.), the file's contents depend heavily on it. Bulk-exporting across modes was landing collision-prone filenames in Downloads.
+- **Fix**: injected a `statusModeSlug` into the filename between the base and the horizon:
+  ```
+  smarterpaw-forecast-inventory-planning-{statusModeSlug}-{horizon}d-{modeTag}-{today}.csv
+  ```
+  Slug mapping: `warehouse` → `warehouse`, `amazon` → `amazon-fba`, `in_house` → `in-house-production`, `combined` → `combined`.
+- **Example filenames now**:
+  - `smarterpaw-forecast-inventory-planning-in-house-production-90d-filtered-2026-07-17.csv`
+  - `smarterpaw-forecast-inventory-planning-amazon-fba-30d-all-2026-07-17.csv`
+  - `smarterpaw-forecast-inventory-planning-warehouse-90d-selected-2026-07-17.csv`
+- **No other changes** — `statusMode` was already resolved inside `downloadInventoryCSV` (used to drive the Status column label per v4.201); v7.20 just pipes it into the filename template.
 
 ## v7.19 — Launch-override drove Vel/day but not Need (precedence bug) + revert v7.18 (persistence restored)
 - **Bug (priority)**: SP-0640 (Paw Natural OG Jar, in-house, `new_product_amazon = true`, `new_amazon_daily_units = 1`, no ASIN yet) showed **Vel/day = 1** correctly on Inventory Planning but every Need column (≤30d, ≤60d, ≤90d, ≤120d) rendered `0`. The launch-override rate was visible but not driving demand math — exactly the opposite of what a launch declaration is for.
