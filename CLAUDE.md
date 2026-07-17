@@ -2,7 +2,27 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.12**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.13**
+
+## v7.13 — 📊 Data currency bar at the top of every metrics-driven page
+- **Ask**: Jason couldn't easily tell whether the metrics he was looking at reflected fresh data or stale uploads. Needed a per-page indicator of source-table currency.
+- **Reusable helper**: `renderPageFreshness(hostId, sources)` where `sources = [{label, table, icon}]`. Queries `max(uploaded_at)` per table, caches 60s to avoid re-hammering Supabase on tab switches, then renders a compact strip:
+  ```
+  [DATA CURRENCY]  📊 SKU Econ US/CA: 2h ago  ·  🇪🇺 SKU Econ EU: 3d ago  ·  📢 Amazon Ads: 5h ago    [↻ Refresh]
+  ```
+- **Directional coloring**: `<24h` = neutral text, `1w+` = orange, `1mo+` or `never` = red. Operator can spot a stale source in a glance without reading the exact age.
+- **Hover tooltips**: each pill shows the full ISO timestamp on hover ("Last upload to sku_economics: 2026-07-14 20:03:30").
+- **Manual refresh button** on the right side of the bar force-invalidates the cache for that host's sources and re-queries.
+- **Wired into 6 pages**:
+  - **Amazon P&L**: `sku_economics`, `sku_economics_eu`, `amazon_ad_spend`
+  - **Shopify P&L**: `shopify_sales_daily`
+  - **Walmart P&L**: `walmart_sales_weekly`
+  - **Chewy P&L (rebates)**: `chewy_rebates`
+  - **Digital Sales**: `digital_sales_tracker`, `shopify_sales_daily`, `walmart_sales_weekly`, `sku_economics` (all four since the page blends tracker + live sources depending on the toggle)
+  - **Inventory Planning**: `sku_economics`, `fba_inventory_snapshots`, `fba_shipments`, `shopify_sales_daily`, `chewy_forecasts` (five sources since IP blends everything)
+  - **Chewy Forecasts** page: `chewy_forecasts`
+- **Fires on every render** — so uploading fresh data + returning to the page shows the new freshness on the very next render (the 60s cache is per-table, not per-render; forcing refresh clears it too).
+- **Not wired** (deliberately): Products, Bundles, Settings — those are catalog / config pages, not metrics pages. Freshness isn't the operator's question there.
 
 ## v7.12 — P&L page: remove 1400px max-width cap so wide monitors use the full viewport
 - **Bug**: the P&L page (Amazon / Shopify / Walmart / Chewy / COGS) had `max-width:1400px` inline on its `.data-wrap`. On Jason's 27"+ monitor, that left ~500px of unused whitespace on the right. Every other page's `.data-wrap` has no cap.
