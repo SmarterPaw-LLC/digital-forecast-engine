@@ -2,7 +2,33 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.18**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.19**
+
+## v7.19 — Launch-override drove Vel/day but not Need (precedence bug) + revert v7.18 (persistence restored)
+- **Bug (priority)**: SP-0640 (Paw Natural OG Jar, in-house, `new_product_amazon = true`, `new_amazon_daily_units = 1`, no ASIN yet) showed **Vel/day = 1** correctly on Inventory Planning but every Need column (≤30d, ≤60d, ≤90d, ≤120d) rendered `0`. The launch-override rate was visible but not driving demand math — exactly the opposite of what a launch declaration is for.
+- **Root cause** in `inventoryNeedBreakdown` (line 15676-15678):
+  ```js
+  const amzVel = !r.asin ? 0
+              : isNewOverride ? Number(r.new_amazon_daily_units)
+              : invAmazonVel(r);
+  ```
+  Precedence was wrong. `!r.asin ? 0` won BEFORE `isNewOverride` got evaluated, so any pre-launch product (no ASIN yet) had `amzVel = 0` regardless of the launch flag + rate. That fell through to `if (amzVel > 0) { … }` never running → `amzBase = 0`, `amzReorder = 0` → total Need = 0.
+- **Fix (v7.19)**: swapped precedence so `isNewOverride` wins first:
+  ```js
+  const amzVel = isNewOverride ? Number(r.new_amazon_daily_units)
+              : !r.asin ? 0
+              : invAmazonVel(r);
+  ```
+  Semantics: a pre-launch product legitimately declares Amazon demand via the manual launch rate. That's the whole point of the New (Amazon) + Rate/day override. Skip the ASIN gate when the operator has explicitly said "here's what this will sell at." Once the ASIN lands + the New flag is turned off, `invAmazonVel(r)` (historical sales) takes over.
+- **Effect for SP-0640** (Rate/day = 1, `reorder_qty_days = 90`, no FBA stock yet):
+  - amzVel = 1
+  - fbaDos = 0/1 = 0 → firstOrderByDay = 0 → first reorder event fires immediately
+  - 30d: 1 event × 90 units → 30d Need ≈ 90
+  - 60d: still 1 event → 60d Need ≈ 90
+  - 90d: still 1 event → 90d Need ≈ 90
+  - 120d: 2 events (day 0 + day 90) → 120d Need ≈ 180
+  - In-house Status mode reads warehouse=0 vs need=90 → status flips from `— WH Stock Missing` to `🏭 Produce Now`
+- **v7.18 reverted**: Top Products filter persistence restored to v7.08 behavior — `topProductFilterId` hydrates from `localStorage`, `setTopProductFilter` writes/removes the key. Jason confirmed cross-session persistence is fine; the earlier "kept auto-selecting Meowi-Waui" report was probably a multi-tab timing quirk (another tab kept writing a value the primary tab didn't know about) rather than genuinely-broken clear behavior. Audited: `setTopProductFilter` is the only writer, and the clear-to-null path removes the key correctly. If it recurs, most likely diagnosis is another open tab.
 
 ## v7.18 — Top Products filter: session-only (fixed stuck Meowi-Waui auto-select on every reload)
 - **Bug**: Jason refreshed Inventory Planning and it kept auto-selecting Meowi-Waui as the active Top Products filter chip. He'd clicked the chip once at some point and the v7.08 `localStorage.topProductFilterId` persistence made that selection permanent across sessions.
