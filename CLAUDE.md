@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.21**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.22**
+
+## v7.22 — Top Products chip panel on Demand Forecast + Units Sold (Phase 2 wiring)
+- **Ask**: Jason: "the top products picker isn't displayed on the demand forecast page, units sold page." v7.08 shipped the panel on Inventory Planning / Products / Amazon P&L (Phase 1) and explicitly deferred the rest as Phase 2 with the pattern: container div + `renderTopProductsPanel` call + one filter guard per page.
+- **Two containers added**:
+  - **Demand Forecast** — `<div id="fc-top-products-panel">` at the top of `#demand-view` inside `page-forecast`, above the forecast detail panel + filter strip.
+  - **Units Sold** — `<div id="sales-top-products-panel">` inside `page-sales > data-wrap`, above the controls row.
+- **Renderers wired**:
+  - `renderAll()` (DF's top-level render) now calls `renderTopProductsPanel('fc-top-products-panel', { onRerender: renderAll })` before the scorecard/table/chart pass — so a chip click narrows all three at once.
+  - `renderSalesTbl()` (Units Sold's top-level render) calls `renderTopProductsPanel('sales-top-products-panel', { onRerender: renderSalesTbl })` at the top.
+- **Filter guards** (chip narrows the visible set the same way it does on IP / Products / P&L):
+  - **DF `getVisible()`** — guard added at the top of the `records.filter(...)` block (`if (topProductFilterId && r.master_id !== topProductFilterId) return false;`). Applies to scorecards + chart + table + filtered CSV export (all pull from `getVisible()`). Selection-only mode also narrowed via a `.filter(...)` on `fcGetSelectedRecords()` — chip filter wins there too (per the v7.08 P&L pattern where chip takes precedence over selection).
+  - **US `renderSalesTbl()`** — guard added inside the `allProducts.filter(p => ...)` block. Applies to `salesVisibleRows` which drives the table + scorecards + chart + filtered CSV.
+- **"Everything" CSV mode also honors the chip** on both pages — Jason has been using the chip as a real filter, not just a display state, so an export shouldn't silently include products the chip filtered out. Applied to both the DF "everything" branch (line 24125) and the sales "all" branch (line 24256).
+- **Panel state stays consistent across pages** — `topProductFilterId` is one shared module-level var (v7.19 restored the localStorage persistence), so a chip picked on DF stays selected when you navigate to IP / Products / US / Amazon P&L. Persists across page reloads too.
+- **What's still un-wired** (deferred — small effort each, only add when Jason asks):
+  - Shopify P&L, Walmart P&L, Bundles, Digital Sales, Chewy Forecasts. Each needs a container + one `renderTopProductsPanel` call + one filter guard, same pattern.
 
 ## v7.21 — Inventory: disambiguate "confirmed 0" vs "no snapshot" on FBA Avail / FBA In / Warehouse
 - **Ask (Jason, looking at KKZ Catnip Spray - 4 OZ)**: FBA Avail rendered "—" but the Gap columns showed +6,602 (30d) / +7,356 (90d) surplus. "What is this showing as available? I can't tell." Legitimate confusion — the dash was overloaded across three distinct semantic states, and the math treats all three as zero without saying so.
