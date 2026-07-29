@@ -2,7 +2,32 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.22**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.23**
+
+## v7.23 — Products page: column picker + saved views (parity with Inventory Planning)
+- **Ask**: Jason: "i should be able to set columns, save views, etc on the products page the same way i can on the inventory planning page." The Products page had a hardcoded thead + tbody + a Lifecycle-view checkbox that conditionally added 3 columns. No way to hide the ones you didn't care about, no way to save a curated column+filter combination for repeat use.
+- **⚠ SQL TO RUN:** `supabase_v7_23_products_saved_views.sql` — adds `user_profiles.products_saved_views JSONB default '{}'`. Idempotent (`add column if not exists`). Run once in Supabase → SQL Editor. Without it, column visibility still works (localStorage) but saved views won't sync across browsers/devices — they stay per-browser via localStorage cache only.
+- **New `PROD_COLUMNS` registry** (mirrors v4.166 `IP_COLUMNS`). 26 columns total, each with `{key, label, group, groupHdr, w, align, default, locked, tip, sortVal(p, ctx), render(p, ctx), csv(p, ctx)}`:
+  - **System (locked, always visible)**: `_chk` (bulk-select checkbox), `_edit` (Edit button)
+  - **Media** (default on): `has_image`
+  - **SKU / Identity** (default on: brand · title · sp_sku · asin · walmart_item_id; default off: full_title · shopify_sku · chewy_sku · barcode · master_id)
+  - **Category** (default on): category · subcat
+  - **Amazon Lifecycle** (default off — was gated by the checkbox): lc_us · lc_ca · lc_uk (per-region NEW/DEP click-to-toggle)
+  - **Attributes** (default on): is_bundle · active · seasonal
+  - **Commerce** (default on: msrp · units90; default off: wholesale · supplier)
+  - **Notes** (default off): notes · forecast_notes
+- **Default visible set = pre-v7.23 layout exactly** — `_chk · has_image · brand · title · sp_sku · asin · walmart_item_id · category · subcat · is_bundle · msrp · units90 · active · seasonal · _edit`. Existing users see the same table on first load; opt-in for anything new.
+- **`📋 View` popup** (parity with IP + FC + P&L). Fixed top-right positioning, two sections:
+  - **💾 Saved Views** — each row is `Apply / ✎ Rename / ↻ Update-with-current / ✕ Delete`. Compact metadata chip beneath each name shows `N cols · brand:X · filter:Y · search:"Z"` so users can eyeball what's in a view without applying. A `💾 Save current as view` button captures columns + sort + all filters (brand, filter dropdown, search, cat/subcat multi-select, lifecycle-view checkbox) as one snapshot.
+  - **📊 Columns** — checkboxes grouped by the 7 registry groups, each with `all` / `none` shortcut buttons. `↺ Reset defaults` at the bottom returns to `PROD_DEFAULT_VISIBLE`.
+- **State & persistence** — `prodVisibleCols` (Array) + `prodSavedViews` (Object) both cached in localStorage for fast first paint. `prodPersistSavedViews` also writes to `user_profiles.products_saved_views` (Supabase) so views follow the user across browsers/devices. `prodLoadSavedViewsFromDb` fires at init alongside `fcLoadSavedViewsFromDb` / `ipLoadSavedViewsFromDb`. Localstorage keys: `prodVisibleCols`, `prodSavedViews`, `prodSortKey`, `prodSortDir`.
+- **renderProductsTbl rewritten** to iterate `prodVisibleColumns()` for both thead and tbody. Each column's `render(p, ctx)` returns a full `<td>...</td>`. Row-level styling (needs-review tint, click-to-open-modal, hover) stays on the `<tr>`. `ctx` carries `{lifecycleByMaster, prodU90, needsReview, lifecycleCell}` so column render fns can reach them without redundant computation.
+- **`prodSortVal` now delegates to registry** — a single switch statement replaced by `PROD_COLUMNS.find(...).sortVal(p, ctx)`. New columns added later automatically get sort support with no separate switch case to keep in sync. `prodSetSort` also uses the registry — column `align` + `group` decide desc-first vs asc-first default direction (right-aligned / center-aligned / lifecycle / commerce / attributes → desc; text → asc).
+- **Lifecycle-view checkbox retained as shortcut** — v7.23 makes lc_us/lc_ca/lc_uk first-class columns, so the checkbox is now a convenience that adds/removes all 3 at once via `prodSyncLifecycleView(on)`. Also stays in sync with popup toggles: checkbox reflects `allOn`, becomes indeterminate on partial visibility.
+- **CSV export honors visible columns** — `doExportCSV('products', ...)` now iterates `prodVisibleColumns()` (skipping locked/sys cols and any without a `csv` fn) instead of the fixed 16-column header. Filtered-mode export narrows by the same filters as the on-screen table; "everything" mode also honors the Top Products chip filter (matches v7.22 pattern).
+- **Top Products chip guard also added** to `renderProductsTbl`'s filtered CSV path (missing pre-v7.23 for the "everything" branch).
+- **Legacy `prodTh` helper left in the file as dead code** — harmless; can be removed in a later cleanup. All callers were replaced.
+- **No breaking changes** — same page, same rows, same sort. Users just gain the picker + saved views. Column visibility from a previous session (if any) is honored via the localStorage-hydrated `prodVisibleCols`; unknown keys (from a future / older version) are filtered out.
 
 ## v7.22 — Top Products chip panel on Demand Forecast + Units Sold (Phase 2 wiring)
 - **Ask**: Jason: "the top products picker isn't displayed on the demand forecast page, units sold page." v7.08 shipped the panel on Inventory Planning / Products / Amazon P&L (Phase 1) and explicitly deferred the rest as Phase 2 with the pattern: container div + `renderTopProductsPanel` call + one filter guard per page.
