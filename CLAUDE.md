@@ -2,7 +2,31 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.33**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.34**
+
+## v7.34 — Product-modal saves push to in-memory caches (case_qty visible immediately); inventory modal flag handlers use master_id fallback
+Two related bugs on the inventory edit modal, both surfaced by v7.33 letting non-ASIN rows open the modal for the first time.
+
+### 1. Case Qty (and other master-level fields) now appear immediately after save — no refresh required
+- **Bug (Jason)**: "i updated case qty for this item but it does not appear. is a refresh required?"
+- **Root cause**: `saveProduct` wrote `case_qty` to the `products` table but never synced it onto the in-memory caches. `records[]` (built at init from `p.case_qty`) held the OLD value; IP renders read `r.case_qty` and showed stale. Same silent-staleness pattern for every master-level field the product modal edits — `in_house_production`, `is_top_product`, `short_name`, `title`, `brand`, `category_id`, `walmart_item_id`, `fulfillment_amazon`. Users had to refresh the whole page to see their edit.
+- **Fix**: added an in-memory cache sync block at the tail of `saveProduct`, after all Supabase writes but before `renderAll` / `renderInventoryTbl`. Steps:
+  - **`allProducts`** — `Object.assign` the updated productData onto the existing entry (or push a new one). Products modal + downstream lookups now see the new value.
+  - **`records[]`** — walk every per-region record for this master_id and patch the master-level fields listed above. Case Qty is stored as `parseInt(productData.case_qty, 10) || 0` (same coercion as records-build).
+  - Wrapped in try/catch so any future field-name mismatch logs to console instead of breaking the save.
+- **Effect**: edit Case Qty on any product → Save Changes → the IP row's Case Qty column reflects the new number on the very next re-render (which fires as part of the save handler). No page refresh needed.
+
+### 2. Inventory modal's ⭐ Top / 🏭 In-house checkboxes work on non-ASIN rows
+- **Bug**: clicking the ⭐ Top or 🏭 In-house checkbox in the inventory modal for a Shopify-only / Chewy-only / in-house-only row (opened via v7.33's new master_id-fallback row click) produced "Could not resolve product master_id." Same for the 🔧 Edit full product card → button.
+- **Root cause**: `_persistInvModalProductFlag` and `jumpToFullProductCard` looked up the record by `editAsin`. That was empty for non-ASIN rows (v7.33 stores it as `''` when the row has no ASIN), so `records.find(x => x.asin === '')` matched nothing → alert.
+- **Fix**:
+  - New module-level `editMasterId` tracks the internal SKU of the record currently open in the modal. Set in `openEditModal`, cleared in `closeEditModal`.
+  - Both handlers now use the same fallback chain as `openEditModal`: `(asin+region)` → `(asin)` → `(master_id+region)` → `(master_id)`. Non-ASIN rows resolve via master_id and the operations complete cleanly.
+
+### No changes to
+- The v7.33 row-click routing (still `openEditModal(asin, region, master_id)` with master_id as third arg).
+- The v7.33 case_qty default:true + auto-migration flag (still lands the column for existing users on next load).
+- Any Supabase write paths — v7.34 is purely front-end cache sync + modal resolver hardening.
 
 ## v7.33 — IP row click: master_id fallback; Status-by mode restore uses setStatusMode; Case Qty column default ON
 Three related fixes on Inventory Planning driven by the same session's user feedback:
