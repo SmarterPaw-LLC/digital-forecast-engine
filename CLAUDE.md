@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.24**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.25**
+
+## v7.25 — Removed the "📥 Last report" period option (never resolved reliably)
+- Jason: "would you remove the 'last report' from the drop down? it never worked and the new last week one works correctly." Confirmed — v7.04's async resolver against `sku_economics.uploaded_at` had rough edges that never got ironed out, and v7.24's `Last week (Sun–Sat)` covers the same intent (view what Amazon's most recent weekly report showed) more directly.
+- **Removed** the `<option value="last-report">` from the Amazon P&L period dropdown. `Last week (Sun–Sat)` is now the first option — so a fresh page load defaults to that.
+- **Code paths left in place** (`getPnlDateRange`'s `last-report` branch, `onPnlPeriodChange`'s async resolve, `resolvePnlLastReport`, `_pnlLastReportCache`, `pnl-last-report-badge` element, entry in `getPnlPeriodLabel` map): unreachable via the UI now, but harmless. Removed cleanly if a future refactor wants to prune dead code.
+- No other surfaces are affected — the label map / URL routing / saved-view apply just skip the missing key.
 
 ## v7.24 — Amazon P&L: Sales & Profitability Report + Sun-Sat/month/quarter period presets
 - **Ask (Jason)**: "on the amazon P&L, i want to be able to run a sales and profitability report, that looks at trends over the last week (data is loaded for the previous week sun - sat, so make sure a 'week' is defined that way), month-to-date, quarter, previous quarter, etc -- and look at profitability. I want to analyse by region top and bottom performers, big changers up and down, etc"
