@@ -2,7 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.34**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.35**
+
+## v7.35 — In-house CSV export: cumulative vs weekly toggle + scoped-radio-read fix + labeled headers
+- **Ask (Jason)**: "i selected to only export cases but it export both." + "also, i want the option to export cumulative or weekly."
+- **Fix #1 — mode read scoped to the dialog** so a stray same-named radio somewhere else on the page can't override it. `weeklyOpts()` now scopes `querySelector` to the `#exportDlg` element rather than the whole document. Same treatment for the values radios. If Jason's "Cases only" was ever getting overridden by a global-scope pick-up, this eliminates that class of bug.
+- **Fix #2 — new "Values" radio group** in the export dialog (in-house mode only):
+  - **Weekly (per-week)** — marginal units due THAT one week. Current behavior — kept as default.
+  - **Cumulative (running total)** — running total from today through end of each week. Week 8 = total need through 8 weeks out.
+- **`weeklyOpts` returns `{weeks, mode, valueMode}`** now. Persisted per-browser (`localStorage.ipCsvWeeklyValueMode`) alongside the existing weeks + mode keys.
+- **`getInventoryWeeklyBreakdown(r, weeks)`** now returns both `units` (marginal) and `cumUnits` (cumulative) so the CSV can pick either without recomputing. Cumulative math: `inventoryNeed(r, endDay)` — same horizon integration the on-screen Need columns already use, so cumulative-mode weekly columns tie out exactly to the horizon totals.
+- **Column headers explicitly labeled**:
+  - Weekly mode → `WK_MM-DD-YYYY_Units` / `WK_MM-DD-YYYY_Cases`
+  - Cumulative mode → `CUM_THRU_MM-DD-YYYY_Units` / `CUM_THRU_MM-DD-YYYY_Cases`
+  So it's clear from the header which math produced the number.
+- **Dialog layout** — the weekly block now has two labeled rows: `Columns:` (Units only / Cases only / Both) and `Values:` (Weekly / Cumulative). Tooltip on each explains the semantic.
+- **Cases math for cumulative** — `ceil(cumUnits / case_qty)` per week. So Week 8 cases = cases needed to cover the full 8-week horizon (not just the marginal 8th week). Both interpretations are useful — cumulative for "how much do I need to have on hand by week N," weekly for "what's the production schedule per week."
 
 ## v7.34 — Product-modal saves push to in-memory caches (case_qty visible immediately); inventory modal flag handlers use master_id fallback
 Two related bugs on the inventory edit modal, both surfaced by v7.33 letting non-ASIN rows open the modal for the first time.
