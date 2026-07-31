@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.25**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.26**
+
+## v7.26 — Fix: Sales & Profitability Report body was empty on expand (buildAdSpendBuckets signature bug) + defensive try/catch
+- **Bug** (Jason): "the sales and profitability report opens to nothing." Panel expanded to a blank body; even the summary sub-header line was missing.
+- **Root cause**: `buildPnlPrevAgg` (v7.24) called `buildAdSpendBuckets({from, to, region, brand})` with the OPTIONS object as the first arg — but the function's signature is `(rows, opts)`. Passing an object as `rows` blew up on `for (const r of rows)` (objects aren't iterable), the exception bubbled out of `buildPnlPrevAgg` → `renderPnlReport` → the pnl render call site. The whole report path silently threw, so the sub-header + body innerHTML never got set. Only surfaced when the details panel was expanded to reveal the empty body.
+- **Fix #1** — call `buildAdSpendBuckets(amazonAdSpendData || [], {from, to, region})` correctly (matches the pattern in `pnlTotalsForRange` at line 10083). Dropped the `brand` key from opts since the function doesn't read it. Also inlined the EU region-array literal (was reaching for `[...EU_REGIONS]` — `EU_REGIONS` is a `Set` above and this call site doesn't have it in scope).
+- **Fix #2** — wrapped the `renderPnlReport(agg, from, to)` call at the bottom of `renderPnl()` in try/catch. On failure: logs to console, sets the sub-header to "error rendering — see console", and puts a red inline message in the body ("Report render failed: <msg>. Filters + scorecards above are unaffected."). So a future bug in the report code path can't silently blank the panel again — you see the error immediately on expand and the rest of the P&L keeps working.
+- **No changes to the report contents / period presets / scorecards** — v7.24 UI is intact; this is a pure hotfix.
 
 ## v7.25 — Removed the "📥 Last report" period option (never resolved reliably)
 - Jason: "would you remove the 'last report' from the drop down? it never worked and the new last week one works correctly." Confirmed — v7.04's async resolver against `sku_economics.uploaded_at` had rough edges that never got ironed out, and v7.24's `Last week (Sun–Sat)` covers the same intent (view what Amazon's most recent weekly report showed) more directly.
