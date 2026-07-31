@@ -2,7 +2,40 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.23**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.24**
+
+## v7.24 — Amazon P&L: Sales & Profitability Report + Sun-Sat/month/quarter period presets
+- **Ask (Jason)**: "on the amazon P&L, i want to be able to run a sales and profitability report, that looks at trends over the last week (data is loaded for the previous week sun - sat, so make sure a 'week' is defined that way), month-to-date, quarter, previous quarter, etc -- and look at profitability. I want to analyse by region top and bottom performers, big changers up and down, etc"
+- **Two additions layered on the existing Amazon P&L page** (region toggle + fx + brand + category + search + selection all keep working exactly as before — the report reads from the aggregation the page already computes):
+
+### 1. New period presets (Sun-Sat week semantics)
+- Added to the top of the Period dropdown, above the rolling-N-day options:
+  - **`Last week (Sun–Sat)`** — previous COMPLETED Sun→Sat window. Matches Amazon SKU Economics' weekly convention exactly (they define week 1 as Sun→Sat), so this ties out with the source report you just pulled.
+  - **`Week-to-date`** — this week's Sunday through today.
+  - **`Month-to-date`** — 1st of current month → today.
+  - **`Last month`** — previous complete calendar month.
+  - **`Quarter-to-date`** — first day of current quarter → today. Q1 = Jan-Mar, Q2 = Apr-Jun, Q3 = Jul-Sep, Q4 = Oct-Dec.
+  - **`Last quarter`** — previous complete calendar quarter. Handles year rollover cleanly (Jan-Mar view → last quarter is Oct-Dec of prior year).
+  - **`Last year`** — Jan 1 – Dec 31 of the prior year.
+- Existing rolling-N options (`Last 7 / 30 / 60 / 90 / 180 / 365 days`) + YTD + custom + `📥 Last report` all kept — they answer different questions ("what did the last 30 rolling days look like" vs "what did the previous complete month look like").
+- **`getPnlDateRange()` extended** to handle each new key. Sun-Sat math uses `Date.getDay()` (0 = Sun) — no timezone math since P&L rows already carry local dates. `last-month` uses the JS trick `new Date(year, month, 0)` = last day of the previous month.
+- **`getPnlPeriodLabel()`** — new helper that maps period keys → human-readable labels. Surfaced in the Report panel's sub-header so operators can see which window they're analyzing.
+
+### 2. 📈 Sales & Profitability Report panel
+- New collapsible `<details>` panel below the scorecards/chart and above the fee-breakdown + product table. Populated by `renderPnlReport(agg, from, to)` at the end of every `renderPnl()` pass — reads the `agg` map the page already built, adds one extra loop for the prior-period comparison, no extra Supabase round-trips.
+- **Summary line** (visible when collapsed): `Period · date range · N products · $X net proceeds · ▲/▼ Y% vs prior`. Lets you eyeball the state without expanding.
+- **Expanded layout — 4 primary panels** (2×2 grid):
+  - **🏆 Top 10 — Net Proceeds**: ranked by absolute profit. Shows Units · Net Sales · Net Proceeds (green). Answers "which SKUs are actually paying the bills."
+  - **🔻 Bottom 10 — Contribution %**: (Net Proceeds − COGS) ÷ Net Sales. Filters to ≥5 units so a one-off refund on a single sale doesn't drown the list. Color-coded (≥15 green, ≥5 orange, else red). Answers "which SKUs are leaking money after all costs."
+  - **▲ Biggest Gainers**: joined against the prior-period agg, sorted by ΔNet Proceeds ($) desc. Shows Prev NP · Cur NP · Δ$ · Δ%. Answers "what suddenly turned up."
+  - **▼ Biggest Losers**: same join, sorted asc. Answers "what suddenly turned down."
+- **Secondary panels** (surfaced only when non-empty):
+  - **🆕 New this period**: products with sales in the current window but nothing in the prior window. Common cases: new launch, first Amazon sale post-listing.
+  - **⚫ Dropped off**: products sold in the prior period but nothing now. Common cases: stockouts, delistings, seasonal end.
+- **Region-aware for free**: the report reads the same `agg` map + `getPnlSource()` + region predicate the page already uses. Toggling US / CA / EU (or picking a specific EU market) narrows the entire report. So "top performers in EU" is just "flip to EU region, expand the panel."
+- **Prior-period math** (`buildPnlPrevAgg(prevFrom, prevTo)`): mirrors renderPnl's main aggregation loop but only carries the fields the report needs (`units, gross_sales, net_sales, sponsored, net_proceeds, cogs_total`). Honors the same brand + category + search + top-product filters + Amazon Ads per-ASIN overlay + fx conversion so the deltas are apples-to-apples. Prior-period range comes from the existing v4.72 `getPnlPrevDateRange({from, to})` — equal-length window immediately preceding the current range.
+- **Currency-aware**: display symbol switches ($/CA$/£/€) with the P&L's currency toggle. Fx multiplier resolves identically to the main aggregation so scorecard totals + report totals always tie out.
+- **No new database columns** — pure client-side analysis over existing `sku_economics` + `sku_economics_eu` + `product_cogs` + `amazon_ad_spend`.
 
 ## v7.23 — Products page: column picker + saved views (parity with Inventory Planning)
 - **Ask**: Jason: "i should be able to set columns, save views, etc on the products page the same way i can on the inventory planning page." The Products page had a hardcoded thead + tbody + a Lifecycle-view checkbox that conditionally added 3 columns. No way to hide the ones you didn't care about, no way to save a curated column+filter combination for repeat use.
