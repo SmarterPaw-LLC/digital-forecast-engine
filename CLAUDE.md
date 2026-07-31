@@ -2,7 +2,35 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.26**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.27**
+
+## v7.27 — Case Qty + Cases Needed / Units Needed columns + in-house production weekly CSV breakdown; Bottom 10 drops min-unit filter
+- **Ask (Jason, two parts)**:
+  1. "for the inventory planning - in house production schedule, i need a new product dimension - case qty - that i can set. the production team needs to know how many units are in a case, so i need to expose this on the inventory planning table columns and csv export. the cases needed/units needed should be selectable columns. they also need a weekly breakdown of what is needed, so on the csv export i need to see column headers for the week start date for the next x weeks (default 8 weeks)"
+  2. "also - do not have min unit count on the bottom 10 - sometimes small unit sales results in big losses and we need to trim out this inventory"
+- **⚠ SQL TO RUN:** `supabase_v7_27_case_qty.sql` — adds `products.case_qty INTEGER` (nullable — no fleet-wide sensible default). Run once in Supabase → SQL Editor. Idempotent (`add column if not exists`).
+
+### Case Qty (units per case) — master-level product field
+- **Product edit modal**: new "Case qty (units per case)" number input in the Product Info section, below Supplier. Loaded via `openProductModal` from `p.case_qty`; persisted via `saveProduct` (parsed with `parseInt` to guard against decimals). Blank / 0 = "not set" and cells render `—` throughout the app.
+- **Records-build** propagates `case_qty` onto every per-region record (`parseInt(p.case_qty, 10) || 0`) so the IP registry can read it as `r.case_qty` without extra lookups.
+
+### Three new IP columns (opt-in via 📋 View popup, PO PLANNING group)
+- **`case_qty` → "Case Qty"** — sortable, exports the raw integer to CSV. Renders `—` when unset with a "click the product modal" hint on hover.
+- **`units_needed` → "Units Needed"** — mirrors the active-horizon (30/60/90/120d dropdown) Need TOTAL. Same math as the Need columns, but explicitly named for the production team's context. Exports the integer.
+- **`cases_needed` → "Cases Needed"** — `Math.ceil(units_needed / case_qty)`. Sortable, exports the integer. Requires `case_qty` to be set; else renders "— set case qty". Cell tooltip shows the math ("N units ÷ K/case = X cases").
+
+### In-house production weekly CSV breakdown
+- **Only appended when `Status by = 🏭 In-house production`** — that's the mode the production team plans against, and the columns would just be noise on other modes.
+- **Default 8 weeks**. Override via `localStorage.ipCsvWeeklyWeeks` (clamped 1–52). Setting persists per browser. UI to configure it is deferred to feedback — hard-coded default + localStorage escape hatch is enough to unblock the production team; a proper picker can drop into the export dialog later if Jason wants it.
+- **Column shape** — 2 columns per week × N weeks appended to the base CSV:
+  - `Week_YYYY-MM-DD_Units` — units needed that week (Sunday-anchored week start)
+  - `Week_YYYY-MM-DD_Cases` — cases needed (`ceil(units/case_qty)`); blank when case_qty unset
+- **Anchored to THIS week's Sunday** — matches Amazon SKU Economics + how the team already thinks about the schedule. First week may span past days; `inventoryNeed(r, X)` integrates from today forward so past-day offsets clamp to 0 (no double-count).
+- **`getInventoryWeeklyBreakdown(r, weeks)`** helper — placed next to `inventoryNeed()`. Uses successive `inventoryNeed(r, X)` differences to compute per-week marginal need, so the weekly CSV totals ROLL UP EXACTLY to the horizon column totals on the on-screen table. Same math family as v4.194's per-period AMAZON REORDER columns.
+
+### Sales & Profitability Report — Bottom 10 fix
+- **Removed the 5-unit minimum** on the Contribution % ranker. Jason correctly pushed back: "sometimes small unit sales result in big losses and we need to trim out this inventory" — those are exactly the SKUs the trim-candidate list should surface. Kept a soft `(units > 0 OR net_sales !== 0)` guard so rows with literally zero activity (created but never sold) don't clutter the list.
+- Panel subtitle updated: `min 5 units to exclude noise` → `trim-candidate list (no min-unit filter — small-volume losers matter)`.
 
 ## v7.26 — Fix: Sales & Profitability Report body was empty on expand (buildAdSpendBuckets signature bug) + defensive try/catch
 - **Bug** (Jason): "the sales and profitability report opens to nothing." Panel expanded to a blank body; even the summary sub-header line was missing.
