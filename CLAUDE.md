@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.35**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.36**
+
+## v7.36 — Export dialog: dispatch BEFORE cleanup (fix "Cases only exports both")
+- **Bug (Jason, third report)**: after v7.35's scoped radio read, "Cases only" was STILL exporting both columns.
+- **Root cause (real one this time)**: the export dialog's three action buttons ran `cleanup()` FIRST, then `dispatch()`:
+  ```js
+  document.getElementById('exp-all').onclick = () => { cleanup(); dispatch('all'); };
+  ```
+  `cleanup()` removed `#exportDlg` from the DOM. Then `dispatch('all')` fired, which called `weeklyOpts()` whose v7.35 scoped query looked up `#exportDlg input[name="exp-weekly-mode"]:checked`. Element gone → `scope = document` fallback → no radios found → `modeEl?.value || 'both'` → mode defaulted to 'both'. Same for `valueMode` → defaulted to 'weekly'. Both fell back to defaults regardless of what Jason had actually selected.
+- **Fix**: swapped the order on all three action buttons. `dispatch()` runs first (reads the radio state while the dialog is still mounted), then `cleanup()` tears down the DOM. Since both are synchronous, this is safe — the download blob is created + click is triggered before cleanup fires.
+- **Verified via trace**: my v7.35 browser probe on click-to-check had confirmed the radio state was read correctly WHEN the dialog was mounted. What I missed was that the button's click handler destroyed the dialog before dispatch. Reordering closes the gap.
+- **No other functional changes** — v7.35's cumulative/weekly toggle + WK_/CUM_THRU_ header labels + scoped-query hardening all still in place.
 
 ## v7.35 — In-house CSV export: cumulative vs weekly toggle + scoped-radio-read fix + labeled headers
 - **Ask (Jason)**: "i selected to only export cases but it export both." + "also, i want the option to export cumulative or weekly."
