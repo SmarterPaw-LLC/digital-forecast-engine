@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.29**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.30**
+
+## v7.30 — PDF report: pre-load data sources for selected regions before generating sections
+- **Bug (Jason)**: "the eu report pdf isn't picking up any data despite it being in the app." PDF sections for EU regions rendered with $0 net sales / 0 products and a false-positive "1 week missing data" banner reading "0 found in sku_economics_eu".
+- **Root cause**: `euPnlData` (rows from `sku_economics_eu`) is only loaded when the user actively clicks the 🇪🇺 EU region toggle on the P&L page — `loadEuPnlTab()` fires from `setPnlRegion('EU')`. If the operator opens the PDF picker without ever visiting EU (or before switching there), `euPnlData` is still `[]`. `buildPnlAggForPdf('EU', …)` iterates an empty array → returns `{}` → section renders empty. Missing-weeks audit sees 0 rows too → orange banner. Same failure mode applies to `pnlData` (US/CA) if the P&L page itself hasn't been opened yet in the session, though that path is rarer since users typically visit the P&L before hitting Generate.
+- **Verified via browser probe**: `euPnlData.length = 0` when session's `pnlRegion === 'US'`. All expected — the lazy-load design was intentional to avoid pulling data the user never asked for. Just needs a pre-load at the PDF generation site.
+- **Fix**: at the top of `generatePnlPdfReport`, inspect the selected regions and pre-load whichever data sources are needed:
+  - `needsUsCa` = any of US / CA selected → `await loadPnlTab()` (skip if `pnlData` already populated)
+  - `needsEu` = 'EU' (all EU markets) OR any per-country EU code selected → `await loadEuPnlTab()` (skip if `euPnlData` already populated)
+- **UX**: shows a green loading pill (fixed top-center, `⏳ Loading data for EU — first-time fetch, back in a moment…`) while the fetch is in flight. Pill message adapts to which sources are being loaded (US/CA / EU / both). Removed on completion (via `finally` so it clears even if a fetch throws). Errors log to console but don't abort — the PDF still renders whatever data did load, and the missing-weeks banner accurately reflects it.
+- **`Promise.all`** so US/CA + EU fetches run in parallel when both are needed (single ~1-2s wait instead of sequential).
+- **Skips the reload** when data is already loaded (fast common case — the user's already on Amazon P&L and just wants to add EU to a PDF they've generated once before).
+- **No API changes** — `_pnlPdfSourceForRegion`, `buildPnlAggForPdf`, `computePnlMissingWeeks`, and the section HTML template all unchanged; the fix is purely load-order.
 
 ## v7.29 — PDF missing-weeks audit: exclude in-progress Sun-Sat weeks
 - **Bug (Jason)**: PDF for `US — Month-to-date` (2026-07-01 → 2026-07-31) flagged `2026-07-27` as missing. "It's expecting a week in July that hasn't happened yet (i don't have this week's sales yet)."
