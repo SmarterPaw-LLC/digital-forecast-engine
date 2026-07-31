@@ -2,7 +2,34 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.37**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.38**
+
+## v7.38 — "Why this need?" tooltip on Units Needed + Cases Needed columns
+- **Ask (Jason)**: after diagnosing that Grand Daddy Purr Catnip Buds' Nov/Dec production schedule was ~3-4× lower than its seasonal peak suggested, needed a per-row diagnostic to see WHICH channel is driving each row's need without opening the code.
+- **New `buildIpNeedTip(r, X)` helper** — placed next to `inventoryNeed`. Given a record + horizon, returns a multiline plain-text string suitable for a `title="..."` attribute. Layout:
+  ```
+  WHY THIS NEED?  (90d horizon)
+  ─────────────────────
+  🅰 Amazon FBA (reorder events)
+     vel: 0.42/day
+     FBA DOS: 12.3d
+     first order-by day: 0
+     1 reorder event in horizon:
+       • order day 0 → arrive day 60 → 38u (sea 1.02×)
+     → contributes 38 units to Need
+  🛍 Shopify (continuous draw)
+     vel: 0.28/day
+     base: 25 units (90d, seasonally integrated via product curve)
+  ═════════════════════
+  TOTAL: 63 units
+    = base 25 (continuous drain) + reorder 38 (events)
+  ```
+- **Surfaces the gotchas** operators keep hitting:
+  - **Amazon FBA reorder is TRIGGER-based** — events fire on DOS crossing threshold, not on seasonality peaks. Each event's qty applies seasonality only to its OWN [arrival, arrival+reorder_qty_days] window. A big seasonal peak inside the horizon may not add extra events, so the schedule can under-represent the peak vs the Seasonality page.
+  - **Chewy demand comes from Chewy's forward monthly forecast** (`chewy_forecasts` table), NOT our derived curve — a strong seasonal shape in Chewy history shows on the Seasonality page but doesn't apply to future need unless Chewy's forecast itself is peaky. Tooltip flags this with a ⚠.
+  - Amazon.base for FBA products is FBA-internal churn — excluded from Total; tooltip calls this out explicitly.
+- **Wired into both columns**: `units_needed` (raw tooltip) and `cases_needed` (case-math header + breakdown appended). Both cells get `cursor:help` so the affordance is discoverable.
+- **Try/catch guarded** so a future breakdown-shape change can't blow up the whole render pass — falls back to `(need-tip error: ...)` and logs to console.
 
 ## v7.37 — Weekly CSV headers: date leads, mode tag moves to the end
 - **Ask (Jason)**: "the column headers are showing as 'CUM_THRU_09-06-2026_Cases' — please stop prepending information before the date — the date is used to quickly see what week it is. add this to the end."
