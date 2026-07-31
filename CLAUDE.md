@@ -2,7 +2,27 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.38**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.39**
+
+## v7.39 — Seasonality page: tooltips everywhere ("I can't remember what these lines even mean")
+- **Ask (Jason)**: "on the seasonality page i need tooltips for everything here. i can't remember what these lines even mean."
+- **Added `title="…"` tooltips + `cursor:help`** across every non-obvious control and label:
+  - **Bulk seasonality bar**: bar label itself, Min weeks label, Method label, Apply-to-Selected button, Apply-to-ALL button, Revert Selected button, seasonal_type dropdown, Set-type button. Each explains what the control does and what the trade-off is.
+  - **Active-product bar**: "Active product" label, Preview calc button, Apply preview button, Revert this one button. Each spells out the workflow (compute draft → eyeball fit → save or discard).
+  - **Curve table rows** (the horizontal bands with per-week multipliers):
+    - `Category default` → "The FALLBACK curve for this product's category — used when the product itself has no per-product curve saved."
+    - `Saved (…)` → "The seasonal curve THIS PRODUCT is currently using in every downstream forecast (Demand Need columns, Inventory Cases Needed, PDF report)."
+    - `Preview (calc, N wks)` → "A DRAFT curve you're considering — not yet saved."
+    - `Adj u/day` → "blended_daily × curve[week] — the seasonally-adjusted DAILY UNITS the forecast will use for each week. Multiply by 7 to get weekly units. This is what actually drives Inventory Planning need."
+  - **Per-week cells** in each row show: `Week N: 0.42 × 3.30× = 1.39 units/day (9.7/week)` — the exact math.
+  - **Chart legend guide** (new block above the canvas) — the four line types get their own hover explanations:
+    - **Actual units/wk** (green) — raw history from `sales_weekly` + `shopify_sales_daily`
+    - **Seasonal fit (trend×curve)** (orange solid) — model's reconstruction; if it tracks Actual, the curve is good
+    - **Trend (de-seasonalized)** (grey dashed) — ±26-week rolling mean; the growth/decline shape after removing the annual cycle
+    - **Projected (next 120d)** (orange dashed) — future values from `forwardSeaDemand` — **this is what downstream forecasts consume**
+- **The Projected-line tooltip** connects the dots explicitly: "If a peak looks too small here, it'll look too small in the production schedule too." That was the key insight from the SP-0060 Grand Daddy Purr investigation.
+- **Legend guide auto-shows/hides** with the chart canvas — no visual noise when no product is active.
+- **Existing tooltips** (Min weeks, Stockout floor, De-trend, Method dropdown) kept intact — v7.39 fills in the gaps around them.
 
 ## v7.38 — "Why this need?" tooltip on Units Needed + Cases Needed columns
 - **Ask (Jason)**: after diagnosing that Grand Daddy Purr Catnip Buds' Nov/Dec production schedule was ~3-4× lower than its seasonal peak suggested, needed a per-row diagnostic to see WHICH channel is driving each row's need without opening the code.
