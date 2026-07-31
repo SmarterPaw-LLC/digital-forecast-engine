@@ -2,7 +2,41 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.30**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.31**
+
+## v7.31 — Sales & Profitability Report: Top Contribution Profit panel + Bottom CP now ranks by $ + per-brand sub-sections
+- **Ask (Jason, three parts)**:
+  1. "instead of net proceeds, it should be contribution profit for the bottom 10 contribution %. and the list should be ordered by this instead of the % column (since % can [be] overstated.)"
+  2. "i want a top contribution %."
+  3. "i want all of these same tables by brand."
+
+### 1. Bottom 10 ranks by contribution profit ($), not %
+- **Column swap**: "Net Proc" → "Contrib Profit" (net proceeds − COGS). Same green/red coloring.
+- **Sort change**: ranked by contribution profit ASCENDING (most negative first). Contribution % stays visible as a context column but no longer drives the sort. Rationale: on a $8-net-sales product, a $8 loss reads as −2000% which pushed real trim candidates (a $500 loser at −20%) out of the top 10. Ranking by $ contribution profit surfaces the biggest actual money movers.
+- **Panel title**: "Bottom 10 — Contribution %" → "Bottom 10 — Contribution Profit". Hint text updated: "trim candidates — ranked by contrib $ (small % on small volume can mislead)".
+
+### 2. New "Top 10 — Contribution Profit" panel
+- Same math and columns as Bottom 10 but sorted DESCENDING (most positive first). Answers "which SKUs put the most $ on the bottom line" — complements the Top NP panel (which measures revenue-side profit before COGS).
+- **Grid changed from 2×2 → 2×3 top row + 1×2 second row**:
+  - **Row 1** (3 cols): 🏆 Top 10 Net Proceeds · 🌟 Top 10 Contribution Profit · 🔻 Bottom 10 Contribution Profit
+  - **Row 2** (2 cols): ▲ Biggest Gainers · ▼ Biggest Losers
+
+### 3. Per-brand sub-sections
+- Below the main "all brands" grid, one collapsible `<details>` per brand present in the current view (Meowijuana / Doggijuana / Kitty Ka-Zoom / etc). Each contains the SAME 5-panel grid, scoped to that brand's products only. Prior-period agg also brand-filtered so gainers/losers are like-for-like.
+- **Collapsed by default** to keep the page scannable — the main grid is what most operators want first; the brand splits are on-demand drill-down.
+- **Summary shows** brand-scoped totals: `N products · $X net proceeds · $Y contrib profit` so you can eyeball which brand is doing the heavy lifting without expanding.
+- **Only rendered when >1 brand present** (single-brand views would be identical to the main grid — no value in duplicating).
+- **`subReport(subCur, subPrev)` extracted** as the shared panels-builder inside `renderPnlReport`. Called once for the main grid and again per brand. Same layout, same coloring, same math family.
+
+### PDF: same three changes applied to buildSection
+- Bottom 10 CP: "Contrib Profit" column + $ sort (matches on-page).
+- New Top 10 Contribution Profit panel between Top NP and Bottom CP.
+- **Per-brand sub-pages** — appended to each region-period section with `page-break-before: always`, so each region-period gets an "overall" page followed by a per-brand-breakdown page. Uses top-5 rankings (not 10) with tighter formatting so each brand fits in one visual band. Includes: 🏆 Top 5 Net Proc · 🌟 Top 5 Contrib $ · 🔻 Bottom 5 Contrib $ · ▲ Top 3 Gainers · ▼ Top 3 Losers.
+- Brand groups skipped when only one brand present in that region-period (no split page for a single-brand region).
+
+### Layout notes
+- On-page grid changed from `1fr 1fr` → `1fr 1fr 1fr` for the top row + `1fr 1fr` for the second row. Both wrap gracefully on narrower viewports.
+- PDF pages: default landscape letter still works — 3 rank columns fit at the standard font sizes.
 
 ## v7.30 — PDF report: pre-load data sources for selected regions before generating sections
 - **Bug (Jason)**: "the eu report pdf isn't picking up any data despite it being in the app." PDF sections for EU regions rendered with $0 net sales / 0 products and a false-positive "1 week missing data" banner reading "0 found in sku_economics_eu".
