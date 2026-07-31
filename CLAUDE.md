@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.28**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.29**
+
+## v7.29 — PDF missing-weeks audit: exclude in-progress Sun-Sat weeks
+- **Bug (Jason)**: PDF for `US — Month-to-date` (2026-07-01 → 2026-07-31) flagged `2026-07-27` as missing. "It's expecting a week in July that hasn't happened yet (i don't have this week's sales yet)."
+- **Root cause**: v7.28's `computePnlMissingWeeks` treated every Monday in the range as "expected." But Amazon SKU Economics reports Sun→Sat weekly windows (stored as the Monday inside), so a Monday X represents Sun (X−1) → Sat (X+5). Monday 2026-07-27 → Sat 2026-08-01, which is in the future when Jason ran this. Amazon hadn't published it yet, so flagging it as "missing" was false-positive.
+- **Fix**: only include a Monday in the `expected` set when its Saturday-end is STRICTLY BEFORE today (`sat < today`). In-progress weeks (Sat ≥ today) get counted separately into a new `skippedInProgress` field. Banner treatment:
+  - **≥1 truly missing week** → orange banner names the missing dates + appends `(N in-progress week(s) not yet expected — Amazon publishes only after Sat-end)` when relevant.
+  - **All expected weeks present** → green ✓ banner, same in-progress note when N > 0.
+  - **Entire range is in-progress** (nothing has closed yet) → new blue info banner: `ℹ N week(s) in this range still in progress (Sat-end after today) — nothing to audit yet.`
+- **Effect for Jason's MTD-July on 2026-07-31**: Mondays 6/13/20 have Sat-ends 7/11, 7/18, 7/25 (< today) → expected. Monday 7/27 has Sat-end 8/1 (≥ today) → skipped as in-progress. `expected = 3, actual = 3, missing = [], skippedInProgress = 1` → green ✓ banner with the in-progress note.
+- **Same fix for `Last week (Sun–Sat)`** — that period is a fully-closed week by design, so the audit still runs cleanly there.
+- **No other functionality touched** — PDF layout, sections, scorecards, rankings all identical to v7.28.
 
 ## v7.28 — Sales & Profitability Report → multi-period × multi-region PDF + missing-weeks audit
 - **Ask (Jason)**: "for the PDF of the profitability report, i need to also be able to select multiple regions. I also need to know if there are any weeks of data missing." Plus the original: multi-period PDF export.
