@@ -2,7 +2,26 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.32**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.33**
+
+## v7.33 — IP row click: master_id fallback; Status-by mode restore uses setStatusMode; Case Qty column default ON
+Three related fixes on Inventory Planning driven by the same session's user feedback:
+
+### 1. Non-ASIN rows now open the inventory edit modal (master_id fallback)
+- **Bug (Jason)**: "for some reason i cannot click on every other row here to open the product card." Rows without an ASIN (Whisker Tickler, Mice Dreams, Cloud 9, Paw Natural OG, etc — Shopify-only / Chewy-only / in-house-only products) silently failed on click.
+- **Root cause**: `openEditModal(asin, region)` looked up records by `records.find(x => x.asin === asin)`. When `asin === ''`, nothing matches → `if (!r) return;` bails → no modal opens.
+- **Fix**: signature extended to `openEditModal(asin, region, masterId)`. Row-click handler now passes `r.master_id` as the third arg. Lookup order: (asin+region) → (asin) → (master_id+region) → (master_id). Jason correctly pointed out master_id is the internal SKU and should be the reliable fallback identifier. All rows now open the SAME inventory edit modal (per-region FBA / warehouse / PO planning fields), keyed on internal SKU when ASIN is empty. Saves still write to `inventory` by (asin, region) — no-op for empty-ASIN rows since there's nothing to key on, but the modal's master-level fields (top / in-house flags, product-level PO settings via `products` upsert) all still save.
+
+### 2. Status-by mode now restores reliably when applying a saved view
+- **Bug (Jason)**: "the 'status by' drop down selection isn't saving to the view. i saved it as in-house and it didn't save."
+- **Root cause candidate**: `ipApplyView` set the dropdown value + localStorage manually then called `renderInventoryTbl()` at the end. That worked in isolation but was fragile — any other init/render pass that read localStorage between the set and the render could revert.
+- **Fix**: route through `setStatusMode(v.statusMode)` — the same code path as an actual onchange event on the dropdown. Guarantees localStorage + render happen together, and any downstream side effects (future ones added to `setStatusMode`) fire too. Falls back to the manual localStorage write when `setStatusMode` isn't defined (defensive; it always is).
+
+### 3. Case Qty column defaulted ON (was opt-in since v7.27)
+- **Bug (Jason, twice now)**: "i also want to see the case qty as a column that is selectable." The column has been available in the View popup under PO Planning since v7.27, but defaulted to hidden — the production team was hunting for it.
+- **Fix**: flipped the registry default `false → true`. Small master-level integer that always applies (or renders `—` when unset), so surfacing it is low-cost and high-value for production planning.
+- **One-time migration** (mirrors v5.48 Shipments pattern): existing users' `ipVisibleCols` (persisted from before v7.33) doesn't include `case_qty`, so on next page load we inject it once and set `ipCaseQtyAutoShownV733=1` in localStorage. A deliberate hide via the popup later doesn't get reverted — the flag stays set.
+- `units_needed` and `cases_needed` remain `default:false` — they duplicate the existing Need TOTAL columns' math (just with a different label and a case-count division). Opt-in for the production team when they specifically want that view.
 
 ## v7.32 — IP CSV export: honor View selection strictly + weekly options dialog + MM-DD-YYYY headers
 - **Ask (Jason, three parts)** on the Inventory Planning CSV export:
