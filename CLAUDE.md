@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.36**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.37**
+
+## v7.37 — Weekly CSV headers: date leads, mode tag moves to the end
+- **Ask (Jason)**: "the column headers are showing as 'CUM_THRU_09-06-2026_Cases' — please stop prepending information before the date — the date is used to quickly see what week it is. add this to the end."
+- **Fix**: swapped header shape.
+  - Weekly mode: `MM-DD-YYYY_Units_WK` / `MM-DD-YYYY_Cases_WK`
+  - Cumulative mode: `MM-DD-YYYY_Units_CUM_THRU` / `MM-DD-YYYY_Cases_CUM_THRU`
+- Date leads so week-by-week scanning is fast; the mode tag stays as a suffix for self-documentation.
+- No other behavior changes — v7.36's dispatch-before-cleanup fix + v7.35's cumulative/weekly toggle all still in place.
 
 ## v7.36 — Export dialog: dispatch BEFORE cleanup (fix "Cases only exports both")
 - **Bug (Jason, third report)**: after v7.35's scoped radio read, "Cases only" was STILL exporting both columns.
