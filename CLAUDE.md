@@ -2,7 +2,37 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.31**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.32**
+
+## v7.32 — IP CSV export: honor View selection strictly + weekly options dialog + MM-DD-YYYY headers
+- **Ask (Jason, three parts)** on the Inventory Planning CSV export:
+  1. "the columns selected in the view don't match what is exporting"
+  2. "the week column headers are in format `Week_2026-07-26_Units` when it should be in format `07-26-2026_Units`"
+  3. "When pressing 'csv' button, the option for the number of weeks should be able to be set, with 8 weeks being default. Also, I should be able to select units, cases, or both."
+
+### 1. Export honors View selection strictly
+- **Removed the forced `stableUpfront` prepend** (`master_id / asin / brand / region / title` were always shoved to the front regardless of visibility). Pre-v7.32 this meant selecting only `Cases Needed` in the View still produced a CSV starting with 5 identity columns you never asked for. Now: `Visible columns` mode exports EXACTLY what's on screen in the same order. Users who want the identity columns for join-back just leave them visible in the view (or switch to `All columns` mode). Filename still carries the date + mode + status-mode-slug for context.
+
+### 2. Week column header format
+- **`Week_2026-07-26_Units` → `07-26-2026_Units`** (MM-DD-YYYY, no `Week_` prefix — matches how Jason's team reads dates).
+- Same treatment for `_Cases` variant: `07-26-2026_Cases`.
+
+### 3. Export dialog picks weeks + units/cases/both
+- **New "🏭 In-house production — weekly breakdown" block** in the export dialog, shown only when the user is on Inventory Planning with Status by = 🏭 In-house production.
+  - **Weeks** — number input, defaults to 8 (or last-used from localStorage). Clamped 1–52.
+  - **Mode** — radio group: `Units only` / `Cases only` / `Both` (default). Any choice persists per browser via `localStorage.ipCsvWeeklyMode`.
+- **Dispatch** — reads the dialog's inputs at click time, passes `{weeks, mode}` to `downloadInventoryCSV(mode, colScope, weeklyOpts)`. Also writes the chosen weeks + mode to localStorage so the next open remembers them.
+- **`downloadInventoryCSV` signature** extended: `(mode = 'filtered', colScope = 'visible', weeklyOpts = null)`. When `weeklyOpts` is present (dialog-driven path), it's authoritative. When null (programmatic caller), falls back to `localStorage.ipCsvWeeklyWeeks` and 'both' mode — preserves the pre-v7.32 default behavior for any other code path.
+- **Column output per mode**:
+  - `units` → one column per week: `MM-DD-YYYY_Units`
+  - `cases` → one column per week: `MM-DD-YYYY_Cases`
+  - `both`  → two columns per week: `MM-DD-YYYY_Units`, `MM-DD-YYYY_Cases`
+- **Cases cell math unchanged** — `Math.ceil(units/case_qty)` when case_qty is set; blank otherwise.
+
+### No changes to
+- The three v7.27 IP columns (Case Qty / Units Needed / Cases Needed) — still in the View popup under PO Planning, still `default:false` opt-in.
+- `getInventoryWeeklyBreakdown` math — Sunday-anchored, marginal per-week values from cumulative `inventoryNeed(r, X)` differences.
+- `showExportDialog`'s row-scope (Selected / Filtered / Everything) and column-scope (Visible / All) — those still work as before, orthogonal to the new weekly options.
 
 ## v7.31 — Sales & Profitability Report: Top Contribution Profit panel + Bottom CP now ranks by $ + per-brand sub-sections
 - **Ask (Jason, three parts)**:
