@@ -2,7 +2,41 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.27**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.28**
+
+## v7.28 — Sales & Profitability Report → multi-period × multi-region PDF + missing-weeks audit
+- **Ask (Jason)**: "for the PDF of the profitability report, i need to also be able to select multiple regions. I also need to know if there are any weeks of data missing." Plus the original: multi-period PDF export.
+- **New button** — 🖨 PDF Report on the Report panel's summary bar (right side, `stopPropagation` so the click doesn't collapse the details). Opens a modal picker.
+- **Modal picker (`openPnlPdfBuilder`)** — two column-strips of checkboxes with `all` / `none` shortcut buttons:
+  - **Periods** — Last week (Sun–Sat), Week-to-date, Month-to-date, Last month, Quarter-to-date, Last quarter, Last year, YTD, Last 30 days, Last 90 days. Defaults check the currently-active period + Last week + MTD + QTD (the common weekly-review set).
+  - **Regions** — 🇺🇸 US, 🍁 CA, 🇪🇺 EU (all markets combined), 🇬🇧 GB, 🇩🇪 DE, 🇫🇷 FR, 🇮🇹 IT, 🇪🇸 ES, 🇳🇱 NL. Defaults check whatever's currently active on the P&L page.
+- **Generator (`generatePnlPdfReport`)** — for each `(region, period)` combo it opens a new browser window with:
+  - Section header — region label + period label + date range + product count + units
+  - **Missing-weeks audit banner** — orange when ≥1 expected Monday-anchored week has zero rows in the region's data (`⚠ N weeks missing data: 2026-06-08 · 2026-06-15 …` with a hint about which table to upload to). Green when all expected weeks are present. Skipped when there's no expected week (edge case).
+  - 4 scorecard tiles — Net Sales, Total COGS, Net Proceeds (with vs-prior-period % chip), Contribution % (with contribution profit)
+  - 2×2 rankings grid — 🏆 Top 10 Net Proceeds · 🔻 Bottom 10 Contribution % (trim candidates — no min-unit filter, matches v7.27) · ▲ Top 5 Gainers · ▼ Top 5 Losers (vs prior period, joined by master_id)
+  - `page-break-after: always` between sections so each combo gets its own printed page
+- **Print flow**: opens a self-contained new window with all HTML + inline CSS. Top toolbar has a "🖨 Print / Save as PDF" button that triggers `window.print()`. Print CSS: letter landscape, 12mm/10mm margins, toolbar hidden. User's browser handles the PDF via "Save as PDF" in the print dialog — no external libraries needed.
+- **All PDF math in USD** — locked regardless of the P&L page's currency toggle so cross-region sections (e.g. US ↔ CA ↔ EU) compare like-for-like. FX conversion: CAD × (1 ÷ pnlFxRate), GBP × pnlFxGbp, EUR × pnlFxEur.
+
+### Missing-weeks audit (`computePnlMissingWeeks`)
+- Given a `(from, to, region)`: walks the region's data source (pnlData / euPnlData filtered by the region predicate) and collects the distinct `week_start` values within range.
+- Generates the EXPECTED set: every Monday between the first Monday on/after `from` and `to`. Uses local-timezone Date arithmetic (matches how sku_economics stores week_start post-v4.91 fix).
+- Missing = expected − actual. Reports both counts + the missing list so operators can see exactly which uploads to grab.
+- Also returns `expected` + `actual` for future features (e.g. showing "N of M weeks loaded" chips).
+
+### Refactor: `computePnlDateRange(periodKey, opts)`
+- Extracted period → `{from, to}` math out of `getPnlDateRange()` (which now only reads the DOM). Lets the PDF builder compute ranges for arbitrary period keys without disturbing the live UI.
+- `getPnlDateRange` stays as a thin DOM wrapper for existing callers.
+- `getPnlPeriodLabel_(k)` — DOM-free variant that maps any period key → human label. Used in the PDF section headers.
+
+### Region-agnostic per-product agg (`buildPnlAggForPdf`)
+- Twin of `buildPnlPrevAgg` but takes region as an explicit parameter (rather than reading `pnlRegion`). Loads from pnlData for US/CA, euPnlData for EU/GB/DE/FR/IT/ES/NL, and filters via `_pnlPdfSourceForRegion(regionKey)`.
+- Ad-spend overlay uses the same `buildAdSpendBuckets(amazonAdSpendData, {from, to, region})` call the main P&L uses (v7.26 signature fix carries through).
+- COGS conversion multiplier = 1 (COGS is stored USD, PDF displays USD).
+
+### Audit log
+- Records `pnl.pdf_report` with `{regions, periods, sections}` so we can see how the feature gets used.
 
 ## v7.27 — Case Qty + Cases Needed / Units Needed columns + in-house production weekly CSV breakdown; Bottom 10 drops min-unit filter
 - **Ask (Jason, two parts)**:
