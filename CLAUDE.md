@@ -2,7 +2,34 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.41**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.42**
+
+## v7.42 — PDF report: Fee Concentration section (top 10 products by each Amazon fee as % of sales)
+- **Ask (Jason)**: "i want to see products that have a high % of different fees as a % of sale. eg, high ad spend, high fulfillment fees, etc. all of the amazon fees should be represented."
+- **New "Fee Concentration" page** appended to every region-period section (via `page-break-before: always`, so it prints as its own page). Renders a 3-column grid of "Top 10 by X" tables — one per Amazon fee type. Each table shows Net Sales · Fee $ · % Sales, ranked by % of net sales descending. Answers "which SKUs are the worst offenders for ad spend / FBA fulfillment / storage / etc."
+- **Fee taxonomy** — every bucket in `sku_economics` + `sku_economics_eu`:
+  - 📢 Ad Spend (Sponsored Products + non-SP overlay)
+  - 📦 FBA Fulfillment
+  - 🏷 Referral Fee
+  - 🏬 FBA Storage
+  - ⏰ Aged Inventory
+  - ⚠ Low Inventory
+  - 📊 Storage Utilization Surcharge
+  - 📥 Inbound Placement
+  - 🚚 Inbound Transport
+  - ↩ Removal Fee
+  - ↺ Refund Admin
+  - 🇪🇺 Digital Services Fee — FBA *(EU only)*
+  - 🇪🇺 Digital Services Fee — Selling *(EU only)*
+- **`buildPnlAggForPdf` extended** to carry every fee field (was only carrying `sponsored + net_proceeds + cogs_total + units + sales`). Fields aggregate with the same fx conversion as sales.
+- **Filtering rules**:
+  - Only products with `net_sales > 0` (skip zero-sales rows — would divide by zero + be spurious).
+  - Only fees with `|feeAmt| > 0.01` (skip products where the fee didn't apply).
+  - Panels with no eligible rows are omitted entirely (some categories don't accrue Aged Inventory, some don't run Sponsored, etc.).
+- **EU-only DSF panels** auto-hidden when region is US/CA. Auto-shown when region is EU or any per-market EU code (GB/DE/FR/IT/ES/NL) AND at least one row has a non-zero DSF value.
+- **% color coding** — `≥40%` red (severe), `≥20%` orange (worth investigating), below = default. Absolute Fee $ always red (any fee is a cost).
+- **Rendered layout** — 3 columns × 5 rows fits comfortably on landscape letter. Total ~11-13 panels depending on which fees have activity.
+- **No new data pulls** — reads the same `pnlData`/`euPnlData` the rest of the PDF already loads (via v7.30's lazy-load if needed).
 
 ## v7.41 — Walmart upload: skip mapping modal when everything is auto-mapped
 - **Ask (Jason)**: "the walmart upload gives me this mapping modal, but no other upload does" — screenshot showed "31 items · 30 already mapped · 0 need mapping". The modal was popping just for the operator to click Save with no real interaction.
