@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.40**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.41**
+
+## v7.41 — Walmart upload: skip mapping modal when everything is auto-mapped
+- **Ask (Jason)**: "the walmart upload gives me this mapping modal, but no other upload does" — screenshot showed "31 items · 30 already mapped · 0 need mapping". The modal was popping just for the operator to click Save with no real interaction.
+- **Why the modal existed in the first place** — v5.50 initially matched Walmart rows by truncated `item_name` (drifted per export), so the modal was necessary for first-time mapping. v5.51 added `walmart_item_id` as a real product identifier that persists across uploads → subsequent uploads auto-match. The modal was still shown on every upload for review, even when zero manual decisions were required.
+- **Fix**: in `openWalmartImport`, after building the items list with auto-matches applied, check `needMap = items.filter(it => !it.chosen).length`. When it's 0 (every item already tagged with a walmart_item_id from a prior upload), skip the modal entirely and call `walmartApplyImport()` directly. Sets a status pill (`⏳ Auto-importing N pre-mapped items…`) so the user knows something happened silently.
+- **First-time / partial-mapping still shows the modal** — the moment even one item has no walmart_item_id match, the modal opens as before (need the operator's picks). So onboarding + adding new Walmart SKUs still works the same way; only the steady-state re-upload is now friction-free.
+- **Behaviorally aligned with the other uploaders**: Shopify / Amazon SKU Economics / Chewy all just parse-and-write when everything matches, and only prompt on unknowns (via auto-create SP-TEMP or an inline decision). Walmart now matches that pattern.
 
 ## v7.40 — PDF report scorecards: vs-prior-period delta chip on every card, not just Net Proceeds
 - **Ask (Jason)**: "on the pdf export — any idea why the scorecards don't have previous period comparisons?"
