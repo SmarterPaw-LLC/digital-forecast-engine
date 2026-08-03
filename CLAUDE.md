@@ -2,7 +2,25 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.43**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.44**
+
+## v7.44 — Amazon P&L: brand-pool ad spend excluded from narrowed views (Cat / Search / Quick / Selection / Top Product)
+- **Bug (Jason)**: selected only the Seafood Treat Trio (`B0QXLYYVET`, $51.96 net sales, 4 units) via Top Products chip → Fee Breakdown showed **Sponsored Brands = -$2,409.51** and Ad Spend scorecard = $2,476.25 (2848.6% of net sales) → Net Proceeds = -$2,498.38. Same discrepancy also visible on Quick filter → Bottom 10 — Net Proceeds for Meowijuana: 10 products totaling $86.93 net sales showed $2,476.25 Ad Spend / -$2,498.38 Net Proceeds.
+- **Root cause**: v6.84 added a brand-pool guard but only for the `selectedRows.length === 1` case. Every OTHER form of narrowing (Category filter, Search, Quick filter, multi-product Selection, Top Products chip) still added the FULL brand-wide SB/DSP/TV pool on top of whatever product subset was displayed. Brand-level SB / DSP / TV / unmatched-SB-SD is by definition brand-wide and unattributable to any specific product — adding it to a filtered subset attributes brand-wide spend to those specific products, which is arbitrary and misleading. For Jason's Meowijuana pool (~$2,409 SB on top of DSP/TV) this dominated the narrowed view.
+- **Fix**: new `isNarrowedView` boolean detects any narrowing beyond `Brand + Region + Period`:
+  - Category filter active (`cat !== ''`)
+  - Search active (`search !== ''`)
+  - Quick filter active (`pnlQuickFilter !== 'all'`)
+  - Selection active (`selectedRows.length > 0`)
+  - Top Products chip active (`!!topProductFilterId`)
+  When narrowed, the brand-pool amount is computed but NOT added to `view.sponsored` / `view.net_proceeds`. When the view is the full brand universe (no narrowing beyond Brand), the pool is added as before. Supersedes v6.84's single-product-only guard.
+- **Fee Breakdown perSlugSpend** mirrors the same exclusion: when narrowed, only per-ASIN Amazon Ads rows whose master_id is in the narrowed set are counted (brand-level rows with null master_id AND per-ASIN rows for other products both drop out). Otherwise the SP-only computation (`view.sponsored − nonSpTotal`) would go negative and hide the SP bar.
+- **`pnlTotalsForRange` mirrors the exclusion** via a new optional `opts.excludeBrandPool` parameter passed by `renderPnl` when `isNarrowedView` — so the vs-prev Ad Spend delta stays apples-to-apples (both windows count per-ASIN only for the narrowed set).
+- **⚠ chip on the Ad Spend scorecard** when brand pool is excluded — reads e.g. `⚠ +$2,409.51 brand-wide not shown` with a hover tooltip explaining the exclusion + how to clear it. Ad Spend tooltip now also lists the excluded amount separately from the included per-ASIN portions.
+- **Scorecard template rendered `c.tip` for the first time** — the Ad Spend tooltip helper has been defined since v6.76 but the Amazon P&L scorecard template was missing the `title=` attribute (Shopify P&L had it since v5.93). Wired both `c.tip` and the new `c.badge` in one template edit.
+- **Effect on Jason's screenshots**:
+  - **Seafood Treat Trio drill**: Ad Spend scorecard drops from $2,476.25 → $2.74 (just the per-ASIN SP), Net Proceeds flips from -$2,498.38 → +$27.68 (matches the row's own Net Proceeds of -$10.29 aggregated with the other 3 units), ⚠ chip surfaces the $2,473.51 held out.
+  - **Bottom 10 quick filter**: same fix. The 10 products' true per-ASIN Ad Spend (~$66.74 from the row totals) replaces the brand-inflated $2,476.25.
 
 ## v7.43 — Shopify upload card: "🔗 Open Shopify report" deep-link with auto-updated SINCE date
 - **Ask (Jason)**: "on this shopify report, i would love a link to the report that i can click to open, going to this link but updated for the correct dates (via link params if possible)." Provided the URL to his existing Sales-by-Product exploration (report id 409403624) with a specific ShopifyQL.
