@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.39**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.40**
+
+## v7.40 — PDF report scorecards: vs-prior-period delta chip on every card, not just Net Proceeds
+- **Ask (Jason)**: "on the pdf export — any idea why the scorecards don't have previous period comparisons?"
+- **Bug**: The PDF's `buildSection` computed a `deltaChip` for Net Proceeds only. Net Sales, Total COGS, and Contribution % rendered as plain numbers with no vs-prior context. The on-page Amazon P&L (v4.72) already showed comparisons on every scorecard — the PDF was silently omitting them.
+- **Fix**: added a `chip(cur, prev, goodWhenUp, pctPoints)` helper mirroring the on-page `pnlDeltaChip` conventions:
+  - **Net Sales** → up = good (green ▲); % change vs prior
+  - **Total COGS** → up = bad (red ▲); a fee/cost increase reads unfavorable
+  - **Net Proceeds** → up = good (green ▲); % change vs prior
+  - **Contribution %** → up = good (green ▲); delta in percentage POINTS (not percent-of-percent, since the metric IS itself a percent)
+- **Comparison set** matches the report's product set — prior-period `agg` was already built via `buildPnlAggForPdf(regionKey, prev.from, prev.to)` so we get like-for-like SKUs. Same fx, same region, same filters.
+- **Header line** also now names the prior window: `2026-07-01 → 2026-07-31 · USD · 247 products · 7,638 units · vs prior 2026-06-01 → 2026-06-30`. Removes the mystery about which window "prior" refers to.
+- **Edge cases** (mirrors v4.72): both zero → "no prior data"; prior=0 but current > 0 → "▲ new · no prior data"; flat (<0.05% change) → grey → (no arrow).
 
 ## v7.39 — Seasonality page: tooltips everywhere ("I can't remember what these lines even mean")
 - **Ask (Jason)**: "on the seasonality page i need tooltips for everything here. i can't remember what these lines even mean."
