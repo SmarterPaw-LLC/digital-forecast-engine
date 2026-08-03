@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.42**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.43**
+
+## v7.43 — Shopify upload card: "🔗 Open Shopify report" deep-link with auto-updated SINCE date
+- **Ask (Jason)**: "on this shopify report, i would love a link to the report that i can click to open, going to this link but updated for the correct dates (via link params if possible)." Provided the URL to his existing Sales-by-Product exploration (report id 409403624) with a specific ShopifyQL.
+- **Added button** to the Shopify DTC upload card body — green `🔗 Open Shopify report`. Opens the Shopify Admin ▸ Analytics ▸ Reports ▸ 409403624 exploration in a new tab, pre-loaded with the exact ShopifyQL this uploader expects.
+- **Auto-updated SINCE date**: the anchor's `href` is dynamically rewritten by the freshness probe when it fetches the latest `shopify_sales_daily.day`. So the query auto-scopes to `SINCE <last-uploaded-day> UNTIL today` — grabs exactly the new range to re-export. When no data has been uploaded yet, falls back to `SINCE last_month UNTIL today`.
+- **Idempotent SINCE**: uses the last day INCLUSIVE (rather than +1) so any late-arriving updates for that day (returns, cancellations) land on re-upload. The parser's DELETE+INSERT keyed on `(shopify_sku, day)` handles duplicates cleanly.
+- **`shopifyReportUrl(sinceDay)`** helper builds the URL (encodeURIComponent-wraps the ShopifyQL so `+`/`%`/quotes survive). `updateShopifyReportLink(sinceDay)` updates the anchor's href + title with the current window. Called from the Shopify branch of `refreshUploadDataRanges` after the last-day query.
+- **Tooltip on hover** explains the flow: "Adjust in Shopify if needed, then Export → drop the CSV here."
+- **`event.stopPropagation()`** on the link's onclick so clicking it doesn't trigger the parent dz card's file picker.
 
 ## v7.42 — PDF report: Fee Concentration section (top 10 products by each Amazon fee as % of sales)
 - **Ask (Jason)**: "i want to see products that have a high % of different fees as a % of sale. eg, high ad spend, high fulfillment fees, etc. all of the amazon fees should be represented."
