@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.44**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.45**
+
+## v7.45 — Amazon P&L: search bar made visible (was blending into the filter strip)
+- **Ask (Jason)**: "can you make this search bar more visible? I'm always hunting for it." The `pnl-search` input used identical background + border as the neighboring dropdowns, only 160px wide, no label, and generic "Search product…" placeholder — visually indistinguishable in a row of five neutral controls.
+- **Fix — four small changes**:
+  1. **Wrapped with a `Search` label** matching the `<span class="fl">` convention every other filter uses (Period / Brand / Category / Quick). Reads as a filter, not a stray input.
+  2. **Widened 160px → 240px** so it doesn't get squeezed between the Category dropdown and the View button.
+  3. **Inline 🔍 icon** at left (absolutely positioned inside a wrapper div, `padding-left:26px` on the input so it doesn't overlap text). Discoverable at a glance.
+  4. **3px solid green left-edge accent** — subtle brand-colored stripe that separates it from the neutral row without being loud.
+- **Active state**: when the input has a value, background tints to `rgba(151,193,71,.08)` and the full border turns green — so from anywhere on the page you can immediately see whether a search filter is on. `pnlOnSearchInput(el)` handler applies the state + debounces the render (120ms) so fast typing doesn't fire N renders per second. Also called from `pnlApplyView` after a saved view restores a search value, so the tinted state syncs on view apply too.
+- **Placeholder** rewritten `Search product…` → `product name, ASIN, master_id…` so it's clear what fields match (the underlying search already covers all three).
+- **Skipped**: Shopify / Walmart / Chewy P&L pages have the same bland search input. This fix targeted the one Jason flagged. Same treatment can be ported when needed — the four styling changes are identical.
 
 ## v7.44 — Amazon P&L: brand-pool ad spend excluded from narrowed views (Cat / Search / Quick / Selection / Top Product)
 - **Bug (Jason)**: selected only the Seafood Treat Trio (`B0QXLYYVET`, $51.96 net sales, 4 units) via Top Products chip → Fee Breakdown showed **Sponsored Brands = -$2,409.51** and Ad Spend scorecard = $2,476.25 (2848.6% of net sales) → Net Proceeds = -$2,498.38. Same discrepancy also visible on Quick filter → Bottom 10 — Net Proceeds for Meowijuana: 10 products totaling $86.93 net sales showed $2,476.25 Ad Spend / -$2,498.38 Net Proceeds.
