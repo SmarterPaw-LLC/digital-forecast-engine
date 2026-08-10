@@ -2,7 +2,29 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.45**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.46**
+
+## v7.46 — In-house weekly schedule on-page + in-house-filter divergence bug
+Two related items bundled since both live under Inventory Planning → In-house production.
+
+### 1. On-page "🏭 Weekly production schedule" panel
+- **Ask (Jason)**: "for the in-house production schedule, it's very confusing that i don't see any weekly schedules on the page - only on the export"
+- **Fix**: new collapsible `<details id="ip-inhouse-panel">` below the main Inventory Planning table, visible ONLY when Status by = 🏭 In-house production. Renders the SAME per-week schedule the CSV writes — one row per SKU, columns = Product · Case Qty · Week 1 date · Week 2 date · … · Week N. Controls at the top of the panel (Weeks input 1-52, Columns radio Units/Cases/Both, Values radio Weekly/Cumulative) persist to the SAME `localStorage` keys the CSV export dialog uses (`ipCsvWeeklyWeeks` / `ipCsvWeeklyMode` / `ipCsvWeeklyValueMode`) — so change the panel, the next CSV export uses those settings, and vice versa.
+- **In `Both` mode**, each week gets two sub-columns (U / C) with a hierarchical header row. `Cases` cell uses `ceil(units / case_qty)`; renders `—` when case_qty is unset (with a tooltip pointing to the product modal).
+- **Row set**: honors everything the main table honors (Brand / Region / Category / Search / Hide inactive / Hide bundles / Top Products chip / Show-selection-only mode). When ≥1 row is checked via the row checkboxes, the panel narrows to just the selected rows so the production team can build ad-hoc pick lists. Sub-header notes `SKUs · Nw · columns · valMode` so the current scope is visible.
+- **Handler `renderInhouseWeeklyPanel(vis)`** called at the tail of `renderInventoryTbl` with the same `vis` array the main table used — no double-filtering, no chance of drift. Hidden immediately if `getStatusMode() !== 'in_house'`. Wrapped in try/catch so a future breakdown-shape change can't blow up the whole render.
+- **Reuses `getInventoryWeeklyBreakdown(r, weeks)`** (v7.35) which returns `[{weekStart, units, cumUnits}]` per week from today's Sunday. Sunday-anchored, marginal per-week or cumulative-through-end-of-week depending on valMode. Zero extra Supabase round-trips; math source of truth is `inventoryNeed(r, X)` (same as the on-screen Need columns).
+
+### 2. In-house-filter divergence bug (three code paths were out of sync)
+- **User report**: exported "Filtered results" from Inventory Planning with the header + dialog both showing 403 rows; CSV came out with 33 data rows. Attached CSV confirmed: `smarterpaw-forecast-inventory-planning-warehouse-90d-filtered-2026-08-10.csv` had exactly 32 SKUs — all Meowi/Doggi/KKZ in-house-manufactured products.
+- **Root cause**: the `ip-in-house-filter` dropdown (v7.01 — filters rows by whether the product is in-house-manufactured; distinct from Status-by mode) was added to `inventoryVisibleRecords` + `downloadInventoryCSV` but NEVER added to `renderInventoryTbl` (the primary table render) OR `showExportDialog` (the dialog's row-count computation). Result:
+  - **Table**: showed 403 rows (all matched rows regardless of in-house flag)
+  - **Dialog "Filtered results" count**: 403 (same missing filter)
+  - **CSV export**: 33 rows (in-house-only, because `downloadInventoryCSV` DID apply the filter)
+  - The `ip-in-house-filter` dropdown looked like it worked (state persisted, re-render fired) but silently didn't narrow the visible table; export was the only surface that respected it.
+- **Fix**: added the missing `inHousePick` check to `renderInventoryTbl`'s filter block AND to `showExportDialog`'s row-count block. Also added the missing `topProductFilterId` check to `showExportDialog` (same class of pre-existing drift, less common trigger). Removed the accidentally-duplicated `Hide inactive` line in `showExportDialog` (copy-paste artifact, no behavioral effect).
+- **All four filter sites now agree**: `renderInventoryTbl` (main table), `inventoryVisibleRecords` (selection bar + chart), `downloadInventoryCSV` (CSV export), `showExportDialog` (dialog counter). The copy-paste-across-4-sites risk was flagged inline as a code smell — a future refactor could extract one `ipRowMatchesFilters(r, opts)` helper; not done here to keep the change surgical.
+- **Effect for Jason's screenshot scenario**: with `ip-in-house-filter = in_house`, the table row-count will now correctly show 33 (down from 403), the dialog matches, and the CSV output is unchanged.
 
 ## v7.45 — Amazon P&L: search bar made visible (was blending into the filter strip)
 - **Ask (Jason)**: "can you make this search bar more visible? I'm always hunting for it." The `pnl-search` input used identical background + border as the neighboring dropdowns, only 160px wide, no label, and generic "Search product…" placeholder — visually indistinguishable in a row of five neutral controls.
