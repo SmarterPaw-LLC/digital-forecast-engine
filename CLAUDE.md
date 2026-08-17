@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.46**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.47**
+
+## v7.47 — Amazon P&L Fee Breakdown: vs-prev delta chip on every fee row
+- **Ask (Jason)**: "i would like to see the over period +/- percentage on these fees like exists on the scorecard"
+- **Fix**: every row in the Fee Breakdown panel now shows a ▲/▼ N% vs prev chip beneath the dollar amount, matching the scorecard convention. Uses the same `pnlDeltaChip` helper the scorecards use so color + arrow + tooltip stay consistent (green ▼ for a cost that dropped, red ▲ for a cost that grew, grey → for flat, "▲ new · no prior data" when the prior window was empty).
+- **Prev values sourced from `prevView`** (already built by `pnlTotalsForRange` for the vs-prev delta on the scorecard's Amazon Fees / COGS / etc.) for every raw fee field: FBA Fulfillment, Referral, Inbound Placement, Inbound Transport, Monthly Storage, Low Inventory, Storage Util, Aged Inventory, Removal, Referral Refunds, FBA Reimbursements, DSF FBA / Selling (EU).
+- **Per-slug ad rows (SP / SB / SD / DSP / TV)** needed a separate prev-period scan of `amazonAdSpendData` since perSlugSpend is derived from that table directly, not from the sku_economics `prevView`. Added `prevPerSlugSpend` computation right after the existing perSlugSpend loop — same shape (region + brand + narrowedMids gates from v7.44), just with `prevRange.from/to` instead of the current window. `prevSpOnlySpend = max(0, prevView.sponsored − prevNonSpTotal)` mirrors the current `spOnlySpend` math so the SP row's prev value is the SP-only slice (excludes SB/SD/DSP/TV) — apples-to-apples with the current cell.
+- **Color sense for refund rows**: FBA Reimbursements + any-negative Referral Refunds are stored/displayed with a leading `+` (credit back). For those, MORE credit is FAVORABLE, so `goodWhenUp` flips to `true` and both `cur` + `prev` pass through `Math.abs()` so the direction reads as "magnitude of credit" rather than raw signed value. Costs (everything else) use `goodWhenUp=false` so a fee increase reads red.
+- **Layout**: the amount `<div>` and delta chip now sit in a `flex-direction:column;align-items:flex-end` container on the right. Row alignment shifted from `center` → `flex-start` so long labels wrap without dragging the amount down. No layout regressions at compact widths — the chip is 10px mono, same as the scorecard chips.
+- **Kept perSlugSpend + prevPerSlugSpend scans side-by-side** rather than extracting a shared helper — the two loops are 10 lines each, and side-by-side keeps future filter drift easy to spot. Same reasoning as the v7.44 note on `computePerSlugSpend`.
+- **Works identically in EU mode** — the EU fee list has its own DSF entries, all mapped 1:1 with `prevView` fields.
 
 ## v7.46 — In-house weekly schedule on-page + in-house-filter divergence bug
 Two related items bundled since both live under Inventory Planning → In-house production.
