@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.49**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.50**
+
+## v7.50 — Amazon Ads upload card: deep link to `advertising.amazon.com/reporting`
+- **Ask (Jason)**: "on the upload page, for amazon ads can you ad a link to the report menu https://advertising.amazon.com/reporting"
+- **Fix**: added a blue `↗ Open Amazon Ads reporting` link inside the Amazon Ads dropzone card body, matching the pattern used by SKU Economics (`↗ Open in Seller Central`) and FBA Shipments (`↗ Open Manage FBA Shipments queue`). Same styling (light-blue tint, `var(--blue)` text, `target="_blank" rel="noopener"`, `event.stopPropagation()` so clicking the link doesn't trigger the parent dropzone's file picker).
+- Hover tooltip spells out the exact report shape the uploader expects (Date · Country · Advertised product ID · Ad product · Advertiser account name + Total cost · Impressions · Clicks · Purchases · Sales) so the user doesn't have to remember which dimensions/metrics to pick.
+- **Note on the URL**: Amazon Ads console is a SEPARATE domain from Seller Central (`advertising.amazon.com` vs `sellercentral.amazon.com`) — same account, different sign-in surface. Reports live under Reporting → Create report.
 
 ## v7.49 — Amazon P&L Fee Breakdown: click any fee to drill into per-product contribution
 - **Ask (Jason)**: "can we get any more granular here? i want to know why this fee jumped up so much" — FBA Fulfillment went ▲ +126.4% vs prev, no way to tell if it was volume, rate change, or a couple of SKUs pulling the total.
