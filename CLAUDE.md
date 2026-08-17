@@ -2,7 +2,26 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.48**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.49**
+
+## v7.49 — Amazon P&L Fee Breakdown: click any fee to drill into per-product contribution
+- **Ask (Jason)**: "can we get any more granular here? i want to know why this fee jumped up so much" — FBA Fulfillment went ▲ +126.4% vs prev, no way to tell if it was volume, rate change, or a couple of SKUs pulling the total.
+- **Fix**: every Fee Breakdown row is now clickable (subtle hover state + `↗` hint). Click opens a per-product drill modal ranking products by |Δ $| against the prev period — the biggest movers land at the top. Answers "which SKUs drove this?" in one look.
+- **Modal shape**:
+  - **Header strip** — three columns showing prev / cur / Δ totals for this fee alone, with the exact date ranges + color-coded delta chip.
+  - **Table** — one row per master_id present in either period. Columns: Product (with brand chip) · Prev Units · Cur Units · Prev $/u · Cur $/u · Prev $ · Cur $ · Δ $ · Share of Δ.
+  - **Per-row diagnostic badges**:
+    - **🆕 new** — no prev-period sales; usually a launch driving up the fee.
+    - **⬇ dropped** — had sales last period, none now (delisting / stockout); shows the amount that fell out.
+    - **▲/▼ N% rate** — per-unit fee shifted >15% while volume remained — flags a fee-schedule change or size-tier reclassification rather than a volume effect. Color-coded (red ▲ = rate went up, green ▼ = rate went down).
+  - **Top 30 shown by default**; the tail (small movers, usually noise) is summarized as "N more products with smaller shifts hidden."
+- **Data path**: extended `buildPnlPrevAgg` (line 11249) to carry the full per-fee shape (`fba_fulfillment` / `referral` / `inbound_placement` / etc.) — same shape as the main `renderPnl` agg loop. Was previously carrying only units + sales + sponsored + net_proceeds + cogs.
+- **Perf-conscious**: prev per-product agg is built LAZILY on first drill-open (not on every render). Two new module vars — `pnlAggByMasterCur` (stashed at end of every renderPnl with the fresh current agg) and `pnlAggByMasterPrev` (null'd on every renderPnl, populated on first drill-open of the session and cached until the next render). Avoids adding a third full sku_economics scan to every P&L paint.
+- **`pnlFeeDrillCtx`** carries the filter context (from / to / prevFrom / prevTo / region / brand / cat / search / currency) so the drill modal reads honest labels + can render the header strip without re-parsing DOM.
+- **`feeKey` + `feeSign` + `noDrill`** added to each fee entry in the `fees` array. `feeKey` maps to the agg field name; `feeSign` handles FBA Reimbursements (stored as negative in the agg, displayed as `+$X`) by flipping display sign for both cur and prev.
+- **Brand-level ad rows (SB / SD / DSP / TV) are noDrill** — spend lives in `amazon_ad_spend` at campaign/audience granularity and isn't merged into per-product `agg` beyond the SP-matched slice. Clicking them opens a note-only dialog pointing to Data → Query Database for direct per-ASIN SB/SD queries. Documented per fee.
+- **Volume vs rate attribution math** (per row, in the tooltip context but computed for future surfacing): `volDelta = (curUnits − prevUnits) × prevPerUnit`; `rateDelta = curUnits × (curPerUnit − prevPerUnit)`. Sums ≈ total delta (small residual on new/dropped products). The ▲/▼ N% rate badge uses this to detect rate shifts.
+- **Cache invalidation**: every `renderPnl` sets `pnlAggByMasterPrev = null` so any filter change (brand / cat / search / date / region) forces a fresh prev-agg build on next drill-open. Also cleared on the empty-render path.
 
 ## v7.48 — Age visibility on Unknown / SP-TEMP products (Products column + P&L inline chip)
 - **Ask (Jason)**: "i can't tell the age of these unknown products. some are super old, but some are new bundles i need to set up" — filtered P&L to "unknown" showed 21 SP-TEMP placeholders, all zero-sales, no way to distinguish stale cruft from freshly-created bundles that still need setup.
