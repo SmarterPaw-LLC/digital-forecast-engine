@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.47**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.48**
+
+## v7.48 — Age visibility on Unknown / SP-TEMP products (Products column + P&L inline chip)
+- **Ask (Jason)**: "i can't tell the age of these unknown products. some are super old, but some are new bundles i need to set up" — filtered P&L to "unknown" showed 21 SP-TEMP placeholders, all zero-sales, no way to distinguish stale cruft from freshly-created bundles that still need setup.
+- **Fix — two surfaces**:
+  1. **Products page → new `Date Added` column** in the SKU group, `default:false` (opt-in via View popup). Renders `created_at` as compact `MM/DD/YY` with a tooltip showing the full ISO date + relative age via the existing `fmtFreshnessAgo` helper. Sortable — descending puts newest first, natural for triage. CSV exports the ISO date. `products.created_at` is stamped by Supabase on every insert (auto-create from SKU Economics upload, P&L Diagnostics create-and-open, manual `+ New Product`) and comes down for free via the existing `loadProducts` `.select('*')` — no schema change, no migration.
+  2. **P&L Product cell inline age chip** for placeholder rows only — `<span>📅 5d ago</span>` next to the title. Blue tint + border when ≤14 days old (probably a bundle Jason is actively setting up), muted grey with just a border when older (probably stale cruft to merge or delete). Tooltip on hover names the exact added-date + a recommendation. Only shown for placeholders — detected as `master_id.startsWith('SP-TEMP-')` OR title starts with `Unknown Product` OR the row's master_id has no matching product record. Real catalog rows don't get the noise.
+- **Detection heuristic** for "is this a placeholder?" — the three checks catch: (a) genuine SP-TEMP rows before they're promoted, (b) products with a real SP-XXXX master_id but the auto-created "Unknown Product (BXXXX)" title (haven't been renamed yet), and (c) any P&L row whose master_id doesn't resolve to `allProducts` at all (would render as `unmatched-<asin>` synthetic).
+- **Triage workflow now**: sort Products page by `Date Added` desc to see newest first, filter to "🔍 Needs Review" → merge/delete anything older than a few weeks that isn't a real product yet; leave recent ones alone to finish setup. On the P&L page, blue chips on the "unknown" search results tell you at a glance which ones deserve attention right now.
+- **No changes to `loadProducts` / DB / any other page** — pure UI surfacing of an existing field.
 
 ## v7.47 — Amazon P&L Fee Breakdown: vs-prev delta chip on every fee row
 - **Ask (Jason)**: "i would like to see the over period +/- percentage on these fees like exists on the scorecard"
