@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.50**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.51**
+
+## v7.51 — Weekly production schedule panel: row-click + `↗ card` chip to open product card
+- **Ask (Jason)**: "i need the card chip to open the product card here (like on other pages)" — pointing at the v7.46 Weekly Production Schedule panel. Rows had no way to reach the product card.
+- **Fix**: (1) whole row is now clickable — `onclick="openProductModal(master_id)"` matches the Products / Bundles page pattern; row cursor + hover state make the affordance discoverable. (2) Product cell also carries an inline `↗ card` chip via the shared `pnlCardBtn(master_id)` helper — same button + tooltip Jason sees on Amazon / Shopify / Walmart P&L Product cells. Redundant surface (row + chip) — chip is discoverable for new users, row-click is efficient once you know.
+- **Escape single quotes in master_id** on the onclick attr (defensive; SP-XXXX ids don't contain them in practice but the pattern matches renderInventoryTbl's row handler).
+- **Layout**: Product cell wraps title + chip in an inner `<span style="display:inline-flex;gap:6px">` so the chip sits inline at the right edge of the truncated title without breaking the max-width / ellipsis.
 
 ## v7.50 — Amazon Ads upload card: deep link to `advertising.amazon.com/reporting`
 - **Ask (Jason)**: "on the upload page, for amazon ads can you ad a link to the report menu https://advertising.amazon.com/reporting"
