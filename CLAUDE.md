@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.56**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.57**
+
+## v7.57 — Units Sold: collapsible product picker (summary cards + product table) + saved-report layout state
+- **User (Jason)**: "i was talking about the product table - this should be collapsible and the state should be saved in the view". v7.56 misread the ask as being about the Top Products chip panel; the real request is collapsing the WHOLE product picker (summary cards + product table) so once a report's selection is locked in, the chart can dominate the viewport.
+- **New collapse bar** above the summary cards on the Units Sold page. Click the header (or the `▾ Hide product picker` button on the left) to hide the summary cards + product table; click again (`▸ Show product picker`) to bring them back. Header hovers to signal the whole row is clickable. Controls row (search / brand / cat / period / channels / bundle-attr / hide-bundles) stays visible in collapsed mode so filters can still be tuned; the chart panel below is unaffected either way. Bar tucks itself flush against the picker area via matching border radii — collapsed = pill; expanded = header-of-a-card look.
+- **State persists per-browser** via `localStorage.salesPickerCollapsed`. Applied on every `renderSalesTbl()` call (the tail of the function), so filter changes / selection toggles / sort clicks don't accidentally re-open the picker.
+- **Saved reports carry the layout**. `salesSnapshotState()` now includes a `layout: { pickerCollapsed }` bag; `salesApplyView()` restores it (guarded on `!== undefined` so pre-v7.57 saved reports don't force the panel open). A `chart-only` chip appears in the popup summary line whenever a report has the picker collapsed.
+- **Workflow now**: build the report (pick filters, check the products, choose chart type + tab), hide the picker, save as report. Next time you apply that report the picker stays hidden — full-screen chart until you explicitly show it.
 
 ## v7.56 — Units Sold By-Channel totals now include bundle attribution + off-map channel warning + collapse discoverability
 - **User (Jason)**: "why don't these totals match?" — Total mode subtitle read `6,712 units` while By Channel subtitle read `3,255 units` for the SAME 2 products (Juananip Bites Chicken + Peanut Butter), same 365d window, all 5 channels checked. Almost exactly 2x — a smoking gun for double-counting somewhere.
