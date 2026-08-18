@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.58**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.59**
+
+## v7.59 — Units Sold: Top Products chip click also auto-selects the product for the chart
+- **User (Jason)**: "the top products chips do not select the products from the picker" — screenshot showed a chip picked (Catnip Spray - 3 Oz - US AMZ), the picker narrowed to that one product, but the row checkbox was empty and no chart appeared. Forced a second click on the row to actually chart it.
+- **Root cause**: on every other page (Inventory, Products, P&L, Forecast, Bundles) the Top Products chip is a FILTER-only affordance — clicking it narrows the visible rows, that's all. On Units Sold the workflow is "pick products → look at the chart", so a filter without an auto-select left the user stuck one click short of the whole point of the page.
+- **Fix — Units-Sold-only override.** The chip panel's `onRerender` callback is wrapped in a function that, before firing `renderSalesTbl()`, checks `topProductFilterId && !salesSelected.has(topProductFilterId)` and adds it to the selection. So clicking a chip narrows the picker AND checks the box AND draws the chart in one gesture. Other pages' chip behavior is untouched.
+- **Sync is one-way**: adds on click, doesn't remove on chip-clear. Rationale: once a product is in your selection you might want to see it charted alongside others regardless of what the chip filter is doing. If the user wants it out, they uncheck the row (or hit `✕ Clear selection`). Matches the v4.122 "selection persists across filter changes" principle.
 
 ## v7.58 — Units Sold: "Products:" row on By-Channel view + vertical scrollbar layout bug fixed
 - **User (Jason)**: two issues after v7.57 —
