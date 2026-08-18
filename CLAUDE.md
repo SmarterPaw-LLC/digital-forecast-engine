@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.55**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.56**
+
+## v7.56 — Units Sold By-Channel totals now include bundle attribution + off-map channel warning + collapse discoverability
+- **User (Jason)**: "why don't these totals match?" — Total mode subtitle read `6,712 units` while By Channel subtitle read `3,255 units` for the SAME 2 products (Juananip Bites Chicken + Peanut Butter), same 365d window, all 5 channels checked. Almost exactly 2x — a smoking gun for double-counting somewhere.
+- **Root cause**: `updateSalesChart` builds two structures per render — (1) per-product `unitsByWeek` (drives Total-mode datasets, INCLUDES bundle attribution when the toggle is on) and (2) `salesRawWeekData` keyed `{week: {channel: units}}` (feeds `updateChannelChart`, populated from DIRECT sales rows only). So when Juananip Bites are components of a bundle that sold, Total mode counted the direct sale + the bundle-driven attribution; By Channel counted only the direct sale. For 2 products where bundles roughly match direct volume, the gap is ~2x.
+- **Fix**: `salesRawWeekData` now folds in bundle-attributed units on the BUNDLE PARENT'S CHANNEL (same channel the bundle actually sold on × the component's BOM qty). Mirrors the Total-mode datasets loop exactly, so `chanTotal` and `periodTotal` now agree row-for-row.
+- **Additional guard — off-map channel warning**: `updateChannelChart`'s subtitle now surfaces any channels with data in the selection that DON'T have a UI checkbox (`amazon_gb / de / fr / it / es / nl` from EU SKU Economics uploads). Renders as `⚠ 234 in amazon_gb (no checkbox)` appended to the subtitle so any remaining Total-vs-By-Channel gap has a visible explanation instead of being mysterious.
+- **⭐ Top Products panel — collapse affordance made obvious.** The header WAS click-to-collapse since v7.08 but styled subtly. v7.56: the chevron button gets a green accent border + hover ring, label now reads `▾ Hide ⭐ Top Products` / `▸ Show ⭐ Top Products` explicitly (was just the chevron + count), row-level hover state added to signal the whole row is clickable, right-side hint text now leads with `click the header to collapse/expand`. Zero behavior change — same click handler, same localStorage-persisted state.
 
 ## v7.55 — Units Sold: Area (Combined) — stacked area chart type
 - **Ask (Jason, after v7.54)**: "can you give me an option to show area combined (or whatever it is called)?" — the v7.54 Area option overlaid each series as translucent fills; user wanted STACKED area (top of chart = combined total, each layer's thickness = that series' share).
