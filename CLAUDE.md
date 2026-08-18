@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.54**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.55**
+
+## v7.55 — Units Sold: Area (Combined) — stacked area chart type
+- **Ask (Jason, after v7.54)**: "can you give me an option to show area combined (or whatever it is called)?" — the v7.54 Area option overlaid each series as translucent fills; user wanted STACKED area (top of chart = combined total, each layer's thickness = that series' share).
+- **New dropdown option** `🏔 Area (Combined)` (value `area-stacked`) added below `🌊 Area`. Applies to both Total mode (stacks selected PRODUCTS) and By Channel mode (stacks CHANNELS — direct alternative to `🧱 Stacked` bar).
+- **How it renders** — Chart.js `y.stacked: true` with `fill: true` on each dataset. Each series' area sits ON TOP of the prior one instead of overlapping from origin. Backgrounds bumped to `~85%` alpha (`+d9`) so the stacked layers read as discrete bands rather than a translucent haze. Plain area unchanged (~33% alpha).
+- **Tooltip footer** shows the combined total across all visible series at the hovered week — so a user can read "top of the chart = X" directly without arithmetic. Applies to both stacked-area AND stacked-bar in By Channel mode.
+- **Preserved:** the v7.54 `stack: 'channel'` grouping on datasets is only used for stacked-BAR (which uses x-axis stacking); stacked-AREA relies purely on y-axis stacking, so the two modes don't collide.
 
 ## v7.54 — Units Sold: saved reports (cross-device) + chart type picker (line / bar / stacked / area)
 - **Ask (Jason)**: "on the 'units sold' page i want to be able to save reports, like year to date juananip bites sales across channels and show different chart types" — two features in one ship.
