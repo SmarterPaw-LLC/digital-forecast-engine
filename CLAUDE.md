@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.52**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.53**
+
+## v7.53 — Hotfix: Fee Breakdown click-to-drill did nothing (nested-quote HTML bug)
+- **User report (Jason)**: "the click tooltip does nothing" — v7.49's Fee Breakdown row click never opened the drill modal.
+- **Root cause**: v7.49's onclick template inline'd `JSON.stringify(...)` output straight into `onclick="..."`. `JSON.stringify('fba_fulfillment')` returns the 6-char string `"fba_fulfillment"` (WITH literal double-quote chars). Embedded in a double-quoted HTML attribute the browser saw `onclick="openPnlFeeDrill("fba_fulfillment", ...)"` — the first inner `"` closed the attribute. Result: parsed attribute = `openPnlFeeDrill(` (broken JS), every click was a silent no-op. Hover chip + cursor still worked, so it looked "attached" but the handler was garbage.
+- **Fix**: HTML-encode the JSON output via `.replace(/"/g, '&quot;')` before embedding. Browser decodes `&quot;` → `"` at parse time and the JS is intact. Verified by trace: `attrEsc('fba_fulfillment')` → `&quot;fba_fulfillment&quot;`, which the browser resolves to a valid JS string literal.
+- **Long-term note**: the copy-paste pattern of `JSON.stringify(x)` directly into a `"…"` attr is risky. Any future onclick with multi-arg JSON-stringified data should use the same `attrEsc` helper OR (better) attach handlers via `addEventListener` + data attributes. Flagged inline as a code smell.
+- **Zero data change** — the drill modal + all v7.49 modal render logic were fine; only the wire-up was broken.
 
 ## v7.52 — Units Sold page: bundle SKUs visible (were unconditionally hidden)
 - **User report (Jason)**: "cat sampler bundle is not appearing on units sold page" — searched "sampler" on Units Sold, saw three sampler products (Catnip Sampler 3 Pack, Purrple Passion Sampler, Day Dreamer Sampler) but NOT Catnip Sampler Bundle. On P&L the same search returned the bundle as an active row with $249.75 net sales.
