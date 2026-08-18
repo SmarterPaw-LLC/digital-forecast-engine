@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.51**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.52**
+
+## v7.52 — Units Sold page: bundle SKUs visible (were unconditionally hidden)
+- **User report (Jason)**: "cat sampler bundle is not appearing on units sold page" — searched "sampler" on Units Sold, saw three sampler products (Catnip Sampler 3 Pack, Purrple Passion Sampler, Day Dreamer Sampler) but NOT Catnip Sampler Bundle. On P&L the same search returned the bundle as an active row with $249.75 net sales.
+- **Root cause**: `renderSalesTbl` at line 33285 had a hardcoded `if (p.is_bundle) return false;` in the filter chain that dropped every bundle SKU from the Units Sold page. Design intent (from long ago) was probably "bundle sales roll into components via bundle attribution, so bundles are noise on this page" — but the checkbox for that (Bundle attribution) is opt-in and defaults off, so the effect was: bundles just invisibly disappeared with no user-facing knob.
+- **Fix**: added a `Hide bundles` checkbox to the Units Sold controls (next to Bundle attribution), default UNCHECKED — bundles now show alongside single products. The `renderSalesTbl` filter uses the checkbox state instead of the hardcoded flag. Users who want the pre-v7.52 behavior check the box.
+- **CSV export path** (`tab === 'sales'` in showExportDialog) mirrors the same fix. "Everything" mode was hardcoded `!p.is_bundle` and would drop bundles from the export even when they were visible on-screen; now honors the checkbox for both Filtered + Everything modes.
+- **Composition with Bundle attribution** (existing `salesBundleAttr`): with BOTH on, components sum bundle sales (via `getBundleAttrUnits`) AND bundle rows show their own sales — technically double-counting if you sum across rows, but each row's number is correct in isolation. Same trade-off the Forecast + Inventory pages have; scorecards can drift by the bundle count. Not addressed here — documenting it in the checkbox tooltip is the visible mitigation.
+- **No changes to Bundle attribution behavior** — Jason's ask was specifically about visibility of the bundle rows themselves, not about the attribution math.
 
 ## v7.51 — Weekly production schedule panel: row-click + `↗ card` chip to open product card
 - **Ask (Jason)**: "i need the card chip to open the product card here (like on other pages)" — pointing at the v7.46 Weekly Production Schedule panel. Rows had no way to reach the product card.
