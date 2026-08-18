@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.53**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.54**
+
+## v7.54 — Units Sold: saved reports (cross-device) + chart type picker (line / bar / stacked / area)
+- **Ask (Jason)**: "on the 'units sold' page i want to be able to save reports, like year to date juananip bites sales across channels and show different chart types" — two features in one ship.
+- **⚠ SQL TO RUN:** `supabase_v7_54_sales_saved_views.sql` — adds `user_profiles.sales_saved_views JSONB default '{}'`. Idempotent (`add column if not exists`). Run once in Supabase → SQL Editor. Without it, saved reports still work in-session via localStorage but don't sync across browsers/devices (a warn is logged; UI still functional).
+- **Chart type picker** (`📈 Line / 📊 Bar / 🧱 Stacked / 🌊 Area`) — new dropdown in the drill-panel header, next to the Total / By Channel tab strip. Applies to both charts:
+  - **Total mode**: line (existing), bar, area (line + fill). Stacked falls through to bar in Total mode because the datasets are separate PRODUCTS — stacked-bar semantics ("this week's total split by segment") only make sense when the segments share a total, which is the By Channel case.
+  - **By Channel mode**: line, bar, **stacked-bar** (each week's total = the stacked heights, per-channel share = each segment size — the intended composition read for "channel mix over time"), area. Chart.js `stacked: true` on both x + y axes when stacked is picked, `stack: 'channel'` on each dataset.
+  - **Bar / area color affordances** — bars use `+cc` alpha (~80%), area uses `+55` (~33%), line stays at `+22` (~13%) so each type reads clearly at a glance.
+  - **Persists per browser** via `localStorage.salesChartType`. Dropdown auto-syncs to the persisted value every time the drill panel is shown (so an applied saved report — which sets `salesChartType` internally — flips the dropdown too).
+- **Saved reports** (new `📋 View` button next to Refresh) — mirrors the `fcSavedViews` pattern (v4.100) exactly:
+  - **State snapshot** (`salesSnapshotState()`) captures: brand, category, search, period (incl. custom from/to dates), channel checkboxes (all 5), bundle-attribution toggle, hide-bundles toggle, chart type, active chart tab (Total vs Channel), sort col + dir, and the full selection (master_ids as an array).
+  - **Popup** at fixed top-right (matches v4.128 anchoring for consistency). Each saved report row is `Apply / ✎ Rename / ↻ Update-with-current / ✕ Delete` with a compact metadata chip beneath the name (`brand · period · channels · chart type · N selected`) so users can eyeball what's in a report without applying.
+  - **`salesApplyView(name)`** restores everything: sets DOM inputs → applies chart type + dropdown sync → replaces `salesSelected` wholesale → calls `renderSalesTbl()` (which fires `updateSalesChart` when there's a selection) → if the saved chart tab is `channel`, calls `switchSalesChartTab('channel')` after the initial render.
+  - **Save flow** (`salesSaveCurrentAsView`): prompts for name → overwrite confirm if the name exists → snapshot → persist. Update / Rename / Delete use the same three-tier persistence path (localStorage → Supabase).
+  - **Persistence** — `salesLoadSavedViewsFromDb` fires at init alongside `fcLoadSavedViewsFromDb` / `ipLoadSavedViewsFromDb` / `prodLoadSavedViewsFromDb`. `salesPersistSavedViews` writes to both localStorage and Supabase; DB failure logs a warn pointing at the migration file but doesn't block the UI.
+- **Snapshot design decision**: `cols` field is reserved as `null` for now — Units Sold doesn't have a user-configurable column set yet. Preserves forward compatibility if that ever changes.
 
 ## v7.53 — Hotfix: Fee Breakdown click-to-drill did nothing (nested-quote HTML bug)
 - **User report (Jason)**: "the click tooltip does nothing" — v7.49's Fee Breakdown row click never opened the drill modal.
