@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.57**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.58**
+
+## v7.58 — Units Sold: "Products:" row on By-Channel view + vertical scrollbar layout bug fixed
+- **User (Jason)**: two issues after v7.57 —
+  1. "the products selected should appear in the legend of the chart" — By Channel mode's Chart.js legend is (correctly) channels, so the WHICH-PRODUCTS-am-I-looking-at information wasn't visible anywhere on the chart. Especially painful with the picker collapsed (Products aren't listed in the drill title either — only "N products selected").
+  2. "no matter how large i make it, the vertical scroll always appears" — resizing the chart panel taller didn't fix the scrollbar.
+- **Fix #1 — new Products row on the By Channel view.** Sits above the Channels checkboxes. Renders one chip per selected product, styled with the SAME color-cycle used by Total mode's per-product datasets (first selected product = green border, second = orange, etc.) so switching between Total and By Channel keeps visual identity. Each chip shows the brand chip + short_name; hover shows the full title. Populated by `updateChannelChart()` at the start of the function.
+- **Fix #2 — layout bug root cause.** The `.ds` container used `overflow:auto` + a `height:calc(100% - 56px)` on `.ds-body` that ASSUMED a fixed 56px header. The v7.54 chart-type dropdown made the header wrap on narrow viewports (or when the "By Channel" tab pill barely didn't fit inline) → actual header height became ~76px → body overshoot by ~20px → vertical scrollbar appeared and never disappeared no matter how tall the container was resized to. Fixed by switching `.ds` to a flex column: header is `flex:0 0 auto` (intrinsic height, wrap-safe), body is `flex:1;min-height:0` (fills the rest exactly). `overflow` on the container is now `hidden` — no scrollbar possible. Max-height cap also bumped `720px → 90vh` so users on tall monitors can drag it larger.
+- **Channel panel** is now a nested flex column too (Products row + Channels row + canvas wrapper). Canvas wrapper is `flex:1;min-height:0;position:relative` so Chart.js's responsive canvas fills exactly the remaining space. `switchSalesChartTab('channel')` now sets `display:flex` on the panel (was `display:block`, which would have collapsed the inner flex-direction).
 
 ## v7.57 — Units Sold: collapsible product picker (summary cards + product table) + saved-report layout state
 - **User (Jason)**: "i was talking about the product table - this should be collapsible and the state should be saved in the view". v7.56 misread the ask as being about the Top Products chip panel; the real request is collapsing the WHOLE product picker (summary cards + product table) so once a report's selection is locked in, the chart can dominate the viewport.
