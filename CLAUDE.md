@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.59**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.60**
+
+## v7.60 — Units Sold: adding an EU-selling product no longer truncates the chart's right edge
+- **User (Jason)**: added Catnip & Silvervine Spray to a selection that already had Catnip Spray - 3 Oz — chart's right edge jumped from 8/3/26 back to 6/8/26 for no obvious reason. Custom range setting was unchanged, no filter change, just adding a second product.
+- **Root cause**: v6.5's cutoff logic clips the chart's right edge at the earliest "latest fully-reported week" across all channels contributing to the selection. The intent was to avoid a misleading drop when e.g. Shopify has uploaded through today but Amazon hasn't uploaded the current week yet — plotting the partial week as a full-height data point would look like a crash. Sound intent, but the cutoff loop treated ANY channel appearing in the selection as relevant — including EU markets (`amazon_gb / de / fr / it / es / nl` from EU SKU Economics uploads) that have NO checkbox and CAN'T render on this chart. If the EU upload is behind (Jason's was — latest week 6/8/26), that becomes the cutoff, and the whole chart loses the newer data even though the visible channels are current.
+- **Fix**: cutoff loop now skips channels not in the UI-mapped `SALES_CHANNELS` set (the same 5 channels the checkboxes cover). EU channels can't cause the "misleading drop" the cutoff was designed to prevent (they don't render at all here), so they have no business dragging the cutoff back. Extracted `SALES_CHANNELS` to module scope so `updateSalesChart` and `updateChannelChart` share one source of truth — dedupes the previously-local `CHANNELS` inside `updateChannelChart`.
+- **Off-map channel warning chip stays** (v7.56) — if a selected product has EU-channel units that aren't visible, the By-Channel subtitle still surfaces `⚠ 131 in amazon_gb (no checkbox)` so the numeric gap between Total mode and By-Channel is still explained.
 
 ## v7.59 — Units Sold: Top Products chip click also auto-selects the product for the chart
 - **User (Jason)**: "the top products chips do not select the products from the picker" — screenshot showed a chip picked (Catnip Spray - 3 Oz - US AMZ), the picker narrowed to that one product, but the row checkbox was empty and no chart appeared. Forced a second click on the row to actually chart it.
