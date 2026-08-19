@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.61**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.62**
+
+## v7.62 — Inventory Planning: Compare tool (upload a spreadsheet, map ASIN + 90d columns, pick a channel, see the delta)
+- **Ask (Jason)**: "on the inventory planning module, i'd like a compare function. i want to upload a spreadsheet and tell the app which column to use for asin and 90 day number, pick the channel, then compare the numbers showing" — audit-style reconciliation against Seller Central Business Reports / Shopify Sales-by-Product / Walmart Scintilla / etc.
+- **New `🔍 Compare` button** on the Inventory Planning controls bar (next to `📋 View`). Opens a modal-driven 3-step flow.
+- **Step 1 — Upload**: file picker (`.csv / .tsv / .txt / .xlsx / .xls`). CSV parser is inline (handles quoted fields with embedded commas/newlines); XLSX uses the already-loaded SheetJS lib. Session-only — no DB migration, nothing persists.
+- **Step 2 — Map columns + pick channel**:
+  - **ASIN column** dropdown (auto-guessed if any header contains "asin")
+  - **90-day units column** dropdown (auto-guessed via regex on `/90.*(day|d)/` → `units sold` → `units/qty/quantity/orders`)
+  - **Channel**: `∑ Total (all channels)` · `🇺🇸 Amazon US` · `🍁 Amazon CA` · `🇪🇺 Amazon EU/UK` · `🛍 Shopify DTC` · `🛒 Walmart` · `🐾 Chewy (forecast only)`
+  - **Compare against**: `Dashboard actuals (last 90 days)` — sums `salesData` history, matches Seller Central raw downloads. Or `Dashboard forecast (next 90 days need)` — reads `inventoryNeedBreakdown(rec, 90)` so the number ties out exactly with the Need columns on screen.
+- **Step 3 — Results table** — one row per matched ASIN, sorted by |Δ%| descending so the biggest divergences bubble to the top. Columns: ASIN · Product (with brand chip) · Uploaded · Dashboard · Δ units · Δ %. Cells color-coded: green when |Δ%| < 5, orange 5-15, red ≥ 15, orange for "dashboard = 0 but uploaded > 0" (Δ% = ∞). Top of the panel shows scorecards (Uploaded total / Dashboard total / Δ / Δ%) with the same color logic. Unmatched ASINs (in the file but not in the catalog — delisted / typo / different account) flagged in an orange caveat row with the first 8 ASIN+units listed inline.
+- **Chewy special case**: no consumer-level history on `sales_weekly`, so `actual` for Chewy falls through to `getChewyFcUnits(mid, 90, region)` when the sum is 0 — otherwise Chewy uploads would always show "0 vs uploaded" as a false-negative.
+- **CSV export** (`↓ Export comparison CSV`) — emits every row (matched + unmatched) with `asin, master_id, brand, product, uploaded_90d, dashboard_90d, delta_units, delta_pct`. Filename tags channel + date. Context comment line at the top names the channel + compare mode + source file so archived exports are self-describing.
+- **In-file dedup rule** — if the uploaded file has multiple rows for the same ASIN (multi-region rows, multi-MSKU splits — common in Seller Central exports), units are SUMMED before comparison. Mirrors the SKU Economics upload convention (v4.61).
 
 ## v7.61 — Units Sold: Shopify DTC recolored from blue → cyan (was indistinguishable from Walmart)
 - **User (Jason)**: "shopify and walmart are the same color" — Shopify was `#3b82f6` and Walmart was `#0071dc`. Walmart's brand color is that exact blue, so keeping it there is the right call; Shopify needed to move. In the stacked-area chart the two blue layers merged into one indistinguishable mass.
