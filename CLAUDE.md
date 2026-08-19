@@ -2,7 +2,11 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.60**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.61**
+
+## v7.61 — Units Sold: Shopify DTC recolored from blue → cyan (was indistinguishable from Walmart)
+- **User (Jason)**: "shopify and walmart are the same color" — Shopify was `#3b82f6` and Walmart was `#0071dc`. Walmart's brand color is that exact blue, so keeping it there is the right call; Shopify needed to move. In the stacked-area chart the two blue layers merged into one indistinguishable mass.
+- **Fix**: Shopify DTC → `#06b6d4` (cyan). Stays in the Shopify-teal family (their brand gradient runs mint→teal) and is distinct from every other channel in the 5-channel palette (green / orange / cyan / purple / Walmart-blue). Updated in both `SALES_CHANNELS` (the source of truth for the chart) and the checkbox label markup so the checkbox row matches what appears in the chart.
 
 ## v7.60 — Units Sold: adding an EU-selling product no longer truncates the chart's right edge
 - **User (Jason)**: added Catnip & Silvervine Spray to a selection that already had Catnip Spray - 3 Oz — chart's right edge jumped from 8/3/26 back to 6/8/26 for no obvious reason. Custom range setting was unchanged, no filter change, just adding a second product.
