@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.65**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.66**
+
+## v7.66 — Units Sold: Top Products chip actually fires the picker re-render + auto-select (v7.59 fix was in the wrong place)
+- **User (Jason)**: "on the units sold page, the top products picker does not select the product in the product picker" — screenshot showed the chip active (green fill + `filter: Buds Jar` in the header), but the product picker still listed all 644 products and the chip's product wasn't checked.
+- **Root cause**: `triggerTopProductPageRerender` (the function `setTopProductFilter` calls to re-render the current page after a chip click) had hardcoded checks for Inventory Planning / Products / Amazon P&L only — no Units Sold branch. So on Units Sold, `topProductFilterId` DID get set but the picker's `renderSalesTbl()` never fired to apply the filter. My v7.59 "auto-add-on-chip-click" wrapper was hooked to the panel's `onRerender` field, but `refreshAllTopProductsPanels` only re-renders the CHIP UI — it never invokes stored `onRerender` hooks. So the wrapper only ran incidentally when renderSalesTbl re-ran for other reasons (velocity change, filter toggle, etc.) — not on chip clicks.
+- **Fix — add Units Sold to `triggerTopProductPageRerender`.** When `#page-sales.active`:
+  1. If `topProductFilterId` is set and not already in `salesSelected`, add it (parity with v7.59 intent — chip click = filter + select in one gesture).
+  2. Call `renderSalesTbl()` — this applies the filter, updates the summary, and (since the tail of renderSalesTbl fires `updateSalesChart()` when there's a selection) draws the chart automatically.
+- **Cleanup**: removed the v7.59 wrapper's now-redundant auto-add block from renderSalesTbl. Kept the plain `onRerender: renderSalesTbl` handoff for any future caller that DOES invoke it. Auto-add now lives at the actual trigger site (the chip click) instead of piggybacking on unrelated renders.
 
 ## v7.65 — In-house production schedule: per-channel filter (produce for just Chewy / Amazon / Shopify / …)
 - **Ask (Jason)**: "for the in-house production view of inventory planning, i need to be able to choose the channels i need the production schedule for (eg, chewy, amazon)" — before v7.65 the weekly schedule always summed every channel via `inventoryNeed(r, X)`, so the production team couldn't pull a "just what we need to make for Chewy this month" schedule.
