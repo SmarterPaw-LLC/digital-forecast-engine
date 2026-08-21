@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.70**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.71**
+
+## v7.71 — CSV exports: filename is now user-editable at download time
+- **Ask (Jason)**: "anywhere i export a csv, allow me to name it" — the app was hardcoding filenames like `smarterpaw-forecast-inventory-planning-warehouse-90d-filtered-2026-08-18.csv`. Sensible defaults but no way to override in one shot.
+- **New helper `promptCsvName(defaultName)`** (near `csvEsc`) — shows a `prompt()` pre-filled with the auto-generated name; Enter accepts the default, edit-then-Enter uses the custom name, Cancel aborts the download. Also ensures `.csv` extension is present + scrubs filesystem-unfriendly chars (`\ / : * ? " < > |` → `_`).
+- **Wired at every CSV download site** (10 total):
+  1. Walmart P&L export
+  2. COGS export
+  3. Chewy Rebates export
+  4. Inventory Compare export
+  5. Inventory Planning CSV export (`downloadInventoryCSV`)
+  6. Chewy Forecast export
+  7. Shopify P&L export
+  8. Amazon P&L export
+  9. Units Sold export (via `doExportCSV('sales', ...)`)
+  10. Template downloads (`dlTemplate` — products / bundles / sku templates)
+- Cancel path revokes any created object URL and (where applicable) sets a `✕ Cancelled` status pill so users see the abort. JSON backup exports (v4.60 `smarterpaw-backup-*.json`) are unchanged — Jason's ask was CSV-specific.
+- Filename logged into `logAudit` payloads where the site already writes an audit event (inventory.export, chewy.export) so archived logs match the file the user actually saved.
 
 ## v7.70 — In-house production panel: Bundle assemblies + Events tooltips explain provenance / cross-channel behavior
 - **Ask (Jason)** after v7.65: "where is 'events' pulling from? and do the bundle assemblies only add totals from the other selected channels?" — flagged that the Events source and Bundle assemblies' cross-channel behavior weren't self-evident. Picked option B (tooltip note) over option A (scope bundle to other channels) for now.
