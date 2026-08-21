@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.64**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.65**
+
+## v7.65 — In-house production schedule: per-channel filter (produce for just Chewy / Amazon / Shopify / …)
+- **Ask (Jason)**: "for the in-house production view of inventory planning, i need to be able to choose the channels i need the production schedule for (eg, chewy, amazon)" — before v7.65 the weekly schedule always summed every channel via `inventoryNeed(r, X)`, so the production team couldn't pull a "just what we need to make for Chewy this month" schedule.
+- **New channel picker row** in the panel header, right of the existing Weeks / Columns / Values controls. Six checkboxes (each a green-outlined pill when active):
+  - **🅰 Amazon** — FBA replenishment shipments (`nb.amazon.reorder`) + FBM continuous draw when Amazon fulfillment=FBM.
+  - **🛍 Shopify DTC** — continuous warehouse draw for direct-to-consumer Shopify orders.
+  - **🐾 Chewy** — Chewy's own forward monthly PO forecast (from `chewy_forecasts` uploads).
+  - **🛒 Walmart** — Walmart 1P continuous warehouse draw against POs.
+  - **📦 Bundle assemblies** — component demand when a bundle sells (pulls BOM from warehouse to assemble).
+  - **📅 Events** — extra draws from Prime Day / promo events (v6.26).
+  - **`all`** button — reset to every channel (matches the pre-v7.65 Need Total).
+- **Default: every channel on** — matches the pre-v7.65 behavior of "produce for total demand" so existing users see the same schedule until they narrow.
+- **Persistence**: state stored per-browser at `localStorage.ipInhouseChannels` as a comma-separated list. Guard: at least one channel must stay checked (an all-off schedule would silently be all-zeros).
+- **New helper `inventoryNeedChannels(r, X, chans)`** at the top level — the channel-filtered version of `inventoryNeed()`. Sums only the selected slices from `inventoryNeedBreakdown`; when the list is empty OR contains every known channel, it defers to `inventoryNeed()` (fast path, unchanged math).
+- **`getInventoryWeeklyBreakdown(r, weeks, chans)`** gained an optional 3rd arg. Passes through to `inventoryNeedChannels` when narrowed; existing callers with no 3rd arg get the full total (back-compat preserved).
+- **CSV export follows the panel** — the v7.46 contract that panel + CSV export share settings is preserved: `downloadInventoryCSV` reads the same `ipInhouseChannels` key and passes it into `getInventoryWeeklyBreakdown`. So a schedule narrowed to Chewy on-screen exports the same Chewy-only weekly columns.
+- **Panel sub-header** appends `channels: chewy, amazon` (or whichever are on) whenever the filter is narrower than "all", so it's obvious at a glance what the current schedule represents.
 
 ## v7.64 — Inventory Planning Compare: "Amazon (all markets)" default + channel labels name the IP column they map to + amazon math scoped to FBA Reorder only
 - **User (Jason)** flagged two bugs after v7.63:
