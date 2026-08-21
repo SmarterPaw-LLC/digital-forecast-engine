@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.67**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.68**
+
+## v7.68 — Row-highlight for checked rows survives horizontal scroll + frozen columns (Inventory Planning / Forecast / Products / Chewy / Units Sold)
+- **User (Jason)**: "on the inventory planning and other pages, when i check an item, i would like the row to highlight so i can tell where i'm looking on horiz scroll" — the pre-v7.68 selected-row highlight was a faint (`rgba(74,158,56,.07)`) inline background on `<tr>`. Two issues: (a) too subtle to spot when scrolled deep into wide Need columns; (b) the v5.42 freeze feature writes `background:var(--surface)` inline on sticky first cells, and a `<tr>` background loses to a cell's own inline background — so on frozen columns the highlight was totally invisible.
+- **Fix — new global CSS class `tr-selected`.** Rule puts the background on every `<td>` via `tr.tr-selected > td { background: rgba(74,158,56,.14) !important }` — `!important` wins over sticky-cell inline; `> td` selector applies to every cell so the highlight travels with the row across horizontal scroll. Adds a `box-shadow: inset 3px 0 0 var(--sp-green)` on the first cell as an obvious green left-edge anchor for scan tracking. Hover-on-selected bumps to `.22` alpha for feedback.
+- **Applied across 5 tables** with row-selection state: Inventory Planning, Demand Forecast, Products, Chewy Forecasts, Units Sold. Each row builder now emits `class="tr-selected"` when selected; the pre-v7.68 inline backgrounds are removed. Hover-mouseover JS handlers now guard on `.classList.contains('tr-selected')` so hover doesn't stomp the selected state.
+- P&L tables (Amazon / Shopify / Walmart) were NOT changed — they already have their own selection-highlight patterns tied to per-page semantics. Can be migrated to the shared class later if needed.
 
 ## v7.67 — Units Sold: Top Products chip click-off symmetrically DESELECTS + closes chart
 - **User (Jason)** after v7.66: "if i unclick the top product on units sold, it stays selected on the product picker" — v7.66 wired "chip click ON → add product to selection", but leaving the click-OFF asymmetric meant the row stayed checked (and the chart stayed drawn with stale data) after clearing the chip.
