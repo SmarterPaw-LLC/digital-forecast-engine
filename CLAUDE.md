@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.66**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.67**
+
+## v7.67 — Units Sold: Top Products chip click-off symmetrically DESELECTS + closes chart
+- **User (Jason)** after v7.66: "if i unclick the top product on units sold, it stays selected on the product picker" — v7.66 wired "chip click ON → add product to selection", but leaving the click-OFF asymmetric meant the row stayed checked (and the chart stayed drawn with stale data) after clearing the chip.
+- **Fix — new module-level `_prevTopProductFilterId`** captured in `setTopProductFilter` BEFORE it mutates `topProductFilterId`, held for the duration of the dispatch, cleared to null after. Lets the page-specific rerender hook know both the old and new values in one call.
+- **Units Sold branch in `triggerTopProductPageRerender` now handles both directions:**
+  - `topProductFilterId` set + not in selection → add (v7.66 behavior).
+  - `topProductFilterId` null + `_prevTopProductFilterId` was in selection → remove.
+  - After the `renderSalesTbl()` call, if selection ended up empty, also call `closeSalesDrill()` so the chart panel closes cleanly. Otherwise `renderSalesTbl` leaves it open with the last state (it only fires `updateSalesChart` when there IS a selection; it never closes the drill on transition to zero).
+- Other pages unaffected — the sync only runs when `#page-sales.active`.
 
 ## v7.66 — Units Sold: Top Products chip actually fires the picker re-render + auto-select (v7.59 fix was in the wrong place)
 - **User (Jason)**: "on the units sold page, the top products picker does not select the product in the product picker" — screenshot showed the chip active (green fill + `filter: Buds Jar` in the header), but the product picker still listed all 644 products and the chip's product wasn't checked.
