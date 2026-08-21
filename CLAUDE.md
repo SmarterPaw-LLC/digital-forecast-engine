@@ -2,7 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.68**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.69**
+
+## v7.69 — Seasonality chart: "Show per-channel actuals" overlay (spot channel-specific trends alongside the aggregated fit)
+- **Ask (Jason)**: "on the seasonality page, i'd like to be able to see trends by channel" + follow-up: "in addition to the aggregated". So aggregate stays visible; per-channel lines overlay when the toggle is on.
+- **New "Show per-channel actuals" checkbox** in the seasonality chart's legend guide bar (below the 4 line explanations). Toggle persists per browser via `localStorage.seaByChannel`.
+- **When on**: the fit chart adds one thin dashed line per channel with sales history in the visible window (last ~80 weeks). Channels with zero units in view are silently dropped so the legend stays tight. Aggregated green Actual + Fit + Trend + Projected lines are unchanged — the overlays sit alongside for direct comparison.
+- **Channel groupings** mirror Units Sold (v7.60 SALES_CHANNELS) so colors read consistently across pages:
+  - Amazon US → `#4a9e38` (green)
+  - Amazon CA → `#f97316` (orange)
+  - Amazon EU (pools `amazon_gb / de / fr / it / es / nl / uk`) → `#c084fc` (light purple)
+  - Shopify → `#06b6d4` (cyan, v7.61)
+  - Chewy → `#a855f7` (purple)
+  - Walmart → `#0071dc` (Walmart blue)
+- **Legend swatches strip** — beneath the checkbox, shows each active channel's window total (e.g. `■ Amazon US 3,240u · ■ Chewy 1,875u`). Empty state reads `(no per-channel history in the visible window)`.
+- **Chart rendering** — per-channel weekly aggregates are built in the same pass as the existing aggregate `weekly` map (one loop over `salesData[mid]` rows, dispatched by `chanKeyOf(r.channel)`). Zero perf overhead unless the toggle is on. Data extended with `Array(FUTURE_WEEKS).fill(null)` so the per-channel lines terminate at the last actual week (no misleading forward projection per-channel).
+- **Renders on toggle** — new `seaToggleByChannel()` handler persists the state and re-fires `renderSeasonality()` (which re-invokes `seaRenderFitChart` with the same product + curve).
 
 ## v7.68 — Row-highlight for checked rows survives horizontal scroll + frozen columns (Inventory Planning / Forecast / Products / Chewy / Units Sold)
 - **User (Jason)**: "on the inventory planning and other pages, when i check an item, i would like the row to highlight so i can tell where i'm looking on horiz scroll" — the pre-v7.68 selected-row highlight was a faint (`rgba(74,158,56,.07)`) inline background on `<tr>`. Two issues: (a) too subtle to spot when scrolled deep into wide Need columns; (b) the v5.42 freeze feature writes `background:var(--surface)` inline on sticky first cells, and a `<tr>` background loses to a cell's own inline background — so on frozen columns the highlight was totally invisible.
