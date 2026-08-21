@@ -2,7 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.62**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.63**
+
+## v7.63 — Inventory Planning Compare: hardened CSV export + explicit Δ direction labeling
+- **User (Jason)**: "i want to be able to export this to a csv" (the button was there but Jason didn't see it and/or the download didn't fire on his browser) AND "also it isn't clear if the +/- is from their forecast (uploaded) or ours" — the `Δ units` / `Δ %` column headers gave no hint which side was the reference.
+- **Export button hardening**:
+  - Button restyled from muted-grey to green-accented pill so it stands out at the top of the results block.
+  - `<a>` anchor now appended to `document.body` BEFORE `.click()` and removed afterward — Firefox and some Chrome variants silently no-op the download on a detached anchor.
+  - Explicit `try/catch` with error surfacing (console + inline status span) so a future failure is visible instead of silent.
+  - Inline `✓ Downloaded {filename} ({N} rows)` toast next to the button confirms the export fired. Success stays green; failures render orange.
+- **Δ direction now unambiguous**:
+  - New blue info banner above the scorecards spells out the convention: `Δ = Uploaded − Dashboard. Positive = uploaded higher (their forecast > ours). Negative = dashboard higher (their forecast < ours).`
+  - Column headers renamed `Δ units` → `Upload − Dash (u)` and `Δ %` → `Upload vs Dash (%)`. Hover tooltips repeat the formula + direction so it's discoverable from either the header or the info banner.
+  - Scorecard tiles renamed similarly (`Δ units` → `Upload − Dash (units)`, `Δ %` → `Upload vs Dash (%)`).
+  - CSV column names renamed to match: `delta_units` → `upload_minus_dashboard_units`, `delta_pct` → `upload_vs_dashboard_pct`. Added a second `#` comment line at the top of the CSV documenting the sign convention so archived files are self-describing.
 
 ## v7.62 — Inventory Planning: Compare tool (upload a spreadsheet, map ASIN + 90d columns, pick a channel, see the delta)
 - **Ask (Jason)**: "on the inventory planning module, i'd like a compare function. i want to upload a spreadsheet and tell the app which column to use for asin and 90 day number, pick the channel, then compare the numbers showing" — audit-style reconciliation against Seller Central Business Reports / Shopify Sales-by-Product / Walmart Scintilla / etc.
