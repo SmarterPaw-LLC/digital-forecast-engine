@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.69**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.70**
+
+## v7.70 — In-house production panel: Bundle assemblies + Events tooltips explain provenance / cross-channel behavior
+- **Ask (Jason)** after v7.65: "where is 'events' pulling from? and do the bundle assemblies only add totals from the other selected channels?" — flagged that the Events source and Bundle assemblies' cross-channel behavior weren't self-evident. Picked option B (tooltip note) over option A (scope bundle to other channels) for now.
+- **Bundle assemblies tooltip** now warns explicitly: `⚠ CROSS-CHANNEL: always sums bundle sales from every channel the bundle sold on, regardless of the other channel checkboxes above. Uncheck this box to remove all bundle draw from the schedule.` So users understand unchecking Chewy doesn't remove Chewy-sold bundles from the assembly draw — only unchecking Bundle assemblies itself does.
+- **Events tooltip** now names the source table + where to manage: `Extra draws from manually-created event entries in the inventory_events table. Manage on Inventory Planning → Reorder Setup tab → 📅 Inventory Events section.` So users can find where to add Prime Day / promo events without hunting.
+- No math change — pure documentation. Option A (scope Bundle assemblies to other channel checkboxes for consistent narrowing) remains available as a future ship if the cross-channel default becomes a real problem.
 
 ## v7.69 — Seasonality chart: "Show per-channel actuals" overlay (spot channel-specific trends alongside the aggregated fit)
 - **Ask (Jason)**: "on the seasonality page, i'd like to be able to see trends by channel" + follow-up: "in addition to the aggregated". So aggregate stays visible; per-channel lines overlay when the toggle is on.
