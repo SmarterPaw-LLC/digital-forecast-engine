@@ -2,7 +2,25 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.63**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.64**
+
+## v7.64 — Inventory Planning Compare: "Amazon (all markets)" default + channel labels name the IP column they map to + amazon math scoped to FBA Reorder only
+- **User (Jason)** flagged two bugs after v7.63:
+  1. It wasn't clear which columns to match on the compare picker — options like "∑ Total (all channels)" and "Compare against" didn't map to any specific column on the IP table.
+  2. On Purrple Passion (B00U6EGXGK), the tool showed Dashboard=3,455 vs Uploaded=71 (-97.9% delta) — but the IP table's FBA Reorder columns for that ASIN are 0 (Amazon well-stocked). His uploaded number is Amazon-only, summed across markets. The 3,455 was `nb.total` (Chewy's forward monthly PO forecast + Shopify/Walmart continuous draw dominated a product with fresh FBA), which has nothing to do with Amazon.
+- **Fix — channel options now name the exact IP column they tie to:**
+  - `🌐 Amazon (all markets)` — sums `nb.amazon.reorder` across US + CA + EU records for the ASIN. **New default.** Matches Amazon Business Reports / Restock reports which typically bundle trailing shipments across all markets into one per-ASIN row.
+  - `🇺🇸 Amazon US only — FBA Reorder (matches ≤90d FBA US column)`
+  - `🍁 Amazon CA only — FBA Reorder (matches ≤90d FBA CA column)`
+  - `🇪🇺 Amazon EU/UK only — FBA Reorder (matches ≤90d FBA UK column)`
+  - `🛍 Shopify DTC — continuous draw (matches ≤90d Shopify base)`
+  - `🛒 Walmart 1P — continuous draw (matches ≤90d Walmart base)`
+  - `🐾 Chewy — forward PO forecast (matches ≤90d Chewy reorder)`
+  - `🏪 Warehouse Total — ALL channels + bundle draws (matches Need Total column)` — explicit warning that this includes bundle-component demand.
+  - Removed the ambiguous "∑ Total (all channels)" from v7.62. Old saved state maps forward to "warehouse" via a back-compat alias.
+- **Math fix — Amazon channels in forecast mode now return `nb.amazon.reorder` only** (not `base + reorder`). Matches the visible FBA Reorder columns on the IP table exactly. Purrple Passion → 0, matching the on-screen `—` in the FBA Reorder columns. Prior code double-counted base (which is FBA-internal churn, not warehouse-relevant) with reorder (the actual FBA replenishment shipments).
+- **Live caption** below the picker names the dashboard column the current pick maps to, so users can visually confirm before running (e.g., picking "Amazon (all markets)" shows "Dashboard number = Amazon FBA Reorder need across US + CA + EU records for this ASIN, summed. Matches the sum of the ≤90d FBA US + CA + UK columns for this row."). Warehouse Total's caption is explicit about bundle-component inflation.
+- **Layout tweak** — moved Channel + Compare-vs into their own row so the longer explicit labels have room to breathe. Compare-vs also now defaults to `forecast` (was `actual`) since the ask is a forecast-need audit.
 
 ## v7.63 — Inventory Planning Compare: hardened CSV export + explicit Δ direction labeling
 - **User (Jason)**: "i want to be able to export this to a csv" (the button was there but Jason didn't see it and/or the download didn't fire on his browser) AND "also it isn't clear if the +/- is from their forecast (uploaded) or ours" — the `Δ units` / `Δ %` column headers gave no hint which side was the reference.
