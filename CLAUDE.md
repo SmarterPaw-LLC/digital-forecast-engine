@@ -2,7 +2,26 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.71**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.72**
+
+## v7.72 — New "🧮 Pricing Scenarios" sub-view on P&L: model bulk-pack pricing against a reference single-pack with cannibalization risk gauge
+- **Ask (Jason)**: bulk pack for Silvervine Sticks — needs to price it so it attracts volume buyers without eroding sales of the existing $9.99 single (which is highly profitable). Wanted a tool to model this.
+- **New P&L sub-view** at `P&L → 🧮 Pricing Scenarios`. Session-only — nothing persists.
+- **Reference product picker** — fuzzy search across title / SP SKU / ASIN / Shopify SKU / Chewy SKU / brand. On select, shows a stat card: MSRP, COGS (Amazon preferred, DTC as fallback), gross profit + margin, 30-day units. Warns explicitly if MSRP or COGS is missing (pointing to the Products / COGS pages to fix).
+- **Scenario builder** — click `+ Add scenario` to add rows; each has:
+  - Pack size (integer, default 3)
+  - Retail price (dollars, default 90% × MSRP × pack size — a safe LOW-risk 10% discount)
+  - Custom bulk COGS override (optional — packaging economies from a real quote; defaults to `base_cogs × pack_size`, linear).
+- **Per-scenario stat tiles**: per-base-pack price · discount % vs single · bulk COGS · gross profit + margin %.
+- **🚦 Cannibalization risk gauge** — 3-band heuristic based on per-base-pack discount vs single MSRP:
+  - 🟢 **LOW (0–14% off)** — bulk buyers self-select (subscribers, gifters, heavy users); single stays the impulse buy. Ideal target.
+  - 🟡 **MODERATE (15–24% off)** — starts pulling single-pack customers; net-positive only if incremental sales lift > 2× the cannibalized margin.
+  - 🔴 **HIGH (25%+ off)** — most habitual single-pack buyers upgrade; risks a permanent margin reset on the profitable SKU.
+  - 💎 **PREMIUM** — bulk price/unit ABOVE single (no cannibalization; must justify premium via convenience / gifting).
+- **Break-even math strip** — for each scenario, shows net margin per bulk sale at three assumed switch rates (10% / 25% / 50% of bulk buyers were previously buying singles). Formula: `netPerBulk = bulkGP − (switchRate × packSize × singleGP)`. Positive = accretive, negative = margin-dilutive. Answers "how many buyers can switch before this becomes a bad deal".
+- **`💡 Suggest safe pricing`** button — wipes current scenarios and seeds 2/3/5-pack scenarios at curated LOW-risk discounts (8% / 10% / 14% off). Immediate starting point.
+- **Assumptions documented in the explainer block below the scenarios** — COGS-scales-linearly, 3-band cannibalization heuristic (not an elasticity model), no packaging economies unless the operator enters them.
+- **How to use for the Silvervine ask**: search "silvervine sticks" → pick the single → click 💡 Suggest safe pricing → see 2-pack at ~$18.38 (8% off/unit), 3-pack at ~$26.97 (10% off/unit), 5-pack at ~$42.96 (14% off/unit). All three land in 🟢 LOW zone. Any tighter discount (i.e. lower bulk price) crosses into 🟡 territory; the operator can dial each to their gut and read the risk gauge live.
 
 ## v7.71 — CSV exports: filename is now user-editable at download time
 - **Ask (Jason)**: "anywhere i export a csv, allow me to name it" — the app was hardcoding filenames like `smarterpaw-forecast-inventory-planning-warehouse-90d-filtered-2026-08-18.csv`. Sensible defaults but no way to override in one shot.
