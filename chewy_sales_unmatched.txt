@@ -1,0 +1,22 @@
+v7.73 — Chewy Sales Actuals file: unmatched SKUs (2026-08-19 snapshot)
+=====================================================================
+
+These 13 Chewy SKUs don't have a matching row in products.chewy_sku.
+They represent ~1% of units + sales in the file. Assign them on the
+Products page (edit each product → set Chewy SKU field), or ignore
+if they are truly discontinued.
+
+CHEWY SKU   NAME
+156572      Meowijuana Catnip Cigar Cat Toy, Color Varies
+696614      Meowijuana Refillable Get Hung Moon & Stars Cat Toy
+346154      Meowijuana Happy Grass Lemongrass Blend Catnip, 0.92-oz bottle
+1105134     Meowijuana Refillable Get Spooked Pumpkin Cat Plush Toy with Catnip
+1105230     Meowijuana Refillable Get Sprung Duckling Cat Plush Toy with Catnip
+4567238     Meowijuana Get Salty Sea Turtle Refillable Plush Cat Toy with Catnip, Blue, Medium
+3271638     Meowijuana Sprinkle 'n' Scratch Taco Scratcher Cat Toy
+4567230     Meowijuana Get Salty Stingray Refillable Plush Cat Toy with Catnip, Blue, Medium
+363614      Meowijuana Get Chilled Snowcone Refillable Plush Cat Toy with Catnip
+3500990     Meowijuana Christmas Knock 'N' Nibble Winter Buddy Plush Cat Toy with Catnip, Brown/Blue, Small
+696694      Meowijuana Christmas Refillable Get Twisted Candy Cane Cat Toy
+696710      Meowijuana Christmas Refillable Get Stuffed Stocking Cat Toy
+4566958     Meowijuana Get Sporty Soccer Ball & Cleat Refillable Plush Cat Toy with Catnip, Blue, Small, 2 count

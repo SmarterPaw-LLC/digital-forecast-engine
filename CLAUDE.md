@@ -2,7 +2,29 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.72**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.73**
+
+## v7.73 — Chewy weekly sales actuals ingest (new `chewy_sales_weekly` table + uploader; fills the Chewy channel on Units Sold + Seasonality)
+- **Ask (Jason)**: sample file `MJ_Sales_Snapshot_W_2026-08-19-0915.xlsx` — Chewy started sending a weekly sell-through snapshot per SKU. Currently only Meowijuana but will expand. Wanted a clean ingest into the sales table + product mapping check.
+- **File shape**: 1,678 rows · 81 distinct Chewy SKUs · 26 weekly buckets (2026-02-02 → 2026-07-27). Columns: `Brand · SKU · Name · FY · Week Start Date · Week End Date · Merch Sales · Units Sold · AS units sold · PDP OOS%`. Mon–Sun weeks (matches app convention). Dates arrive as Excel serials (46055 = 2026-02-02) — parser decodes.
+- **Product mapping check**: 68/81 SKUs (84%) matched via `products.chewy_sku`; the 13 unmatched represent only **1.03% of units / 0.97% of sales** (`$3,961 / $406,764`) — all long-tail seasonal plush / niche variants. Unmatched list: [chewy_sales_unmatched.txt](chewy_sales_unmatched.txt).
+- **⚠ SQL TO RUN:** [supabase_v7_73_chewy_sales_weekly.sql](supabase_v7_73_chewy_sales_weekly.sql) — creates `chewy_sales_weekly (master_id, chewy_sku, week_start, week_end, fy, units_sold, autoship_units, merch_sales, pdp_oos_pct, region, uploaded_at)` + unique index `(chewy_sku, week_start)` + RLS + authenticated grants + anon revoke (v6.47 hard rule).
+- **Why a new table** (not `sales_weekly`): existing sales_weekly unique index `(channel, asin, coalesce(shopify_sku,''), week_start)` collapses to `(chewy, NULL, '', week_start)` for every Chewy row → every Chewy product's row for a given week would collide with every other Chewy product. Cleanest fix mirrors what Walmart got in v6.51 (`walmart_sales_weekly`) — isolated table, easy migration, no risk to Amazon/Shopify write paths. Also lets us capture Chewy-only dimensions (Autoship split, PDP OOS%) natively.
+- **New upload card** on Data → Uploads → Sales & P&L → `grp-chewy-actuals` (right after the Chewy Rebate PDFs card). Distinct from `grp-chewy-sales` above (that's the forward Vendor Statement PO forecast). Accepts `.xlsx / .xls`. Uses existing SheetJS (`window.XLSX`).
+- **`parseChewyActuals()`**:
+  - Case-tolerant column resolver (aliases for future format tweaks).
+  - Excel-serial-date decoder (`_chewyExcelSerialToYmd`).
+  - In-file dedup — sums duplicate `(sku, week_start)` rows (SKU Economics v4.61 multi-MSKU convention).
+  - Auto-creates `SP-TEMP-CHW-<sku>` placeholders for unknown Chewy SKUs (v4.57 pattern for Amazon unknown ASINs) so their volume still flows; SP-TEMP rows surface on Products → Needs Review for promotion.
+  - DELETE+INSERT scoped to `(chewy_sku ∈ file, week_start ∈ file)` — Architecture Rule #5. Chunked 100 SKUs per delete, 500 rows per insert.
+  - Returns row count, SKU count, week count, autoship %, new-product count, skipped-row count.
+- **Downstream wiring**: `loadSalesAnalytics` now pulls `chewy_sales_weekly` alongside sales_weekly + shopify_sales_daily + walmart_sales_weekly. Rows are mapped to the legacy `salesData` shape with `channel='chewy'`, `region='US'`. Immediately lights up:
+  - **Units Sold page** — Chewy channel checkbox now has real data (previously empty because `sales_weekly` never carried Chewy).
+  - **Seasonality per-channel overlay (v7.69)** — Chewy line has real historical data instead of showing "no per-channel history".
+  - **`fcSoldByChannel` / `getInventoryChannelVel`** — Chewy velocity now flows through where the channel-agnostic helpers pick up any channel present in `salesData`.
+- **`chewy_forecasts` (v6.02) untouched** — that table remains the forward-looking Chewy PO forecast source and continues to drive `getChewyFcUnits` for Inventory Planning's chewy.reorder math. Two Chewy tables serving different purposes.
+- **Autoship + PDP OOS carried through in the DB row + salesData** but not yet surfaced in the UI. Follow-up ship if wanted: an "Autoship share" badge on Chewy Forecasts page / Chewy P&L, and OOS-week highlighting on the Seasonality chart.
+- **Freshness bar**: new `last-chewy-actuals-grp` + `last-chewy-actuals` slots wired in `refreshUploadDataRanges`. Shows latest week_start + relative days.
 
 ## v7.72 — New "🧮 Pricing Scenarios" sub-view on P&L: model bulk-pack pricing against a reference single-pack with cannibalization risk gauge
 - **Ask (Jason)**: bulk pack for Silvervine Sticks — needs to price it so it attracts volume buyers without eroding sales of the existing $9.99 single (which is highly profitable). Wanted a tool to model this.
