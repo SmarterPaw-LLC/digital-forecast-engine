@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.73**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.74**
+
+## v7.74 — Units Sold Area (Combined) chart regression fix — stacked area lines need `fill: '-1'`, not `fill: true` (surfaced by v7.73 Chewy data)
+- **User (Jason)**: "this broke units sold page" — after uploading Chewy actuals via v7.73, the Units Sold chart on the Catnip Spray 3 Oz drilldown rendered mostly empty, showing only 2 dots at the leftmost x-position (7/20/26) despite the subtitle claiming "48 weeks · 18,707 units". Chart type was Area (Combined) + By Channel.
+- **Root cause**: my v7.55 area-stacked implementation used `fill: true` on every dataset, which fills each layer to y=0. That looked FINE pre-v7.73 because Amazon dominated all weeks and the other channels were mostly zero — the topmost layer painted over the identical lower ones so the visual was correct by accident. As soon as Chewy joined the mix (v7.73 populated `salesData['chewy']` for 68 SmarterPaw products), each channel had substantial cross-week data — every layer filling to origin meant upper layers overpainted lower ones, so all but the topmost visible layer read as a flat blob at y=0.
+- **Fix**: Chart.js's canonical stacked-area-line pattern — first dataset `fill: 'origin'`, all subsequent datasets `fill: '-1'` (fill to the previous dataset in the stack). Applied to both `updateChannelChart` (per-channel stacking) and `updateSalesChart` (per-product Total-mode stacking). Non-stacked area unchanged (`fill: true`).
+- **Additional defensive fixes** to the v7.73 Chewy loader in `loadSalesAnalytics` while I was there:
+  - Explicit `Number()` coercion on `units_sold`, `merch_sales`, `autoship_units` (PostgREST returns `numeric()` columns as strings to preserve precision — untyped downstream arithmetic then string-concats and can poison Chart.js).
+  - Skip rows with `week_start` that fails `new Date().getTime()` — malformed dates would propagate NaN keys through `toMondayKey` and break bucketing.
+  - `try/catch` around the whole Chewy pull so any Postgres/PostgREST hiccup can't take the whole loader down.
+  - Kill-switch: set `localStorage.disableChewySalesPull='1'` in DevTools to bypass the pull entirely without touching code — last-resort recovery.
+- **Data coercion in chart data arrays** — both `updateChannelChart` and `updateSalesChart` now wrap the mapped values in `Number(...)` before `|| 0`. Defensive; matches what should have always been there.
 
 ## v7.73 — Chewy weekly sales actuals ingest (new `chewy_sales_weekly` table + uploader; fills the Chewy channel on Units Sold + Seasonality)
 - **Ask (Jason)**: sample file `MJ_Sales_Snapshot_W_2026-08-19-0915.xlsx` — Chewy started sending a weekly sell-through snapshot per SKU. Currently only Meowijuana but will expand. Wanted a clean ingest into the sales table + product mapping check.
