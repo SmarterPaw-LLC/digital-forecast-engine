@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.75**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.76**
+
+## v7.76 — Merge + SP-TEMP promotion: reassign `chewy_sales_weekly` FKs (was silently CASCADE-deleting Chewy actuals on merge)
+- **User (Jason)**: "when i merged a chewy temp product into an existing one, i'm not sure if the sales data carried over. i don't see chewy sales reflected here" — screenshot of Hiking Boot (Doggijuana) Units Sold showed only Shopify (cyan) data on the chart despite the Chewy channel checkbox being on and there being a Chewy SKU on the product.
+- **Root cause**: same class of bug fixed for other tables in v4.145 (sku_economics_eu), v5.97 (sales_weekly), v6.54 (walmart_sales_weekly), v6.98 (fba tables), etc. — the merge tool + SP-TEMP promotion path both maintain hardcoded lists of tables to re-point FKs on, and `chewy_sales_weekly` (added in v7.73) wasn't on either list. When Jason merged the SP-TEMP-CHW into Hiking Boot, the SP-TEMP product was deleted → the `on delete cascade` FK on `chewy_sales_weekly.master_id` CASCADED the Chewy actuals rows into oblivion.
+- **Fix — two sites**:
+  1. `runMerge` — added `await reassignMasterId('chewy_sales_weekly')` alongside the other `reassignMasterId` calls before the product-delete step.
+  2. `saveProduct` SP-TEMP → SP-XXXX promotion path — added `await sb.from('chewy_sales_weekly').update({ master_id }).eq('master_id', oldMasterId)` alongside the walmart_sales_weekly line.
+- **Undo behavior (v6.99 Merge History)** — reassignMasterId already captures the row PKs it touches, so undoing a v7.76+ merge will correctly re-point Chewy rows back to the src. Merges done BEFORE v7.76 that lost Chewy rows to CASCADE can't be recovered — the rows are gone; **re-upload the Chewy sales snapshot** and the rows will re-populate against the correct product (since chewy_sku is now attached to the Hiking Boot product record).
+- **Recovery for Jason's Hiking Boot case**: re-upload `MJ_Sales_Snapshot_W_*.xlsx`. The Chewy SKU on the Hiking Boot product will match the file's rows and populate chewy_sales_weekly with `master_id = <Hiking Boot's master_id>`. Chart populates on next Units Sold render.
 
 ## v7.75 — Chewy sales uploader: mixed-brand files handled correctly (brand normalizer + distribution report + mismatch audit)
 - **Ask (Jason)**: "if i upload a chewy sales file and it has all brands mixed together - will it get messed up?" — v7.73 handled the initial Meowi-only file but had two brand risks for mixed files.
