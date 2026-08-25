@@ -2,7 +2,25 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.78**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.79**
+
+## v7.79 — Inventory Planning seasonal filter: separate "Seasonal product" vs "Product with seasonality" (v7.78 wrongly OR'd them)
+- **User (Jason)**: "one is for seasonal products (like a christmas candy cane) the other is to denote items with seasonality" — my v7.78 filter treated `products.seasonal` (checkbox) and `products.seasonal_type` (enum) as variants of the same "seasonal" concept and OR'd them. They're actually two DIFFERENT concepts:
+  - **Seasonal PRODUCT** (`products.seasonal` checkbox): the SKU itself is seasonal — Christmas candy cane, only on shelf during a specific season, off-season = literally not sold.
+  - **Product with SEASONALITY** (`products.seasonal_type ∈ {seasonal, seasonal_limited}`): year-round product with a seasonal demand SHAPE — Catnip Spray sells all 12 months but peaks summer/holidays. On shelf year-round; demand curve varies.
+- **Fix — filter dropdown split into 4 semantic options** (previous "🌱 Seasonal only" was ambiguous):
+  - `All products` (default)
+  - `🌱 Seasonal products only` — matches `products.seasonal = true` ONLY (limited-window SKUs)
+  - `📈 With seasonality only` — matches `products.seasonal_type ∈ {seasonal, seasonal_limited}` ONLY (year-round products with a shape)
+  - `🎃 Narrow-peak (limited) only` — matches `products.seasonal_type = seasonal_limited` (sharp holiday/event lift on a year-round SKU)
+  - `— Neither (flat) only` — products with NEITHER flag set (assumed flat year-round demand)
+- **Filter logic** at all 4 sites (main render, `getVisibleInventory`, `downloadInventoryCSV`, `showExportDialog`) now uses distinct predicates:
+  ```js
+  const _isSeasonalProduct = r.seasonal === true;
+  const _hasSeasonality    = r.seasonal_type === 'seasonal' || r.seasonal_type === 'seasonal_limited';
+  ```
+- **Column tooltips clarified** (`Seasonal` + `Sea Type`) to name each concept explicitly and cross-reference the other so users see the distinction at a glance without opening docs.
+- **Records-build fields unchanged** (`r.seasonal` + `r.seasonal_type` still populated from `products.*`) — this is purely a filter-semantics + labels fix.
 
 ## v7.78 — Inventory Planning: sort + filter by seasonal (Seasonal + Sea Type columns; Seasonal-only filter dropdown)
 - **Ask (Jason)**: "on the inventory planning module, i need to be able to sort by seasonal items" — no way to see all seasonal SKUs together for holiday-window planning.
