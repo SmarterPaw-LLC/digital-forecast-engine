@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.77**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.78**
+
+## v7.78 — Inventory Planning: sort + filter by seasonal (Seasonal + Sea Type columns; Seasonal-only filter dropdown)
+- **Ask (Jason)**: "on the inventory planning module, i need to be able to sort by seasonal items" — no way to see all seasonal SKUs together for holiday-window planning.
+- **Records-build now carries `seasonal` (boolean from `products.seasonal`) and `seasonal_type` (enum from `products.seasonal_type`)** so IP columns can sort/filter without an O(N) `allProducts` lookup per row.
+- **Two new columns** in the SEASONALITY group (both default OFF — opt-in via 📋 View popup):
+  - **`Seasonal`** — center-aligned badge column. Renders `🌱 SEASONAL` (orange pill) when `products.seasonal` is true, else `—`. Sort desc floats seasonal SKUs to the top. CSV emits `Yes` / `No`.
+  - **`Sea Type`** — enum badge from `products.seasonal_type`. `🎃 LIMITED` (red) for `seasonal_limited` (narrow-peak holiday products), `🌾 SEASONAL` (orange) for `seasonal`, `— FLAT` (grey) for explicit flat, `standard` (muted) otherwise. Sort maps to a rank so `seasonal_limited` (3) → `seasonal` (2) → `flat` (1) → `standard` (0) — clustering the sharp-peak items at one end of the sort. CSV emits the raw type string.
+- **New Seasonal filter dropdown** in the controls bar (right of the In-house filter): `All (seasonal + standard)` (default) · `🌱 Seasonal only` · `🎃 Limited only (narrow peak)` · `Standard only (non-seasonal)`. "Seasonal only" matches `seasonal=true` OR `seasonal_type ∈ {seasonal, seasonal_limited}`. "Limited only" narrows further to `seasonal_type=seasonal_limited`.
+- **Filter applied at all 4 IP filter sites** (v4.202 pattern): `renderInventoryTbl` (main table) + `getVisibleInventory` (selection bar + chart) + `downloadInventoryCSV` (export) + `showExportDialog` (dialog counter). So the schedule + CSV + counters all agree.
+- **Workflow**: pick "🌱 Seasonal only" from the filter → the table narrows to seasonal SKUs → sort by `Sea Type` desc to cluster `🎃 LIMITED` (holiday) at the top → hover a Need cell to see when the reorder events fire → adjust production accordingly.
 
 ## v7.77 — Units Sold: chip-clear now removes ALL chip-added products (was leaving earlier chips' products in the chart)
 - **User (Jason)**: "when i clear off the selection here, it doesn't remove it from the graph sometimes" — pointing at the Top Products chip area on Units Sold.
