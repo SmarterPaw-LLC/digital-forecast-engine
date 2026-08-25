@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.74**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.75**
+
+## v7.75 — Chewy sales uploader: mixed-brand files handled correctly (brand normalizer + distribution report + mismatch audit)
+- **Ask (Jason)**: "if i upload a chewy sales file and it has all brands mixed together - will it get messed up?" — v7.73 handled the initial Meowi-only file but had two brand risks for mixed files.
+- **Risks (pre-v7.75)**:
+  1. Matched rows (99% of typical volume) — SAFE because `chewy_sku` is the join key; the product's own brand wins regardless of what the file says.
+  2. Unmatched rows (creates SP-TEMP-CHW placeholders) — v7.73 took the file's Brand column string verbatim and fell back to `'Meowijuana'` if the column was empty. So a Doggijuana row with an empty Brand column would silently create a Meowi-branded SP-TEMP; a KKZ row with `"Kitty Ka Zoom"` (no hyphen) would create an SP-TEMP with a brand string that doesn't match the canonical KKZ chip.
+- **Fix — `_chewyNormalizeBrand(raw)`**: canonicalizes any variant to `Meowijuana` / `Doggijuana` / `Kitty Ka-Zoom` via case-insensitive substring match (`meowi`, `doggi`, `kitty`/`kkz`/`ka-zoom`/`ka zoom`/`kazoom`). Returns null for unrecognized values (no silent default) so the caller can surface them.
+- **SP-TEMP creation now uses normalized brand.** If a row's brand is empty/unrecognized, the SP-TEMP falls back to the FILE'S SOLE KNOWN BRAND (only if the file is truly mono-brand — e.g. all Meowi rows) OR `'Unknown'` (visible + fixable on Products → Needs Review). Never silently misclassified anymore.
+- **Brand-distribution report** in the upload status line: `✓ N rows · M SKUs · W weeks · X% autoship · brands: MJ 12,340u · DJ 3,201u · KKZ 890u`. So a mixed-brand file's composition is obvious at a glance.
+- **Brand-mismatch audit** for matched rows: if the file's normalized brand ≠ the product's brand (product wins because chewy_sku is authoritative), the row goes into a `brandMismatches` array. Surfaced in the status line as `⚠ N matched SKU(s) had a file brand that didn't match the product brand` and details logged to console. Signals when Chewy has an SKU labeled differently than SmarterPaw does — pure hygiene warning, no data change.
+- **Unrecognized Brand strings** are collected + surfaced too: `⚠ Unrecognized Brand strings in file: "New Brand Name" — SP-TEMPs for those rows landed with brand 'Unknown'.`
+- **Return shape extended**: `{ rowCount, skuCount, weekCount, autoshipPct, newProducts, skippedRows, brandStats, brandMismatches, unrecognizedBrands }` — future callers (e.g. an audit-log entry) can consume any of these.
 
 ## v7.74 — Units Sold Area (Combined) chart regression fix — stacked area lines need `fill: '-1'`, not `fill: true` (surfaced by v7.73 Chewy data)
 - **User (Jason)**: "this broke units sold page" — after uploading Chewy actuals via v7.73, the Units Sold chart on the Catnip Spray 3 Oz drilldown rendered mostly empty, showing only 2 dots at the leftmost x-position (7/20/26) despite the subtitle claiming "48 weeks · 18,707 units". Chart type was Area (Combined) + By Channel.
