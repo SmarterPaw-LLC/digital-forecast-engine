@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.76**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.77**
+
+## v7.77 — Units Sold: chip-clear now removes ALL chip-added products (was leaving earlier chips' products in the chart)
+- **User (Jason)**: "when i clear off the selection here, it doesn't remove it from the graph sometimes" — pointing at the Top Products chip area on Units Sold.
+- **Root cause**: v7.67's chip-clear handler only removed the SINGLE chip that was just deselected (`_prevTopProductFilterId`). If the user had clicked multiple chips in sequence — each auto-adding its product to `salesSelected` — clearing the LAST chip only dropped the last product. Every earlier chip-added product stayed in the selection, and the chart kept showing them. From the user's perspective, "cleared the chip but chart still has stuff on it."
+- **Fix — track chip-added selections separately.** New module-scope `_salesChipAdded = new Set()`:
+  - **Chip pick** — when `topProductFilterId` transitions to a non-null value, add the product to `salesSelected` AND `_salesChipAdded`.
+  - **Chip clear** — when `topProductFilterId` transitions to null (chip toggle-off OR "Clear filter" button OR any path), iterate `_salesChipAdded` and remove EVERY tracked product from `salesSelected`. Reset the tracking set.
+  - **Manual row-uncheck** — remove that product from `_salesChipAdded` too (keeps the tracking set tidy so a later chip-clear doesn't try to re-remove a product that's already out of the selection).
+  - **"Clear selection" button** — resets `_salesChipAdded` alongside `salesSelected.clear()` so a fresh chip click starts with clean tracking.
+- **Semantic**: chip-added products come and go WITH the chip. Manual row-checkbox picks are outside `_salesChipAdded` and STAY across chip changes. Matches user expectation that "the chip" is a temporary filter+select combo.
+- **Session-only** — `_salesChipAdded` doesn't persist to localStorage or saved reports. Fresh session starts with an empty tracking set (any pre-existing selection from a saved report just isn't in `_salesChipAdded` and behaves like row-checkbox picks — stays across chip changes).
 
 ## v7.76 — Merge + SP-TEMP promotion: reassign `chewy_sales_weekly` FKs (was silently CASCADE-deleting Chewy actuals on merge)
 - **User (Jason)**: "when i merged a chewy temp product into an existing one, i'm not sure if the sales data carried over. i don't see chewy sales reflected here" — screenshot of Hiking Boot (Doggijuana) Units Sold showed only Shopify (cyan) data on the chart despite the Chewy channel checkbox being on and there being a Chewy SKU on the product.
