@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.81**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.82**
+
+## v7.82 — Ship-by consumed cells in CUMULATIVE mode now show the running total (matches CSV export; panel was displaying "0" and looking like the event vanished mid-window)
+- **User (Jason)** after v7.81 CSV export: "the event numbers do not export" — pasted a Cases_CUM_THRU CSV. Compared to the panel screenshot, the panel showed `0` for consumed weeks (10/11 → 12/27) while the CSV showed the running total unchanged from the ship-by cell (e.g. Catnip Spray - 3 Oz: panel showed `633 +287 · 0 · 0 · ... · 0 · 635` but CSV showed `633 · 633 · 633 · ... · 633 · 635`). The CSV was actually correct — the event WAS reflected (10/4 jumped from 345 → 633, the +288 pulled forward) and consumed weeks correctly held the cumulative running total. The panel was the one lying: it rendered marginal-zero (`0`) inside a cumulative view.
+- **Root cause**: v7.81's `cellConsumed()` always emitted `"0"` regardless of `valMode`. In weekly mode that's correct (no NEW units ship that week). In cumulative mode it's flat wrong — the running total didn't reset to 0; it just didn't grow.
+- **Fix**: new `cellConsumedCum(v)` renderer for cumulative-mode consumed cells. Same italic-dim styling as `cellConsumed`, but the value is the actual running total (`adjVal`), and the tooltip changes to "Cumulative unchanged — no new demand this week (already shipped in an earlier ship-by lump)." Weekly-mode consumed cells still use `cellConsumed()` and still show `0` (that's still correct there).
+- **Render loop** now branches on `valMode`:
+  - `weekly` + consumed → `cellConsumed()` (dim "0")
+  - `cumulative` + consumed → `cellConsumedCum(adjVal)` (dim running total)
+- **Panel + CSV now match exactly** — for Jason's example row, both surfaces show `633` for consumed weeks in cumulative mode, `633 +287` on the ship-by cell (badge is UI-only), and pick back up at `635` after the event window.
+- **CSV unchanged** — it was correct in v7.81; math simply mirrored to the panel display. No export-format shift.
+- **Why the badge still helps in cumulative mode**: the +287 badge on the ship-by cell reads as "this cumulative jump is driven by pull-forward" — without it, the operator would see 345 → 633 and wonder if late-September velocity spiked. The badge names the event contribution explicitly.
 
 ## v7.81 — Ship-by is EVENT-based (Jason: "i only need to shift some weeks back … i need to be able to specify the time period and when to shift it") — supersedes v7.80's blanket shift
 - **User pushback on v7.80**: "i only need to shift some weeks back - eg i need the cumulative up to december shifted back to October - but this isn't true for every week. so i need to be able to specify the time period and when to shift it."
