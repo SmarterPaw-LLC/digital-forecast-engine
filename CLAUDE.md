@@ -2,25 +2,36 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.80**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.81**
 
-## v7.80 — In-house production: Ship-by pull-forward schedule (departure dates, not arrival dates) + `+N` badge on the UI
-- **Ask (Jason)**: "on the in house production schedule, i need a way to define must ship by dates for inventory needs. for instance, for the majority of december needs, these need to leave by early October to be in place for demand. So i'd like a view that is exportable that shows this clearly. On the UI (not in the export), when i toggle this view, I want to see the +n number of units added because of the must ship by date."
-- **The problem**: the v7.46 In-house Weekly Production Schedule panel showed each week's ON-SHELF demand — but for products with long shipping lead times (Amazon inbound), the units for December have to LEAVE the warehouse in early October. Operators had to mentally shift every column back 8 weeks to figure out real shipping deadlines.
-- **New controls** in the panel header (right of the channel picker):
-  - **🚚 Ship-by schedule** checkbox — off by default. Persisted per browser via `localStorage.ipShipByOn`.
-  - **Ship lead (d)** number input — days between "leaves warehouse" and "in place for demand". Default 60 (typical inbound-to-Amazon lead time). Range 1-365. Rounded to nearest whole week for the shift. Persisted via `localStorage.ipShipByLeadDays`. Only enabled when the checkbox is on.
-  - Both controls surface tooltips explaining the semantic (arrival vs departure, +N badge meaning).
-- **Cell semantics — same table, two modes:**
-  - **OFF (default)**: cell for week i shows on-shelf demand for that week (arrival semantics — the pre-v7.80 behavior).
-  - **ON**: cell for week i shows the SHIPPING quantity needed to arrive at Amazon / warehouse / DC by demand `shipLead` days later. So Dec-peak demand appears in Oct columns for a 60-day lead.
-- **Math** — `shiftWeeks = round(shipLead / 7)`. When ON, we compute an EXTENDED breakdown covering `weeks + shiftWeeks` horizon: `wkExt = getInventoryWeeklyBreakdown(r, weeks + shiftWeeks, activeChans)`. Cell for week i uses `wkExt[i + shiftWeeks].units` (or `.cumUnits` in cumulative mode). Baseline = `wkExt[i]` = the same week's own unshifted demand. Both baseline and shifted values respect the active channel filter + val mode (weekly vs cumulative) + horizon selection — everything composes cleanly.
-- **`+N` badge (UI only)** — when `shipByOn`, each cell renders a green pill with `+N` where `N = shifted - baseline` (only when positive). Names the pull-forward contribution vs the baseline (unshifted) view. Tooltip on the badge: "Pull-forward: +N units brought back from ~Xw later (must-ship-by Yd)." Cases mode gets its own `Math.ceil(badge/case_qty)` badge so cases + units stay internally consistent.
-- **CSV export applies the shift WITHOUT badges** — reads the same localStorage keys (`ipShipByOn` / `ipShipByLeadDays`) inside `downloadInventoryCSV` so the exported schedule matches what's on-screen (panel/CSV parity per v7.46 contract). The exported column for week i carries the shifted value directly; no badge, no `+N` decoration — the exported numbers ARE the shipping schedule. Consumers can just look at the CSV and know when each batch must ship.
-- **Sub-header calls out the mode** when active: `… · 🚚 ship-by 60d (~9w shift)`.
-- **Why the extended breakdown**: to compute what needs to SHIP in week 5 to arrive in place for week 14 demand (shipLead = 63d ≈ 9w), we need `getInventoryWeeklyBreakdown` to reach week 14 — which is why we ask for `weeks + shiftWeeks`. The `weeks` control still defines the SHIPPING horizon (how many weeks of departure schedule you want to see); the underlying demand horizon is `weeks + shiftWeeks`.
-- **Cumulative mode also works** — with cumulative on, cell i shows the CUMULATIVE shipping quantity through week i. Since cumulative = sum of marginals in `[0, i+shiftWeeks]`, the same shift math applies (just to `cumUnits` instead of `units`).
-- **Practical read for operators**: turn ship-by ON with lead = 60d. Look at week 5's column. It shows `4,200 +1,800` = "ship 4,200 units this week; 1,800 of those are pulled forward from a busier period 60 days out." Now you can PO plan against real shipping deadlines instead of arrival dates.
+## v7.81 — Ship-by is EVENT-based (Jason: "i only need to shift some weeks back … i need to be able to specify the time period and when to shift it") — supersedes v7.80's blanket shift
+- **User pushback on v7.80**: "i only need to shift some weeks back - eg i need the cumulative up to december shifted back to October - but this isn't true for every week. so i need to be able to specify the time period and when to shift it."
+- **v7.80 was wrong for the real use case.** Jason's actual mental model is targeted "stock waves" (Q4 pull-forward, Prime Day pre-build, back-to-school, etc.) — not a uniform slide of every week's demand back by N. v7.80 fatted every future column proportionally, which double-counted downstream lumps and didn't reflect how POs actually get planned. Removed entirely.
+- **Replaced with pull-forward EVENTS.** Each event = `{ label, shipByWeek, coverThroughWeek }` (both dates Sunday-anchored ISO strings). An event says: "on shipByWeek, ship enough to cover demand through coverThroughWeek." Multiple events can coexist over time.
+- **Cell semantics:**
+  - **Ship-by week's cell**: cumulative demand from that week through coverThroughWeek (front-loaded lump). Green `+N` badge names the pull-forward contribution vs the week's own baseline demand.
+  - **Consumed weeks** (strictly between shipByWeek and coverThroughWeek, inclusive of coverThroughWeek): cell shows `0` in muted italic with tooltip "This week's demand already shipped in an earlier ship-by lump." Prevents double-ordering.
+  - **Other weeks**: unchanged — normal cadence.
+- **UI — new inline event editor** in the panel header:
+  - Header row gets a **🚚 Ship-by events (N)** checkbox. When on, an inline editor block appears below the controls.
+  - Editor: `+ Add event` button + one row per event. Each row: `[Label input] Ship by [date picker] → Cover through [date picker] [✕ delete]`. Invalid ranges (cover ≤ ship) show a `⚠ invalid range` chip.
+  - Add-event defaults: shipByWeek = today's Sunday, coverThroughWeek = +8 weeks (operator edits both).
+  - Empty state calls out the workflow: "e.g. Ship-by = week of Oct 5, Cover-through = week of Dec 27 to lump December stock into the Oct column."
+- **Storage**: `localStorage.ipShipByEventsOn` (bool) + `localStorage.ipShipByEvents` (JSON array). Per browser. `activeEvents` filter drops events with missing/invalid dates; the on-disk array preserves partially-typed rows so the editor doesn't lose state mid-edit.
+- **Date snapping**: both shipByWeek and coverThroughWeek snap to Sunday (via `snapToSun`) so they align with `getInventoryWeeklyBreakdown`'s Sunday-anchored week starts. If a user picks a Wednesday, the math snaps to the containing Sun-Sat week.
+- **Math flow** (`renderInhouseWeeklyPanel`):
+  1. Build `coverageByShipWeek: Map<shipSun, maxCoverSun>` — when multiple events land on the same ship week, widest coverage wins.
+  2. Build `consumedWeeks: Set<sun>` — every week strictly between any event's shipSun and coverSun.
+  3. Compute `extWeeks = max(weeks, weeksFromAnchorToFurthestCover + 1)` so the underlying `getInventoryWeeklyBreakdown` reaches every event's cover-through week even when the visible horizon is shorter.
+  4. Per row, fetch the extended breakdown ONCE (`wkAll`).
+  5. Build `adjWeekly[]` = per-week shipping quantity: for each event, sum baseline marginals `[shipIdx .. coverIdx]` into `adjWeekly[shipIdx]`, then zero out `adjWeekly[shipIdx+1 .. coverIdx]`. Non-event weeks stay at their baseline marginal.
+  6. Cumulative mode: derive `adjCum[]` from the running sum of `adjWeekly[]` so the cumulative view is internally consistent.
+  7. Render visible weeks: ship-by → `cellPlus(v, badge, tip)`; consumed → `cellConsumed()`; other → `cell(v)`.
+- **Badge math**: `badge = max(0, adjVal - baselineVal)` on ship-by weeks. Cases badge = `ceil(badge / case_qty)` so units + cases stay internally consistent under both modes.
+- **CSV export** (`downloadInventoryCSV`) mirrors the render loop's math against the same localStorage keys — same coverage map, same consumed set, same adjusted marginal + cumulative arrays — but emits ONLY the adjusted numbers (no badges, no consumed styling). The exported column values ARE the shipping plan; consumers just read the CSV and know exactly what to ship each week. Panel/CSV parity per v7.46 contract preserved.
+- **Extended horizon rationale**: to display a Q4 pull-forward event whose ship-by is week 8 but cover-through is week 25, we need `getInventoryWeeklyBreakdown` to reach week 25. `extWeeks` in the render loop + `csvExtWeeks` in the CSV path both extend to cover the furthest event, no matter the visible `weeks` setting.
+- **Sub-header** surfaces active event count when enabled: `… · 🚚 3 ship-by events`.
+- **Practical read for operators**: enable events, click `+ Add event`, label it "Q4 stock", set Ship by = 2026-10-04, Cover through = 2026-12-27. The Oct 4 column now shows the lump total (say `9,500 +8,400`) — 8,400 pulled from the Oct 11 → Dec 27 window. Those 12 columns in between show `0` (already shipped). PO planning against Oct 4 = correct volume, no double-orders downstream.
 
 ## v7.79 — Inventory Planning seasonal filter: separate "Seasonal product" vs "Product with seasonality" (v7.78 wrongly OR'd them)
 - **User (Jason)**: "one is for seasonal products (like a christmas candy cane) the other is to denote items with seasonality" — my v7.78 filter treated `products.seasonal` (checkbox) and `products.seasonal_type` (enum) as variants of the same "seasonal" concept and OR'd them. They're actually two DIFFERENT concepts:
