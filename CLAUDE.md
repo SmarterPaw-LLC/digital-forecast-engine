@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.83**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.84**
+
+## v7.84 — Sales & Traffic uploader deep links open the actual report, not the Sales Dashboard
+- **User (Jason)**: "your report link on the upload page for the new report goes to the dashboard. should it go to the detail by child instead?" — screenshots showed my v7.83 links landing on Business Reports → Sales Dashboard (generic account rollup), forcing him to click through By ASIN → Detail Page Sales and Traffic By Child Item every time.
+- **Root cause**: I linked to the bare `sellercentral.amazon.com/business-reports` path, which redirects to the Sales Dashboard by default.
+- **Fix**: all three deep links (US / CA / EU-UK) now include the URL fragment `#/report?id=102%3ADetailSalesTrafficByChildItem` — the exact anchor Amazon uses to route straight to the Detail Page Sales and Traffic By Child Item report. Extracted verbatim from Jason's browser URL bar in the screenshot. One click on `↗ Open Detail Page Sales & Traffic (US)` now opens the correct report ready to pick a date range and click Download (.csv).
+- **Link label** also updated to name the report directly: `↗ Open Detail Page Sales & Traffic (US)` instead of the generic `↗ Open Business Reports (US)`. CA / EU-UK still use short labels since they open the same report on their marketplace.
+- The `columns=...` query string Amazon appends when you're in the report is user-specific saved column preferences — deliberately NOT included so each user's default view applies.
 
 ## v7.83 — Amazon Sales & Traffic (per-ASIN Sessions / Conversion / Buy Box) — Phase 1: schema + uploader + P&L columns
 - **Ask (Jason)**: "on the amazon p&l page, i want to add more analysis capability. i want to look at conversion rates for pages and use this to make decisions on ad spend. i think the right report to us is the sales by traffic report on amazon, which we aren't currently bringing in."
