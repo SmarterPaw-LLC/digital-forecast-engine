@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.84**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.85**
+
+## v7.85 — Cross-upload validation: SKU Economics ↔ Sales & Traffic ↔ Sales Dashboard "By Date" all reject wrong-file drops with a targeted error naming the correct uploader
+- **Ask (Jason)**: "can you make sure the wrong spreadsheet doesn't get uploaded for sku economics vs sales and traffic?"
+- **The risk**: both reports come from the same Seller Central page, both have ASIN columns, both are CSV — but they capture entirely different data. Dropping a SKU Economics file into the Sales & Traffic dropzone (or vice versa) would either fail with a confusing "missing column" error or, worse, silently insert nonsense rows.
+- **Fix — signature-based rejection in every affected parser**:
+  - **`parseSkuEconomics` (US/CA)** — checks headers for Sales & Traffic markers (`sessions - total`, `unit session percentage`, `featured offer (buy box)`, `(child) asin`, `(parent) asin`, `page views - total`). Any hit → throw with: `"This looks like a Sales & Traffic … file, not SKU Economics. Upload it via the 📊 Amazon Sales & Traffic dropzone instead."`
+  - **`parseEuSkuEconomics`** — same guard, same marker list, message names "SKU Economics EU".
+  - **`parseAmazonSalesTraffic`** — checks headers for SKU Economics markers (`net units sold`, `reporting week`, `fba fulfillment fee`, `fulfilment by amazon`, `amazon store`, `referral fee total`, `sponsored products charge`, `sponsored products total`, `net proceeds total`). Any hit → throw: `"This looks like a SKU Economics file, not Sales & Traffic. Upload it via the 📈 Amazon SKU Economics dropzone instead."`
+- **Third case caught explicitly — Sales Dashboard "By Date" rollup**. The Business Reports menu has TWO similarly-named entries: **By Date → Sales and Traffic** (account-level daily rollup, no ASIN — the wrong report Jason first exported in his v7.83 discussion) and **By ASIN → Detail Page Sales and Traffic by Child Item** (the right report). Both have "sales and traffic" in the name. If a user drops the By-Date rollup into the Sales & Traffic uploader, `parseAmazonSalesTraffic` now detects the `Date` column + `Order Item Session Percentage` signature + missing ASIN column and throws: `"This is the Business Reports 'By Date → Sales and Traffic' rollup (account-level daily), not the per-ASIN report. You want By ASIN → Detail Page Sales and Traffic by Child Item — click ↗ Open Detail Page Sales & Traffic on the uploader card."` Points them at the right navigation path AND the deep link that's already on the card.
+- **Guards run BEFORE the existing column-index resolution**, so the wrong-file error surfaces before any parsing-side confusion (e.g. "Missing required column: Amazon store"). The user gets one clear sentence telling them which dropzone to use.
+- **No new upload paths, no schema change** — pure defensive validation on existing parsers.
 
 ## v7.84 — Sales & Traffic uploader deep links open the actual report, not the Sales Dashboard
 - **User (Jason)**: "your report link on the upload page for the new report goes to the dashboard. should it go to the detail by child instead?" — screenshots showed my v7.83 links landing on Business Reports → Sales Dashboard (generic account rollup), forcing him to click through By ASIN → Detail Page Sales and Traffic By Child Item every time.
