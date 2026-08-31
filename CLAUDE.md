@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.86**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.87**
+
+## v7.87 — Page Performance scatter bubbles are click-to-open-product-card
+- **Ask (Jason)**: "if i click on a scatter bubble, it should open the product card"
+- **Fix**: added Chart.js `onClick` handler on the quadrant bubble chart — clicks resolve to the underlying data point's `master_id` (stashed on each bubble object) and call `openProductModal(master_id)`. Same modal the tables' row-clicks already open.
+- **Small-bubble hit forgiveness**: `activeEls[0]` alone can miss tiny bubbles in the low-Sessions / low-Conversion corner; the handler falls back to `chart.getElementsAtEventForMode(evt, 'nearest', {intersect:false}, true)` so clicks land as long as the pointer is near a bubble.
+- **Cursor affordance**: `onHover` flips the canvas cursor to `pointer` when hovering over any bubble, `default` otherwise. So the click affordance is discoverable without reading copy.
+- **Discovery copy**: chart subtitle now ends with "Click any bubble to open the product card." so a user glancing at the panel sees the interaction is available.
+- No other behavior changes — the same click chain (open modal → edit / view card) as everywhere else in the app.
 
 ## v7.86 — Amazon P&L: new "📈 Page Performance" sub-view (session-starved high converters + high-traffic PDP-problem products)
 - **Ask (Jason)**: "at the top, between summary and diagnostics, i want a page toggle for page performance. here, i want different charts to see performance from the traffic detail report. most interested in being able to see high converter starved products and low converter upside down products."
