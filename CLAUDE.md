@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.89**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.90**
+
+## v7.90 — Amazon P&L: Seasonal filter (mirrors Inventory Planning's v7.79 4-option semantics)
+- **Ask (Jason)**: "i want to be able to filter by seasonal items on the amazon p&l page"
+- **Reused the exact v7.79 semantic distinction** from Inventory Planning (two independent concepts, not variants):
+  - **Seasonal PRODUCT** (`products.seasonal = true`) — the SKU itself is seasonal (limited-window, off-season = not sold; e.g. Christmas candy cane).
+  - **Product with SEASONALITY** (`products.seasonal_type ∈ {seasonal, seasonal_limited}`) — year-round SKU with a seasonal demand SHAPE (e.g. Catnip Spray peaks in summer, on shelf year-round).
+- **New dropdown** in the P&L filter strip between Category and Search: 5 options — `All products` (default) · `🌱 Seasonal products only` · `📈 With seasonality only` · `🎃 Narrow-peak (limited) only` · `— Neither (flat) only`.
+- **Single `pnlSeasonalMatches(prod, mode)` helper** hoisted next to `pnlDeltaChip` — one predicate, four semantic branches. `_placeholder` products (unmatched ASINs from `sku_economics` that have no product row) are EXCLUDED from every non-"all" filter: their seasonal state is unknown, not confirmed "not seasonal", so counting them under "Neither (flat)" would misrepresent them.
+- **Wired at three Amazon P&L sites** — mirrors the v4.202 sitewide-consistency pattern:
+  1. `renderPnl` main agg loop (drives scorecards + product table + fee breakdown).
+  2. `buildPnlPrevAgg` (prev-period comparison for the fee drill modal). Without this, the per-fee drill's delta chip would compare filtered current vs unfiltered prior.
+  3. `renderPnlDiagnostics` (per-ASIN Diagnostics view). So Diagnostics + Summary + Fee Drill all agree on what's in scope.
+- **`updatePnlChart` intentionally SKIPPED** — the chart only fires when the user has explicitly checkbox-selected products. Selection is the operator's direct expression of intent and takes precedence over passive filters (same convention as Top Products chip flow).
+- **`pnlTotalsForRange` (equal-length prior period totals for scorecard vs-prev delta chips)** picks up the filter transitively via `midSet` — `renderPnl` already builds the mid set from filter-passing rows and passes it in, so the seasonal filter flows through without touching `pnlTotalsForRange`.
+- **Saved views** — added `season` field to `pnlSnapshotState()` + a restore line in `pnlApplyView()`. Views saved on v7.90 restore the seasonal filter; pre-v7.90 views omit the field entirely and inherit the current UI value on apply (backward compatible).
+- **Compositional with every other filter** — brand + category + seasonal + search + quick + Top Products chip all narrow the visible set independently. So "Doggijuana + 🎃 Narrow-peak (limited) only + last 90 days" gives exactly that slice.
+- **No schema change** — reads existing `products.seasonal` (v6.39) and `products.seasonal_type` (v4.77).
 
 ## v7.89 — Header respects the light theme (was hardcoded `rgba(14,18,8,0.95)` dark green)
 - **Ask (Jason)**: "the header does not swap to light mode" — screenshot showed the whole app in light theme but the sticky top header still dark.
