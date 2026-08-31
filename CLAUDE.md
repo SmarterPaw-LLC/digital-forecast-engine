@@ -2,7 +2,33 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.85**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.86**
+
+## v7.86 — Amazon P&L: new "📈 Page Performance" sub-view (session-starved high converters + high-traffic PDP-problem products)
+- **Ask (Jason)**: "at the top, between summary and diagnostics, i want a page toggle for page performance. here, i want different charts to see performance from the traffic detail report. most interested in being able to see high converter starved products and low converter upside down products."
+- **New third sub-tab** on the Amazon P&L page, between Summary and Diagnostics: **📈 Page Performance**. Sits in the existing tab strip; state variable `pnlAmazonView` now accepts `'summary' | 'performance' | 'diagnostics'`.
+- **Data source**: reuses the same agg `renderPnl()` builds (per-master_id join of `sku_economics` × `amazon_sales_traffic` × `amazon_ad_spend`). No new fetch — the render just filters `pnlExportRows` to rows with `has_traffic=true` and derives per-row metrics. Free-riding on all the P&L filters (region / period / brand / category / search / quick / Top Products chip).
+- **Derived per-row metrics**:
+  - `conversion_pct = traffic_units_ordered ÷ sessions × 100` (recomputed from summed values across the P&L period — honest at any date range, not a naive average of per-week rates)
+  - `buy_box_pct = buy_box_pct_weighted ÷ sessions` (sessions-weighted average)
+  - `ad_spend = sponsored` (v6.76 already folds SP + non-SP into this)
+  - `margin_pct`, `contrib_pct`, `acos_pct` for context
+- **Quadrant split — MEDIAN-based, not absolute thresholds**. So the analysis scales from a 5-product test set to the full catalog without any tuning. Two active quadrants:
+  - **🎯 STARVED**: `conversion ≥ median AND sessions ≤ median` → "invest more" ranking, sorted by conversion desc
+  - **💸 BLEEDING**: `conversion ≤ median AND sessions ≥ median AND ad_spend > 0` → "fix PDP before more spend" ranking, sorted by ad spend desc (worst money-losers first)
+  - The other two quadrants (🌟 STARS top-right, 🌱 NICHE bottom-left) are shown in the scatter but don't get dedicated tables — they're not the ad-spend decision points.
+- **Scorecards row** (4 tiles at top): Total Sessions · Weighted Conversion · TACoS · Ad Spend / Net Sales rollup. Color-coded (Conv ≥10% green, ≥5% orange, red; TACoS ≤20% green, ≤30% orange, red).
+- **Quadrant scatter chart** (Chart.js bubble type):
+  - X axis: Sessions (log scale — the range spans orders of magnitude, e.g. 100 to 17,000)
+  - Y axis: Conversion %
+  - Bubble size: proportional to `sqrt(net_sales)` so a $10k product doesn't swamp the visualization (clamped 4–24px)
+  - Color: brand-chip color (Meowi green, Doggi blue, KKZ orange)
+  - **Median split lines** drawn via a custom Chart.js plugin (`medianLinesPlugin`) — dashed grey verticals at `medSessions` and horizontals at `medConv`. Quadrant labels (🎯 STARVED / 💸 BLEEDING / 🌟 STARS / 🌱 NICHE) painted at the corners.
+  - Rich tooltip: product title, sessions, conversion, net sales, ad spend, units.
+- **Two focused tables**, each with columns: Product (brand chip + card link + click-to-open-modal) · ASIN (deep link to amazon.com/dp/) · Sessions · Conv % (color-coded) · Ad Spend · Net Sales · Margin % · Contrib % · Action verb ("↑ Increase ad budget" for starved, "Fix PDP before more spend" for bleeding). Row click opens the product modal.
+- **Empty state**: when no ASINs in the current filter have traffic data uploaded, an orange callout tells the user to upload a Sales & Traffic report covering the active region + period.
+- **Live re-render on filter changes**: when the Performance view is active, `renderPnl()` calls `renderPnlPerformance()` at the end of each render — so changing Region, Period, Brand, Category, Search, or the Top Products chip flows through immediately.
+- **Chart lifecycle**: `pnlPerfScatterInstance` destroyed on every re-render so canvas stays clean; lazy-loaded Chart.js via `getChart()`.
 
 ## v7.85 — Cross-upload validation: SKU Economics ↔ Sales & Traffic ↔ Sales Dashboard "By Date" all reject wrong-file drops with a targeted error naming the correct uploader
 - **Ask (Jason)**: "can you make sure the wrong spreadsheet doesn't get uploaded for sku economics vs sales and traffic?"
