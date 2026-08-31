@@ -2,7 +2,36 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.82**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.83**
+
+## v7.83 — Amazon Sales & Traffic (per-ASIN Sessions / Conversion / Buy Box) — Phase 1: schema + uploader + P&L columns
+- **Ask (Jason)**: "on the amazon p&l page, i want to add more analysis capability. i want to look at conversion rates for pages and use this to make decisions on ad spend. i think the right report to us is the sales by traffic report on amazon, which we aren't currently bringing in."
+- **Right report**: Seller Central → Reports → Business Reports → **By ASIN → Detail Page Sales and Traffic by Child Item**. Per-marketplace CSV with (Parent) ASIN, (Child) ASIN, Sessions, Page Views, Buy Box %, Units Ordered, Unit Session % (conversion), Ordered Sales, Total Order Items — plus B2B variants for every metric.
+- **⚠ SQL TO RUN**: `supabase_v7_83_amazon_sales_traffic.sql` — creates two tables:
+  - **`amazon_sales_traffic`** (weekly, unique `(asin, region, week_start)`) — Sun-Sat weekly cadence matching SKU Economics. Direct join to `sku_economics` + `amazon_ad_spend` on the same key.
+  - **`amazon_sales_traffic_snapshot`** (arbitrary period, unique `(asin, region, period_start, period_end)`) — for YTD / QTD / monthly backfill files that don't map to a single Sun-Sat week. Same column set.
+  - Both tables have full RLS + authenticated grants + anon revoke (v6.47 hard rule). Consumer + B2B metrics captured; only consumer surfaced in UI for now.
+- **New uploader tile** on Data → Uploads → Sales & P&L, sitting right after SKU Economics. One dropzone handles both weekly and snapshot uploads — routed by the date range the user picks at upload time.
+- **Upload flow**: pick file → modal prompts for (region, period_start, period_end) → live-detects Sun-Sat and shows routing hint (`→ Weekly table` or `→ Snapshot table`) → parses. Brand is auto-detected from ASIN majority-wins via `products.brand` lookup (one Business Report file = one brand by construction, since each Seller Central account is per-brand). Unknown ASINs auto-create `SP-TEMP-{asin}` with the file's dominant brand — same convention as SKU Economics.
+- **Parser (`parseAmazonSalesTraffic`)** handles Amazon's format quirks:
+  - Numbers ≥1,000 arrive as quoted strings with commas (`"16,959"`) — strip both.
+  - Currency values (`"$32,718.47"`) — strip `$` and `,`.
+  - Percentages (`"14.79%"`) — strip trailing `%`.
+  - Alias-tolerant header lookup (Amazon has renamed columns before — accepts `(Child) ASIN` / `Child ASIN` / `ASIN`, `Unit Session Percentage` / `Unit Session %`, `Featured Offer (Buy Box) Percentage` / `Buy Box %`, etc.).
+  - DELETE+INSERT per Architecture Rule #5, scoped to `(region, week_start OR period_start+period_end, asin ∈ file)`. Missing-table error routes to a clear "run the migration first" message.
+- **Region set** (`AMAZON_BR_REGIONS`) — 11 per-marketplace codes matching the SKU Economics US/CA + EU convention: `US, CA, MX, GB, DE, FR, IT, ES, NL, AU, JP`. Business Reports are per-country (unlike FBA which pools EU/UK) — one file per marketplace.
+- **Deep links** to Business Reports gateway on the upload card: 🇺🇸 US, 🍁 CA, 🇪🇺 EU/UK — one click opens each Seller Central's Business Reports page.
+- **Loader** (`loadAmazonSalesTraffic`) — Architecture Rule #4 pagination (≥1000 rows). Silent-degrade on missing table so P&L still renders on a pre-migration environment. Fires from `loadPnlTab` alongside `loadAmazonAdSpend`.
+- **P&L integration** — new "Traffic & Conversion" column group in `PNL_COLUMNS`, 4 columns all default OFF (opt-in via 📋 View popup):
+  - **Sessions** — sum across P&L period.
+  - **Page Views** — sum across P&L period.
+  - **Buy Box %** — sessions-weighted average across the P&L period (`sum(bb% × sessions) ÷ sum(sessions)`). Color-coded: ≥95% neutral, ≥80% orange, below red.
+  - **Conversion %** — traffic-side units ordered ÷ sessions × 100. Recomputed from summed values so it stays honest at any date range (not a naive average of per-week rates). Color-coded: ≥10% green, ≥5% orange, below red.
+- **Traffic lookup** (`trafficLookup: Map<'{asin}|{region}|{week_start}', row>`) built once per render, pre-filtered by the active P&L period + region. O(1) per-row joins in the agg loop.
+- **`has_traffic` flag** on each agg row — `true` when at least one matching traffic row was folded in. Columns render `—` (no data uploaded) vs `0` (uploaded but zero) distinctly.
+- **Empty-state handling**: no traffic uploaded yet → columns show `—` in muted grey with a tooltip pointing to the uploader. P&L still renders normally (no console errors, no missing rows).
+- **Deferred to Phase 2** (per Jason's phasing agreement): new scorecards (Total Sessions, Avg Conversion, TACoS, ACoS), quick filters (Session-starved high converters, High traffic / low conversion, Buy Box risk). **Deferred to Phase 3**: scatter chart panel (X = ad spend, Y = conversion, bubble size = net sales, color = ROAS).
+- **Workflow for Jason today**: (1) run the SQL migration in Supabase, (2) upload the YTD `BusinessReport-8-31-26 (1).csv` snapshot he already has (auto-routes to snapshot table since it's not Sun-Sat), (3) start weekly Sun-Sat pulls going forward alongside SKU Economics.
 
 ## v7.82 — Ship-by consumed cells in CUMULATIVE mode now show the running total (matches CSV export; panel was displaying "0" and looking like the event vanished mid-window)
 - **User (Jason)** after v7.81 CSV export: "the event numbers do not export" — pasted a Cases_CUM_THRU CSV. Compared to the panel screenshot, the panel showed `0` for consumed weeks (10/11 → 12/27) while the CSV showed the running total unchanged from the ship-by cell (e.g. Catnip Spray - 3 Oz: panel showed `633 +287 · 0 · 0 · ... · 0 · 635` but CSV showed `633 · 633 · 633 · ... · 633 · 635`). The CSV was actually correct — the event WAS reflected (10/4 jumped from 345 → 633, the +288 pulled forward) and consumed weeks correctly held the cumulative running total. The panel was the one lying: it rendered marginal-zero (`0`) inside a cumulative view.
