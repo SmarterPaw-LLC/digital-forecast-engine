@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.88**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.89**
+
+## v7.89 — Header respects the light theme (was hardcoded `rgba(14,18,8,0.95)` dark green)
+- **Ask (Jason)**: "the header does not swap to light mode" — screenshot showed the whole app in light theme but the sticky top header still dark.
+- **Root cause**: the `header {}` CSS rule set `background: rgba(14,18,8,0.95)` as a literal, not via a CSS variable. My v7.88 palette overrides only flipped `--bg` / `--surface` / `--text` / etc. — a literal rgba doesn't participate in that swap.
+- **Fix — one-var indirection**:
+  - Added `--header-bg: rgba(14,18,8,0.95)` on `:root` (dark default, matches pre-v7.89 behavior).
+  - Added `--header-bg: rgba(244,247,239,0.95)` on `:root[data-theme="light"]` (warm off-white matching `--bg` at 95% opacity, so the header still reads as a slightly-frosted sticky bar over the body content).
+  - Rewrote `header { background: var(--header-bg); }`.
+- **Border-bottom kept as `var(--sp-green3)`** — the brand green underline stays across themes for continuity. Text elements inside the header (logo, nav tabs, version chip, etc.) already read from theme-aware vars (`var(--text)`, `var(--text3)`, `var(--surface2)` on hover) so they flipped automatically the moment the header bg went transparent-white — no per-element rewiring needed.
+- **Nav tab active state** (`.nav-tab.active` uses `rgba(74,158,56,.12)` — 12% green tint) reads legibly on both themes: soft mint on white, muted green on dark. No adjustment needed.
 
 ## v7.88 — Light theme toggle (Settings → 🎨 Theme)
 - **Ask (Jason)**: "can you add a light mode toggle to the settings"
