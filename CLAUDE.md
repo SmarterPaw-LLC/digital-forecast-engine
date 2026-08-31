@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.87**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.88**
+
+## v7.88 — Light theme toggle (Settings → 🎨 Theme)
+- **Ask (Jason)**: "can you add a light mode toggle to the settings"
+- **Approach — pure CSS-variable override**. The whole app already reads its palette from CSS custom properties (`--bg`, `--surface`, `--surface2/3`, `--border`, `--border2`, `--text`, `--text2`, `--text3`, plus status colors). Added a single `:root[data-theme="light"] { ... }` block that overrides each variable with a light-mode value. Zero individual style edits — every existing `var(--text)` / `var(--surface)` / etc. usage flips automatically.
+- **Palette design**:
+  - Base surfaces: warm off-white (`--bg: #f4f7ef`), pure white (`--surface: #ffffff`), soft gray (`--surface2: #edf1e6`) — clean but with a subtle green tint that echoes the dark theme's green-tinted blacks. Keeps brand feel consistent.
+  - Text: deep near-black (`--text: #1a1f14`) for AA contrast on white; medium (`--text2: #4a5540`) and muted (`--text3: #7a856e`) grays.
+  - Status colors darken from the dark theme's pastels (e.g. `--red` #f87171 → #dc2626, `--green` #6dd44a → #15803d) so they read cleanly on white surfaces without losing meaning.
+  - Brand chip vars (`--meow`, `--doggi`, `--kkz`) get darker variants for chip-text-on-light-bg legibility.
+  - **SmarterPaw brand accents (`--sp-green`, `--sp-orange`, `--sp-red`) stay identical** across themes — brand identity is consistent regardless of chrome preference.
+- **Flash-of-dark prevention**: inline boot script in `<head>` (BEFORE the stylesheet renders anything) reads `localStorage.appTheme` and sets `data-theme="light"` on `<html>` synchronously. Light-mode users don't see a dark flash before the theme applies.
+- **Settings UI** — new top-of-page "🎨 Theme" card with a segmented button pair: 🌙 Dark (default) · ☀ Light. Clicking either calls `setAppTheme(theme)` which toggles the `data-theme` attribute, persists to localStorage, syncs the button styling, and logs a `settings.theme` audit event. Instant switch — no page reload needed.
+- **Button state sync**: `syncThemeButtons(theme)` runs on every set + at init to reflect the boot-applied theme on the Settings toggle. `initThemeUI()` fires from `init()` so the buttons are correct the moment the user first opens Settings.
+- **Chart.js note**: existing chart configs use hardcoded grey axis/tick colors (`#c0c0c0` / `#909090`) that read fine on both themes — no per-chart rewiring needed. Charts already open when the theme flips look slightly off until their next natural re-render (filter/tab change) — acceptable trade-off vs force-destroying every mounted chart on a theme toggle.
+- **RGBA inline tints** on many one-off components (e.g. `rgba(74,158,56,.14)` background tints in banners / drill panels) also transfer cleanly — a tint on a white surface reads soft, a tint on dark reads muted; both legible without needing per-theme rgba pairs.
+- **Cross-browser storage**: preference is per-browser (localStorage). No Supabase sync — theme is a personal chrome preference, not a report state that should follow you across devices.
 
 ## v7.87 — Page Performance scatter bubbles are click-to-open-product-card
 - **Ask (Jason)**: "if i click on a scatter bubble, it should open the product card"
