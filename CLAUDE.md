@@ -2,7 +2,40 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.90**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.91**
+
+## v7.91 — Page Performance: bubble click filters tables (was modal); ALL 4 quadrant tables; per-row chart-visibility checkboxes
+- **Ask (Jason)**: "instead of opening the card when i click a bubble, change it so that it filters to the list below. this means i also need every product listed below based on the quadrant it falls on, not just the two there now. i should also have checkbox capability to control what appears on the grid"
+- **Three coupled changes**:
+
+### 1. Bubble click → focus filter (was: open modal)
+- **Behavior**: click any bubble → sets a "focus" master_id → a blue banner appears between the chart and the tables naming the focused product + its quadrant, with a **✕ Clear focus** button. Every quadrant table below filters to just that one product (three of four are empty at that point — that's the point).
+- **State**: `pnlPerfSelectedMid` (module-level). Cleared by the banner button OR by any filter change that removes the mid from the current derived set (auto-cleanup so a stale focus can't get stranded).
+- **Row clicks in the tables still open the product modal** — that path unchanged. Bubble click and table row click now do different things by design.
+
+### 2. All four quadrants get tables (was 2)
+- **New tables**: 🌟 STARS (top-right — high sessions × high conv, winners to protect) and 🌱 NICHE (bottom-left — low × low, investigate).
+- **Sort orders** picked per quadrant's decision context:
+  - STARVED — conversion desc (spend more on the highest converters first)
+  - BLEEDING — ad spend desc (worst money-losers first)
+  - STARS — net sales desc (protect the biggest revenue drivers first)
+  - NICHE — conversion desc (bright spots surface first even in a weak pool)
+- Each table has a per-quadrant action verb: `↑ Increase ad budget` / `Fix PDP before more spend` / `Protect (defend rank)` / `Investigate / maintain`.
+- Every table renders EVERY product in that quadrant — was previously "top N" for STARVED/BLEEDING (no truncation now).
+
+### 3. Row checkboxes control what's visible on the scatter
+- **New leftmost column** on every table: a checkbox that toggles whether that ASIN appears on the scatter chart above. Unchecking dims the row (opacity .55) but leaves it in the table — the checkbox controls chart visibility only, not table membership.
+- **Header select-all** per table toggles the whole quadrant. Indeterminate state when only some are hidden.
+- **State**: `pnlPerfHiddenMids` (Set). Empty = everything visible. Persists across renders WITHIN a session. Auto-pruned each render — mids that fell out of the derived set (filter change) get removed so a stale hide can't strand.
+- **`pnlPerfToggleOne(mid, hidden)`** and **`pnlPerfToggleAllInQuadrant(kind, hidden)`** handlers do the state mutation + full re-render (chart + all 4 tables).
+- The `pnlPerfQuadrantsCache` module-level object stores the per-quadrant mid arrays so the select-all handler doesn't have to recompute the split — reuses whatever renderPnlPerformance last computed.
+
+### Additional details
+- **Focus banner tells you WHICH quadrant** the focused product landed in (e.g. `🔍 Focused on: Catnip Spray - 3 Oz - US AMZ B0... — quadrant: 🌟 STARS`) so you don't have to hunt for it.
+- **`renderPerfTable` signature extended** from `(kind, list, colorTheme)` to `(kind, focusedList, fullList, colorTheme, actionLabel, actionColor)`. `focusedList` is what to render; `fullList` is the whole quadrant (used for select-all state calc). Old signature callers won't compile — updated the four call sites accordingly.
+- **`renderPnlPerfScatter` receives `visibleDerived`** (post-hidden-filter) instead of the full `derived`. Same underlying render; just fewer data points when the user has unchecked rows.
+- **Empty state / focus edge case**: when focus is set but the focused product's quadrant table is the only one with data, the other three tables show `"No rows in this quadrant match the focus."` in the count-summary line (instead of the generic "No matches").
+- **`onClick` handler** on the scatter: same nearest-point forgiveness for small bubbles as v7.87 (`getElementsAtEventForMode('nearest', {intersect: false})`). Same pointer cursor via `onHover`. Only the ACTION changed — set focus vs open modal.
 
 ## v7.90 — Amazon P&L: Seasonal filter (mirrors Inventory Planning's v7.79 4-option semantics)
 - **Ask (Jason)**: "i want to be able to filter by seasonal items on the amazon p&l page"
