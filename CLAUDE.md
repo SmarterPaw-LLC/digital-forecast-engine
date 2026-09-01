@@ -2,7 +2,31 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.93**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.94**
+
+## v7.94 — Two fixes: quadrant mutual-exclusivity bug (top-products chip put the same ASIN in all 4 tables) + Amazon P&L sub-view AND filter state now round-trip through the URL
+- **Fix #1 — Quadrant tables duplicated the same ASIN across all 4 quadrants when the Top Products chip filtered to a single product.**
+  - **User (Jason)**: "when i filter the product, it shows up in all 4 quadrants. what???" ... "oh, this is when i filter by top products, FYI" — screenshot showed Catnip Spray - 3 Oz - US AMZ (990 sessions, 49.70% conv) appearing in STARVED, BLEEDING, STARS, AND NICHE simultaneously.
+  - **Root cause**: v7.91's quadrant filters used non-strict inequalities on BOTH sides of each median split (`>=` on high side AND `<=` on low side of same axis). With a single product in the derived set, that product IS the median for both axes — so its (conv, sessions) satisfied every predicate.
+  - **Fix**: mutually exclusive predicates. High side keeps `>=`; low side switches to strict `<`. Ties (median-exact values) go to the "high" side of each axis (STARS-ward). Extracted `isHighConv(r)` / `isHighSess(r)` helpers so the four quadrant filters are self-evidently complementary:
+    - STARVED  =  isHighConv AND !isHighSess
+    - STARS    =  isHighConv AND  isHighSess
+    - NICHE    = !isHighConv AND !isHighSess
+    - BLEEDING = !isHighConv AND  isHighSess (with ad_spend > 0 gate for actionability)
+  - Every product now lands in EXACTLY ONE quadrant. Single-product-focus case: appears only in STARS (median-tied → high side of both axes), not in all four.
+
+- **Fix #2 — Amazon P&L sub-view + filter state now round-trip through the URL.**
+  - **User (Jason)**: "page performance and filters do not have their own links" — the URL stayed at `#pnl/amazon` regardless of which sub-tab was active or what filters were set, so links / bookmarks / browser back-button didn't restore the view.
+  - **Router extended (`routeParse` + `_routerBuildHash`)**: added a THIRD path segment (`subsub`) for the Amazon sub-view + arbitrary query params for filter state. Fully backward-compatible — all new params are optional; existing callers unchanged.
+  - **New `pnlUpdateRoute()`**: reads current filter state + `pnlAmazonView` and writes the hash. Called from `switchPnlAmazonView` (tab change) and at the end of `renderPnl` (filter change). Uses `history.replaceState` — no session-history bloat on every filter tweak. Defaults omitted from the query string for clean URLs (a bare `#pnl/amazon` still means Summary + US + 90d + no filters).
+  - **New `_applyPnlFiltersFromUrl(filters)`**: sets DOM values from parsed URL params. Called by `routeApply` BEFORE `renderPnl` fires (via the async `loadPnlTab` chain), so the render reads them naturally without extra plumbing.
+  - **`routeApply` extended**: after switching to `#pnl/amazon`, applies filter state to DOM + switches to the requested Amazon sub-view (summary/performance/diagnostics). Suppressed under `_routerSilent` guard so it doesn't fight itself during restore.
+  - **URL shape now looks like**:
+    - `#pnl/amazon` — Summary tab, US region, 90-day period, no filters (default)
+    - `#pnl/amazon/performance` — Page Performance tab, defaults
+    - `#pnl/amazon/performance?region=CA&brand=Doggijuana&period=last-week&season=has_seasonality&search=catnip` — full state deep link
+  - Everything the P&L filter strip carries (region · period · custom from/to · brand · category · seasonal · search · quick) round-trips. The three sub-tabs (summary/performance/diagnostics) are the third path segment.
+  - **Impact**: bookmarks work, "share this view" works, browser back / forward navigates between filter states, refresh preserves your exact view.
 
 ## v7.93 — Page Performance: "Ad Headroom" column + portfolio scorecard (how much more can I spend before this product loses money?)
 - **Ask (Jason)**: "i want to be able to answer the question: how much additional ad spend can i funnel towards a product before it loses profitability"
