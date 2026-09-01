@@ -2,7 +2,37 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.94**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.95**
+
+## v7.95 — Configurable Ad Headroom target % (default 20%, was hardcoded $0); Ad Headroom column added to Summary P&L
+- **Ask (Jason)**: "allow me to set the ad headroom % amount - on both the page performance and summary P&L. the default should be 20%, not $0"
+- **Two coupled changes**:
+
+### 1. Ad Headroom now measures headroom to a CONFIGURABLE contribution % floor (was: to $0)
+- **Prior semantic**: `headroom = max(0, contrib_profit)` — how much more spend before contribution profit hits $0.
+- **New semantic**: `headroom = max(0, contrib_profit − net_sales × target%/100)` — how much more spend before contribution % drops below the target FLOOR (default 20%).
+- **Why**: hitting $0 contribution profit is way too permissive. Most SmarterPaw products should maintain a 20-30% contribution % to stay strategically viable; anything below the floor eats into fixed cost coverage and long-run health.
+- **Default 20%** — persisted per-browser via `localStorage.pnlAdHeadroomTargetPct`. First-time users see 20% pre-filled; on any change it saves and re-renders.
+- **New "Ad HR target" input** in the P&L filter strip between Category and Seasonal. Numeric input, 0-100, step 1. Change fires `pnlSetAdHeadroomTarget(v)` → validates → persists → re-renders. Tooltip on the label spells out the semantic.
+
+### 2. Ad Headroom column added to Summary P&L (was only on Page Performance)
+- **New `PNL_COLUMNS` entry** `key: 'ad_headroom'`, group `profit`, default OFF (opt-in via 📋 View popup).
+- Two-line cell: dollar amount + `+X% over current` (or `below X%` when the product is already under the floor).
+- Same color coding as the Page Performance version: green ≥50% over current spend · orange 25-50% · red < 25% / at floor / below floor. Products below the floor render `−$shortfall` in red with a "Cut ad spend to restore" tooltip.
+- Cell tooltip spells out the math and the target %.
+- CSV export emits the raw headroom dollar amount.
+
+### Wiring details
+- **Page Performance table** column header dynamically shows the target: `Ad Headroom (to 20%)` — flips to `(to 15%)` etc. as the target changes.
+- **Page Performance portfolio scorecard tile** also renamed: `Ad Headroom (to 20%)` with a sub-line reading `X% over current spend · to 20% floor`.
+- **Page Performance derived rows** use `pnlAdHeadroomTargetPct` at render time (not at definition time), so a change in the input re-renders everything.
+- **Tooltips everywhere** rewritten from "before contribution profit hits $0" to "before contribution % drops below <target>%" — the new semantic is honest about what's being modeled.
+- **Portfolio total** on the scorecard subtracts each product's per-target floor before summing headroom. Products already below the floor contribute 0 (their shortfall isn't headroom — it's a leak).
+
+### Read for Jason's Doggijuana Catnip Spray (Aug week)
+- Net Sales $154,840 · Contrib % 21.2% · Contrib Profit ≈ $32,826 · current Ad Spend $35,716.
+- At default target 20%: target contrib = $154,840 × 0.20 = $30,968. Headroom = $32,826 − $30,968 = **$1,858** (5% over current).
+- Was: $32,826 (92% over current) under the $0-floor model. New number is much closer to a defensible spend increase without eroding strategic margin.
 
 ## v7.94 — Two fixes: quadrant mutual-exclusivity bug (top-products chip put the same ASIN in all 4 tables) + Amazon P&L sub-view AND filter state now round-trip through the URL
 - **Fix #1 — Quadrant tables duplicated the same ASIN across all 4 quadrants when the Top Products chip filtered to a single product.**
