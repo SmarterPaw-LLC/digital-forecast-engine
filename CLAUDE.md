@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.97**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.98**
+
+## v7.98 — Digital Sales Tracker "Latest Data" was falsely reading "today" — showed max FORECAST month, not last upload
+- **User (Jason)**: "the latest data on the digital sales tracker is wrong. this hasn't been uploaded for several weeks" — screenshot showed "LATEST DATA 2026-12 (today)" on the Uploads-page group header for Digital Sales Tracker.
+- **Root cause**: `digital_sales_tracker` is FORECAST data — every upload contains rows for the current + future months (typically through end of year, e.g. 2026-12). The v6.87 group-rollup code computed `MAX(year, month)` in the data and passed the last day of that month through `relDays()`, which clamps future-dated diffs to `'today'`:
+  ```js
+  if (days <= 0) return 'today';
+  ```
+  So for a file with rows through 2026-12, `relDays('2026-12-31')` from Sep 1 returned `'today'` (days is ~-121 → clamped). Even months after the last upload, the header still read "today" because the forecast HORIZON hadn't advanced past today's date. Not a freshness metric — a plan-horizon metric mistaken for one.
+- **Fix**: use `uploaded_at` (the actual upload timestamp) as the primary cadence signal, matching every other data source. Max forecast month becomes secondary context. Group rollup now reads `uploaded 2w ago · thru 2026-12`. Card line reads `📅 upload · forecasts through 2026-12 · uploaded 2w ago`. Same `ago()` cadence every other source uses (today / yesterday / Nd ago / Nw ago / Nmo ago).
+- **The data-currency bar (top-of-page) was NOT affected** — it uses `getTableFreshness()` which reads `uploaded_at` directly. Only the Uploads-page group header had this bug.
 
 ## v7.97 — Data Currency chips are click-to-open-the-uploader + fix Amazon Ads "Open reporting" link stealing clicks to the file picker
 - **Two changes**:
