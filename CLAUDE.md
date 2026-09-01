@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.92**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.93**
+
+## v7.93 — Page Performance: "Ad Headroom" column + portfolio scorecard (how much more can I spend before this product loses money?)
+- **Ask (Jason)**: "i want to be able to answer the question: how much additional ad spend can i funnel towards a product before it loses profitability"
+- **The math — worst-case pessimistic bound**: `Ad Headroom = max(0, Contribution Profit)`. This answers: "How much MORE ad spend can I add before contribution profit hits $0, assuming the extra spend produces ZERO incremental sales?" Any real incremental sales from the extra spend make the true headroom higher — so this figure is a conservative floor Jason can trust when making the "spend more" decision.
+- **Why not model incremental ROAS**: Amazon Ads has diminishing returns curves we don't observe. Extrapolating current per-ASIN conversion forward as "marginal" would be optimistic and misleading. The pessimistic bound (worst-case) is the honest "you can safely spend up to $X more" answer without hand-waving assumptions.
+- **New "Ad Headroom" column** in every quadrant table (STARVED / STARS / NICHE / BLEEDING), between Ad % and Net Sales.
+  - Two-line cell: dollar amount on line 1 (`$32,819`), percentage over current spend on line 2 (`+92% over current`).
+  - Color-coded: green ≥50% over current (lots of room to invest) · orange 25-50% (moderate) · red <25% or $0 (near the ceiling).
+  - **Already-unprofitable case**: when contribution profit is NEGATIVE, cell shows `−$X.XX` in red with sub-text "over budget" and tooltip "Already unprofitable. Cut ad spend to restore margin. Headroom = 0."
+  - **No current ad spend case**: cell shows the full contribution profit as the max spend-target with sub-text "(no current ad spend)" — pure organic profitability being the ceiling.
+  - Cell tooltip on every value spells out the math + assumption so the user can verify: `"You can add up to $32,819 more ad spend (92% over current) before this product hits $0 contribution profit. Worst-case bound — assumes the extra spend brings ZERO incremental sales. Any real incremental sales make the true headroom higher."`
+- **Portfolio-level "Ad Headroom" scorecard** added as the 5th tile in the top scorecard row. Sums positive per-product headroom (already-unprofitable products contribute 0 to the pool since their negative contribution isn't headroom, it's a leak). Sub-text names the % over current portfolio ad spend. Same three-tier color coding.
+- **Scorecard grid** expanded from 4 columns to 5 to fit the new tile.
+- **Sample read for Jason's screenshot** (Catnip Spray - 3 Oz - US AMZ, $35,716 ad spend, 21.2% contrib):
+  - Contribution profit ≈ $154,840 × 21.2% ≈ $32,826
+  - **Ad Headroom = $32,826 (+92% over current)** — you can nearly DOUBLE ad spend to ~$68,542 before this product hits $0 profitability under the worst-case bound. In practice, any incremental sales from the extra spend push the real ceiling higher.
+- Empty-state colspan bumped 11 → 12.
 
 ## v7.92 — Page Performance tables: new "Ad %" column (ad spend ÷ net sales)
 - **Ask (Jason)**: "i can't see the ad spend % here" — screenshot showed the STARS/NICHE tables with only the raw Ad Spend dollar amount and no efficiency percentage.
