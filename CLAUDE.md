@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.91**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.92**
+
+## v7.92 — Page Performance tables: new "Ad %" column (ad spend ÷ net sales)
+- **Ask (Jason)**: "i can't see the ad spend % here" — screenshot showed the STARS/NICHE tables with only the raw Ad Spend dollar amount and no efficiency percentage.
+- **Root cause**: `renderPerfTable` already computed `acos_pct = ad_spend ÷ net_sales × 100` inside the derived rows (used by the scorecards' TACoS) but never surfaced it in the per-row tables.
+- **Fix**: added an **Ad %** column between Ad Spend and Net Sales in all four quadrant tables. Semantically = per-product TACoS (ad spend ÷ net sales × 100).
+  - Naming: called it "Ad %" (not "ACoS") because ACoS traditionally implies ad-ATTRIBUTED sales as the denominator; here it's net sales (all sources). "Ad %" is unambiguous about what's being divided.
+  - Color-coded with INVERTED sense vs the other percent columns (lower is better for efficiency): ≤15% green, ≤30% orange, >30% red.
+  - Guarded against div-by-0: rows with `net_sales = 0` show `—` in muted grey with a tooltip explaining the ratio is undefined. Rows with only ad spend and no revenue would otherwise show `Infinity%`.
+  - Cell tooltip on every value shows the underlying math (`Ad Spend ÷ Net Sales × 100. Ad Spend: $X · Net Sales: $Y.`) for verification without opening the modal.
+- Empty-state colspan bumped 10 → 11.
 
 ## v7.91 — Page Performance: bubble click filters tables (was modal); ALL 4 quadrant tables; per-row chart-visibility checkboxes
 - **Ask (Jason)**: "instead of opening the card when i click a bubble, change it so that it filters to the list below. this means i also need every product listed below based on the quadrant it falls on, not just the two there now. i should also have checkbox capability to control what appears on the grid"
