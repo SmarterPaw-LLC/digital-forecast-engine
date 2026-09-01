@@ -2,7 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.96**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.97**
+
+## v7.97 — Data Currency chips are click-to-open-the-uploader + fix Amazon Ads "Open reporting" link stealing clicks to the file picker
+- **Two changes**:
+
+### 1. Data Currency chips → click to open the uploader for that data source (Jason)
+- **Ask**: "when i click on data currency, it should open the section where i upload that report"
+- Every chip in the sticky "Data Currency" bar (rendered by `renderPageFreshness` across the Amazon P&L / Shopify P&L / Walmart P&L / Chewy P&L / Inventory Planning / Chewy Forecasts / Digital Sales pages) now navigates directly to Data → Uploads and expands + scrolls to the target uploader group.
+- **New `TABLE_TO_UPLOAD_GROUP` map** — 13 entries covering every table currently surfaced in a freshness bar (`sku_economics` / `sku_economics_eu` → `grp-amz-sales`, `amazon_ad_spend` → `grp-amazon-ads`, `amazon_sales_traffic` → `grp-sales-traffic`, `shopify_sales_daily` → `grp-shopify-sales`, `walmart_sales_weekly` → `grp-walmart-sales`, `chewy_forecasts` → `grp-chewy-sales`, `chewy_rebates` → `grp-chewy-rebates`, `chewy_sales_weekly` → `grp-chewy-actuals`, `digital_sales_tracker` → `grp-digital-sales`, `fba_inventory_snapshots` → `grp-fba-inv`, `fba_shipments` → `grp-fba-ship`, `fba_shipment_summaries` → `grp-fba-ship-sum`).
+- **`openUploadGroupForTable(table)`** — calls `showPage('data')` → `switchDataView('uploads')` → waits two `requestAnimationFrame`s for layout → adds the `.open` class to the target group (same class `toggleUploadGroup` uses) → smooth-scrolls the group to the viewport center → flashes a green outline ring around the group for ~1.4s so the user can tell WHICH one just opened (multiple uploaders share the visual style).
+- **Chip rendering**: chips with a known mapping become `<button>` elements with an underline hint and a hover cue that emphasizes clickability; chips without a mapping fall back to the pre-v7.97 non-clickable span so tables without a linked uploader never dead-end. Hover tooltip on clickable chips names both the last-upload timestamp AND the target action ("Click → open the sku_economics uploader.").
+- **Also updates the URL** (via the standard `showPage` → `routeWrite` chain) so the "click a data-currency chip" navigation is bookmarkable / back-button-friendly.
+
+### 2. Fix Amazon Ads "Open reporting" link opening the file picker instead
+- **Ask (Jason, mid-turn)**: "the blue open amazon ads reporting here opens the file selector, it doesn't link to the amazon report"
+- **Root cause**: the `<a>` was missing `position:relative;z-index:2` in its style. Every `.dz` upload card has an absolute-positioned invisible `<input type="file">` filling the entire card so ANY click opens the picker. Sibling elements need to explicitly lift their z-index above that input (matches the pattern SKU Economics / FBA Inventory / FBA Shipments links use — those work correctly). Amazon Ads was the only card that missed it. Also added `cursor:pointer` for consistency with the other links.
 
 ## v7.96 — Units Sold chart: visible "no data in this window" diagnostic instead of silently closing the drill
 - **User (Jason)**: "the units sold chart is no longer rendering" — screenshot showed a product row with 376 units 30d / 7,339 all-time in the summary cards, but the drill panel below was invisible.
