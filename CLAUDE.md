@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.95**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.96**
+
+## v7.96 — Units Sold chart: visible "no data in this window" diagnostic instead of silently closing the drill
+- **User (Jason)**: "the units sold chart is no longer rendering" — screenshot showed a product row with 376 units 30d / 7,339 all-time in the summary cards, but the drill panel below was invisible.
+- **Attempted local repro**: identical flow (populate salesData + salesSelected + trigger renderSalesTbl → updateSalesChart) in the local preview → chart renders correctly. Panel `display:block`, canvas has size, chart instance created. So the code path itself is intact.
+- **Most likely cause on Jason's environment**: `updateSalesChart` hit its `if (!weeks.length) closeSalesDrill(); return;` early exit. That branch fires silently — the drill panel just disappears with no user-facing signal. Possible triggers we can't reproduce here without his exact data: (1) selected product's salesData has all rows outside the current date window (e.g. "Last 30 days" but product's data is >30d old — but here 30d shows 376 units so this shouldn't fire), (2) toMondayKey returned null for every row (malformed week_start), (3) cutoffWeek clipped everything out.
+- **Fix — visible overlay** instead of silent close:
+  - Kept the drill panel `display:block`.
+  - Hid the canvas + rendered an absolute-positioned overlay INSIDE the chart area with:
+    - "📊 No chart data in this window" headline
+    - The current date range being queried
+    - Per-selected-product: total rows in `salesData[mid]` vs rows falling inside the date range
+    - A suggestion: "Try a longer time period (All time) or check that this product has recent sales."
+  - The overlay is a `position:absolute` layer ON TOP of the canvas (which gets `display:none`). Any subsequent successful render (data in range) calls `hideEmptyOverlay()` which removes the overlay and re-shows the canvas — no HTML surgery needed.
+  - **`console.warn` fires** naming the selection, range, and cutoff, so DevTools carries the diagnostic even if the user doesn't look at the panel.
+- **Instead of hiding the failure, we surface it.** If the failure mode is "product has no data in the last 30 days," Jason sees that immediately with actionable next-step. If it's a bug, we get console output to debug from.
+- **No regression**: the drill panel and canvas stay in exactly the same DOM shape as before. Only when weeks is empty does the overlay appear. First subsequent render with data restores the canvas.
 
 ## v7.95 — Configurable Ad Headroom target % (default 20%, was hardcoded $0); Ad Headroom column added to Summary P&L
 - **Ask (Jason)**: "allow me to set the ad headroom % amount - on both the page performance and summary P&L. the default should be 20%, not $0"
