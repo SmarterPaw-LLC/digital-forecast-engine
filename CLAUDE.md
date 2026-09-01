@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.98**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.99**
+
+## v7.99 — Units Sold chart: stop the "cutoff-week" logic from clipping fresh data when ANY channel is chronically stale
+- **The real bug behind v7.96 + the whole-month-missing chart Jason spotted**: v6.5's cutoff-week rule ("clip the chart's right edge to the earliest of each channel's latest week") was designed for the CURRENT-WEEK partial-data case — Shopify uploads daily, Amazon SKU Economics may lag 3-5 days, so plotting the current week would show a fake crash. Sound intent.
+- **But it fires whenever ANY channel is stale, not just when the current week is partial.** If chewy_sales_weekly's global latest is 2026-07-20 (6 weeks old — legitimately behind, not "waiting on this week's upload"), the cutoff clips at 2026-07-20 → every week past 7/20 gets dropped from the chart, even though Amazon + Shopify have fresh data through today.
+- **Two repros Jason hit**:
+  1. **Sep 1, Bubbles, Last 30 days**: Chewy actuals stale → cutoff = 2026-06-15 → all 30d weeks drop → chart blanks. (This is the bug v7.96's overlay was catching but not fixing.)
+  2. **Sep 1, Catnip & Silvervine Spray, Last 12 months, By Channel Area (Combined)**: Chewy actuals latest = 2026-07-20 → chart clips at 7/20, dropping ~6 weeks of fresh Amazon + Shopify + Chewy Forecasts data.
+- **Fix — freshness threshold on the cutoff**: only apply cutoff for channels whose latest is within the last 21 days. If a channel is older than that, it's chronically stale — treat as "not a fresh boundary, just old data" and skip it entirely. Fresh channels still align around the current-week partial as originally intended.
+- **v7.99 predecessor attempt** used a range-based check (skip if latest < from), but that only helped when the stale-channel gap crossed the visible-range start. The 21-day-freshness threshold catches the mid-window case too.
+- **Also updated my v7.96 overlay message** to be honest about what happened — the "try All time" advice was masking the real cutoff issue. Now reads: "If any row above shows N total rows but 0 in date range, this product's data doesn't fall inside the selected period. Try adjusting the period."
 
 ## v7.98 — Digital Sales Tracker "Latest Data" was falsely reading "today" — showed max FORECAST month, not last upload
 - **User (Jason)**: "the latest data on the digital sales tracker is wrong. this hasn't been uploaded for several weeks" — screenshot showed "LATEST DATA 2026-12 (today)" on the Uploads-page group header for Digital Sales Tracker.
