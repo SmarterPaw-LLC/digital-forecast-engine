@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.00**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.01**
+
+## v8.01 — Amazon P&L View popup is now sub-view-aware (Summary vs Page Performance vs Diagnostics)
+- **Jason flagged two related things:** (1) "i don't think the 'view' settings are sub-page based" — the popup showed the same column checkboxes regardless of whether Summary, Page Performance, or Diagnostics was active; (2) "units is selected, but units don't appear" — toggling Units in the popup while on PP had no effect because Page Performance's four quadrant tables use FIXED columns inside `renderPerfTable` (Product / ASIN / Sessions / Conv % / Ad Spend / Ad % / Ad Headroom / Net Sales / Margin % / Contrib % / Action) and never consult `pnlVisibleCols`. Only the Summary product table reads from `PNL_COLUMNS`.
+- **Two coupled fixes:**
+
+### 1. Saved views now capture the active sub-view + Page Performance state
+- **`pnlSnapshotState()` extended** with `subview` (summary / performance / diagnostics) and a `perf` bag: `{ focusMid, hiddenMids, adHeadroomTargetPct }`. So a save on Page Performance carries: the sub-view, the focus banner's ASIN, the row-checkbox hidden-mids Set, AND the Ad Headroom target %. Applies additively — existing v4.126 shape (no `subview`) still applies to Summary as before (backward-compat).
+- **`pnlApplyView()` restores** the perf state BEFORE flipping the sub-view (so the newly-rendered PP tables see the right focus + hidden mids), then calls `switchPnlAmazonView(v.subview)` at the tail. That triggers PP's own `renderPnlPerformance()` render pass so the restored state paints. `switchPnlAmazonView` is skipped when the saved sub-view matches the current tab (no redundant render).
+
+### 2. View popup is now scoped + labeled by active sub-view
+- **Popup title** reads `📋 View — 📈 Page Performance` (or Summary / Diagnostics) so the scope is obvious.
+- **Orange callout on non-Summary sub-views** explains: `Currently on Page Performance. These column toggles drive the Summary product table only. Page Performance uses fixed columns … flip to Summary to see the effect. Saved views DO capture the sub-view, so a save from Page Performance returns you to it on Apply.` Closes the "why doesn't Units show up" gap without hiding the columns section (users can still preconfigure Summary while looking at PP).
+- **New Page Performance controls section** (only shown when on PP): editable Ad Headroom target % (wired directly to `pnlSetAdHeadroomTarget` — persists via localStorage + re-renders PP); `✕ Clear focus` button (when a scatter bubble is focused); `↺ Reset hidden (N)` button (when row-checkboxes have hidden mids off the chart).
+- **Saved views meta chip** now leads with the sub-view tag (e.g. `📈 Page Performance · US · Doggijuana · last-week · 2 selected · focus`) so PP-scoped views are visually distinct from Summary-scoped ones at a glance. Column count only shown for Summary-scoped views.
+- **Save button** relabeled to name the sub-view: `💾 Save current as 📈 Page Performance view`. Captures line under it enumerates the PP-specific fields when relevant.
+- **Popup live-refreshes** when the sub-view flips — `switchPnlAmazonView` now checks if the popup is open and calls `pnlRenderColsPopup()` so the scope + callout re-scope in real time without close+reopen.
 
 ## v8.00 — Page Performance CSV export + Sales & Traffic upload modal fixes (default dates + auto-Saturday)
 - **New standing rule captured** ([[feedback-always-csv-export]]): every new data-bearing page / sub-view MUST be CSV-exportable via the top-bar `↓ CSV` button before shipping. Page Performance shipped in v7.86–v7.95 without export — Jason called it out.
