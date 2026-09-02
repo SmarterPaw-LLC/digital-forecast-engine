@@ -6399,7 +6399,11 @@ async function handleAmazonSalesTrafficUpload(input) {
       if (!meta) { setSt('— Cancelled', ''); input.value = ''; return; }
       setSt('⏳ Uploading…', '');
       const result = await parseAmazonSalesTraffic(e.target.result, meta.region, meta.periodStart, meta.periodEnd, meta.isWeekly);
-      const tableTag = result.table === 'weekly' ? `weekly · ${result.weekStart}` : `snapshot · ${meta.periodStart}→${meta.periodEnd}`;
+      // v8.00 — show the actual Sun-Sat range the user picked (not the derived
+      // Monday-key that v4.91's shift stores as week_start in the DB). Matches
+      // what the "Latest week" line below shows, and matches what Amazon's
+      // Business Reports UI shows so there's no cognitive mismatch.
+      const tableTag = result.table === 'weekly' ? `weekly · ${meta.periodStart}→${meta.periodEnd}` : `snapshot · ${meta.periodStart}→${meta.periodEnd}`;
       const brandTag = result.dominantBrand ? ` · ${result.dominantBrand}` : '';
       const newTag   = result.created > 0 ? ` · ${result.created} new SP-TEMP` : '';
       setSt(`✓ ${result.rows} ASINs · ${meta.region} · ${tableTag}${brandTag}${newTag}`, 'dz-ok');
