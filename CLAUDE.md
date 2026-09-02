@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v7.99**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.00**
+
+## v8.00 — Page Performance CSV export + Sales & Traffic upload modal fixes (default dates + auto-Saturday)
+- **New standing rule captured** ([[feedback-always-csv-export]]): every new data-bearing page / sub-view MUST be CSV-exportable via the top-bar `↓ CSV` button before shipping. Page Performance shipped in v7.86–v7.95 without export — Jason called it out.
+
+### Page Performance CSV export
+- **New `doDownloadPnlPerformanceCSV()`** exports every derived row across all four quadrants in ONE file, with a leading `quadrant` + `action` column so the operator can filter/pivot by quadrant in Excel. Same shape as the on-screen tables: sessions · page_views · buy_box_pct · conv_pct · ad_spend · ad_pct_of_sales · **ad_headroom_to_N_pct** (column name embeds the target %, defaulting to 20 per v7.95) · **ad_headroom_pct_over_current** · net_sales · net_proceeds · contrib_profit · contrib_pct · margin_pct.
+- **Ad Headroom is signed** — negative means the product is below the target-contrib floor (a shortfall vs the target, not headroom); positive means room to spend more. Matches the on-screen cell semantics.
+- **Sort order** — quadrants in on-screen priority (STARVED → BLEEDING → STARS → NICHE), then by the same field each table sorts by (STARVED/NICHE by conv desc, STARS by net_sales desc, BLEEDING by ad_spend desc). Left-to-right the CSV reads the same as the four tables stacked top-to-bottom.
+- **Cache at render time** — `renderPnlPerformance` populates three new module-level snapshots (`pnlPerfExportDerived`, `pnlPerfExportQuadrantOf`, `pnlPerfExportCtx`) at its tail so the exporter never has to re-do the median split or fetch again. Mirrors the `pnlExportRows` snapshot pattern from v4.72.
+- **Routing** — `exportCSV()` gains one line: when `pnlView === 'amazon' && pnlAmazonView === 'performance'`, route to the new exporter. Summary + Diagnostics still fall through to `doDownloadPnlAmazonCSV`.
+- **Filename** — `smarterpaw-pnl-amazon-us-page-performance-2026-08-04_to_2026-08-31.csv` (matches v6.9 nav-path convention).
+- **Audit** — logs `pnl.performance_export` with row count, quadrant counts, target %, date range.
+
+### Sales & Traffic upload modal fixes
+- **Default date range was landing a full month early** (07/23 → 07/29 on Sep 2 instead of 08/23 → 08/29). Root cause: a stray pre-mutating `setDate()` call ran before the actual last-Saturday calc — the first call shifted `lastSat` from Sep 2 into August (Aug 29), then the second `setDate(-2)` re-ran with `today.getDate()=2`, but interpreted from the NEW month context (August), rolled back to July 29. Fixed by removing the redundant pre-mutating line.
+- **New auto-follow behavior on Period Start change** — picking a start date now auto-sets the end date to the Saturday that follows: Sun → +6 days (proper Sun-Sat week, routes to weekly table), Mon-Fri → next Saturday within the same calendar week, Sat → same day. So the common workflow (pick a Sunday, ship) collapses to one interaction instead of two. Live routing preview (`→ Weekly table` / `→ Snapshot table`) updates with the auto-set end.
 
 ## v7.99 — Units Sold chart: stop the "cutoff-week" logic from clipping fresh data when ANY channel is chronically stale
 - **The real bug behind v7.96 + the whole-month-missing chart Jason spotted**: v6.5's cutoff-week rule ("clip the chart's right edge to the earliest of each channel's latest week") was designed for the CURRENT-WEEK partial-data case — Shopify uploads daily, Amazon SKU Economics may lag 3-5 days, so plotting the current week would show a fake crash. Sound intent.
