@@ -14,9 +14,13 @@
 -- Numbers will drop substantially for products where organic drives most sales.
 --
 -- BACKFILL: existing sku_economics rows will have sponsored_products_sales_total = 0
--- until a re-upload of the same weeks. The scenario panel falls back to
--- TROAS × 0.5 (labeled as "estimated") when the column is empty, so it
--- keeps working during the backfill window.
+-- because the column didn't exist when those weeks were uploaded. The
+-- scenario panel handles this cleanly: rows with no attributed_sales fall
+-- back to a labeled "est ROAS" (TROAS × 0.30 heuristic, rendered in orange)
+-- while rows with fresh data show real ROAS. NO RE-UPLOAD REQUIRED —
+-- coverage grows organically as new weekly uploads land. The panel header
+-- displays a coverage % chip (v8.14) so you can see at a glance how much
+-- of the current view is real vs estimated.
 --
 -- Same column added to sku_economics_eu — the EU report has the same
 -- "Sponsored Products sales total" column.
