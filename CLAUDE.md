@@ -2,7 +2,41 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.01**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.04**
+
+## v8.04 — Amazon P&L Page Performance: Top Action Items + Scenario Modeling + Change Log (agency handoff)
+- **⚠ SQL TO RUN:** `supabase_v8_04_action_items.sql` — creates `pnl_action_items` table + RLS + grants + updated_at trigger. Idempotent. Run before flagging your first item; until then the Change Log tab shows an empty state with a pointer to the migration.
+- **Jason's ask (three parts):** (1) a view of top action items across conversion, sessions, ad spend, contribution % + scenario modeling ("what happens if I add 50% ad spend to top performers, cut from low?"); (2) track adjustments over time as a change log so impact can be measured; (3) CSV export of flagged changes for the agency partner.
+
+### 1. 🎯 Top Action Items panel (Page Performance, collapsible, above the scatter)
+- **Two ranked lists side-by-side:** ⬆ TOP INVEST candidates + ⬇ TOP CUT candidates. Each shows top 10 with current state + estimated $ impact of a suggested +50% / -50% shift.
+- **INVEST score** = `headroom_$ × (conv/median_conv) × (contrib_pct/100) × (0.5 + 0.5·min(3, sessions/median))`. Gates: contribution ≥ target %, ad headroom > 0, conv > 0. Sorts descending.
+- **CUT score** = `shortfall_$ + ad_spend × acos_penalty/100 + ad_spend × conv_gap/100`. Gates: ad spend > 0. Sorts descending. Products bleeding money against contribution surface first.
+- Each row has a **📌 Flag** button pre-filled with the suggested action (Increase / Decrease ad spend + delta %). Hover any row to see the score + math tooltip.
+
+### 2. 🧪 Scenario Modeling panel (Page Performance, collapsible)
+- Two side-by-side blocks: INVEST scenario + CUT scenario. Each has editable inputs: **spend % change** (+X% for invest, -Y% for cut) and **top/bottom N** products to include.
+- **Marginal ROAS = current × 0.7** (moderate diminishing returns — the choice you picked). Applied to both directions: extra spend on top invest candidates uses marginal ROAS to project revenue; cut spend assumes the LEAST-productive $ removed first (also marginal ROAS).
+- **Rollup card** below shows net spend change · net revenue change · net contribution change · efficiency lift (contrib per $ spend, before → after). Assumptions displayed inline so the math isn't opaque.
+- **Live-updates as sliders change** — panel reuses the last render's scored set (`pnlPerfScoredCache`) so recomputes are instant.
+
+### 3. 📋 Change Log — new 4th sub-view on Amazon P&L
+- **Persistent tracker** backed by `pnl_action_items` in Supabase. Cross-device, cross-session.
+- **Flag button on every quadrant table row** (v8.04 adds a 13th column) with a per-quadrant suggested action (STARVED → +50% ad, STARS → +25% ad, BLEEDING → fix PDP, NICHE → other). Flag button also on every Top Action Items row.
+- **Flag modal** captures: action_type (increase / decrease / pause / launch creative / fix PDP / other), delta %, rationale, effective + review dates, AND a **baseline_snapshot** JSON blob freezing 30d sessions / conv / ad spend / net sales / contrib profit / contrib % at flag time. That baseline is what post-change impact is measured against.
+- **Change Log table columns:** Product · Action · Δ % · Baseline Ad Spend (frozen) · Target Ad Spend (baseline × (1+Δ)) · Current Ad Spend (live from the last Page Performance render) · Δ vs Baseline · Status · Rationale · Effective · action controls (status dropdown + delete).
+- **Status flow:** draft → sent_to_agency → in_effect → completed (or cancelled). Inline dropdown per row.
+- **Filters:** status (default = active = draft + sent + in_effect), action type, search (matches product / ASIN / master_id / rationale / notes).
+
+### 4. Agency CSV export
+- **↓ Export CSV (agency)** button on the Change Log toolbar. Also wired through the top-bar `↓ CSV` button when on the changelog sub-view.
+- **Agency-friendly columns:** product, master_id, ASIN, brand, region, action, delta_pct, baseline_ad_spend, target_ad_spend, current_ad_spend, baseline_net_sales, baseline_conv_pct, baseline_contrib_pct, rationale, effective_date, review_date, status, notes, created_at. Filename: `smarterpaw-pnl-amazon-agency-changelog-<date>.csv`.
+- **Filters flow through:** exports exactly what's on screen, so pick "📝 Draft only" + filter search → send that CSV to the agency without extra editing.
+
+### Sub-view integration
+- `pnlAmazonView` enum extended: `'summary' | 'performance' | 'diagnostics' | 'changelog'`.
+- `switchPnlAmazonView` handles the new tab + calls `loadPnlActionItems()` + `renderPnlChangeLog()` on entry. 30-second cache on the load so tab-flips are snappy; ↺ Refresh button forces re-fetch.
+- The v8.01 View popup + saved views already survive — subview label map extended with `changelog: '📋 Change Log'`.
 
 ## v8.01 — Amazon P&L View popup is now sub-view-aware (Summary vs Page Performance vs Diagnostics)
 - **Jason flagged two related things:** (1) "i don't think the 'view' settings are sub-page based" — the popup showed the same column checkboxes regardless of whether Summary, Page Performance, or Diagnostics was active; (2) "units is selected, but units don't appear" — toggling Units in the popup while on PP had no effect because Page Performance's four quadrant tables use FIXED columns inside `renderPerfTable` (Product / ASIN / Sessions / Conv % / Ad Spend / Ad % / Ad Headroom / Net Sales / Margin % / Contrib % / Action) and never consult `pnlVisibleCols`. Only the Summary product table reads from `PNL_COLUMNS`.
