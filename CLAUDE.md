@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.04**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.23**
+
+## v8.23 — Scenario Modeling copy cleanup + regression viewer modal
+- **Jason's ask:** "clean up some of the copy on this page - lots of artifacts from past builds and explanations that aren't really needed. i would like the ability to see the modeling for the regression analysis"
+- **Copy trimmed** on the Scenario Modeling panel — the assumptions footer, the panel description, the coverage banner (now one compact line: `ROAS coverage · N products · ■ N attributed · 📉 N regression · ⚠ N heuristic`), and the ad-launch candidates description (dropped the multi-sentence explainer for a single line naming the criterion).
+- **`pnlOpenRegressionModal(masterId)`** — new modal opened by clicking the 📉 icon on any regression-tier ROAS chip in the invest/cut rows. Shows: β (marginal ROAS), R², weeks, ad-spend CV as scorecard tiles; the model formula (`net_sales = intercept + β × ad_spend`); a Chart.js scatter of the weekly (ad_spend, net_sales) observations with the fitted line overlaid. Backing data: `pnlHistoricalRoasByMaster[master_id]` now carries `obs` (the raw weekly pairs) + `intercept` (from OLS) — stored by `computeHistoricalRoasEstimates` at compute-time (latest region wins the master-level entry).
+- **Icon is a clickable `<span>`** with cursor:pointer + tooltip. Wrapped in `event.stopPropagation()` so clicking doesn't bubble to any parent handler. Same wrapper applied in both invest + cut row renderers via replace_all.
+- **Chart.js loaded lazily** via the existing `getChart()` helper. Modal cleans up on backdrop click or ✕. If chart render fails, the panel shows a red inline error instead of blocking the modal.
 
 ## v8.04 — Amazon P&L Page Performance: Top Action Items + Scenario Modeling + Change Log (agency handoff)
 - **⚠ SQL TO RUN:** `supabase_v8_04_action_items.sql` — creates `pnl_action_items` table + RLS + grants + updated_at trigger. Idempotent. Run before flagging your first item; until then the Change Log tab shows an empty state with a pointer to the migration.
