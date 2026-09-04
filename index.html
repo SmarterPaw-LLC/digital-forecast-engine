@@ -16607,11 +16607,11 @@ function renderPnlPerfScenarioPanel(derived, medSessions, medConv, targetPct) {
            </div>`
         : '';
       return `<div style="background:rgba(232,96,26,0.06);border:1px solid var(--sp-orange);border-radius:6px;padding:8px 12px;margin-bottom:8px;font-family:var(--mono);font-size:10px;color:var(--text2);line-height:1.6">
-        <strong style="color:var(--text)">ROAS data coverage across ${total} products with ad spend:</strong><br>
-        <span style="color:var(--sp-green)">■ ${cAtt} attributed (${pctAtt}%)</span> — real Amazon-attributed sales ÷ ad spend (v8.13 SKU Economics column).<br>
+        <strong style="color:var(--text)">ROAS data coverage across ${total} products with ad spend (v8.19):</strong><br>
+        <span style="color:var(--sp-green)">■ ${cAtt} attributed (${pctAtt}%)</span> — real Amazon-attributed sales ÷ ad spend (v8.17: Amazon Ads report, not SKU Economics). Apples-to-apples denominator: uses SP charge only for weeks with matching ads-report SP rows.<br>
         <span style="color:var(--blue)">📉 ${cReg} regression (${pctReg}%)</span> — β estimated from OLS on historical (net_sales vs ad_spend) per product (needs ≥6 weeks + variable spend).<br>
         <span style="color:var(--sp-orange)">⚠ ${cHeu} heuristic (${pctHeu}%)</span> — no attributed data AND not enough history to regress; fallback assumes 30% of net_sales are ad-attributable.<br>
-        Attributed coverage grows automatically as new SKU Economics uploads land — <strong>no forced backfill required</strong>. Historical data was retained; the regression fills the gap using it.
+        Attributed coverage grows as new Amazon Ads uploads land — <strong>no forced backfill required</strong>.
         ${zeroDx}
       </div>`;
     })()}
