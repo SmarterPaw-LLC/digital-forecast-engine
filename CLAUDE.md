@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.23**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.24**
+
+## v8.24 — ROAS chip is now clickable on every tier (attributed / regression / heuristic)
+- **Jason's ask:** "can i see the modeling for ROAS via the same chip?" After v8.23 only the 📉 icon on regression-tier rows was clickable, but in practice most rows are attributed (no icon at all).
+- **Fix:** the whole ROAS chip is now a clickable target on every tier, marked with a small `ⓘ` glyph when there's no other tier icon (attributed) and keeping the existing 📉 / ⚠ markers on regression / heuristic. `pnlOpenRegressionModal` renamed to `pnlOpenRoasModal`; old name kept as an alias for backward-compat.
+- **Modal is tier-aware:**
+  - **ATTRIBUTED:** shows attributed sales (from Amazon Ads report), covered ad spend (SP-covered + non-SP), the formula ROAS = attributed_sales ÷ covered_ad_spend, coverage % of SP charge, and how much total spend is folded into the denominator vs excluded as uncovered.
+  - **REGRESSION:** β, R², weeks, ad-spend CV as scorecard tiles, the OLS model formula, and a scatter plot of weekly (ad_spend, net_sales) with the fitted line overlaid (Chart.js, lazy-loaded).
+  - **HEURISTIC:** shows the 30% fallback assumption, the implied attributed number, and explains WHY we couldn't do better (no attributed data + not enough spend variance to regress).
+- **Common footer** shows what marginal ROAS drives the scenario for THIS product (regression β, current ROAS, or 0) alongside a note explaining that marginal β accounts for diminishing returns per-product rather than a blanket haircut.
+- **Backing data** lives in `pnlPerfScoredCache` (row-level, already populated for the scenario panel) + `pnlHistoricalRoasByMaster` (regression β/R²/obs/intercept, added in v8.23). No new state.
 
 ## v8.23 — Scenario Modeling copy cleanup + regression viewer modal
 - **Jason's ask:** "clean up some of the copy on this page - lots of artifacts from past builds and explanations that aren't really needed. i would like the ability to see the modeling for the regression analysis"
