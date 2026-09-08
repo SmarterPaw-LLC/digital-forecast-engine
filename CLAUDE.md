@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.32**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.34**
+
+## v8.34 — Sales & Traffic uploader stops auto-creating SP-TEMPs
+- **Jason flagged:** the Sales & Traffic report was auto-creating SP-TEMP products from PARENT ASINs (unsellable rollups) — screenshot showed `SP-TEMP-B0FHX39G23` for a Tuffer Chewer parent. Wanted the uploader to never create new products.
+- **Fix:** removed the SP-TEMP auto-create block from `parseAmazonSalesTraffic`. Unmatched ASINs still store their traffic rows (with `master_id = null` — matches the walmart_sales_weekly unlinked pattern) so no data is dropped; they just don't pollute the catalog. Upload status now shows `⚠ N ASINs not in catalog (stored unlinked; no auto-create)` when unmatched rows exist. Return object gains `skippedUnknownAsinCount`; audit log entry gets it too.
+- **New query preset "SP-TEMPs from Sales & Traffic uploads (cleanup targets)"** — surfaces every SP-TEMP the old auto-create logic left behind, with counts of sales_weekly / sku_econ / traffic_weekly / traffic_snapshot rows per row. Rows with only `traffic_*` counts (parent rollups) are safe to delete; rows with `sku_econ` or `sales_weekly` counts are real products that should be promoted via the Product modal instead.
+- **SKU Economics uploader still auto-creates SP-TEMPs** — it's the canonical source for new-ASIN discovery (financial rows must land somewhere, and its rows are per-child-ASIN grain). Only Sales & Traffic (parent+child mixed) is affected by v8.34.
+- **Cleanup guidance:** Products page delete button (v7.00) opens a "Delete Product + Purge All Data" confirmation dialog with counts per child table. For parent-ASIN SP-TEMPs, `amazon_sales_traffic` counts will be tiny (just parent-level rollups); safe to purge. For any SP-TEMP with `sku_economics` or `sales_weekly` rows, promote to SP-XXXX instead — deletion cascades and would lose those rows.
 
 ## v8.32 — Diagnostic query for "bundles with walmart sales" (don't hardcode walmart-exclusion)
 - **Jason flagged:** the v8.31 per-channel `+B` badge on Walmart columns shouldn't be there because Walmart doesn't sell bundles. My initial fix (skip walmart in bundle attribution) was rightly rejected — "hardcoding around a product being mistakenly flagged as a bundle" is a band-aid.
