@@ -2,7 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.28**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.30**
+
+## v8.30 — v8.29 bundle rollup + THE actual bug that broke v8.27/v8.29 (const → let)
+- **Root cause (finally caught):** `let chwyReorder` was declared as `const chwyReorder` at line 21742. Both v8.27 and v8.29 tried to do `chwyReorder += bundleChwyBase`, which throws `TypeError: Assignment to constant variable` at RUNTIME. Since `renderInventoryTbl` builds tbody via `rows.map(r => …).join('')` and the first component product hit `inventoryNeedBreakdown` → throw → whole map failed → tbody stayed empty. Node's `new Function(js)` syntax check doesn't validate const-mutation (only runtime does), which is why the syntax check kept passing.
+- **Caught by testing locally** (finally) — spun up a python http.server, loaded index.html via the browser pane, mocked `allBomData` + `salesData` + `bundleAttrOn`, called `inventoryNeedBreakdown(mockRec, 30)` in the console. It reproduced the exact TypeError with a full stack trace pointing at line 21792. One-character fix.
+- **Fix:** `const chwyReorder` → `let chwyReorder`. Plus the entire v8.29 change re-applied.
+- **Testing protocol going forward:** before pushing any change to `inventoryNeedBreakdown` (or any hot-path function on Inventory Planning), run a browser-side test with mocked state to catch runtime errors that `new Function` syntax checks miss.
+
+## v8.29 — Re-attempt of bundle attribution rollup, safer (single-pass helper, no checkbox changes)
+- **Jason's ask (same as v8.27's bundle part):** bundle attribution should roll up into the per-channel Need columns (Shopify / Walmart / Amazon Reorder / Chewy Reorder) the way it already rolls into Need TOTAL.
+- **Why v8.27 broke:** 4 sequential calls to `getBundleAttrDailyVelocity` with different channel filters per breakdown — the memo helped subsequent calls but the initial fanout was heavier than expected. Combined with the simultaneous checkbox HTML change it was hard to isolate the failure.
+- **v8.29 fix — new helper `getBundleAttrByChannel(masterId, windowDays, region)`** walks `allBomData` ONCE and returns per-channel daily velocities (`{amazon, shopify, walmart, chewy, other, all}`). Amazon covers all `amazon_*` sub-channels. Memoized under a distinct `bac|` key prefix so it doesn't collide with the existing helper. Same performance profile as the old single-channel helper (single allBomData walk).
+- **`inventoryNeedBreakdown` extension:** when bundleVel > 0 (component products only), calls `getBundleAttrByChannel` once, then runs `forwardSeaDemand` on each non-zero per-channel slice, folds results into `amzReorder` / `shopBase` / `wmartBase` / `chwyReorder`. Residual (`other` channel bucket, rare) folds into `shopBase` so total is preserved. `bundleBase` is NO LONGER added to `baseSum` (would double-count), but `nb.bundle.base` is retained on the result so the `+B` badge on Need TOTAL still works. `_nbMemo` is cleared per render via the existing `renderInventoryTbl` reset, so checkbox toggles behave correctly.
+- **NOT included in v8.29** (deferred to a separate commit once this lands cleanly): the unified checkbox merge (bundle-attr + hide-bundles). Keeping v8.29 to ONE change so it can be reverted in isolation if there's still a bug.
 
 ## v8.28 — Revert v8.27 (Inventory Planning page blanked out; needs safer re-implementation)
 - **User flagged:** after v8.27 the Inventory Planning table body was empty (627 of 819 SKUs displayed in the header but no rows visible). Regression from the bundle-attribution + checkbox-merge changes.
