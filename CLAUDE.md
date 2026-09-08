@@ -2,7 +2,12 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.26**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.28**
+
+## v8.28 — Revert v8.27 (Inventory Planning page blanked out; needs safer re-implementation)
+- **User flagged:** after v8.27 the Inventory Planning table body was empty (627 of 819 SKUs displayed in the header but no rows visible). Regression from the bundle-attribution + checkbox-merge changes.
+- **Reverted the whole v8.27 commit** to restore a working Inventory Planning page. The two v8.27 asks (bundle attribution rolling into per-channel Need columns; unified `+ bundle components` / hide bundles control) still need to be delivered but with a safer implementation.
+- **Root cause not yet fully diagnosed** — auth-walled deployment prevents direct browser inspection. Suspect either (a) the new hidden `ip-hide-bundles` checkbox with `checked` default is stripping every row when combined with a specific filter/saved-view state, (b) an unhandled throw in the per-channel `getBundleAttrDailyVelocity` fanout inside `inventoryNeedBreakdown`, or (c) a broken saved-view apply path. Next attempt will land the two features in separate commits so each can be reverted independently.
 
 ## v8.26 — Inventory Planning: Amazon + Chewy cumulative reorder broken out as separate column groups
 - **Jason's ask:** "i need this cumulative broken out chewy vs amazon as separate headers" (screenshot of the ≤30/60/90/120d Reorder group on the popup).
