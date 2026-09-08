@@ -2,7 +2,13 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.31**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.32**
+
+## v8.32 — Diagnostic query for "bundles with walmart sales" (don't hardcode walmart-exclusion)
+- **Jason flagged:** the v8.31 per-channel `+B` badge on Walmart columns shouldn't be there because Walmart doesn't sell bundles. My initial fix (skip walmart in bundle attribution) was rightly rejected — "hardcoding around a product being mistakenly flagged as a bundle" is a band-aid.
+- **Correct fix:** find the miscategorized product(s) in the catalog and fix the data (either flip `is_bundle=false` on a single-pack SKU that shouldn't be a bundle, OR remove the walmart_item_id mapping if the wrong bundle got tagged).
+- **New Query Database preset "Bundles w/ Walmart Sales (data mismap check)"** joins `products` (is_bundle=true) with `walmart_sales_weekly` and reports units + revenue + date range per master_id. Any hit is the data mismap. Ordered by walmart_units desc so the biggest offenders surface first.
+- **v8.31 bundle attribution math is unchanged** — the `+B` badge on Walmart columns is faithfully reporting what's in the data. Once Jason fixes the flagged product(s), those badges disappear naturally.
 
 ## v8.31 — +B badges on every per-channel cumulative Need column + bundle-attr auto-hides bundles
 - **Jason's first ask:** "loads but i don't see the +B green numbers" — the per-channel columns (Shopify / Walmart / Amazon Reorder Cum / Chewy Reorder Cum) rolled bundle attribution into their totals but showed no visual indicator, so it wasn't clear the rollup was actually happening.
