@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.24**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.25**
+
+## v8.25 — Inventory Planning: Shopify per-channel Need columns + clearer CUMULATIVE / PER PERIOD labeling
+- **Jason's ask (2 parts):** (1) "i need each channel separated. for example, so i need shopify and walmart separated out. it looks like walmart already is, but there isn't a shopify set of dimensions for 30/60/90/120." (2) "sometimes these headers specify if they are marginal or cumulative, but not always."
+- **Fix #1 — new `NEED — SHOPIFY DTC (CUMULATIVE)` column group** (4 horizons: `shopifyNeed30/60/90/120`, default OFF, opt-in via View popup). Mirrors the v6.60 Walmart column pattern. Reads `inventoryNeedBreakdown(r, X).shopify.base` (already folded into Need TOTAL + BASE — just surfaced as its own opt-in + exportable column). Sortable, CSV-exportable, styled `thg thg-need-base` (same blue-tinted "continuous drain" band as Walmart / Bundle). Positioned in the popup between Walmart and Reorder groups. US-only channel by convention.
+- **Fix #2 — every group header now names CUMULATIVE or PER PERIOD explicitly:**
+  - `NEED — WALMART (1P)` → `NEED — WALMART (1P · CUMULATIVE)` (was the only Need group missing the marginal/cumulative tag)
+  - `NEED — SHOPIFY DTC (CUMULATIVE)` (new — added with the tag from the start)
+  - View popup section labels updated to match: "Need — WALMART (1P · cumulative · warehouse draw)", "Need — SHOPIFY DTC (cumulative · warehouse draw)", "Amazon Reorder (per period · marginal)", etc. So the marginal-vs-cumulative distinction is visible everywhere: the on-screen group band, the View popup section labels, AND (already) the per-column tooltips + the v4.198 clarifier notes on cumulative columns.
+- Group class + tooltip maps updated to reflect the renamed key. No data-shape changes — `nb.shopify` was already populated by `inventoryNeedBreakdown` since v6.52.
 
 ## v8.24 — ROAS chip is now clickable on every tier (attributed / regression / heuristic)
 - **Jason's ask:** "can i see the modeling for ROAS via the same chip?" After v8.23 only the 📉 icon on regression-tier rows was clickable, but in practice most rows are attributed (no icon at all).
