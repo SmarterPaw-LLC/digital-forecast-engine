@@ -2,13 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.27**
-
-## v8.27 — Inventory Planning: bundle attribution rolls into channel-specific counts + unified bundle/hide-bundles control
-- **Jason's ask (2 parts):** (1) "when the + bundles is checked, the bundle components should roll up into the channel specific counts like they do in the need total" — the per-channel columns (Shopify, Walmart, Amazon reorder, Chewy reorder) previously excluded bundle-attributed demand, only Need TOTAL/BASE saw it. (2) "when the + bundles is selected, hide bundles should also be selected — join these into the same selector" — the two checkboxes are semantically one intent (component view: roll up bundles + hide their parents).
-- **Fix #1 — per-channel bundle distribution in `inventoryNeedBreakdown`.** Bundle-attributable velocity is now computed four times with channel-scoped filters: Amazon (all `amazon_*` channels) / Shopify / Walmart / Chewy. Each channel's `forwardSeaDemand` result is folded into the matching slice — Amazon bundles → `amazon.reorder`, Shopify → `shopify.base`, Walmart → `walmart.base`, Chewy → `chewy.reorder`. The `nb.bundle.base` field is retained (drives the +B badge on Need TOTAL). Since the per-channel slices partition the same demand, `bundleBase` is NO LONGER re-added to `baseSum` (would double-count). `total` is preserved. A residual safety catches any bundle sales on channels outside the known set and routes them to `shopify.base` so nothing gets silently dropped.
-- **Channel routing rationale.** Bundles are their own SKU with their own fulfillment model — the component's own `isFBM` flag doesn't apply. Amazon bundle sales trigger a warehouse→FBA replenishment for the bundle SKU (which pulls component units from warehouse), so component demand routes to Amazon's `reorder` slot. Shopify/Walmart bundles are continuous warehouse draws (`base`). Chewy bundles are batch POs (`reorder`).
-- **Fix #2 — unified `+ bundle components` checkbox.** The old "Hide bundles" checkbox is now a hidden input that mirrors the visible `+ bundle components` control. New `ipOnBundleAttrChange()` handler syncs the two + re-renders. Saved-view apply also syncs both to whichever was set (preferring `bundleAttr`; falling back to `hideBundles` for legacy views). Tooltip rewritten to explain both effects. Existing readers of `#ip-hide-bundles` (four filter sites) keep working unchanged.
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.26**
 
 ## v8.26 — Inventory Planning: Amazon + Chewy cumulative reorder broken out as separate column groups
 - **Jason's ask:** "i need this cumulative broken out chewy vs amazon as separate headers" (screenshot of the ≤30/60/90/120d Reorder group on the popup).
