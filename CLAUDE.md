@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.30**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.31**
+
+## v8.31 — +B badges on every per-channel cumulative Need column + bundle-attr auto-hides bundles
+- **Jason's first ask:** "loads but i don't see the +B green numbers" — the per-channel columns (Shopify / Walmart / Amazon Reorder Cum / Chewy Reorder Cum) rolled bundle attribution into their totals but showed no visual indicator, so it wasn't clear the rollup was actually happening.
+- **Jason's second ask (mid-turn):** "the bundle toggles got reverted. bundle components should also hide bundles" — checkbox unification was skipped in v8.29 for safety; time to re-add.
+- **Fix #1 — per-channel `+B` badges.** Each channel slice on the `inventoryNeedBreakdown` result now carries a `bundle` field with that channel's attributed contribution. New `pre.bTag(b)` helper renders a green `+B N` badge (same style as the Need TOTAL badge). All 16 per-channel cumulative columns updated: `≤30/60/90/120d Walmart`, `≤30/60/90/120d Shopify`, `≤30/60/90/120d Amz`, `≤30/60/90/120d Chwy`.
+- **Fix #2 — auto-sync hide bundles.** `+ bundle components` checkbox onchange now calls `ipOnBundleAttrChange()` which flips `Hide bundles` to match, then re-renders. Both checkboxes stay VISIBLE so the operator can still manually override (uncheck Hide Bundles if they want bundle parents in view even with attribution on — accepts the semantic double-count). Default state: both on.
+- **Tested locally** (following the v8.30 protocol) — mocked `allBomData` + `salesData`, called `inventoryNeedBreakdown(mockRec, 30)` in the browser console. No throws. Structure has expected per-channel `bundle` fields.
 
 ## v8.30 — v8.29 bundle rollup + THE actual bug that broke v8.27/v8.29 (const → let)
 - **Root cause (finally caught):** `let chwyReorder` was declared as `const chwyReorder` at line 21742. Both v8.27 and v8.29 tried to do `chwyReorder += bundleChwyBase`, which throws `TypeError: Assignment to constant variable` at RUNTIME. Since `renderInventoryTbl` builds tbody via `rows.map(r => …).join('')` and the first component product hit `inventoryNeedBreakdown` → throw → whole map failed → tbody stayed empty. Node's `new Function(js)` syntax check doesn't validate const-mutation (only runtime does), which is why the syntax check kept passing.
