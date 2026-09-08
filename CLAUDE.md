@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.25**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.26**
+
+## v8.26 — Inventory Planning: Amazon + Chewy cumulative reorder broken out as separate column groups
+- **Jason's ask:** "i need this cumulative broken out chewy vs amazon as separate headers" (screenshot of the ≤30/60/90/120d Reorder group on the popup).
+- **Fix:** two new opt-in column groups, mirroring the v6.60 / v8.25 pattern used for the base-channel splits:
+  - **`NEED — AMAZON REORDER (CUMULATIVE)`** — 4 horizons (`amzReorderCum30/60/90/120`), reads `nb.amazon.reorder`. Sums Amazon FBA trigger qty across all regions (US + CA + EU/UK) matching the all-channel REORDER cumulative.
+  - **`NEED — CHEWY REORDER (CUMULATIVE)`** — 4 horizons (`chwyReorderCum30/60/90/120`), reads `nb.chewy.reorder`. Chewy PO forecast contribution.
+- **Existing all-channel group renamed** `NEED — REORDER (CUMULATIVE)` → `NEED — REORDER (CUMULATIVE · ALL CHANNELS)` so the three cumulative reorder groups sit next to each other in the popup and read as related (all → Amazon slice → Chewy slice). All three are styled `thg thg-need-reorder` (orange band).
+- **Distinction from existing marginal groups.** The old `AMAZON FBA REORDER (PER PERIOD)` and `CHEWY REORDER (PER PERIOD)` groups still exist — those are MARGINAL (per-bucket) and per-region for Amazon. The new v8.26 groups are CUMULATIVE + region-agnostic (Amazon sum). Both live in the picker for different planning use cases: cumulative for aggregate volume through a horizon, per-period for cadence + placing individual POs.
+- Popup group order + labels updated so the new groups appear right after `need-reorder` (all-channel) before the marginal `amz-reorder` / `chwy-reorder` groups.
 
 ## v8.25 — Inventory Planning: Shopify per-channel Need columns + clearer CUMULATIVE / PER PERIOD labeling
 - **Jason's ask (2 parts):** (1) "i need each channel separated. for example, so i need shopify and walmart separated out. it looks like walmart already is, but there isn't a shopify set of dimensions for 30/60/90/120." (2) "sometimes these headers specify if they are marginal or cumulative, but not always."
