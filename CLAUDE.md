@@ -2,7 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.36**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.37**
+
+## v8.37 — Inventory Planning: FBA Inbound + Shipments columns now respect region filter
+- **Jason flagged:** with Region set to "US only" (or "CA only") the FBA Inbound + Shipments columns still showed shipments from the OTHER region. Screenshot showed Catnip Spray 4 OZ with `1 active · 28 total` shipments on a US-pinned row — many of which were CA shipments.
+- **Root cause:** `ipFbaInTransitByMaster` and `ipShipmentsByMaster` were both keyed only by `master_id`. When a product had shipments in both regions, both got lumped into a single per-master entry, and lookups had no way to filter down to the row's region.
+- **Fix:** both maps upgraded to nested `Map<master_id, Map<region, T>>`. Lookup helpers `ipInTransitFor(r)` and `ipShipmentsFor(r)` now filter by `r.region`:
+  - **Single-region record** (`'US'` / `'CA'` / `'EU/UK'`) → only that region's data.
+  - **Pooled record** (region contains `+`, e.g. `'US+CA'`) → sums across all matching regions.
+  - **Region-less record** → returns everything (unpinned view).
+  - **Unknown region** → returns 0 / empty array.
+- **`openIpShipmentsViewer(masterId)` (the click-through modal)** intentionally still flattens all regions for that master — the viewer shows full shipment history regardless of the row's current region pin. That's a UX call; the on-row column is per-region, the drill-in modal is full history.
+- **Runtime tested** — mocked the nested map, called both helpers with US-pinned / CA-pinned / pooled / unpinned / unknown-region records. All five scenarios returned the expected slice.
+
+
 
 ## v8.36 — Units Sold chart: no more auto-clip; per-channel "data thru" freshness in the subtitle
 - **Jason flagged:** the chart cutoff (v6.5 → v7.99) was clipping his chart at 8/24 even though Amazon US had data through 8/31 and Shopify through 9/5. Root cause: Chewy's latest was 8/24 (16 days old — inside the 21-day "fresh" window) so the `min(fresh channels' latest week)` cutoff picked 8/24. He asked: "just add lines on the report indicating when there isn't sales data, but let me select the time i want."
