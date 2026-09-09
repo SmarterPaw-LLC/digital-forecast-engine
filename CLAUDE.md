@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.34**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.35**
+
+## v8.35 — Active saved view's name is the CSV default filename
+- **Jason's ask:** "for any view saved, i'd like to be able to set the stored name of the export. by default, it should use the name of the view" + "i'd also like the date of the report to append."
+- **Fix:** `promptCsvName(defaultName)` — the single helper every CSV export site routes through (Inventory, Forecast, P&L Amazon/Shopify/Walmart, COGS, Chewy, etc.) — now checks the router's `_routerActiveView` state. When a saved view is currently applied (URL carries `?view=…`), the prompt defaults to `<view name>-<YYYY-MM-DD>.csv` instead of the auto-generated `smarterpaw-forecast-inventory-planning-warehouse-90d-filtered-...` string. Falls back to the caller's original suggested name when no view is active.
+- **View name is pre-sanitized** (`\ / : * ? " < > |` scrubbed) so the prompt already shows a clean string; the second sanitization pass on the user's input still runs.
+- **Applies universally** — no per-callsite changes needed; every export inherits the behavior via the shared helper.
+
+
 
 ## v8.34 — Sales & Traffic uploader stops auto-creating SP-TEMPs
 - **Jason flagged:** the Sales & Traffic report was auto-creating SP-TEMP products from PARENT ASINs (unsellable rollups) — screenshot showed `SP-TEMP-B0FHX39G23` for a Tuffer Chewer parent. Wanted the uploader to never create new products.
