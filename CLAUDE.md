@@ -2,7 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.35**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.36**
+
+## v8.36 — Units Sold chart: no more auto-clip; per-channel "data thru" freshness in the subtitle
+- **Jason flagged:** the chart cutoff (v6.5 → v7.99) was clipping his chart at 8/24 even though Amazon US had data through 8/31 and Shopify through 9/5. Root cause: Chewy's latest was 8/24 (16 days old — inside the 21-day "fresh" window) so the `min(fresh channels' latest week)` cutoff picked 8/24. He asked: "just add lines on the report indicating when there isn't sales data, but let me select the time i want."
+- **Fix:** removed the auto-clip in both `updateSalesChart` (Total mode) and its downstream feed to `updateChannelChart` (By Channel mode). The chart now respects the user's selected date range fully — no right-edge clipping regardless of any channel's freshness.
+- **Freshness surfaced in the subtitle** — the drill-panel subtitle now appends `· data: Amazon US thru 8/31 (9d) · Chewy thru 8/24 (16d) · Shopify DTC thru 9/5 (4d) · Walmart —` so operators can see WHERE each channel's data ends without the chart hiding it. Only relevant channels (ones that could contribute to the current selection) are listed; missing/no-data channels render as `—`.
+- **Both chart modes updated** — Total mode reads `latestByChannel` from the raw `salesData` scan (already computed earlier in the function). By Channel mode recomputes from the aggregated `salesRawWeekData` so it stays in sync with what the stacked areas / bars are actually showing.
+
+
 
 ## v8.35 — Active saved view's name is the CSV default filename
 - **Jason's ask:** "for any view saved, i'd like to be able to set the stored name of the export. by default, it should use the name of the view" + "i'd also like the date of the report to append."
