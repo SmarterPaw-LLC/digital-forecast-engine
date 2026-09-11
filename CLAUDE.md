@@ -2,7 +2,25 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.37**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.38**
+
+## v8.38 — Chewy Rebates → Chewy P&L (Sales + Rebates as tabs)
+- **Jason's ask:** "change 'Chewy Rebates' into Chewy P&L. the rebates can be a tab on that page. the main page should show sales with date pickers similar to what is on amazon. use the chewy sales data to inform the data."
+- **Nav rename:** dropdown entry `🐾 Chewy Rebates` → `🐾 Chewy P&L`.
+- **Structure:** existing rebates content wrapped in `#chpnl-view-rebates`. New `#chpnl-view-sales` container added above with a tab strip (💰 Sales default · 💸 Rebates). `switchChewyPnlView(view)` toggles containers + tab styling + routes to the right loader.
+- **New Sales tab** built on the Walmart P&L pattern:
+  - **Period picker** — Last 30/60/90/180/365 days · This month · Last month · YTD · Custom range (same options as Walmart P&L).
+  - **Brand + Category + Search filters.**
+  - **5 scorecards:** Merch Sales · Autoship Units (+ % of units) · Total COGS · Net Proceeds · Contribution %.
+  - **Sortable product table:** Product · Chewy SKU · Units · Autoship % · Merch Sales · Avg Price · COGS · Net Proceeds · Contrib %.
+  - Row click opens the product modal.
+- **COGS basis** — new `chewyPnlCogs(mid)` helper prefers `product_cogs.chewy_cogs`; falls back to `landed_cost` → `dtc_cogs` → `amazon_cogs`. Missing COGS renders `⚠ missing` red inline and counts on the scorecard.
+- **Data source:** `chewy_sales_weekly` (from v7.73 MJ_Sales_Snapshot XLSX uploads). Paginated fetch, cached in `chewyPnlSalesData`, filtered to rows with a resolved `master_id` (unmapped Chewy SKUs skipped — needs SP-TEMP promotion).
+- **Partial-data callout** stays honest — Net Proceeds is `Merch Sales − COGS`; Chewy's wholesale margin + rebates / trade allowances / Chewy Ads are NOT subtracted here (rebates live on the Rebates tab).
+- **`switchPnlView('chewy')`** now defers to `switchChewyPnlView(chewyPnlView || 'sales')` so the Sales tab is the default entry.
+- **Tested locally** — all 6 new functions defined, `getChewyPnlSalesDateRange` returns valid range, renderChewyPnlSales runs cleanly on both empty state and mocked aggregation.
+
+
 
 ## v8.37 — Inventory Planning: FBA Inbound + Shipments columns now respect region filter
 - **Jason flagged:** with Region set to "US only" (or "CA only") the FBA Inbound + Shipments columns still showed shipments from the OTHER region. Screenshot showed Catnip Spray 4 OZ with `1 active · 28 total` shipments on a US-pinned row — many of which were CA shipments.
