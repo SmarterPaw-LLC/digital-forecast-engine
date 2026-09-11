@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.38**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.39**
+
+## v8.39 — Chewy P&L Sales: clearer "retail sell-through" framing + period-over-period delta chips
+- **Jason flagged:** "this is sales at chewy, not our sales — just a note. i want to see the change over period like on amazon."
+- **Callout rewritten** to lead with `ℹ Retail sell-through at Chewy` and explicitly state that Merch Sales is Chewy's retail revenue (what customers pay Chewy), NOT SmarterPaw's wholesale sell-in or vendor payment. Frames Net Proceeds as a "top-line health signal, not your true vendor P&L."
+- **Period-over-period delta chips** added to every scorecard (Merch Sales · Autoship Units · Total COGS · Net Proceeds · Contribution %). Reuses the Amazon P&L helpers `getPnlPrevDateRange` (equal-length window immediately preceding the current range) and `pnlDeltaChip` (colored arrow + %, `pts` for contribution % change). Comparison scoped to the same master_ids in the current view so a product entering / leaving the catalog can't skew the delta.
+- **Color sense flipped for COGS** — a rise in Total COGS reads red (unfavorable), matching Amazon P&L's convention. Every other card reads green on an up move.
+- **Tested locally** — mocked current + prior period data, verified 5 scorecards render, delta chips include ▲/▼ arrows and "vs prev" text, and pnlDeltaChip returns the expected `+125.0% vs prev` HTML.
+
+
 
 ## v8.38 — Chewy Rebates → Chewy P&L (Sales + Rebates as tabs)
 - **Jason's ask:** "change 'Chewy Rebates' into Chewy P&L. the rebates can be a tab on that page. the main page should show sales with date pickers similar to what is on amazon. use the chewy sales data to inform the data."
