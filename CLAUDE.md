@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.40**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.41**
+
+## v8.41 — Global "🏷 Labels" toggle: show data-point values on every chart
+- **Jason's ask:** "i'd like an option to show the data labels for each data point on any graph. so i can take screenshots."
+- **Fix:** new `🏷 Labels` toggle button added to the global search bar (left of the search input). When ON, every Chart.js chart in the app renders the value at each data point. State persists via `localStorage.chartDataLabels`.
+- **Plugin loaded lazily via `getChart()`** — first chart render pulls `chartjs-plugin-datalabels@2` from jsDelivr alongside Chart.js and registers it globally. Set once, applies everywhere. Falls back gracefully if the CDN fetch fails.
+- **Global plugin defaults** set on `Chart.defaults.plugins.datalabels`:
+  - `display: () => chartDataLabelsEnabled()` — re-read on every render, so toggling flips ALL live charts without per-config edits.
+  - Small monospace, high-contrast grey, anchored above the point with a 4px offset.
+  - Compact formatter: values ≥1M → `1.5M`, ≥1k → `1.5k`, ≥10 → integer, else `.1f`. Scatter (bubble) points use `y`.
+- **Toggle button** flips green when ON, transparent when OFF, with a tooltip explaining the state. Reflected on load from `localStorage`.
+- **`setChartDataLabelsEnabled(v)`** iterates `Chart.instances` and calls `.update()` on each so all currently-rendered charts flip immediately — no re-navigation needed.
+- **Tested locally** — plugin loads, state roundtrip works, display function honors flag, compact formatter tested on 5 scales (`0.5 · 150 · 1.5k · 2.5M · scatter{y:42}=42`).
+
+
 
 ## v8.40 — Global search bar (sticky under header, thick outline)
 - **Jason's ask:** "i'm tired of searching for the search bar. on every page, i want it at the very top right below the header menu, where i've circled. it should have a thick outline to call attention to it."
