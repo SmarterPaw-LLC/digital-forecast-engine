@@ -2,7 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.39**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.40**
+
+## v8.40 — Global search bar (sticky under header, thick outline)
+- **Jason's ask:** "i'm tired of searching for the search bar. on every page, i want it at the very top right below the header menu, where i've circled. it should have a thick outline to call attention to it."
+- **Fix:** new `#globalSearchBar` div added right after `</header>`. Sticky at `top: 54px` (below the sticky 54-px header), background matches page bg, `position:sticky` so it stays visible when scrolling within any page. Search input has a thick 3px SmarterPaw green border + a 3px 15%-alpha green box-shadow ring so it's unmistakable.
+- **Dispatch model:** every page has its own local search input (each wired to its own re-render). Rather than push a new global filter through every render function, the global bar forwards the query to whichever local input belongs to the currently-active page + sub-view via `GLOBAL_SEARCH_MAP`. The dispatcher sets `.value` + fires a native `input` event so each page's existing wiring takes over — no per-page changes.
+- **Coverage:** Products · Bundles · Units Sold · Forecast (Demand / Inventory / Reorder Setup / Chewy / FBA Shipments) · Amazon P&L · Shopify P&L · Walmart P&L · Chewy P&L Sales · Chewy P&L Rebates · COGS. Pages without a search field (Seasonality, Pricing Scenarios, Data, Settings, Digital Sales) show a disabled "No search on this page" state instead of routing.
+- **Sync:** switching pages or sub-views calls `globalSearchSyncFromTarget()` which mirrors the newly-active page's local search value into the global bar (so leaving/returning to a filtered page shows its current filter). Wired at the end of `showPage`, `switchPnlView`, `switchForecastView`, and `switchChewyPnlView`.
+- **UX niceties:** `Esc` clears and blurs. A small `✕` button appears when the field is non-empty. Placeholder text mirrors the target page's placeholder ("product name, ASIN, master_id…" on P&L, "Search invoice # / rebate name…" on Rebates, etc.).
+- **Shown only after auth resolves** — `onAuthSuccess` flips `display:none → flex`. Never renders on the login gate.
+- **Tested locally** — 4 different (page, sub-view) combos routed to the expected local input IDs; dispatch fired the native input event and landed on the target correctly.
+
+
 
 ## v8.39 — Chewy P&L Sales: clearer "retail sell-through" framing + period-over-period delta chips
 - **Jason flagged:** "this is sales at chewy, not our sales — just a note. i want to see the change over period like on amazon."
