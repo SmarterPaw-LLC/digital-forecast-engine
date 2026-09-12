@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.41**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.42**
+
+## v8.42 — Move `🏷 Labels` toggle from the global search bar onto each chart header
+- **Jason's follow-up:** "the labels control should be on the chart header, not at the top of the page."
+- **Fix:** dropped the button from the global search bar. Now every chart panel's `.ds-hdr` gets its own labels toggle auto-injected. All toggles share the same underlying localStorage state, so flipping ANY chart's toggle turns labels on/off for EVERY chart (matches Jason's screenshot-workflow intent).
+- **Auto-injection helper `injectChartLabelsToggles()`** walks `.ds-hdr` elements, skips those already tagged (`dataset.hasLabelsToggle='1'` — idempotent), appends a small green pill styled to match each panel's header. Fires on: auth resolve, `showPage`, `switchPnlView`, `switchForecastView`, `switchChewyPnlView`.
+- **MutationObserver on `document.body`** catches chart panels that mount lazily (e.g. Amazon P&L's chart panel that appears when products are checked, Chewy Revision Tracker inside a `<details>`, forecast drill panels). New `.ds-hdr` nodes → instant toggle injection without touching every render function.
+- **State propagation stays instant:** `setChartDataLabelsEnabled(v)` iterates every `.chart-labels-toggle` button and updates their green/transparent state so all toggles across the app stay in sync — click one, they all flip.
+- **Tested locally** — 19 existing headers on the login screen (rendered but hidden), synthetic pair added and injected correctly, idempotent second call → no duplicates, toggle state propagates to background color, MutationObserver caught a dynamically-added header without an explicit inject call.
+
+
 
 ## v8.41 — Global "🏷 Labels" toggle: show data-point values on every chart
 - **Jason's ask:** "i'd like an option to show the data labels for each data point on any graph. so i can take screenshots."
