@@ -2,7 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.49b**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.49c**
+
+## v8.49c — Growth Model: market $ opportunity (TAM analysis) + tooltips on every trajectory field
+- **Jason's asks:** (1) "i also want to know what the market share potential would mean in terms of $." (2) "please add tooltips showing how each field is calculated, eg organic lift."
+- **Market $ analysis — new second scorecard row.** Four tiles surface the TAM of the queries this ASIN plays in:
+  - **Market Size** — total $ moving through the ASIN's SQP keywords per month, market-wide. Formula: `sum(purchases_total_count × purchases_price_median)`. This is the TAM of queries you're already relevant to.
+  - **Your $ Today** — your monthly revenue from these queries at current share, using YOUR MSRP (since you always sell at MSRP regardless of the query's median price). Also shows your % of the market $ pool.
+  - **Your $ at Target** — monthly run-rate revenue if you reached your end-of-horizon target share TODAY on ALL these keywords. Formula: `total_market_units × target_share × YOUR MSRP`.
+  - **Monthly $ Gap** — additional monthly revenue at target vs today. Multiplied by horizon = total upside if sustained.
+- **New "💰 Market Opportunity by Keyword" collapsible table** (top 30 keywords by market $). Columns: keyword · market units/mo · market price · market $/mo · your share · your units · your $/mo · @Target $/mo · Gap $/mo. Sorted by market $ desc so biggest queries lead.
+- **Tooltips on every trajectory column** — Month, Target Share, Achieved, Baseline Organic, Organic Carry-in, Paid Units, Total Units, Ad Spend, TACOS, Contribution, Uplift → Next Mo. Each `ⓘ` header shows the exact formula, referencing the user's current settings (uplift %, CPC inflation exponent, MSRP, trend rate). Also added tooltips to every top scorecard.
+- **Ordering fix** — moved `prod`/`msrp` declaration BEFORE the market-opportunity computation so `msrp` is defined when the market $ math runs.
 
 ## v8.49b — Growth Model: actually enforce the TACOS ceiling (binary-search cap on monthly share push)
 - **Jason flagged:** "why can this violate the max monthly taco %?" v8.49 computed the requested share ramp regardless of the ceiling and just labeled offending months over the ceiling — not useful as a planner.
