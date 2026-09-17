@@ -2,7 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.47**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.47a**
+
+## v8.47a — Move COGS preview toggle from the COGS page to the P&L pages
+- **Jason pushed back:** "why is cogs preview mode on the COGS page? put it on the P&L page." Right call — the modeled impact IS the P&L, so the toggle belongs where the operator sees the effect, not where they set up the scheduled revision.
+- **Removed:** the standalone `🗓 Preview mode: OFF/ON` button that lived in the COGS page controls bar.
+- **`renderCogsPreviewBanners()` now renders in both states.** Every `.cogs-preview-banner-host` (there's one at the top of Amazon P&L, Shopify P&L, Walmart P&L, Chewy P&L Sales, and the COGS page) gets:
+  - **When preview OFF and ≥1 product has `next_effective_date` set:** compact dashed pill saying `N products have a scheduled COGS revision. Preview how it changes the P&L before promoting. [🗓 Preview COGS changes]` (green button).
+  - **When preview ON:** the existing green banner naming the modeled state with `[✕ Turn off preview]`.
+  - **When preview OFF and zero scheduled revisions:** the host renders nothing (empty string) so no dead affordance clutters the header.
+- Same call sites already re-render banners on sub-view switch (`switchPnlView` / `switchChewyPnlView`) and on data load (`loadProductCogs`), so the toggle appears on every P&L page without any extra plumbing.
 
 ## v8.47 — COGS Preview mode (in-memory swap) + Products search covers every ID
 - **Jason's ask (COGS preview, option 1 of 3 he picked):** "where can i see the cogs change modeled?" — v8.46 lets you SCHEDULE a future COGS revision per product, but nothing on the app was showing what the P&L would look like if the scheduled values were live. This is that: a toggle that mutates the in-memory `cogsByMaster` so every downstream reader (Amazon P&L, Shopify P&L, Walmart P&L, Chewy P&L, COGS page) automatically reflects the modeled impact without needing to promote.
