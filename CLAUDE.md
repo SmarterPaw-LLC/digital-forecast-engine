@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.49**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.49b**
+
+## v8.49b — Growth Model: actually enforce the TACOS ceiling (binary-search cap on monthly share push)
+- **Jason flagged:** "why can this violate the max monthly taco %?" v8.49 computed the requested share ramp regardless of the ceiling and just labeled offending months over the ceiling — not useful as a planner.
+- **Fix — new "Enforce ceiling" checkbox** (default ON, next to Max monthly TACOS input). When ON:
+  - Each month runs an initial unconstrained pass at the target share gain.
+  - If resulting TACOS > ceiling, binary-search the share-gain multiplier (0-1 of target) until TACOS lands at the ceiling. 24 iterations = 0.0001 precision.
+  - Edge case: even zero paid can leave you over ceiling if baseline economics are broken (e.g. MSRP too low, COGS too high). Model detects this and caps at zero paid, flags the month.
+- **Trajectory table** gets a new **Achieved** column showing actual share reached vs target. Capped months tinted blue with a 🔒 icon on the achieved share. Target column shows the aspirational number.
+- **Verdict banner** now distinguishes three cases:
+  - 🔴 Uncapped mode + months over ceiling → "Enable Enforce ceiling to cap the ramp, or accept the TACOS trade-off."
+  - 🟡 Enforcement on + months hit ceiling → "Ceiling-constrained — N of H months hit ceiling and had ramp capped. Achieved end share X% vs target Y%."
+  - 🟢 Everything under ceiling naturally → profitable trajectory.
+- **CSV export** gains `achieved_share_pct` + `capped_by_ceiling` (yes/no) columns.
+- When enforcement is OFF, model reverts to v8.49 behavior — buys full ramp, orange rows for offenders.
 
 ## v8.49 — Growth Model v2: real multi-month trajectory with baseline, share ramp, uplift, CPC inflation
 - **Jason's pushback on v8.48:** "this growth model is not very deep. it is meant to model growth over a period of defined months, using an understanding of increasing ad spend, building organic traction, etc — using some of the products own growth trajectory as a baseline. right now it just give a flat incremental cost based on current spend and run rate." Fair — v8.48 was a single-month "spend this much to buy N units" calculator, not a real growth trajectory model.
