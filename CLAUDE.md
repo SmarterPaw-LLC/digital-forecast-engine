@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.47b**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.47c**
+
+## v8.47c — SP Search Term parser: alias-tolerant for the new Amazon Ads console column names
+- **Jason flagged mid-build:** Amazon renamed the SP Search Term Report columns in the new Ads console UI. The old column names (`Advertised ASIN`, `Advertised SKU`, `Currency`, `Cost per click (CPC)`, `Spend`, `7 Day Total Orders`, `7 Day Conversion Rate`) no longer exist — replaced by new names the parser didn't recognize.
+- **Column renames handled in `parseAmazonSpSearchTerm`:**
+  - `Advertised ASIN` → `Advertised product ID`
+  - `Advertised SKU` → `Advertised product SKU`
+  - `Cost per click (CPC)` → `Cost per click`
+  - `Spend` / `Total spend` → `Cost`
+  - `7 Day Total Orders` → `Purchases` (+ `Purchases (promoted)` as fallback)
+  - `7 Day Total Units` → `Units sold` (+ `Units sold (promoted)` as fallback)
+  - `7 Day Conversion Rate` → `Purchase rate`
+  - `Currency` → `Budget currency`
+  - `Match type` → `Targeting match type`
+  - `Keyword` / `Keyword text` → `Matched target`
+- **All aliases added alongside the legacy names** so old exports still parse. Alias-tolerant `ci(...)` helper walks the list and picks the first match; legacy names win when present so historical files are byte-identical after parse.
+- **What to pick in the new console when building the SP Search Term report:** in Customize columns, tick `Advertised product ID`, `Targeting match type`, `Customer search term`, `Campaign name`, `Ad group name`, plus metrics `Impressions`, `Clicks`, `Cost per click`, `Cost`, `Sales`, `Purchases`, and either `Purchase rate` or `Conversion rate`. `Purchases (promoted)` / `Sales (promoted)` are ignored by the parser (redundant with the plain versions for our purposes).
 
 ## v8.47b — Preview mode now re-derives Amazon + DTC totals from swapped building blocks
 - **Jason flagged:** "clicking preview cogs change does not change the numbers." Preview mode banner was reading ON, showing "9 products have a scheduled revision," but the P&L totals didn't move. Real bug.
