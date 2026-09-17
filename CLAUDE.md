@@ -2,7 +2,33 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.48**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.49**
+
+## v8.49 — Growth Model v2: real multi-month trajectory with baseline, share ramp, uplift, CPC inflation
+- **Jason's pushback on v8.48:** "this growth model is not very deep. it is meant to model growth over a period of defined months, using an understanding of increasing ad spend, building organic traction, etc — using some of the products own growth trajectory as a baseline. right now it just give a flat incremental cost based on current spend and run rate." Fair — v8.48 was a single-month "spend this much to buy N units" calculator, not a real growth trajectory model.
+- **v8.49 rebuild — multi-month trajectory engine.** Inputs:
+  - **Planning horizon:** 3 / 6 / 9 / 12 months
+  - **End-of-horizon impression share (%)** — target SoV to reach by month N; model ramps linearly from current baseline to this target
+  - **Paid→organic uplift (%)** — fraction of this month's paid purchases that seed NEXT month's organic baseline (BSR lift, review accumulation, brand recall)
+  - **CPC inflation curve** — Linear (1.0), Convex mild (1.4), Steep (2.0) — how aggressively CPC rises with share push (auction dynamics)
+  - **Max monthly TACOS ceiling (%)** — months exceeding this are flagged
+  - **Market MoM growth (%)** — secular category growth applied to baseline
+- **Baseline computed from the ASIN's own SQP history.** When ≥3 months of SQP ASIN view data available, extrapolates monthly avg MoM growth rate from historical `purchases_asin_count`. When <3 months, uses flat last-month rate. Baseline confidence badge next to the product picker (✓ 6 months / ⚠ 1 month / ✗ no history).
+- **Month-by-month simulation loop.** For each month m:
+  - **Baseline organic** = `last_month × (1 + trend_growth)^m + organic_carry_in_from_prior`
+  - **Target share this month** = `share_start + (share_end - share_start) × (m/H)` — linear ramp
+  - **Paid impressions** = per-keyword `impressions_total × share_gain / 100`
+  - **CPC inflation** = `base_cpc × (1 + share_gain/100)^cpc_inflation_exp`
+  - **Paid units** = paid_impressions × market_CTR × market_CVR (funnel-average)
+  - **Ad spend** = paid_clicks × cpc_inflated
+  - **Total units** = baseline + paid
+  - **Organic carry to next month** = paid_units × uplift_pct/100
+- **Verdict banner** — 🟢 profitable (agg TACOS ≤ 25%, all months under ceiling), 🟡 marginal (some months over ceiling, or TACOS 25-35%), 🔴 unprofitable (cumulative contribution negative).
+- **Month-by-month table** shows: Month · Target Share · Baseline Organic · Organic Carry-in (green when non-zero) · Paid Units · Total Units · Ad Spend · TACOS (colored by ceiling) · Contribution · Uplift → Next Month. Rows over the TACOS ceiling highlighted orange. Footer sums cumulative totals.
+- **Month 1 keyword allocation table** — actionable this-month drill-down showing per-keyword impressions bought, clicks, units, inflation-adjusted CPC, spend. Sorted by cost-per-purchase ascending.
+- **Six scorecards** at top: Cumulative Units · Total Ad Spend · Agg TACOS · Cumulative Contribution · Baseline (with historical trend badge) · Share Ramp start→end.
+- **CSV export** — two sections in one file: month-by-month trajectory rows + month 1 keyword allocation drill-down. Header preamble names all model parameters so the file is self-documenting.
+- **What's NOT in v8.49 (deferred if needed):** trajectory line chart (numbers table is currently richer than a chart would be), non-linear share ramps (S-curve / front-loaded / back-loaded), reverse-solve mode ("what target share hits X units at Y max TACOS?"), competitor-share modeling (assumes the share we buy comes from anyone, not from specific competitors).
 
 ## v8.48 — Growth Model Ship 2: keyword-level unit growth planner on Amazon P&L
 - **Jason's ask:** "proceed with building the growth modeler." v8.44 shipped the data foundation (SQP + SP Search Term tables + uploaders + loaders). This is the actual model.
