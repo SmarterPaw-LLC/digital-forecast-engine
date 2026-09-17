@@ -2,7 +2,28 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.44**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.45**
+
+## v8.45 — SQP parser accepts Brand View files (not just ASIN View)
+- **Jason flagged:** uploaded the Brand View file (Comprehensive Aug 2026) and hit `SQP ASIN upload error: Row 1 missing ASIN=[…] — is this a Search Query Performance ASIN view file?` The v8.44 scope was "ASIN view only for v1" but Jason has both file formats in Downloads and wants them both ingested.
+- **File format comparison:** identical structure to ASIN view except:
+  - Row 1: `Brand=["Meowijuana"],Reporting Range=["Monthly"],Select year=["2026"],Select month=["August"]` (Brand instead of ASIN).
+  - Column headers: `Impressions: Brand Count` / `Impressions: Brand Share %` / etc. instead of `ASIN Count` / `ASIN Share %`. Purchase / cart-add / clicks columns same.
+  - Semantics: Brand view rows aggregate share-of-voice at the BRAND level (catalog-wide across all Meowijuana ASINs), not per-listing.
+- **⚠ SQL TO RUN:** `supabase_v8_45_sqp_brand_view.sql` — extends `amazon_query_performance_asin`:
+  - Adds `view_type TEXT NOT NULL DEFAULT 'asin' CHECK (view_type IN ('asin','brand'))`.
+  - Adds `brand TEXT` (null on ASIN view rows, populated on Brand view rows).
+  - Drops the plain-column unique index and replaces with functional: `(view_type, coalesce(asin,''), coalesce(brand,''), region, reporting_month, search_query)` — coexists both view types without collision. Downgrades table to Architecture Rule #5 (DELETE+INSERT required, not upsert). Idempotent.
+- **Parser (`parseAmazonSqpAsinView`) extended:**
+  - Row 1 regex now checks BOTH `ASIN=[…]` and `Brand=[…]`; sets `viewType='asin'` or `'brand'` accordingly. Error message updated to name both file types.
+  - Column resolver takes alias arrays — `ci('impressions: asin count', 'impressions: brand count')` matches either header.
+  - Row payload carries `view_type` + `asin` (null on brand view) + `brand` (null on ASIN view) + `master_id` (only for ASIN view — resolved via ASIN → products lookup; brand view rows are catalog-wide so no single master_id fits).
+  - DELETE scope updated: `(view_type, region, reporting_month, identity)` where identity = asin OR brand depending on view. So re-uploading the same Meowijuana Brand view file for August cleanly replaces its rows without touching the Pawty Mix ASIN view for the same month.
+- **Upload handler surfaces view type in status/log:**
+  - Status line: `✓ 200 query rows · 2 ASIN view file(s) · 1 Brand view file(s) · 1 month(s)`.
+  - Audit log renamed `upload.amz_sqp_asin` → `upload.amz_sqp` with separate `asins` + `brands` counts.
+- **Uploader tile description + label updated** to advertise Brand view support.
+- **Error message on missing v8.45 columns:** if the user tries to upload a Brand view file before running the migration, they'll see `Table schema out of date — run supabase_v8_45_sqp_brand_view.sql in Supabase SQL Editor (adds view_type + brand columns), then retry.` — no confusion about which migration is needed.
 
 ## v8.44 — Growth Model — Ship 1: schema + uploaders for Amazon SQP (ASIN view) + SP Search Term Report
 - **Jason's ask:** "i want to build functionality to model growth of product skus based on ad spend. this should be a new tab on the amazon p&l page (next to page performance). I need a way to upload these query reports (by brand view and asin view)." Direction picked from decisions: unit-count goal · US-only v1 · ASIN view (Brand view deferred) · SP Search Term Report as CPC source for best modeling precision.
