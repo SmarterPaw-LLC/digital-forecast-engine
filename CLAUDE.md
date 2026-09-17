@@ -2,7 +2,14 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.47c**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.47d**
+
+## v8.47d — SP Search Term parser aggregates daily-grain CSV rows into monthly totals
+- **Jason flagged:** first upload attempt threw `Insert failed: duplicate key value violates unique constraint "amazon_sp_search_term_uniq"`. Real bug.
+- **Root cause:** the new Amazon Ads console exports SP Search Term at **DAILY** grain (one row per day per search term per ASIN per match type). Our schema is MONTHLY — unique key `(asin, region, month, campaign, ad_group, match_type, search_term)` — so 31 daily rows for the same key would collide on insert. Parser was pushing each daily row through untouched.
+- **Fix:** `parseAmazonSpSearchTerm` now aggregates BEFORE the DELETE+INSERT step. Groups by the same 5-tuple the DB constraint uses; sums additive fields (impressions, clicks, spend, sales_7d, orders_7d, units_7d); recomputes rate fields from the sums (`ctr = clicks/impressions`, `cpc = spend/clicks`, `acos = spend/sales × 100`, `roas = sales/spend`, `cvr = orders/clicks × 100`). Recomputed rates are honest — sum-derived rather than averaged over days (avg-of-daily-rates is mathematically wrong when day sizes differ).
+- **Compression on Jason's Aug 2026 file:** 5,923 daily rows → 3,136 monthly aggregated rows (1.9× compression). Total spend $12,389.84 / total sales $32,605.68 for the month.
+- **No schema change** — the fix is purely in the parser. Existing rows (from prior working uploads at daily-only spans that didn't cross day boundaries within a single search term key) are unaffected.
 
 ## v8.47c — SP Search Term parser: alias-tolerant for the new Amazon Ads console column names
 - **Jason flagged mid-build:** Amazon renamed the SP Search Term Report columns in the new Ads console UI. The old column names (`Advertised ASIN`, `Advertised SKU`, `Currency`, `Cost per click (CPC)`, `Spend`, `7 Day Total Orders`, `7 Day Conversion Rate`) no longer exist — replaced by new names the parser didn't recognize.
