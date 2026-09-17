@@ -2,7 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.47a**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.47b**
+
+## v8.47b — Preview mode now re-derives Amazon + DTC totals from swapped building blocks
+- **Jason flagged:** "clicking preview cogs change does not change the numbers." Preview mode banner was reading ON, showing "9 products have a scheduled revision," but the P&L totals didn't move. Real bug.
+- **Root cause:** v8.47's `applyCogsPreview` swapped `next_*` → current field-by-field, but products where the user set `next_landed_cost` / `next_fulfillment_amazon` (building blocks) WITHOUT explicitly setting `next_amazon_cogs` had their building blocks swap but `amazon_cogs` (which the Amazon P&L reads via `getActivePnlCogs` → `cogsByMaster[mid].amazon_cogs`) stay untouched. So the P&L was reading the SAME `amazon_cogs` value before and after the toggle — no visible effect.
+- **Fix — `applyCogsPreview` now re-derives channel totals from the post-swap building blocks:**
+  - Amazon COGS = `landed_cost + fulfillment_amazon + production_labor` (same formula the COGS page uses for its green `ƒ` derived display)
+  - DTC COGS = `landed_cost + overhead_dtc + fulfillment_dtc + shipping_cost + production_labor`
+  - Only re-derive when (a) at least one INPUT building block was swapped, (b) `next_amazon_cogs` / `next_dtc_cogs` was NOT explicitly set (manual override wins over the derivation, matching v6.20 rule), and (c) `landed_cost` is non-null after the swap (foundational input gate).
+- **Banner also now surfaces brand rollup** — new `scheduledCogsChangesByBrand()` returns e.g. `Meowi (5) · Doggi (3) · KKZ (1)` and the banner renders it in muted grey after the count. So a user filtered to one brand can tell at a glance whether preview would even affect their view (or whether the scheduled revisions all live in a different brand).
+- **Same in-memory swap model as v8.47** — no DB writes, no cache invalidation needed. Snapshot restores everything on toggle off, including the re-derived totals (the shadow copy captured them before the swap).
 
 ## v8.47a — Move COGS preview toggle from the COGS page to the P&L pages
 - **Jason pushed back:** "why is cogs preview mode on the COGS page? put it on the P&L page." Right call — the modeled impact IS the P&L, so the toggle belongs where the operator sees the effect, not where they set up the scheduled revision.
