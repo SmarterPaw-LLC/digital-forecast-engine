@@ -17,6 +17,13 @@ alter table amazon_query_performance_asin
   add column if not exists view_type text not null default 'asin' check (view_type in ('asin', 'brand')),
   add column if not exists brand text;
 
+-- v8.44's create table had `asin text not null`. Brand view rows have no
+-- ASIN (they aggregate across the whole catalog for that brand), so drop
+-- the NOT NULL constraint. The functional unique index below uses
+-- coalesce(asin, '') so nullable asin doesn't break uniqueness.
+alter table amazon_query_performance_asin
+  alter column asin drop not null;
+
 -- Existing rows are ASIN view (backfill default already covers it).
 
 -- Unique index needs to distinguish (asin, month, query) rows from (brand,

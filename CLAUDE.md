@@ -2,7 +2,34 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.45**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.46**
+
+## v8.46 — COGS Modeling: schedule ONE future revision per product on the COGS page
+- **Jason's ask:** "for the cogs page, i need to add the concept of COGS modeling. We have current COGS inventory that we are changing suppliers at a future date - so i need to be able to set, per product, an effective date for new COGS cost."
+- **Scope decision:** ONE scheduled future revision per product (not a full timeline). If the multi-revision pattern comes up later, we upgrade to a `product_cogs_history` table; v1 stays additive on `product_cogs` so the modal UX is simple. Auto-apply on effective date in the P&L aggregator is DEFERRED to Ship 2 — Jason confirmed manual promotion is fine for v1.
+- **⚠ SQL TO RUN:** `supabase_v8_46_cogs_modeling.sql` — adds 12 columns to `product_cogs`:
+  - 10 `next_*` cost fields (mirrors current schema: landed_cost, fulfillment_amazon, fulfillment_dtc, overhead_dtc, shipping_cost, production_labor, amazon_cogs, amazon_cogs_eu, dtc_cogs, chewy_cogs)
+  - `next_effective_date DATE` (when the values kick in)
+  - `next_note TEXT` (free-text describing the change — supplier name, reason)
+  - Partial index on next_effective_date where non-null. Idempotent.
+- **UI on the COGS page:**
+  - **🗓 button per row** — next to the product name. Opens the COGS Modeling modal.
+  - **Modal layout:**
+    - Header names product + master_id.
+    - Info banner explains: "Schedule ONE future revision · leave blank inputs to keep current · P&L uses current until you promote."
+    - Two-column controls: **Effective date** (date picker, min=today) + **Note** (free text).
+    - Table with rows for each of the 10 cost fields: **Field · Current · Next**. Current shown for reference (read-only). Next is an editable numeric input. Total-COGS rows (Amazon / DTC / Chewy / Amazon EU) shaded for visual grouping vs building blocks.
+    - Actions bar: **⬆ Promote → current** (only shown when a scheduled revision exists — copies next_* → current, clears next_*), **✕ Clear future** (nukes the scheduled revision entirely), **Cancel**, **💾 Save**.
+    - Promote button turns orange + labels `(past due)` when today >= effective_date.
+    - Backdrop click closes (with drag-out protection, v4.168 pattern).
+  - **Chip next to product name** when a revision is scheduled: `🗓 2026-11-01` (blue) OR `🗓 promote (2026-10-15)` (red) when past-due. Click either → opens the modal. Tooltip shows the note.
+- **Save flow:** upserts to `product_cogs` preserving every current field verbatim; only writes next_* + next_effective_date + next_note. If any next_* value is set but no date, error prompts to set a date. If date is set but no values, confirms it's a placeholder reminder.
+- **Promote flow:** for each next_* field that's set, copy into the corresponding current field (else current stays); then null out every next_* + date + note. Confirm dialog lists per-field changes (`Landed Cost: $1.40 → $1.35`).
+- **Clear flow:** null every next_* + date + note; current fields untouched.
+- **Audit log:** `cogs.modeling_save`, `cogs.modeling_promote` (with the per-field change list), `cogs.modeling_clear`.
+- **`loadProductCogs`** unchanged — `.select('*')` picks up new columns automatically. `cogsByMaster` cache carries the next_* fields onto every downstream reader.
+- **Downstream P&L aggregators intentionally untouched** — they still read `amazon_cogs` / `dtc_cogs` / `chewy_cogs` and behave exactly as before. When the new supplier's inventory ships, click Promote to swap; the P&L then reflects the new COGS going forward.
+- **Deferred (Ship 2 if wanted):** effective-date-aware aggregator that swaps automatically on the boundary (tricky for historical reports crossing the date — needs a design decision on what "COGS for the week ending X" means when X spans two suppliers). Full timeline table with N future revisions.
 
 ## v8.45 — SQP parser accepts Brand View files (not just ASIN View)
 - **Jason flagged:** uploaded the Brand View file (Comprehensive Aug 2026) and hit `SQP ASIN upload error: Row 1 missing ASIN=[…] — is this a Search Query Performance ASIN view file?` The v8.44 scope was "ASIN view only for v1" but Jason has both file formats in Downloads and wants them both ingested.
