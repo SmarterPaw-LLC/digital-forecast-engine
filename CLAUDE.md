@@ -2,7 +2,35 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.47d**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.48**
+
+## v8.48 — Growth Model Ship 2: keyword-level unit growth planner on Amazon P&L
+- **Jason's ask:** "proceed with building the growth modeler." v8.44 shipped the data foundation (SQP + SP Search Term tables + uploaders + loaders). This is the actual model.
+- **New 🎯 Growth Model tab** — 5th tab on Amazon P&L (after Change Log). `pnlAmazonView` accepts new `'growth'` value; `switchPnlAmazonView` styles the tab + shows the container.
+- **Inputs:**
+  - **Product picker** — dropdown of every ASIN with BOTH SQP data AND a catalog row (empty-state banner when either is missing).
+  - **Target incremental units / month** — integer input, default 100.
+- **Model (per keyword the ASIN has SQP data for, latest reporting month):**
+  - **CTR** = query-wide `clicks_total_count / impressions_total_count` (funnel average, more honest than a per-ASIN sample of one).
+  - **CVR** = query-wide `purchases_total_count / clicks_total_count`.
+  - **Addressable impressions** = `impressions_total × (1 - current_share_pct/100)` — the impressions we could theoretically win from other listings.
+  - **Projected purchases** = `addressable_impressions × CTR × CVR`.
+  - **CPC** = actual from SP Search Term Report (matched by ASIN + normalized `customer_search_term`), else median CPC across the ASIN's SP data, else $0.75 default.
+  - **Cost per purchase** = `CPC ÷ CVR` (clicks needed per purchase × CPC per click).
+- **Allocation:** rank keywords by cost-per-purchase ascending, allocate greedily until `target_units` is covered. Anything not fillable is surfaced as an orange callout ("Only N of M target units can be covered by the addressable keyword set — consider a higher target-share strategy").
+- **Scorecards:** Target Units (allocated / requested), Est Ad Spend, Est TACOS, Net Contribution ($ + per-unit).
+- **Verdict banner** (colored + iconed): 🟢 profitable (TACOS < 20%), 🟡 marginal (20-35%), 🔴 high TACOS or negative contribution. Shows projected sales, net proceeds, MSRP per unit, COGS per unit, contribution per unit before ad spend.
+- **Per-keyword table:** keyword, query volume, current share %, CTR, CVR, CPC (marked * when using median fallback), cost/purchase, allocated units, allocated spend. Sortable via CSV export.
+- **Guardrails surfaced:**
+  - **$0 COGS** → orange warning "profitability estimate is optimistic."
+  - **$0 MSRP** → orange warning "TACOS + contribution assume no revenue per unit."
+  - **Unfulfilled target** → warning explaining the addressable ceiling.
+- **CSV export** — one row per allocated keyword with all columns: asin, keyword, query_volume, current_share_pct, ctr_pct, cvr_pct, cpc, cpc_source (matched/median), cost_per_purchase, allocated_units, allocated_spend. Filename `smarterpaw-growth-model-{asin}-{date}.csv`. Audit log records `pnl.growth_model_run` + `pnl.growth_model_export`.
+- **Contribution math** — uses `getAmazonCogs(mid)`, `products.msrp`, 15% referral fee, $4/unit FBA fulfillment. Net proceeds per unit = `MSRP × 0.85 - $4`. Net contribution = `filled × (net proceeds - COGS) - total_ad_spend`.
+
+## v8.47e — SQP + SP Search Term parsers detect wrong-tile uploads
+- **Jason flagged:** dropped the SP Search Term CSV on the SQP tile by mistake, got a cryptic "Row 1 missing ASIN=[...] or Brand=[...]" error. Not obvious the file went to the wrong tile.
+- **Fix:** both parsers now sniff Row 1 + headers before starting normal parsing. If the file looks like the OTHER report format, throw a specific "⚠ Wrong uploader — this looks like a Sponsored Products Search Term Report, drop it on the 🎯 Amazon Ads — Sponsored Products Search Term Report tile below instead" (and mirror for the reverse case). Names the correct tile in the error so the fix is one drop away.
 
 ## v8.47d — SP Search Term parser aggregates daily-grain CSV rows into monthly totals
 - **Jason flagged:** first upload attempt threw `Insert failed: duplicate key value violates unique constraint "amazon_sp_search_term_uniq"`. Real bug.
