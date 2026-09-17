@@ -7417,8 +7417,9 @@ async function parseAmazonSpSearchTerm(text, region, reportingMonth) {
     ctr:        ci('click-thru rate (ctr)', 'ctr', 'click through rate'),
     // v8.47c — new Amazon Ads console uses just 'Cost per click' (no CPC suffix).
     cpc:        ci('cost per click (cpc)', 'cpc', 'cost per click'),
-    // v8.47c — new Amazon Ads console uses 'Cost' as the primary label.
-    spend:      ci('spend', 'total spend', 'cost'),
+    // v8.47c — new Amazon Ads console uses 'Cost' or 'Total cost' depending on
+    // the report template. Both are the same value (previously called Spend).
+    spend:      ci('spend', 'total spend', 'cost', 'total cost'),
     sales7d:    ci('7 day total sales', '7 day total sales ', '7d total sales', 'sales', '7 day sales'),
     // v8.47c — new Amazon Ads console uses 'Purchases' for orders. Include
     // 'purchases (promoted)' as a lower-priority fallback if only the
