@@ -2,7 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.46**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.47**
+
+## v8.47 — COGS Preview mode (in-memory swap) + Products search covers every ID
+- **Jason's ask (COGS preview, option 1 of 3 he picked):** "where can i see the cogs change modeled?" — v8.46 lets you SCHEDULE a future COGS revision per product, but nothing on the app was showing what the P&L would look like if the scheduled values were live. This is that: a toggle that mutates the in-memory `cogsByMaster` so every downstream reader (Amazon P&L, Shopify P&L, Walmart P&L, Chewy P&L, COGS page) automatically reflects the modeled impact without needing to promote.
+- **Toggle button on the COGS page controls bar** — `🗓 Preview mode: OFF (N scheduled)` when off, `🗓 Preview mode: ON (N)` (green fill) when on. Click to flip. `setCogsPreviewMode(!cogsPreviewMode)`. State persisted per browser via `localStorage.cogsPreviewMode` so a reload doesn't silently drop the mode.
+- **`applyCogsPreview()`** — snapshots the current `cogsByMaster` into a shadow (`cogsByMasterOriginal`), then walks every product and swaps `next_*` → current field-by-field, but ONLY for products with `next_effective_date` set (so a `next_amazon_cogs` typed in without a date can't leak into preview). `unapplyCogsPreview()` restores from the snapshot via `Object.assign` so any keys added to `cogsByMaster` since preview was applied (e.g. via `loadProductCogs`) are preserved.
+- **`setCogsPreviewMode(on)`** — flips the flag, persists it, applies or unapplies the swap, then re-renders every dependent surface: `renderCogsTbl`, `renderPnl`, `renderShopifyPnl`, `renderWalmartPnl`, `renderChewyPnlSales`. Each wrapped in try/catch so a not-yet-loaded page can't block the toggle. Also calls `renderCogsPreviewBanners()` to update the toggle button styling + populate every banner host.
+- **Green banner** on the COGS page + every P&L sub-view (Amazon / Shopify / Walmart / Chewy Sales) when preview is on: `🗓 COGS Preview mode is ON — showing values as if the scheduled COGS changes were in effect today. N products have a scheduled revision. [✕ Turn off preview]`. Rendered into every div with class `.cogs-preview-banner-host` — added to each of the 5 sub-view containers. `switchPnlView` + `switchChewyPnlView` call `renderCogsPreviewBanners()` so the banner re-renders into whichever host is visible.
+- **`loadProductCogs`** hooked to null the shadow (`cogsByMasterOriginal = null`) and re-apply preview after the load, so uploading fresh COGS while preview is on doesn't strand stale shadow data.
+- **`countScheduledCogsChanges()`** — counts products with `next_effective_date` set. Used in the banner (`N products have a scheduled revision`) and the toggle button label.
+- **DEFERRED to Ship 2 (not v8.47):** effective-date-aware P&L aggregator that auto-swaps COGS at the boundary (tricky for historical reports crossing the date). Preview mode gives you the "what would today look like" answer immediately; auto-apply on effective date is a separate feature.
+
+### Products page search covers every product identifier (v8.47)
+- **Was:** search matched title / short_name / master_id / SP SKU / ASIN / Shopify SKU. Chewy SKU, Walmart ID, and UPC (barcode) fell through — typing a Chewy SKU like `3506990` returned nothing even though the product was right there.
+- **Now:** matches every ID field on the Products page — title, short_name, master_id, sp_sku, asin, shopify_sku, chewy_sku, walmart_item_id, barcode. Applied to all three call sites (main render, showExportDialog row count, filtered CSV export) so what's visible, what's counted, and what's exported all agree.
+- **Placeholder + tooltip** rewritten: `Search product, SP SKU, ASIN, Shopify SKU, Chewy SKU, Walmart ID, UPC…` with hover tooltip listing every matched field explicitly.
 
 ## v8.46 — COGS Modeling: schedule ONE future revision per product on the COGS page
 - **Jason's ask:** "for the cogs page, i need to add the concept of COGS modeling. We have current COGS inventory that we are changing suppliers at a future date - so i need to be able to set, per product, an effective date for new COGS cost."
