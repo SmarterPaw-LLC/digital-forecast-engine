@@ -2,7 +2,44 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.42**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.44**
+
+## v8.44 — Growth Model — Ship 1: schema + uploaders for Amazon SQP (ASIN view) + SP Search Term Report
+- **Jason's ask:** "i want to build functionality to model growth of product skus based on ad spend. this should be a new tab on the amazon p&l page (next to page performance). I need a way to upload these query reports (by brand view and asin view)." Direction picked from decisions: unit-count goal · US-only v1 · ASIN view (Brand view deferred) · SP Search Term Report as CPC source for best modeling precision.
+- **⚠ SQL TO RUN:** `supabase_v8_44_growth_model_tables.sql` — creates two tables (`amazon_query_performance_asin`, `amazon_sp_search_term`) + indexes + RLS + policies + grants + anon revoke. Idempotent (`create table if not exists`).
+- **Ship 1 scope (this release) — data foundation.** Two new uploader tiles + two parsers + two loader stubs + freshness probes + TABLE_TO_UPLOAD_GROUP map entries. Growth Model UI + modeling math ship in v8.45 (Ship 2) after the schema + ingestion path validate on real data.
+
+### 1. `amazon_query_performance_asin` — Brand Analytics Search Query Performance (ASIN view)
+- **Source:** Seller Central → Brand Analytics → Search Query Performance → **ASIN view → Monthly**. One CSV per (ASIN, month) — top-100 keywords driving that listing with full funnel share-of-voice metrics.
+- **Parser (`parseAmazonSqpAsinView`):** row 1 is a metadata header (`ASIN=["B07…"],Reporting Range=["Monthly"],Select year=["2026"],Select month=["August"]`) parsed via regex to extract asin + year + month. Row 2 is the 34-column data header; parser has explicit aliases for every field (`Impressions: Total Count`, `Impressions: ASIN Share %`, cart-adds, purchases, shipping-speed splits, etc.). Rows 3+ are per-query data. All numeric fields tolerate `$`, `,`, `%`, and blanks (returns null vs 0 correctly — blanks in the ASIN price/median columns when zero purchases).
+- **Multi-file upload supported** — drop several months at once and each parses independently. DELETE+INSERT scoped to `(asin, region, reporting_month)` so re-uploading the same month is idempotent.
+- **`master_id` FK to products** on delete cascade. Auto-resolved via `allProducts.find(p => p.asin === asin)` at parse time; null if no matching product yet (row still stored — the query volume + share data has value even for unmatched ASINs).
+- **Uploader tile:** 🔎 grp-amz-sqp-asin between Amazon Ads and Digital Sales Tracker. Links to `sellercentral.amazon.com/brand-analytics/dashboard/query-performance`. Multi-select input.
+
+### 2. `amazon_sp_search_term` — Sponsored Products Search Term Report
+- **Source:** advertising.amazon.com → Reports → Create report → Sponsored Products → **Search Term Report → Monthly**. Per-keyword actual CPC / spend / attributed sales for advertised SKUs.
+- **Parser (`parseAmazonSpSearchTerm`):** alias-tolerant column resolver — Amazon has renamed these fields multiple times. Handles `Campaign Name` / `Campaign`, `Match Type`, `Customer Search Term` / `Search Term`, `Cost Per Click (CPC)` / `CPC`, `7 Day Total Sales` / `7d Total Sales` / `Sales`, `Total Advertising Cost of Sales (ACoS)` / `ACoS`, etc.
+- **Prompt at upload:** the report has no internal region OR month column, so the uploader prompts for both (region dropdown: US/CA/GB/DE/FR/IT/ES/NL; reporting month via `<input type="month">`). Applied to every row in the batch.
+- **DELETE+INSERT per Architecture Rule #5.** Unique index uses `coalesce(asin,'')` + `coalesce(match_type,'')` + `coalesce(campaign_name,'')` + `coalesce(ad_group_name,'')` (nullable disambiguators), so upsert with plain-column onConflict would silently degrade to plain INSERT and produce duplicates. Delete scoped to `(region, reporting_month, ASIN∈file)` + a second sweep for NULL-ASIN rows (auto-targeting rollups). Then plain INSERT chunked 500/batch.
+- **Uploader tile:** 🎯 grp-amz-sp-search-term next to the SQP ASIN tile. Multi-select input. Links to `advertising.amazon.com/reporting`.
+
+### 3. Loader stubs + freshness probes + map entries
+- **`loadAmazonSqpAsin` + `loadAmazonSpSearchTerm`** — paginated loader stubs (matches Architecture Rule #4 pattern, mirrors `loadAmazonSalesTraffic`). Cache invalidated on upload. Not called by anything yet — Ship 2 wires them into the Growth Model page.
+- **`refreshUploadDataRanges`** extended with two new probes — latest `reporting_month` + `uploaded_at` for each table. Renders in both the card status line and the group rollup chip.
+- **`TABLE_TO_UPLOAD_GROUP`** map gained two entries so future data-currency chips route correctly.
+
+### Ship 2 preview (deferred)
+- New "🎯 Growth Model" 5th tab on Amazon P&L (after Change Log).
+- Product picker + goal date + target monthly unit count input.
+- Modeling logic: keyword-level share-of-voice → target impression share → CPC × auction escalation → per-keyword monthly ad spend allocation.
+- Guardrails: structural margin check (Catnip Spray 4 OZ lesson — sub-breakeven margin means no ad spend is profitable regardless of ROAS), break-even ROAS, contribution % floor, TACOS ceiling, Ad Headroom to 20% target.
+- Output: month-by-month spend plan with per-keyword allocation, projected purchases, projected TACOS, profitability verdict.
+- Validate against Pawty Mix (B07WGHX6M3) + Catnip Spray 3oz (B07KPRTSMT) data (4 SQP files already downloaded to Jason's Downloads folder).
+
+## v8.43 — Hide duplicate per-page search inputs (v8.40 global search bar covers them)
+- **Jason flagged:** "the search bar is in two places here. that should not happen - very confusing" — screenshot showed the Products page with both the global sticky search bar (v8.40) and the local `prodSrch` input. Same issue on every page that had a local search input in GLOBAL_SEARCH_MAP.
+- **Fix — `hideLocalSearchDuplicates()`** helper walks every entry in GLOBAL_SEARCH_MAP and sets `display:none` on each local input, marked idempotent via `dataset.hiddenByGlobal='1'`. Global bar's dispatch still writes `.value` + fires the native `input` event on the hidden inputs, so each page's existing filter handlers still fire — no per-page changes.
+- **Wired into:** `onAuthSuccess` (after global bar shows), `showPage`, `switchPnlView`, `switchChewyPnlView`, `switchForecastView`. Covers Products, Bundles, Units Sold, Forecast sub-views, all P&L sub-views, COGS.
 
 ## v8.42 — Move `🏷 Labels` toggle from the global search bar onto each chart header
 - **Jason's follow-up:** "the labels control should be on the chart header, not at the top of the page."
