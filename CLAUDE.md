@@ -2,7 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.49c**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.50**
+
+## v8.50 — Growth Model: auto-derive Paid→Organic Uplift % from SQP + SP data
+- **Jason's ask:** "can this be modeled off of actual data already being loaded?" — the uplift knob was manual (defaulted to 15%). Yes, derivable from what's already ingested.
+- **Method:** for months where BOTH SQP + SP Search Term data exist for this ASIN:
+  - `total_purchases` = sum(SQP.purchases_asin_count across keywords)
+  - `paid_purchases` = sum(SP.orders_7d across keywords for that ASIN + month)
+  - `organic` = total − paid (clamped ≥ 0)
+- **Across consecutive month-pairs:** `uplift_pct = ((organic_{t+1} - organic_t) / paid_t) × 100`. Positive = paid IS building organic. Negative = organic declined despite paid.
+- **Averaged across all valid pairs**, clamped to [-200%, 500%] to reject single-month outliers.
+- **Confidence:** high (≥3 pairs), med (2 pairs), low (1 pair), none (<1 pair or insufficient overlap).
+- **UI:** small `📊 Data: X% (N pairs · confidence)` hint below the input with an **Apply** button. Hover the hint for the full formula + method. When derivation isn't possible (only 1 month overlap, or paid = 0 in all prior months), shows `📊 Can't auto-derive — <reason>` explaining what's needed.
+- **When applied**, rounds to nearest integer and clamps to [0, 50].
+- **Fallback:** manual override still works — user can type any value; the Data hint stays visible as a reference.
+- **Growth Model function series:** `pnlGrowthComputeEmpiricalUplift(asin)` + `pnlGrowthApplyDerivedUplift()`. Non-throwing — returns `{ pct: null, reason: '...' }` when derivation isn't possible.
 
 ## v8.49c — Growth Model: market $ opportunity (TAM analysis) + tooltips on every trajectory field
 - **Jason's asks:** (1) "i also want to know what the market share potential would mean in terms of $." (2) "please add tooltips showing how each field is calculated, eg organic lift."
