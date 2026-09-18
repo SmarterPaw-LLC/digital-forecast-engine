@@ -18507,6 +18507,22 @@ function pnlGrowthOnAsinChange(asin) {
 }
 
 function pnlGrowthRunModel() {
+  try {
+    _pnlGrowthRunModelImpl();
+  } catch (err) {
+    console.error('Growth Model error:', err);
+    const host = document.getElementById('pnl-growth-result');
+    if (host) {
+      host.innerHTML = `<div style="padding:14px;color:var(--sp-red);border:1px solid var(--sp-red);border-radius:6px;font-size:12px;font-family:var(--mono)">
+        <strong>Growth Model failed to run.</strong><br>
+        ${(err?.message || err || '').toString().replace(/</g, '&lt;')}<br>
+        <span style="color:var(--text3);font-size:10px">Full stack in browser console.</span>
+      </div>`;
+    }
+  }
+}
+
+function _pnlGrowthRunModelImpl() {
   const asin = pnlGrowthState.asin;
   const s = pnlGrowthState;
   if (!asin) return;
