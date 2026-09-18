@@ -18823,7 +18823,15 @@ function _pnlGrowthRunModelImpl() {
   };
   pnlGrowthState.lastResult = result;
   pnlGrowthRenderResult(result);
-  if (typeof logAudit === 'function') logAudit('pnl.growth_model_run', { asin, targetUnits, filled, totalCost: Math.round(totalCost), tacos: +tacos.toFixed(1) });
+  if (typeof logAudit === 'function') logAudit('pnl.growth_model_run', {
+    asin,
+    horizonMonths: H,
+    cumulativeUnits: Math.round(cumulativeUnits),
+    cumulativeSpend: Math.round(cumulativeSpend),
+    aggTacos: +aggTacos.toFixed(1),
+    targetShareEndPct: s.targetShareEndPct,
+    enforced: s.enforceTacosCeiling,
+  });
 }
 
 function pnlGrowthRenderResult(result) {
