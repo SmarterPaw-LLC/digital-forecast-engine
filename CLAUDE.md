@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.50**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.54**
+
+## v8.54 — SP Campaign Snapshot uploader + PPC Diagnostics panel (batch impression-share triage)
+- **Jason's ask:** "i need a way to upload reports and find this information. i cannot be clicking into screens for 15 products" — the Growth Model needed actual impression-share data per campaign; clicking into Amazon Ads Campaign Manager per product doesn't scale to 15+ SKUs.
+- **⚠ SQL TO RUN:** `supabase_v8_54_sp_campaign_snapshot.sql` — creates `amazon_sp_campaign_snapshot` table (one row per campaign per reporting_month per advertiser × region). RLS + authenticated-all + anon revoke (v6.47 hard rule). Unique index uses `coalesce(campaign_id, '')` + `coalesce(campaign_name, '')` + advertiser + region + month to handle nullable campaign_id gracefully.
+- **New uploader tile** on Data → Uploads → 📊 Amazon Ads — Sponsored Products Campaign Snapshot. Accepts .csv AND .xlsx (via existing SheetJS). Prompts for advertiser account (Meowijuana / Doggijuana / Kitty Ka-Zoom / Other) + region (US / CA / GB / DE / FR / IT / ES / NL) + reporting month at upload — Campaign Manager exports have no internal month column.
+- **`parseAmazonSpCampaign`** with alias-tolerant column resolution. Captures: campaign_name, campaign_id, status, daily_budget, spend, impressions, clicks, ctr_pct, cpc, sales, orders, units_sold, acos_pct, roas, **impression_share_pct**, **top_of_search_impression_share_pct**, **impression_share_lost_to_budget_pct**, **impression_share_lost_to_rank_pct**. Any unknown columns Amazon adds later land in `raw_extra` (jsonb).
+- **DELETE+INSERT per Architecture Rule #5** — unique index uses `coalesce()`, so upsert with plain-column onConflict would silently degrade to INSERT + duplicate. Delete scoped to `(region, reporting_month, advertiser ∈ file)` so re-uploads of the same account/month refresh without clobbering other advertisers.
+- **New PPC Diagnostics panel** at the top of the Growth Model tab (collapsible `<details>`). Reads the latest `reporting_month` across all advertisers, categorizes every campaign as:
+  - 🔴 **Budget-throttled** — IS lost to budget > 30% → raise daily budget (auction is giving you impressions, budget is capping capture).
+  - 🟠 **Bid-constrained** — IS lost to rank > 50% → raise bids OR improve PDP quality (Ad Rank issue; more budget won't help).
+  - 🟢 **Auction-saturated** — IS > 70% + no throttle → need new keywords/campaigns, not more spend here.
+  - ⚫ **Underused** — IS < 20% + spend > 0 → pause or reallocate.
+  - 🟢 **Healthy** — the rest.
+- **Table sorted worst-offender first** (Budget → Rank → Underused → Saturated → Healthy), then by spend desc within each tier so biggest levers surface at the top. Diagnosis column color-coded with hover tooltip naming the recommended fix. Summary chips at the top show tally by category + spend total for the month.
+- **Loader wired:** `loadAmazonSpCampaign()` follows Architecture Rule #4 (paginated). Triggered on Growth Model tab open alongside SQP + SP Search Term + P&L loaders. Cache invalidated after upload so next tab open force-refreshes.
+- **Freshness probe** on Data → Uploads shows `📅 Latest month YYYY-MM · uploaded {N ago}`. TABLE_TO_UPLOAD_GROUP map entry so data-currency chips route correctly. Card description spells out the exact Campaign Manager column customization needed (Daily budget · Impression share · Top-of-search IS · IS lost to budget · IS lost to rank).
+- **Architecture Rule #8 audit:** `amazon_sp_campaign_snapshot` has NO `master_id` FK — it's campaign-level, not product-level. Merge tool / SP-TEMP promotion / doRestore integration is NOT required. If we later add product association via campaign-name parsing (e.g., "SP-XXXX_US_Auto" naming convention), revisit.
 
 ## v8.50 — Growth Model: auto-derive Paid→Organic Uplift % from SQP + SP data
 - **Jason's ask:** "can this be modeled off of actual data already being loaded?" — the uplift knob was manual (defaulted to 15%). Yes, derivable from what's already ingested.
