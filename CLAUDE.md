@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.54**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.55**
+
+## v8.55 — Pricing Scenarios: New Product Launch mode (fee benchmarks from SKU Economics comparables)
+- **Jason's ask:** "in the pricing scenarios, i want to expand this to consider setting price for new products, using sku economics on similarly priced products. eg, i set the cogs and determine the price point based on positive contribution."
+- **New mode toggle** at the top of Pricing Scenarios: `🎁 Bulk-Pack (existing product)` (the v7.72 flow, unchanged) vs `🆕 New Product Launch` (new). State in `_pricingMode`; controlled via `pricingSetMode(mode)`. Existing scenarios still work exactly as before.
+- **New Product Launch inputs:**
+  - **COGS per unit (USD)** — required. Feeds the recommended min-price calc.
+  - **Target contribution % floor** — default 15% (SmarterPaw viability threshold; 20-30% is healthy). Higher = leaves more margin cushion.
+  - **Category filter** — optional. Narrows the benchmark to same-category comparables (e.g., "Sprays" only) so the fee load reflects what YOUR product will actually incur, not the whole-catalog average.
+  - **Brand filter** — optional. Fee % can shift by brand due to different product size tiers + ad strategies.
+- **Fee benchmarking** — `pricingNewBuildBenchmark({category, brand})` aggregates `pnlData` (Amazon SKU Economics) by master_id over the last 180 days, computes per-product `price_per_unit`, `fee_pct` (FBA + referral + Sponsored Products ads ÷ net_sales), and `contribution_pct` (net_proceeds − cogs·units ÷ net_sales). Filters to products with ≥30 units and price $2–$200 (removes noise + outliers).
+- **Price-band bucketing** — `pricingNewBands(rows)` buckets comparables into 10 bands ($0–5, $5–10, $10–15, $15–20, $20–25, $25–30, $30–40, $40–50, $50–60, $60+). Each band reports: sample size, median price, median FBA %, median referral %, median ad %, median total fee %, median contribution %. Empty bands drop out so the table only shows what has data.
+- **Recommended min price** — `pricingNewMinPrice(cogs, feePct, targetPct)` solves `price × (1 − fee% − target%) ≥ COGS`. Iterative: uses overall-median fee % for the first estimate, then refines using the band-specific fee % once we know which band the initial recommendation lands in (bigger products = higher FBA per unit; lower price bands = lower FBA % of sale). Returns null when fee% + target% ≥ 100% (unachievable at this COGS).
+- **Contribution preview at 5 price points** (min viable, +10%, +25%, +50%, +100%): shows price, band-specific fee %, net proceeds/unit, gross profit/unit, contribution/unit (colored green ≥25%, orange ≥target, red below). Answers "how much cushion do I get at each price."
+- **Price-band benchmark table** below the recommendation — full band-by-band view of what real products in the catalog actually pay in fees + earn in contribution. Discovery surface: user can see that $10-15 products typically pay ~55% fees while $30+ products only pay ~35%, so a bigger product size can support a lower COGS ratio.
+- **Explainer block** at the bottom spells out the math + why ad spend is included as a fee (real cost every launched product needs to cover) + the target contribution % trade-off (higher target = larger buffer for under-performing ad spend).
+- **State + wiring:** `pricingInit` (already runs on tab open) now populates category dropdown + primes `loadPnlTab` if data isn't loaded yet + calls `pricingSetMode('existing')` for default. Auto-renders as user types (oninput on every input; onchange on selects).
 
 ## v8.54 — SP Campaign Snapshot uploader + PPC Diagnostics panel (batch impression-share triage)
 - **Jason's ask:** "i need a way to upload reports and find this information. i cannot be clicking into screens for 15 products" — the Growth Model needed actual impression-share data per campaign; clicking into Amazon Ads Campaign Manager per product doesn't scale to 15+ SKUs.
