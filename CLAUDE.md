@@ -2,7 +2,43 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.55**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.56**
+
+## v8.56 — Growth Model transparency (fleet-wide uplift + starting volume + lift column) + Competitor screenshot gallery on New Product pricing
+- **Jason flagged three things:**
+  1. "for the price modeling, i'd like a place to place in screenshots of existing products on amazon or other digital marketplaces to compare and help set price strategy."
+  2. "on growth model — i need to understand that paid → organic uplift when a) the data suggests there is only 2 months of data yet i've loaded in 8 months, and b) why 15 is the default — is this the average across products, or an industry standard?"
+  3. "i need a starting monthly unit sales volume, and in the month by month i need a column that shows the total with the existing volume. this data should come from the sku economic P&L."
+
+### Growth Model uplift transparency (Jason's #2)
+- **Empirical-uplift hint block rewritten.** The old block said "Data: X% (N pair · low)" with a tooltip about "N months of overlapping SQP + SP data." That was confusing when Jason had 8 months of SQP loaded but the hint said 2 — because the LIMITING FACTOR is SP Search Term coverage (he'd only uploaded 2 months of SP). New display shows the actual counts explicitly:
+  - **📊 This ASIN pill** now reads either `X SQP mo · Y SP mo · overlap Z` (when derivation isn't possible — makes the SP gap visible at a glance) or `X% (N pairs · confidence)` (when derivation IS possible). Tooltip enumerates ASIN-specific SQP months, SP months, overlap count, month-pair count, formula, confidence.
+  - **🏭 Fleet pill** (NEW) — computed via `pnlGrowthFleetUplift()` — averages per-ASIN empirical uplift across every product with valid pairs, weighted by pair count. Shows the fleet-wide value with sample size + total pairs. Has its own **Apply Fleet** button.
+  - **📖 Industry default line** (always shown) — explicitly states that the 15% default is an Amazon Sponsored Products industry rule-of-thumb (10-20% typical based on published case studies) and points users to Fleet-derived values once they have data.
+- **New helper `pnlGrowthFleetUplift()`** — iterates `amazonSqpAsinCache` distinct ASINs, calls `pnlGrowthComputeEmpiricalUplift(asin)` for each, weights by pair count. Returns `{ pct, median, product_count, total_pairs, confidence, industry_default: 15 }`. Skips products with no valid pairs.
+- **New helper `pnlGrowthApplyFleetUplift()`** — one-click apply of the fleet-derived value, mirroring `pnlGrowthApplyDerivedUplift()` for the per-ASIN case.
+- **Uplift input now sets `pnlGrowthState.upliftUserSet = true`** on any user edit — reserved for future logic that auto-defaults to fleet when the user hasn't touched it (not wired yet; keeps state stable).
+
+### Starting Volume + Lift column (Jason's #3)
+- **New "Starting Volume" scorecard** as the FIRST scorecard on the results page (moved to the leftmost position with green tint). Shows current monthly units + trailing-3-month avg + spike-warning when latest month diverges >15% from avg. Sourced from SKU Economics when available (v8.53b path), SQP top-keywords otherwise. This is the anchor Jason was asking for — "what am I selling today" before the model's ad-driven growth.
+- **New "Incremental vs No-Ads" scorecard** — shows the true delta from running the plan vs "do nothing." Formula: `cumulative_paid + cumulative_organic_carry`. Answers "what is the ad spend actually buying me?" (Contrast with Cumulative Units, which is the total including the baseline you'd earn anyway.)
+- **`baselineTrailing3Avg` + `cumulativeIncremental`** added to the result object.
+- **Trajectory table columns renamed for clarity:**
+  - `Baseline Organic` → **Existing Vol.** (the current organic sales, source-labeled in tooltip)
+  - `Organic Carry-in` → **+ Carry-in** (with `+` prefix so it reads as additive)
+  - `Paid Units` → **+ Paid** (same rationale)
+  - `Total Units` → **= Total** (with equals sign so the math reads "Existing + Carry + Paid = Total"). Also tinted green background + hover tooltip showing the actual sum breakdown.
+- **New "Lift" column** — displays `carry_in + paid_units` per month (incremental over "do nothing"). Green, bold. Also shown in the tfoot row.
+- **Tooltips updated** to reflect renames + include the sum breakdown so the math is unambiguous.
+
+### Competitor screenshot gallery on Pricing Scenarios → New Product Launch (Jason's #1)
+- **New "📸 Competitor screenshots" panel** at the top of the New Product Launch view. Provides a research surface so operators can eyeball where their proposed price lands relative to competitor listings without leaving the app.
+- **Two upload paths:**
+  - **Paste** (Ctrl+V) into the dashed drop zone — captures images from clipboard. Filters to `image/*` MIME types.
+  - **+ Upload image button** — hidden file input accepts multiple images via drag-select.
+- **Each screenshot rendered as a card** (180px wide) with: thumbnail (click to open full size in new tab), label input ("Competitor / product…"), price input ("Their price ($)"), and a ✕ button to remove.
+- **Persisted to localStorage** as base64 data URLs under key `pnew_screenshots_v1`. Session-only research — never leaves the browser, no backend upload. **✕ Clear all** button empties the gallery with confirm dialog.
+- **New helpers:** `pricingScreenshotsGet` / `Set` / `Add` / `Update` / `Remove` / `Clear` / `Paste` / `FromInput` / `Render`. Render is called on New-mode entry via `pricingSetMode('new')`.
 
 ## v8.55 — Pricing Scenarios: New Product Launch mode (fee benchmarks from SKU Economics comparables)
 - **Jason's ask:** "in the pricing scenarios, i want to expand this to consider setting price for new products, using sku economics on similarly priced products. eg, i set the cogs and determine the price point based on positive contribution."
