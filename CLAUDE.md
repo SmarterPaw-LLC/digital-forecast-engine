@@ -2,7 +2,46 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.56**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.57**
+
+## v8.57 — Growth Model: baseline filter switched from ASIN → master_id (fixes 2× under-count) + Keyword Verdict column + Baseline Audit panel
+- **Jason flagged (screenshot):** "you KEEP getting existing volume incorrect. monthly volume is about 2x this." Existing Vol. column showed 769/mo in M1 for Pawty Mix but actual monthly units are ~1500. Also asked for "a column analyzing each keyword performance" on the Month 1 Keyword Allocation table.
+
+### Baseline undercount root cause + fix
+- **The bug:** `_pnlGrowthRunModelImpl`'s sku_economics filter was `if (r.asin !== asin || (r.region && r.region !== 'US')) continue;` — filtering by the single selected ASIN. Products with multiple ASIN variants (parent-child variant families, re-launched ASINs after a rebrand, catalog-level dedupes with variant SKUs under one master_id) had their sales scattered across multiple `sku_economics.asin` rows but all sharing the same `master_id` FK. Filtering by ASIN captured only ONE variant's sales — Pawty Mix's 2× shortfall matches "half of variants captured" perfectly.
+- **The fix (v8.57):** filter by `master_id` (the FK on sku_economics that groups every variant under the same product identity). Fallback OR-check for older rows where master_id might not be populated: `if (!midMatch && !asinMatch) continue;`. US region gate preserved (this model targets Amazon US ads).
+- **`pnlBaselineDiag` object added** — tracks `rowsMatched`, `asinsFound` (Set), `regionsFound` (Set), `monthsWithData`, `perMonth` breakdown. Surfaced on the result object so the render layer can show it without opening DevTools.
+
+### 🔍 Baseline audit panel (new, collapsible)
+- **Positioned between Verdict Banner and Trajectory Table** so it's the second thing Jason sees after opening the model.
+- Header: `Matched N rows across M ASIN(s) · K region(s). Click to expand and verify.`
+- Body shows:
+  - Master ID + selected ASIN
+  - All ASINs the query matched (as code chips) — orange warning if none
+  - All regions matched
+  - Source label (green if sku_economics, orange if SQP fallback with the "2× low" warning)
+  - Per-month history table: month, units + source (sku_econ or sqp), what the SQP value was pre-enrichment (so you can see the delta), and keyword count
+  - Excluded incomplete-month callout (v8.53c preserves partial current-month rows in `excludedIncompleteMonths`)
+  - Triage hints for the "2× too low" pattern: (1) variants not captured, (2) missing region, (3) upload gaps
+- **Also updated Starting Volume scorecard tooltip** to include the per-month breakdown + matched ASINs + regions inline so Jason can eyeball the number's provenance without expanding the audit panel.
+
+### Keyword Verdict column (Month 1 Keyword Allocation)
+- **New rightmost column** classifying each keyword's performance with a multi-signal verdict + recommended action:
+  - **🎯 Bid up** (green) — Untapped share (<10%) + cool auction (Δ CPC < 15%) + profitable margin
+  - **🏆 Winner** (green) — Earning >50% of contribution per unit clean
+  - **✓ Balanced** (neutral) — Profitable but not exceptional
+  - **⚠ Marginal** (orange) — Cost/unit slightly > contribution/unit; small change flips it
+  - **⚠ Loses money** (red) — Cost/unit >1.5× contribution/unit; lower bid or pause
+  - **🔥 Hot auction** (red) — Δ CPC >40%; redirect budget to cooler queries
+  - **🔒 Saturated** (orange) — Already >60% share; limited upside
+  - **💤 Low volume / Low yield** (muted) — Market too small OR <0.05 projected units
+- **Precedence order** (money-losers first, then hot auctions, then untapped opps, then scale drivers).
+- **Hover tooltip** on every verdict shows the actual math (cost/unit vs contribution/unit, share, Δ CPC) for that specific keyword.
+- **Also added `$/unit` column** left of Spend — cost per acquired unit = incr_spend ÷ incr_units. Color-coded green when < contribution/unit, red when > contribution/unit. Explicit signal of per-keyword profitability without doing the math in your head.
+- **Legend rewritten** as a 2-column grid at the bottom explaining every verdict + when to use it, plus the existing color guides for Cur Share and Δ CPC.
+
+### For Jason's Pawty Mix screenshot specifically
+- Expected outcome after deploy: if Pawty Mix has variant ASINs in sku_economics under the same master_id, the M1 Existing Vol. will approximately DOUBLE (matching actual monthly volume). If the number is still 2× low after this fix, expand the 🔍 Baseline audit panel — the ASINs-matched list will show what's actually in sku_economics for this master_id, and the per-month table will reveal whether it's a data-gap issue (missing SKU Economics uploads) vs a master_id/ASIN linkage issue in the catalog.
 
 ## v8.56 — Growth Model transparency (fleet-wide uplift + starting volume + lift column) + Competitor screenshot gallery on New Product pricing
 - **Jason flagged three things:**
