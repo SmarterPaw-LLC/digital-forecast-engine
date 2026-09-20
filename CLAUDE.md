@@ -2,7 +2,25 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.59**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.60**
+
+## v8.60 — Growth Model: "ⓘ What/Calc/Goal" section-help badges on every major panel (concise, structured tooltips)
+- **Jason's ask:** "on the growth page - and all pages, i need a tooltip on each section to explain what each part does, and the respective terms and calculations used. explain what the goal should be for each area. try not to use overly verbose explanations"
+- **Approach — one reusable badge with a consistent 3-line structure:** WHAT (1 sentence, purpose) / CALC (formula in shorthand) / GOAL (what to aim for). Renders as a compact green "ⓘ What/Calc/Goal" pill next to section headers; hover shows the structured tip. Kept SHORT — no paragraphs, no verbose narrative.
+- **Reusable helper `secHelp(what, calc, goal)`** defined inside `pnlGrowthRenderResult`. Returns the badge HTML. Easy to extend to other pages by duplicating the helper into their render functions.
+- **Applied to 8 major Growth Model sections:**
+  - 📊 **Trajectory scorecards** (new section header above the 6 top cards): what/calc/goal for the whole scorecard row so users see the summary framing before drilling into individual cards
+  - 💰 **Market opportunity** (scorecard row) — what/calc/goal for the TAM $ analysis
+  - **Month-by-Month Trajectory** table header — what/calc/goal for the simulation math + how to read Achieved vs Target Share
+  - **Month 1 — Keyword Allocation** table header — what/calc/goal for the actionable per-keyword plan + how to use the Verdict column
+  - **💰 Market Opportunity by Keyword** panel — what/calc/goal for the $-ranked keyword table
+  - **🐈 Portfolio Overlap** panel — what/calc/goal for sibling-ASIN detection
+  - **🔍 Baseline Audit** panel — what/calc/goal for the sku_econ history verification
+  - **📚 Data Sources** panel — what/calc/goal for the upload → model input map
+  - **🎯 PPC Diagnostics** panel (in the HTML template, not the renderer) — inline title attribute since it's outside the render function's scope, but same 3-line structure
+- **Concise by design.** Each tip is ~3-4 short sentences total. GOAL always names the specific number to watch or the action to take, so users know what "good" looks like without reading paragraphs.
+- **Pattern extendable to other pages.** The `secHelp` helper is a simple pure function that can be copy-pasted into any render context. Prioritized Growth Model here because it's the current active workflow; can be extended to P&L / Forecast / Inventory as follow-up.
+- **Column-level tooltips (already extensive)** unchanged — those cover per-metric math. The section-help layer adds the "why does this section exist and how should I read it?" layer that was missing above the column level.
 
 ## v8.59 — Growth Model: 🐈 Portfolio Overlap panel + explicit single-ASIN scope callout
 - **Jason asked:** "on the growth analysis, is this report including other similar products we sell? for instance, i generated SQP for the pawty mix ASIN (catnip), but we also sell other types of catnip we also want to grow sales for."
