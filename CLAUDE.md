@@ -2,7 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.58**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.59**
+
+## v8.59 — Growth Model: 🐈 Portfolio Overlap panel + explicit single-ASIN scope callout
+- **Jason asked:** "on the growth analysis, is this report including other similar products we sell? for instance, i generated SQP for the pawty mix ASIN (catnip), but we also sell other types of catnip we also want to grow sales for."
+- **Answer:** No. The model runs one ASIN at a time. When multiple SmarterPaw catnip products rank on the same broad queries (e.g. "meowijuana catnip"), pushing this ASIN's share can cannibalize sibling ASINs' organic traffic AND drive up CPC by bidding against yourself in the same auction. The model doesn't currently coordinate across a portfolio.
+- **What v8.59 ships to make this visible:**
+
+### 🐈 Portfolio Overlap detection panel
+- **Positioned between the Baseline Audit panel and the Trajectory Table** so it's part of the standard result flow, not buried.
+- **Header summary chip** reads: `N sibling ASIN(s) compete on M of your top Q queries this month` — tells you at a glance whether portfolio conflict is a concern for this ASIN.
+- **Scope reminder banner** (orange) at the top of the expanded panel spells out the three risks: cannibalization, self-competition raising CPC, undercounting true brand share.
+- **Sibling ASINs table** — for the current ASIN's SQP queries in the latest month, finds every OTHER ASIN in `amazonSqpAsinCache` that shares any query. Columns: sibling ASIN + name, brand, count of overlap queries, sum of their units on those overlap queries, avg impression share (red flag when >20%). Resolves ASIN → product via `allProducts` lookup for readable names.
+- **Per-query breakdown** — for the top 30 queries the model is buying paid impressions on, shows: query, your share, your units, sibling ASINs playing on that query (with each sibling's share + units in an inline stack), combined portfolio share (green if <40%, orange if ≥40% — high combined share = your brand already dominates this query; less upside from spending harder).
+- **Empty-state** when no overlap detected explains three possible causes: (a) siblings truly don't compete, (b) siblings' SQP not uploaded yet, (c) siblings uploaded but for a different month than the model's latest.
+- **Deferred:** full brand-level portfolio rollup model (would need to sum trajectories across all sibling ASINs and dedupe shared queries). Flagged as follow-up; the per-ASIN model + this overlap panel is the pragmatic v1.
+
+### Data Sources map scope callout
+- **Added an orange scope banner** at the bottom of the 📚 Data Sources panel (v8.58) making it explicit: "This model runs for ONE ASIN AT A TIME — not your whole catalog." Points to the 🐈 Portfolio Overlap panel for sibling detection.
 
 ## v8.58 — Growth Model: 📚 Data Sources map + Brand-view warning (fixes "which upload feeds what?" confusion)
 - **Jason flagged:** "it is VERY confusing trying to figure out which report/upload goes with which part of this model. i just uploaded a bunch of brand search query months, would they show up here?" Screenshot showed Catnip Spray 3 Oz with "Flat baseline only · 1 month loaded" for SQP, even though Jason had just uploaded a batch of SQP files.
