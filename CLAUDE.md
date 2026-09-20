@@ -2,7 +2,26 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.57**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.58**
+
+## v8.58 — Growth Model: 📚 Data Sources map + Brand-view warning (fixes "which upload feeds what?" confusion)
+- **Jason flagged:** "it is VERY confusing trying to figure out which report/upload goes with which part of this model. i just uploaded a bunch of brand search query months, would they show up here?" Screenshot showed Catnip Spray 3 Oz with "Flat baseline only · 1 month loaded" for SQP, even though Jason had just uploaded a batch of SQP files.
+- **Root cause:** SQP has TWO view types — **ASIN view** (per-listing, feeds this model) and **Brand view** (per-brand aggregate, NOT used by the per-ASIN Growth Model). Jason uploaded Brand-view files expecting them to boost this per-ASIN model's confidence. They can't — different data grain. Nothing in the UI told him which view type each upload was, or which view the model actually consumed.
+- **Two-part fix:**
+
+### Explicit Brand-view warning under the product picker
+- **New orange callout** shown whenever Brand-view months exist in the cache. Reads: `⚠ SQP Brand-view: N month(s) uploaded (M for {brand}) — but this model needs ASIN-view for THIS ASIN specifically. Brand-view is for brand-level analysis, not per-ASIN modeling.`
+- **Also renamed the existing labels** so the distinction is unmissable: `SQP months` → `SQP ASIN-view months`, `SP months` → `SP Search Term months`. Every source now qualified so users can't confuse them.
+
+### 📚 New "Data sources" collapsible panel at the top of the Growth Model tab
+- **Table lists every one of the 5 data sources** with columns: Upload name + where to find it · What model inputs it feeds · Status for THIS ASIN (green ✓ N months + latest months preview, orange ⚠ when uploaded-but-not-used, red ✗ when missing).
+- **Explicit "NOT USED HERE" row for SQP Brand view** — orange row background so it visually pops. Explains why brand aggregates can't drive per-listing impression share ramps.
+- **Also documents SKU Economics** (baseline volume source of truth) + **SP Campaign Snapshot** (feeds only the PPC Diagnostics panel, NOT the trajectory model) — the two most commonly confused inputs alongside Brand vs ASIN view.
+- **Quick reference footer** summarizes the pipeline in one paragraph: "The trajectory model runs on SQP ASIN view + SP Search Term. Baseline gets upgraded to SKU Economics when available. SQP Brand view uploads do NOT feed this per-ASIN model. SP Campaign Snapshot only feeds PPC Diagnostics. After any new upload, click ↻ refresh."
+- **Panel is collapsed by default** so it doesn't shove the model down the page for repeat users; expands on click for first-time / troubleshooting sessions.
+
+### For Jason's screenshot specifically
+- After deploy, opening Growth Model → picking Catnip Spray 3 Oz will now surface the orange "⚠ SQP Brand-view: N months uploaded but not used" callout right under the product picker. Expanding 📚 Data sources shows exactly which upload types he needs more of for this specific ASIN. The confusion evaporates.
 
 ## v8.57 — Growth Model: baseline filter switched from ASIN → master_id (fixes 2× under-count) + Keyword Verdict column + Baseline Audit panel
 - **Jason flagged (screenshot):** "you KEEP getting existing volume incorrect. monthly volume is about 2x this." Existing Vol. column showed 769/mo in M1 for Pawty Mix but actual monthly units are ~1500. Also asked for "a column analyzing each keyword performance" on the Month 1 Keyword Allocation table.
