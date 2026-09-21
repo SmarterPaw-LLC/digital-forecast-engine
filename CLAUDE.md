@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.98**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.99**
+
+## v8.99 — Growth Model: additional ad spend answer + Execution Plan panel
+- **Jason's two asks** while planning growth: (1) "what is the additional ad spend/month?" — the trajectory showed TOTAL ad spend but he needed to see the DELTA above his current baseline; (2) "where does this ad spend go in the available keywords? do we increase the budget of campaigns, the bid, etc?" — the Month 1 Keyword Allocation showed spend per keyword but nothing about how to execute (raise bid vs raise budget vs add keyword).
+- **Q1 answer — 4 scorecards + new "Δ vs Current" trajectory column.** Above the Month-by-Month Trajectory table, a 4-tile grid shows: **Current baseline ad spend** ($X/mo trailing 30d from Amazon P&L) · **Plan avg total ad spend** ($Y/mo across the horizon) · **➕ Additional needed** (highlighted orange, `+$Z/mo avg = $W total over N months`) · **Current TACoS** (baseline before ramp). The Additional Needed tile is the direct answer — one number Jason can hand to the ad budget planner.
+- **New "Δ vs Current" column in the trajectory** between Ad Spend and TACOS. Every month cell shows the per-month incremental amount above baseline in orange (`+$664`, `+$1,532`, ...). The TOTAL row sums cumulative incremental spend. Existing "Ad Spend" column continues to show the FULL number (baseline + incremental) so both views coexist. All three sources tie out via v8.83's `ad_spend_baseline` + `ad_spend_incremental` split on each month row.
+- **Q2 answer — new "💼 Execution Plan" panel below Month 1 Keyword Allocation.** For each Month 1 keyword, cross-references against SP Search Term (what's currently being bid on for this ASIN) + SP Campaign Snapshot (budget health via IS lost to budget) and emits ONE specific action:
+  - **💰 RAISE BUDGET** — when the keyword's current campaign is losing >30% IS to budget. Bids won't help until budget is unblocked. Names the campaign + current daily budget + recommended new budget.
+  - **📈 BID UP** — when model_bid > current_CPC × 1.10. Names the exact campaign › ad group (match type), current CPC, target bid, % raise, and expected units + $/unit.
+  - **📉 BID DOWN** — when model_bid < current_CPC × 0.90. You're overpaying at the target share.
+  - **✓ SUSTAIN** — current bid already at model target. No change needed.
+  - **🆕 ADD** — keyword not currently targeted for this ASIN. Recommends exact match at model bid with a suggested ad group name.
+  - **⚠ SKIP** — when $/unit > 1.5× contribution. Loses money on every sale; model says don't add.
+- **Priority order in the plan** — budget-throttled wins first (bids can't move IS while budget is capped), then bid ups, then adds. So walking the list top-to-bottom is the right execution order.
+- **Summary chips + campaign count** — "N campaign(s) to touch · M need budget raise" at the top plus color-coded chips per action type (add / bid up / raise budget / bid down / sustain / skip) so Jason can eyeball the mix before diving into rows.
+- **Data lookups:** `amazonSpSearchTermCache` (matched on both `customer_search_term` AND `targeting` — best-signal wins) for current CPC + campaign + ad group + match type. `amazonSpCampaignCache` for IS lost to budget + daily budget. Both are already loaded when the Growth Model runs. Empty-state callout when SP Search Term hasn't been uploaded for this ASIN. Skip budget health checks (still emits bid actions) when SP Campaign Snapshot isn't uploaded.
+- **How to use it:** run the Growth Model for a product. First check the "➕ Additional needed" scorecard — that's your monthly budget delta answer. Then scroll to the Execution Plan and walk it top-to-bottom — every row is a specific campaign action you can either do yourself or hand to the consultant.
 
 ## v8.98 — Consultant Activity Assessment + Ad Change Log filters + CSV export
 - **Jason's real question:** "a consulting group wants to charge us $1,500 a month to make changes to the account and i'm trying to determine if it is warranted." The v8.96/97 raw change log couldn't answer that directly — 13k events past a 200-row cap, no aggregate view, no way to filter for "novel work vs bulk-rule noise."
