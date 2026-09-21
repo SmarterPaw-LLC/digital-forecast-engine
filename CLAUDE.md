@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.97**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v8.98**
+
+## v8.98 — Consultant Activity Assessment + Ad Change Log filters + CSV export
+- **Jason's real question:** "a consulting group wants to charge us $1,500 a month to make changes to the account and i'm trying to determine if it is warranted." The v8.96/97 raw change log couldn't answer that directly — 13k events past a 200-row cap, no aggregate view, no way to filter for "novel work vs bulk-rule noise."
+- **New `✅ Consultant Activity Assessment` panel** at the top of the Ad Change Log. Rolling window (14/30/60/90d, default 60d) with a green/yellow/red verdict targeting a $1.5K/mo Sponsored Products management engagement on a mid-6-figure/yr spend account.
+- **Verdict criteria (5 checks, must pass ≥4 for green):**
+  - **Cadence** ≥30 changes/week (an active agency working the account weekly).
+  - **Novel work** ≥1/week — new keywords, new campaigns, new product ads. The highest-value signal: automated rules NEVER add new keywords; only humans do keyword research.
+  - **Coverage** ≥8 unique campaigns touched — flags "consultant only working the top-3 campaigns and ignoring the tail."
+  - **Diversity** ≥5 distinct event types — thoughtful mix vs one-note bulk edits.
+  - **Bid signature** — coefficient of variation on bid-change magnitudes. High CV (>0.5) = per-keyword tuning; low CV (<0.2) = uniform bulk-rule signature. Requires ≥8 bid changes to score; below that, "unknown" doesn't count as a fail.
+- **Category tiles** — Novel / Optimization / Removals / Automated with counts. Automated (state flips) explicitly deprioritized ("mostly budget rules, not the consultant") so the operator doesn't inflate his consultant's contribution.
+- **Verdict rationale** — 5 checked lines showing exactly which criteria pass/fail, so Jason can push back with specifics ("you touched only 3 campaigns; here's what you should be doing on the other 40"). Footer note calibrates targets to the $1.5K/mo fee tier and points at bid variance + novel work as the strongest anti-signals.
+- **Ad Change Log filters** — event-type multi-select chips (added / removed / bid up / bid down / budget up / budget down / paused / enabled / match type / strategy / portfolio / state) and a free-text search matching campaign/ad-group/label. Filters persist across re-renders via `_adLogEventTypeFilter` + `_adLogCampaignFilter`. Debounced search input (300ms) so typing doesn't repaint per keystroke.
+- **Display cap 200 → 500** for more visibility. Row count line updates to "Change log — 500 shown of 12,540 matching · filtered to 12,540 of 13,316" when filters are active so scope is obvious.
+- **↓ Export CSV** button next to the search input. Exports ALL events (unfiltered — Jason gets the raw data), 13 columns: snapshot_date, event_type, entity, change_summary, campaign_name, ad_group_name, asin, product_name, keyword_text, product_target_expression, before, after, field. UTF-8 with BOM for Excel. Filename: `ad-change-log-{today}.csv`. Audit log records `export.ad_change_log`.
+- **How to use it:** open Amazon P&L → 🛠 Ad Activity Timeline. The Assessment panel is your headline answer. Verdict green = fee warranted, yellow = press for scope specifics, red = fee not warranted. Then filter the change log to specific event types (e.g., "added" only) to see if the consultant is doing keyword research + campaign building, or just fiddling with bids. Export the CSV for a full audit trail to share with the consultant when negotiating scope.
 
 ## v8.97 — Ad Change Log: richer labels · fix snapshot-date extraction · snapshot management panel
 - **Two bugs Jason surfaced from the first v8.96 render:** (1) every event row showed abstract labels like "Removed Keyword" / "Removed Bidding Adjustment" with NO keyword text, SKU, bid, or placement percentage — useless for actually understanding what changed. (2) The snapshot date column showed today's date (2026-09-21) instead of the actual download date. Jason's most recent bulk file was from 2026-09-07 but the change log attributed all events to today.
