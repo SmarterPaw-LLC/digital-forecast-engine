@@ -2,7 +2,43 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.22**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.23**
+
+## v9.23 — Growth Model: empirical organic trend + CTR/CVR decay + "Do Nothing" baseline comparison
+- **Three coupled fixes in one ship** — all addressing Jason's core concern that the model was over-optimistic:
+  1. Baseline trend: empirical organic-only CAGR (not total-sales CAGR)
+  2. CTR/CVR decay curves at higher share (real diminishing returns)
+  3. "Do Nothing" baseline scorecards for direct counterfactual comparison
+- **Fix #1 — Empirical organic-only CAGR** (Jason: "just use growth of organic sales per the available data for now"):
+  - Historical organic units per month = SKU Econ total − SP Search Term paid (from existing `pnlGrowthComputeEmpiricalUplift(asin).sample`)
+  - CAGR computed on organic-only when ≥3 months of SP + SQP overlap available
+  - Replaces the pre-v9.23 total-CAGR (which included paid growth mechanics → over-projection)
+  - Falls back to total-CAGR when SP Search Term Report unavailable for this ASIN
+  - New fields on result: `baselineTrendSource` ('organic' | 'total'), `organicTrendPct`, `organicTrendPairs`
+- **Fix #2 — CTR/CVR decay** (Jason changed his mind: "go ahead and add the decay"):
+  - New `pnlGrowthState.ctrDecayExp` + `cvrDecayExp` (default 0.5 = mild — recommended)
+  - Applied in `computeMonth`: `ctr_effective = ctr × (1 + share_gain)^(-ctrDecayExp)`, same for CVR
+  - Rationale: marginal impressions at higher share convert worse (lower-quality placements, less-qualified users)
+  - 0 = no decay (pre-v9.23 behavior). 0.5 = mild. 1.0 = moderate. 1.5 = steep.
+  - UI: two dropdowns added next to CPC inflation curve. Same 4-option scale for both.
+  - Added to save-view fields so strategies capture the decay assumptions.
+- **Fix #3 — "Do Nothing" baseline scorecards** (Jason: "i also can't see what sales and contribution are at current if no action was taken"):
+  - New strip above "What the additional buys you" showing the counterfactual:
+    - Do Nothing Sales: baseline_organic × ASP × horizon
+    - Do Nothing Ad Spend: currentMonthlyBaselineAdSpend × horizon
+    - Do Nothing Contribution: units × contribPerUnit − ad spend
+    - Plan vs Do Nothing: Δ contribution + Δ contribution %
+  - Directly explains the paradox Jason spotted: "how can contribution be growing but incremental be negative?" — because most contribution growth is baseline trend (which happens without the plan). Plan adds spend that doesn't quite pay for itself on the marginal $/unit.
+- **Diminishing-returns disclaimer updated** to reflect all three fixes:
+  - Names the active baseline source (organic vs total)
+  - Names the active decay levels (0.5 / 1.0 / 1.5 if enabled; warns if 0)
+  - Softer wording overall since the model is now more realistic
+- **Expected impact on Pawty Mix at v9.23 defaults** (empirical organic + 0.5/0.5 decay):
+  - Baseline trend drops from ~17%/mo total-CAGR to a more modest organic-only rate (probably ~8-12%/mo)
+  - Paid units per month drop meaningfully (CTR × CVR × 0.5 decay knocks 25%+ off marginal units at 5% share)
+  - Contribution % likely flattens or slightly falls instead of rising
+  - Incremental contribution may swing more negative (plan looks less profitable) — this is the honest picture
+  - Do Nothing baseline stays comparable → clearer signal on when to execute vs hold
 
 ## v9.22 — Growth Model: HOLD (marginal) → BID UP (loss-leader) when aggregate contribution clears + diminishing-returns disclaimer
 - **Jason caught the gap between banner and actions:** v9.21's Execution Plan banner said "$859/mo plan IS reachable — execute the actions below" but the actions still said HOLD (marginal) on 6 keywords ($576/mo). Following only the "actionable" rows produces $251/mo not $859/mo. The banner promised reachability the actions didn't deliver.
