@@ -2,7 +2,43 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.20**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.21**
+
+## v9.21 — Growth Model: unified reachability using AGGREGATE contribution % (per-keyword $/unit is diagnostic only)
+- **Jason caught two problems in one:**
+  1. Trajectory Reach column showed ✓ REACH while Execution Plan showed 🚫 UNREACHABLE for the same plan — two different reachability concepts colliding under the same name.
+  2. More importantly: "as long as contribution is over a certain %, the keyword margin CAN erode and that's fine. why didn't you suggest this? if spend plan is reached and contribution is still over 20%, what is the big deal?"
+- **The bigger insight:** per-keyword $/unit vs contribPerUnit is the WRONG gate for reachability. Some keywords ARE share-growth loss leaders and that's fine — the strategic question is whether the AGGREGATE plan clears a contribution % floor. Ad agencies optimize on aggregate ROAS/contribution %, not per-keyword profitability.
+- **⚠ SQL/schema change:** none — pure JS-side logic + one new pnlGrowthState field.
+
+### Unified reachability check (v9.21)
+- **Two-condition gate** (both must clear for ✓ REACH):
+  1. **Saturation** (v9.19): keywords can absorb the spend at <75% of impression-share ceiling
+  2. **Profitability** (v9.21 refactor): AGGREGATE month contribution % ≥ `minContribPct` floor (default 15%)
+- **Per-keyword $/unit still tracked** but as DIAGNOSTIC only — surfaces in tooltips + Execution Plan drill-down so operators can see which keywords are the loss leaders. Does NOT gate the reach verdict. Loss-leader spend labeled explicitly ("OK — aggregate holds" when contribution % is fine).
+- **New `pnlGrowthState.minContribPct` setting** — default 15% (SmarterPaw viability threshold from Pricing Scenarios v8.55). New number input in the settings panel next to Max monthly TACOS %. Added to `PNL_GROWTH_VIEW_FIELDS` + `MATCH_FIELDS` so saved strategies capture it.
+- **Reach status classification:**
+  - ✓ REACH — both saturation and contribution % clear
+  - ⚠ TIGHT — one is approaching threshold (saturation 75-100%, OR contribution 10-15%)
+  - 🔴 UNREACH — one is failing (saturation >100%, OR contribution <10%)
+  - `reach_reason` distinguishes 'saturation' | 'profitability' | 'both' | 'clear' so the lever recommendations point at the right fix
+
+### UI updates cascaded across every reachability surface (audit-driven per v9.19 rule)
+- **Trajectory Reach column** now uses composite check + shows reason in tooltip. Per-cell tooltip explains the aggregate contribution % (not per-keyword bucketing).
+- **Reach banner** at the top of results distinguishes three failure modes:
+  - Saturation-blocked → recommends expansion (long-tail keywords, sibling ASINs, SB/SD/DSP)
+  - Profitability-blocked → recommends unit economics levers (lower target share, raise ASP, lower COGS, lift CVR, lower contribution floor)
+  - Both → recommends pulling both types
+- **Execution Plan reachability verdict** (v9.17 → v9.21): now gates on M1 aggregate contribution % ≥ floor. When reachable, banner reads "✓ Aggregate contribution % clears the 15% floor, so the $X/mo plan IS reachable — even the $Y/mo of loss-leader spend is fine because it's paying for share growth and the aggregate math still works." When not, the recommendation reads "raise actual ASP" (not "raise MSRP" — post-v9.20 the model uses ASP so raising MSRP without ASP catching up does nothing).
+- **New "Contrib %" column** in the trajectory table (after Contribution). Per-month aggregate contribution %. Color-coded by floor threshold. Horizon aggregate contribution % in footer.
+
+### Why v9.17 → v9.20 flip-flopped (documented for context)
+- Jason correctly called out "this keeps flip-flopping ugh" — each version fixed a real bug but moved numbers in different directions:
+  - v9.17: market CVR only → over-projected $/unit → reachability said "unreachable" for the wrong reason
+  - v9.18-9.19: CVR premium (3.5×) added → under-projected $/unit → reachability said "reachable" for the wrong reason
+  - v9.20: MSRP → actual ASP ($16 vs $17.99 for Pawty Mix) → contribution/unit dropped → reachability said "unreachable" again but based on per-keyword
+  - v9.21: unified check on aggregate contribution % → this should be the stable baseline. If aggregate contribution stays healthy, plan is reachable regardless of individual keyword loss leaders.
+- **v9.21 is the stable answer** — matches how ad agencies actually optimize (aggregate profitability, share growth via loss leaders when the aggregate math works). No more architectural flips expected.
 
 ## v9.20 — Growth Model: actual ASP from SKU Economics replaces MSRP throughout the model (+ Sales column in trajectory + share-label consistency)
 - **Jason's ask:** "i see contribution here but i don't see sales. can you model sales growth based on sku economics? i need to know this number alongside the contribution." Also noted the Market Opportunity scorecards showed a purchase-$-share number (4.3%) next to an impression-share number (7%) — two different "share" concepts sitting side-by-side without labels.
