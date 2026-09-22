@@ -2,7 +2,47 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.18**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.19**
+
+## v9.19 — Growth Model: per-keyword saturation ceilings + per-month reachability check + Market Opportunity math consistency fix
+- **Jason caught a math inconsistency mid-build** (in the same session as v9.19): the Market Opportunity "Your $ at Target" scorecard showed $24,794/mo at 5% share, while the trajectory M12 at the same 5% target showed $203k/mo (~8× larger). Both used `targetShareEndPct` but interpreted it differently — Market Opp treated it as PURCHASE share (of category units), trajectory treated it as IMPRESSION share (of query auction). The setting is defined + labeled as impression share; the Market Opp math was the bug.
+- **Root cause pattern:** since v8.49c introduced Market Opportunity, no audit had checked whether all consumers of `targetShareEndPct` interpret it the same way. v9.18's CVR premium (3.5× for Pawty Mix) made the mismatch visually obvious, but it had been silently broken for ~10 versions. See [[feedback_forecast_check_shared_settings]] — new standing rule for the model.
+- **Fix — Market Opp now uses impression-share interpretation, matching trajectory** (lines 22555–22574):
+  - `yourIncrementalUnitsAtTarget = sum over keywords of (impressions_total × (target_share − current_impression_share) × market_CTR × ASIN_CVR)` — walks the same impression → click → unit funnel the trajectory model does per keyword per month.
+  - `yourUnitsAtTarget = currentAsinUnitsFromSqp + yourIncrementalUnitsAtTarget` — existing organic + incremental paid at target share
+  - `yourDollarsAtTarget = yourUnitsAtTarget × MSRP`
+  - Applies v9.18's boosted CVR (premium multiplier) consistently — the pre-v9.19 math didn't, which was a SECOND bug on top of the share-type mismatch.
+- **Per-keyword @Target column** in the Market Opportunity by Keyword table also fixed with matching math. `kwOpportunity` rows now carry `impressions_total`, `current_impression_share_pct`, `ctr`, `cvr` alongside the existing purchase-side fields so the render can use the impression-share formula.
+- **Scorecard subtitle updated** from "5% purchase share applied to market" → "5% impression share applied to market". Tooltips explain the v9.19 change + reference v9.18's CVR premium.
+- **Expected effect:** for Pawty Mix (3.5× premium), Market Opp "Your $ at Target" will land much closer to the trajectory M12 monthly rate. Not identical — trajectory also has seasonal trend, market growth, organic carry-in from paid uplift — but the same order of magnitude instead of 8× off.
+
+### Reachability check (the original v9.19 build)
+- **Jason's ask (verbatim):** "the execution plan only looks at the first month. how do we know if we can continue to build in future months?" The v9.17 reachability check ran on Month 1's keyword allocation only — Jason correctly pointed out the Execution Plan didn't tell him whether Month 12's $7,936/mo spend (~2.6× Month 1) fits in the same keyword set as they scale, or whether the plan silently overflows what the current SQP keyword set can absorb.
+- **Best-practice framing:** industry pattern for this kind of forward-looking paid-search planning is "response-curve-based media planning" — the lightweight cousin of Marketing Mix Modeling. Three ideas do most of the work: (1) per-keyword saturation curves — every query has an addressable ceiling before marginal ROAS craters; (2) marginal-ROAS portfolio allocation — rank keywords by contribution/CPC, fill top-ranked first, spill as they saturate; (3) time-phased planning with explicit constraints + sensitivity — pessimistic/expected/optimistic scenarios matter more than point precision. Full Bayesian MMM (Robyn, LightweightMMM) is overkill for single-ASIN Sponsored Products planning — needs multi-year, multi-channel data + control variables. v9.19 ships pieces 1 and 2; sensitivity (piece 3) is a natural v9.20 follow-on.
+- **Per-keyword saturation ceilings** (added in `_pnlGrowthRunModelImpl` around line 22165):
+  - New constant `MAX_REALISTIC_SHARE_PCT = 60` — empirical rule: past ~60% impression share on a single query you're heavily bidding against yourself; marginal ROAS craters. That becomes each keyword's ceiling.
+  - Per keyword: `max_share_gain = 60 − current_share_pct`, `max_incr_impr = impressions_total × max_share_gain/100`, `cpc_at_ceiling = base_cpc × (1 + max_share_gain/100)^cpcInflationExp`, `max_spend_month = max_incr_impr × ctr × cpc_at_ceiling`, `max_units_month = max_incr_impr × ctr × cvr` (uses v9.18's boosted CVR).
+  - Lookup Map `kwCeilingByTerm` for O(1) per-month evaluation.
+- **Per-month reachability check** (added right after `plan` is computed, before `months.push`):
+  - For each keyword in this month's `plan.alloc`: compute `util = incr_spend / max_spend_month` (fraction of the keyword's saturation ceiling being used this month).
+  - Month verdict classification:
+    - `overflow` (🔴 red) — any keyword > 100% util (plan is impossible in the current keyword set without expansion)
+    - `tight` (⚠ orange) — any keyword > 75% util but none over 100% (approaching saturation; expansion helps but not required yet)
+    - `reachable` (✓ green) — all keywords under 75% util (comfortable headroom)
+  - Stores `reach_status`, `reach_max_util`, `reach_top_saturated` (top 3 saturating keywords for this month), `reach_set_ceiling` (aggregate ceiling across the keyword set), `reach_headroom` (remaining ceiling capacity).
+- **Horizon-level summary** on the result:
+  - `reachHorizonVerdict` — overall verdict (worst month wins: overflow > tight > reachable)
+  - `reachFirstTightMonth`, `reachFirstOverflowMonth` — the first month each threshold gets crossed
+  - `reachTopSaturatedKeywords` — top 5 keywords aggregated across the horizon, ranked by peak utilization, showing when each first goes tight and its current SQP share
+  - `reachMaxSharePct` — the ceiling constant (60) surfaced so tooltips can reference it dynamically
+- **UI surfaces** in `pnlGrowthRenderResult`:
+  - **Reach column** in the trajectory table (after Uplift → Next Mo). Per-month color-coded badge with a hover tooltip naming the top saturating keyword + its utilization %. Footer shows the horizon-level verdict.
+  - **Reachability banner** (v9.19 addition, injected between v9.18's CVR banner and the scorecards). Three states:
+    - Green when fully reachable: "Reachable across all 12 months — every month's plan fits inside the current keyword set at <75% of saturation."
+    - Orange when tight: "Tight starting M{N} — current keyword set approaches saturation but doesn't exceed it." Lists top saturating keywords + first-tight month.
+    - Red when overflow: "Overflow starts at M{N}." Same keyword list, PLUS a spelled-out list of expansion vectors: long-tail variants, sibling ASINs, Sponsored Brands/Display, Amazon DSP.
+- **Practical implications for Pawty Mix (Jason's example):** with the v9.18 CVR premium boost, Pawty Mix converts at ~35% (vs ~10% market avg) → the model earns purchases at low $/unit → keywords stay well below saturation → the M1–M12 plan should read REACHABLE across every month even at the $7,936/mo M12 spend level. If any month is flagged TIGHT or OVERFLOW, that's a real constraint — the top saturating keywords are the ones to expand into (broad match variants, sibling ASINs like Silvervine Sticks that ride the same catnip queries).
+- **What's NOT in v9.19 (deferred, small builds):** sensitivity table (3-column pessimistic/expected/optimistic view of CVR premium × CPC exponent) — piece 3 of the response-curve framework. Also deferred: automatic marginal-ROAS re-ranking within a month's allocation (the current allocation is cost-per-purchase-ranked, close to marginal ROAS but not identical). Both are next-natural adds.
 
 ## v9.18 — Growth Model: per-ASIN actual CVR premium (fixes Pawty Mix "shot through the heart")
 - **Jason's ask (verbatim):** "that is INSANE. pawty mix already has one of our BEST conversions. this is an ABSOLUTE SHOT THROUGH THE HEART." Context: v9.17 shipped the reachability check, which said Pawty Mix's 71% recommended plan spend was UNREACHABLE (bids capped at $2.00 by the model verdict). Jason correctly pushed back: Pawty Mix has 35.99% session→unit conversion — one of the fleet's TOP performers. If the reachability check says "loses money," the model is wrong, not the product.
