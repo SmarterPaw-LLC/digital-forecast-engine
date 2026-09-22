@@ -2,7 +2,34 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.24**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.32**
+
+## v9.32 — Growth Model: REVERT v9.31's incremental-contribution gate (aggregate contribution % is the whole test)
+- **Jason, verbatim:** "YOU JUST UNDID AGAIN WHAT WE PREVIOUSLY FIXED. OMG. THIS IS GETTING RIDICULOUS. When contribution is above the threshold, SPEND THE MONEY."
+- **What v9.31 broke.** I added a third reachability gate: `incremental contribution >= 0`, computed as `incr_units × contribPerUnit − incr_spend` where `incr_units` counts PAID units only. My reasoning was that aggregate contribution % is baseline-dominated (32% carried by organic units that cost no ad spend) so it can look healthy while every marginal dollar loses. That reasoning was wrong in this model, for two reasons:
+  1. **The Δ vs Do Nothing column already answers the question correctly** and answers it POSITIVE. On Jason's screenshot: +$1,691 / +$3,640 / +$5,926 / +$8,628 / +$11,833 / +$15,636 = **+$47,355 over the horizon**. Two competing definitions of "incremental" existed; I gated on the wrong one.
+  2. **The v9.31 metric structurally can't go positive on a share-growth plan.** It ignores the organic carry-in those paid units seed next month (the whole v8.50 uplift mechanic) and ignores that the spend also defends the baseline. So it reads negative by construction on exactly the plans the model exists to evaluate.
+- **Symptom:** every month read 🔴 UNREACH and the TOTAL row read 🔴 OVERFLOW, despite Contrib % at 32.0% → 34.0% against a 20% floor and TACOS at 9.1–11.2% against a 30% ceiling.
+- **Reverted — reachability profitability gate is aggregate contribution % ONLY** (restores v9.21):
+  ```js
+  if      (monthContribPct < contribFloor - 5) profitabilityStatus = 'unprofitable';
+  else if (monthContribPct < contribFloor)     profitabilityStatus = 'tight';
+  ```
+  `incr_contribution` stays on the month object as a surfaced diagnostic. It is never a gate.
+- **Execution Plan verdict** now follows `reach_status` alone. `aggregateClears = m1ContribPct >= contribFloor` (dropped the `&& m1IncrContrib >= 0`).
+- **Per-keyword PAUSE guard now respects the same rule.** The `dollarPerUnit > contribPerUnit × 1.5` money-loser guard fires ONLY when `!aggregateClears`. This closes the contradiction Jason called out one version earlier — "HOW is it reachable when all the high volume campaigns GET PAUSED?" The answer was never "make it unreachable," it was "stop pausing them." When the aggregate clears, deep money-losers fall through to the loss-leader BID UP branch.
+- **`isMarginal` widened** from `> contribPerUnit && <= 1.5×` to just `> contribPerUnit`. The >1.5× case already returns early when the aggregate fails, so reaching the branch with >1.5× means the aggregate clears → loss-leader BID UP is correct. Without this, deep loss-makers fell through to the plain "BID UP · profitable" branch, which mislabels them.
+- **Diagnostic tile relabeled** "Incr contribution (diag)" with an explicit tooltip naming why it reads negative and pointing at Δ vs DN as the decision column. Color moved red → orange (it's information, not a failure).
+- **Kept from v9.31:** the selected-month fix (action logic was reading M1's contribution while displaying M6 — a real bug) and the Deployable vs Pause breakdown in the verdict tiles.
+- **Standing rule this reinforces:** Jason's v9.21 framing — *"as long as contribution is over a certain %, the keyword margin CAN erode and that's fine... if spend plan is reached and contribution is still over 20%, what is the big deal?"* — is the model's profitability semantics. Do not layer additional profitability gates on top of it. If a new metric seems to contradict it, the metric is wrong.
+
+## v9.25–v9.31 — Growth Model iteration (Do Nothing comparison, column ordering, month pickers)
+Condensed; each shipped same-day off direct Jason feedback.
+- **v9.25–v9.27 — "Do Nothing" moves into the monthly breakout.** Jason: "this needs to be in the monthly breakout, not up in the header" → then "there is no sales at 'do nothing' levels, so i cannot compare the revenue impact of ad spend" → then "how is the contribution of DN Contrib 25,376 in month 6 when NOTHING WAS DONE?" The DN baseline was inheriting the ad-driven trend; fixed to use Market CAGR only with flat ad spend. Then "there is still no sales at the current level. i feel like i've asked for this 3 times now" — DN Sales column existed but was positioned after Contribution instead of beside Sales. Moved.
+- **v9.28 — Market Opportunity scope labels.** Removed a redundant column Jason flagged; clarified which figures are per-month run-rate vs horizon-cumulative after "the month 6 sales number does not match the gap number."
+- **v9.29 — Month picker on Keyword Allocation AND Execution Plan.** Jason: "what would this look like for month 2? i know it says all 6 months can be reached, but i'm somewhat skeptical how this happens if the bid doesn't increase." Shipped on Keyword Allocation first; Jason: "you added the monthly tabs here but not on the execute plan where i need it." `pnlGrowthSetExecMonth(monthIdx)` + `execPlanMonth` on state.
+- **v9.29a → process correction.** Jason: "9.29? the last was 9.29a. wtf." **Rule: every code change bumps the version chip. No letter suffixes.**
+- **v9.30–v9.31 — the incremental-contribution detour.** Reverted in v9.32 above.
 
 ## v9.24 — Growth Model: v9.23 fixes + terminology audit + PAUSE vs SKIP distinction + formatted Excel export
 - **Jason: "please review each part of this page to make sure the terminology and calculations are still correct."** After the rapid v9.17 → v9.23 cascade (~2h, 7 architectural shifts), a full audit surfaced stale text + real logic bugs. v9.24 addresses them all in one comprehensive ship.
