@@ -2,7 +2,28 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.00**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.18**
+
+## v9.18 — Growth Model: per-ASIN actual CVR premium (fixes Pawty Mix "shot through the heart")
+- **Jason's ask (verbatim):** "that is INSANE. pawty mix already has one of our BEST conversions. this is an ABSOLUTE SHOT THROUGH THE HEART." Context: v9.17 shipped the reachability check, which said Pawty Mix's 71% recommended plan spend was UNREACHABLE (bids capped at $2.00 by the model verdict). Jason correctly pushed back: Pawty Mix has 35.99% session→unit conversion — one of the fleet's TOP performers. If the reachability check says "loses money," the model is wrong, not the product.
+- **Root cause:** the growth model used MARKET CVR from SQP (`purchases_total_count / clicks_total_count`, ~10% for catnip queries) to project units-per-click for every keyword. But Pawty Mix's ACTUAL CVR is 35.99% — meaning it converts 3-4× the market average. Result: model's `projectedPurchases = projectedClicks × market_cvr` was 3-4× too LOW, `$/unit = spend / purchases` was 3-4× too HIGH → every keyword above ~$2 was incorrectly flagged as "Marginal loses money."
+- **Fix — new "conversion premium" multiplier** applied to every keyword's CVR at the model level (`_pnlGrowthRunModelImpl`, around line 22079):
+  - Trailing 90-day session→unit CVR computed from `salesTrafficWeekly` (which is loaded from `amazon_sales_traffic` — the Amazon Sales & Traffic report). Requires ≥100 sessions AND >0 units to avoid noise from low-volume products.
+  - Market CVR computed from SQP's click-weighted aggregate across all rows in the SQP keyword set (`sum(purchases_total_count) / sum(clicks_total_count) × 100`).
+  - `asinCvrPremium = actual_pct / market_pct` — capped at `[0.25×, 5.0×]` so a single-week outlier can't produce garbage projections.
+  - Applied as `cvr = market_cvr × asinCvrPremium` on every keyword before the CTR × CVR unit math runs.
+  - Preserves market CVR as `marketCvr` field on the keyword object (retained for debugging + future tooltip work); the actively-used CVR is the boosted value.
+- **Diagnostic banner** (v9.18) at the very top of `pnlGrowthRenderResult` output — shown whenever the premium is meaningfully different from 1.0 (>2% divergence). Green banner + 🚀 for high converters ("This ASIN converts 3.42× the market average — unit projections + $/unit boosted accordingly"). Orange banner + ⚠ for below-average. Includes the actual %, market %, and the cap disclosure. So Jason immediately sees WHY numbers shifted vs prior versions.
+- **Note on CVR source disagreement**: Amazon's Session CVR uses `sessions` as denominator (~= "clicks that landed on PDP"); SQP's market CVR uses `clicks_total_count`. They're not directly comparable in absolute terms — but the RATIO still captures the right signal: "does this listing convert above or below the market baseline?" That's what feeds the premium.
+- **Expected impact on Jason's Pawty Mix case:**
+  - Trailing 90d actual CVR: ~35% (from Sales & Traffic)
+  - Market CVR (catnip queries in SQP): ~10%
+  - Premium: ~3.5× (capped from what would be higher)
+  - Result: `$/unit` for "catnip" keyword drops from $10.28 → ~$2.94
+  - Verdict flips from `⚠ Marginal (loses money)` → `✓ Bid up (profitable)`
+  - Reachability check now shows Pawty Mix as REACHABLE
+- **Result object extended** with `asinCvrPremium`, `asinActualCvrPct`, `marketAvgCvrPct` for scorecards / debugging / future audit-log entries.
+- **Products with insufficient S&T data** (< 100 sessions in trailing 90d OR no data at all) fall through to `asinCvrPremium = 1.0` (market CVR only). No banner shown — the model behaves exactly like pre-v9.18 for those products.
 
 ## v9.00 — Growth Model: saved strategy views (planning-side config presets)
 - **Jason's ask:** "the 'view' options only makes sense for the P&L summary page. for the growth model, i should be able to save views based on the growth settings i've selected." The top-level P&L saved-views popup (columns + filters + sort) is meaningless on the Growth Model page, which has its own planning-settings surface (planning horizon, target end-of-horizon impression share %, paid→organic uplift %, CPC inflation curve, max monthly TACOS %, enforce ceiling checkbox, market annual growth CAGR %, portfolio rollup level).
