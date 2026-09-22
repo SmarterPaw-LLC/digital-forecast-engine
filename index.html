@@ -24253,11 +24253,17 @@ Use THIS panel to size the keyword-level opportunity. Use the TRAJECTORY to plan
     }
     return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:14px">
       <div style="padding:10px 14px;background:var(--surface2);border-bottom:1px solid var(--border)">
-        <div style="font-family:var(--display);font-weight:700;font-size:12px;color:var(--text)">💼 Execution Plan — Month ${selMonthIdx} ${secHelp(
-          `For each Month ${selMonthIdx} keyword, tells you SPECIFICALLY what to do: raise this bid on that campaign, raise this budget, or add this keyword as a new target.`,
-          'Cross-references model kw list against SP Search Term (current campaign + CPC per ASIN per keyword) and SP Campaign Snapshot (budget health via IS lost to budget). Rules: (a) if IS lost to budget >30% → raise budget first (bids won\'t help); (b) if model_bid >10% > current_CPC → raise bid; (c) if not currently targeted → add keyword; (d) if $/unit > 1.5× contribution AND currently active → PAUSE, if not active → don\'t add.',
-          'Walk this list top-to-bottom with your consultant or Amazon Ads console. Every row is a specific campaign action. Use the M1–M' + result.horizonMonths + ' picker above to see how bids ramp in later months — this plan is only the first step of a schedule.'
-        )}</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="font-family:var(--display);font-weight:700;font-size:12px;color:var(--text)">💼 Execution Plan — Month ${selMonthIdx} ${secHelp(
+            `For each Month ${selMonthIdx} keyword, tells you SPECIFICALLY what to do: raise this bid on that campaign, raise this budget, or add this keyword as a new target.`,
+            'Cross-references model kw list against SP Search Term (current campaign + CPC per ASIN per keyword) and SP Campaign Snapshot (budget health via IS lost to budget). Rules: (a) if IS lost to budget >30% → raise budget first (bids won\'t help); (b) if model_bid >10% > current_CPC → raise bid; (c) if not currently targeted → add keyword; (d) if $/unit > 1.5× contribution AND currently active → PAUSE, if not active → don\'t add.',
+            'Walk this list top-to-bottom with your consultant or Amazon Ads console. Every row is a specific campaign action. Use the M1–M' + result.horizonMonths + ' picker to the right to see how bids ramp in later months — this plan is only the first step of a schedule.'
+          )}</div>
+          <div style="display:flex;align-items:center;gap:5px;margin-left:auto">
+            <span style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px" title="v9.29 — Bids RAMP across the horizon. cpc_this_month = base_CPC × (1 + cumulative_share_gain)^${pnlGrowthState.cpcInflationExp}, and share gain grows every month. Switch months to see the full bid schedule — M1's recommendation is only the first step.">Month</span>
+            ${result.months.map(mm => `<button onclick="pnlGrowthSetExecMonth(${mm.month_idx})" title="View the execution plan for Month ${mm.month_idx} (target share ${mm.target_share_pct.toFixed(1)}%)" style="padding:3px 9px;font-family:var(--mono);font-size:10.5px;font-weight:${mm.month_idx === selMonthIdx ? '700' : '400'};background:${mm.month_idx === selMonthIdx ? 'var(--sp-green)' : 'var(--surface)'};color:${mm.month_idx === selMonthIdx ? '#fff' : 'var(--text2)'};border:1px solid ${mm.month_idx === selMonthIdx ? 'var(--sp-green)' : 'var(--border2)'};border-radius:4px;cursor:pointer">M${mm.month_idx}</button>`).join('')}
+          </div>
+        </div>
         <div style="font-family:var(--mono);font-size:10.5px;color:var(--text3);margin-top:2px">
           ${uniqueCampaignsToTouch} campaign(s) to touch ${uniqueBudgetsToRaise ? `· ${uniqueBudgetsToRaise} need budget raise` : ''}
           ${!campDataAvailable ? ' · ⚠ SP Campaign Snapshot not uploaded — budget health checks skipped' : ''}
