@@ -2,7 +2,41 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.19**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.20**
+
+## v9.20 — Growth Model: actual ASP from SKU Economics replaces MSRP throughout the model (+ Sales column in trajectory + share-label consistency)
+- **Jason's ask:** "i see contribution here but i don't see sales. can you model sales growth based on sku economics? i need to know this number alongside the contribution." Also noted the Market Opportunity scorecards showed a purchase-$-share number (4.3%) next to an impression-share number (7%) — two different "share" concepts sitting side-by-side without labels.
+- **Two problems addressed:**
+  - **Sales was never surfaced.** The model computed `plan.sales = plan.total × MSRP` on every month object as `total_sales` but never rendered it — trajectory showed units and contribution but not the revenue in between. Also, MSRP overstates revenue for products with promos / Subscribe & Save discounts / coupons.
+  - **Market Opp mixed share types.** "Your $ Today" showed purchase-$-share (a lagging outcome) while "Your $ at Target" showed impression share (the model's actual lever). Reading "4.3% → 7%" as growth was apples-to-oranges.
+- **Fix #1 — MSRP → Actual ASP throughout the model.** New `revPerUnit` variable computed near the top of `_pnlGrowthRunModelImpl`:
+  - Reads trailing 90-day `net_sales / net_units_sold` from `pnlData` (SKU Economics), scoped to this ASIN + region=US
+  - Requires ≥30 units in the window (else falls through to MSRP)
+  - `revPerUnit = actualAspFromSkuEcon || msrp` — ASP wins when available, MSRP is the fallback
+  - Stores `actualAspFromSkuEcon`, `aspSource` ('sku_economics' | 'msrp'), `aspDeltaFromMsrp`, `aspUnitsUsed`, `aspSalesUsed` on the result for downstream tooltips + diagnostic panels
+- **Audit-driven swap** per the [[feedback_forecast_check_shared_settings]] rule (v9.19). Every `× msrp` site in the growth model function swapped to `× revPerUnit`:
+  1. `netProceedsPerUnit` (contribPerUnit derivation)
+  2. `yourDollarsCurrent` (Market Opp kwOpportunity)
+  3. `plan.sales` (per-month computeMonth)
+  4. TACOS ceiling enforcement guard (`revPerUnit > 0` check)
+  5. `totalSales` (aggregate for aggTacos)
+  6. `yourDollarsAtTarget` (Market Opp scorecard)
+  7. `incrSales` (incremental sales tile in render)
+  8. `yourAtTarget` per-keyword (Market Opp by Keyword @Target column)
+- **New Sales column in the trajectory table** between Δ vs Current and TACOS. Per-month `total_sales` display + horizon TOTAL in footer. Tooltip explains the ASP source ("actual ASP" vs "MSRP, no SKU Econ data") and reveals the multiplier being used.
+- **New ASP banner** at the top of the results, right after the v9.18 CVR banner:
+  - Green 💰 when actual ASP > MSRP (rare — shipping/handling collected on top of price)
+  - Orange 📉 when actual ASP < MSRP by >5% (heavy discounting — promos / S&S / coupons — the common case)
+  - Green 📊 when ASP within 5% of MSRP (clean pricing)
+  - Muted 💡 fallback notice when no SKU Econ data available — points to Data → Uploads
+  - Sub-line names the source: "$X net sales ÷ Y net units" from trailing 90d
+- **Fix #2 — Market Opportunity share-label consistency:**
+  - "Your $ Today" sub-line now reads `X% impression share · Y% of market $` — surfaces BOTH share types explicitly so the operator can see they're different lenses on the same current state
+  - "Your $ at Target" sub-line reads `X% → Z% impression share` — makes the ramp visible with the actual comparable metric (both endpoints are impression share, not one of each)
+  - Both tooltips fully explain the two share types (impression share = model's lever; purchase-$ share = the resulting outcome)
+- **Verdict banner** now shows actual ASP with a compact `+X% vs MSRP` delta chip when notable, so the ASP substitution is visible in the primary scorecard footer without opening tooltips.
+- **Expected impact on Pawty Mix:** actual ASP is likely $15-17 vs $17.99 MSRP (Subscribe & Save + occasional coupons). Trajectory Sales column drops 5-10%, TACOS goes UP by proportional %, Contribution goes DOWN by proportional %. More honest — Pre-v9.20 numbers were aspirational.
+- **What's NOT in v9.20 (deferred):** sensitivity table (3-column pessimistic/expected/optimistic ASP × CVR premium × CPC exponent) — piece 3 of the response-curve framework from v9.19 recommendations.
 
 ## v9.19 — Growth Model: per-keyword saturation ceilings + per-month reachability check + Market Opportunity math consistency fix
 - **Jason caught a math inconsistency mid-build** (in the same session as v9.19): the Market Opportunity "Your $ at Target" scorecard showed $24,794/mo at 5% share, while the trajectory M12 at the same 5% target showed $203k/mo (~8× larger). Both used `targetShareEndPct` but interpreted it differently — Market Opp treated it as PURCHASE share (of category units), trajectory treated it as IMPRESSION share (of query auction). The setting is defined + labeled as impression share; the Market Opp math was the bug.
