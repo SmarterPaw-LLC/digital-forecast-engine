@@ -2,7 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.21**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.22**
+
+## v9.22 — Growth Model: HOLD (marginal) → BID UP (loss-leader) when aggregate contribution clears + diminishing-returns disclaimer
+- **Jason caught the gap between banner and actions:** v9.21's Execution Plan banner said "$859/mo plan IS reachable — execute the actions below" but the actions still said HOLD (marginal) on 6 keywords ($576/mo). Following only the "actionable" rows produces $251/mo not $859/mo. The banner promised reachability the actions didn't deliver.
+- **Fix — action-type classification now aware of aggregate reachability.** New `aggregateClears = m1ContribPct >= minContribPct` flag computed once per plan-row build. In the marginal branch:
+  - `aggregateClears === true` → keyword flips from `hold_marginal` to `bid_up_loss_leader`. Recommendation becomes `BID UP — loss-leader ($X/u > $Y, OK)` with rationale "aggregate M1 contribution ${pct}% clears your ${floor}% floor — the plan absorbs this loss for share growth."
+  - `aggregateClears === false` → HOLD (marginal) preserved (old v9.17 behavior). Recommendation names both the per-keyword loss AND the aggregate floor being under stress.
+- **Summary chip added** — orange `🔥 N bid up (loss-leader)` chip at the top counts keywords in the new state. Distinct from green `+ N add keyword` and orange `⚠ N hold (marginal)` chips.
+- **Execution Plan spend summary now folds `bid_up_loss_leader` into executable**, so "achievable" reads the true deployable spend when aggregate contribution clears. Fixes the "plan is reachable but I can only deploy $251/mo" contradiction.
+- **Also caught by Jason: contribution % rising as ad spend rises** (M1 31.9% → M6 32.8%). Mathematical explanation:
+  - Contribution % floor (ad-free) = ~43% (constant — depends on ASP, COGS, FBA)
+  - Actual contribution % = floor − TACOS%
+  - TACOS drops from 11.3% → 10.3% across horizon because sales grow faster than ad spend
+  - Sales outgrow spend because (a) organic carry-in from prior paid × 10% uplift compounds monthly, (b) baseline trend growth (~17%/month for Pawty Mix's history) is aggressive
+- **This is technically correct BUT the model has no CTR/CVR decay** — only CPC inflates with share push. In reality, marginal impressions past a keyword's natural fit convert worse (lower CTR AND lower CVR). Real economics would flatten or reverse the contribution % rise.
+- **New diminishing-returns disclaimer banner** injected into the trajectory footer when contribution % rises >0.5pts across the horizon. Names the missing decay curves + calls the trajectory "BEST CASE." Prevents Jason (or anyone) from taking the rising contribution % at face value.
+- **What's deferred to v9.23 (Jason asked to confirm):** actual CTR/CVR decay curves in the model. Would make marginal impressions convert worse as share pushes higher — matches empirical performance-marketing intuition. Bigger change than v9.22, needs Jason's confirmation before shipping.
 
 ## v9.21 — Growth Model: unified reachability using AGGREGATE contribution % (per-keyword $/unit is diagnostic only)
 - **Jason caught two problems in one:**
