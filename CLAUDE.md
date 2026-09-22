@@ -2,7 +2,54 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.23**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.24**
+
+## v9.24 — Growth Model: v9.23 fixes + terminology audit + PAUSE vs SKIP distinction + formatted Excel export
+- **Jason: "please review each part of this page to make sure the terminology and calculations are still correct."** After the rapid v9.17 → v9.23 cascade (~2h, 7 architectural shifts), a full audit surfaced stale text + real logic bugs. v9.24 addresses them all in one comprehensive ship.
+- **Fix #1 — Baseline trend uses MIN(organic, total) as conservative floor:**
+  - v9.23 blindly swapped `baselineTrendPct = organicTrendPct` when empirical organic-only CAGR was available. But for products where paid was a shrinking fraction of the mix (Pawty Mix — paid grew slower than organic historically), organic CAGR came out HIGHER than total-CAGR → baseline projection went UP, not down as intended
+  - Jason: "contribution is even higher now" — this fix.
+  - v9.24 keeps organic only when `organicTrendPct ≤ baselineTrendPct` (uses the more conservative). Otherwise flags `baselineTrendSource = 'total_conservative'` — organic available but not applied
+- **Fix #2 — CTR/CVR decay math reformulated (was too weak):**
+  - v9.23 formula: `(1 + effGain/100)^-decay` — but `effGain` is percentage points (~1-5), so `effGain/100` was ~0.02, producing near-zero decay
+  - v9.24 formula: `(1 + effGain/current_share)^-decay` — uses RELATIVE share gain
+  - At 5% target with 3.3% current + 0.5 exponent: prior decay was 1%, new decay is 19%. Meaningful.
+- **Fix #3 — SKIP → PAUSE / DON'T ADD distinction:**
+  - Jason: "what does SKIP on here mean? is it current a keyword that is bid on? should we REMOVE it?"
+  - Old: any money-loser flagged as "SKIP — loses money", ambiguous about action
+  - New: split by whether keyword is currently active (has SP Search Term data):
+    - Currently active → ⛔ PAUSE (stop the bleeding — you're currently spending on this)
+    - Not currently targeted → ✗ DON'T ADD (correctly excluded)
+  - Actionable pause tip includes campaign name + ad group + current CPC + how much per unit is being lost
+- **Fix #4 — 9 stale MSRP → ASP text updates:**
+  - v9.20 swapped MSRP → revPerUnit throughout the model math, but 9 tooltips/section-helps/formula displays still said "MSRP"
+  - Updated every one to conditionally reference "ASP" (when SKU Econ data available) or fall back to "MSRP":
+    - Trajectory scorecards secHelp formula
+    - Market Opportunity secHelp formula
+    - "Incremental sales = ..." code comment
+    - Contrib/unit column tooltip
+    - Verdict banner formula display
+    - Empty-verdict "Need MSRP + COGS" text
+    - Market Opp by Keyword secHelp formula
+    - Per-keyword "Your $/mo" column tooltip
+    - Per-keyword "@Target $/mo" column tooltip
+- **Fix #5 — CSV export updated with new columns:**
+  - Added: `ad_spend_incremental` (v8.83), `sales` (v9.20), `contribution_pct` (v9.21), `reach_status` (v9.19), `reach_reason` (v9.21)
+  - Header comments now include ASP/MSRP source, baseline trend source, CTR/CVR decay settings, CVR premium, contribution floor
+- **Feature #1 — Formatted .xlsx export via ExcelJS (lazy-loaded from cdnjs):**
+  - New "📊 Export to Excel" button (green) next to the existing "↓ CSV" button (kept for raw data dumps)
+  - Multi-sheet workbook: Summary / Trajectory / Execution Plan / Do Nothing vs Plan
+  - Column widths + number formats ($#,##0, 0.0%, #,##0) applied per-column
+  - Color-coded Contribution % (green above floor, orange approaching, red below)
+  - Color-coded Reach column (green/orange/red)
+  - Bold headers with dark background + frozen top row
+  - ExcelJS 4.4.0 lazy-loaded from cdnjs on first click (adds ~800KB but only when needed)
+  - Button shows "⏳ Loading Excel library…" during first-time load
+  - Falls back gracefully if CDN fetch fails
+- **What v9.24 leaves for follow-up (called out in audit):**
+  - Diminishing-returns disclaimer text still mentions decay generically — could be more specific about the v9.24 decay math change
+  - Some Portfolio Overlap + Baseline Audit panel tooltips not re-audited (unchanged since v8.59/v8.57)
+  - The Excel export doesn't yet include the CVR premium banner + ASP banner + reach banner content on the Summary sheet — could be added later if wanted
 
 ## v9.23 — Growth Model: empirical organic trend + CTR/CVR decay + "Do Nothing" baseline comparison
 - **Three coupled fixes in one ship** — all addressing Jason's core concern that the model was over-optimistic:
