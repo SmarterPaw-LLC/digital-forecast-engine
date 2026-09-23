@@ -2,7 +2,31 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.32**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.36**
+
+## v9.36 — Pricing Scenarios: OCR competitor prices off screenshots (Tesseract.js)
+- **Jason:** "why does it not pull prices from images? that's the whole point." Correct. v8.56 shipped the competitor-screenshot gallery as manual entry, and the instruction text actively told the user to type the price in. The screenshot is pasted in order to get the price out of it; making the user retype it defeats the feature.
+- **Tesseract.js 5.1.1**, lazy-loaded from cdnjs on first use (same pattern as Chart.js / SheetJS / pdf.js / JSZip / ExcelJS). Fully client-side, nothing leaves the browser, no API key. Worker + wasm core come from jsdelivr, language data from tessdata.projectnaptha.com; all three verified reachable before building. Measured ~0.8s for a 620x220 six-price grid.
+- **Runs automatically on paste / upload.** `pricingScreenshotsAdd` fires `pricingScreenshotsOcr(id)` on a 50ms timeout. Card shows `⏳ reading prices… 47%` live via the Tesseract logger callback.
+- **`pricingOcrExtractPrices(text)`** handles the ways Amazon screenshots actually OCR:
+  - `$12.99` standard
+  - **Split-cent**: Amazon renders cents as a superscript block, so OCR returns `$12 99` or `$12\n99`. Parsed as dollars + cents, not two prices.
+  - **Merged cents**: `$1299` → 12.99. Restricted to 4-5 digit runs so a real `$120` is not mangled into `$1.20`.
+  - Bare `$12`, unit prices in parens `($1.08/Count)`, strikethrough list price alongside sale price.
+  - Range filter 0.50–500 rejects years, ASINs, review counts.
+  - **Rules consume what they match** so a looser later rule cannot re-read the same characters. Without this, `$12 99` produced `[12.99, 8.49, 12, 8]` — the bare-dollar rule re-matched the already-consumed dollars. Caught in unit tests, not by reading the code.
+  - 11 parser unit cases, all passing.
+- **A grid screenshot legitimately holds many prices**, so every candidate renders as a one-click chip under the card rather than the tool guessing one. First detected price auto-fills only when the field is empty; a re-scan never clobbers a hand-typed or hand-picked value (verified).
+- **`🔍 Scan all`** button re-runs detection across every screenshot that has not yet produced a price.
+- Instruction text rewritten — it previously bragged about the limitation in orange bold.
+
+## v9.33–v9.35 — Products: SP SKU migration importer
+- **Jason:** "i need to reconcile column items in column B for our product table SP_ID. please build a modal to map this new id to column D (check if this id already exists) and give me a button to approve each." Source file: `Shopify and Amazon Item IDs.xlsx`, sheet `Items Sold to Cust Petsmart CT`. 445 rows → **221 unique mappings** (101 rows are the same mapping repeated across customer rows).
+- **New `⇄ Migrate SP SKUs` button** on the Products page next to `↑ Import Catsy`. Renames `products.sp_sku` in place. sp_sku is NOT a foreign key (master_id is), so sales / P&L / inventory / BOM history all follow the product automatically. The one consequence: Shopify + Catsy upload files still keyed on the OLD sku stop matching.
+- **Six row states**, only `ready` is approvable: `ready` · `taken` (new SKU already on a different product — this is the "check if this id already exists" requirement) · `merge` (two live products both want the same new SKU, listed in a panel, never applied) · `noop` · `nomatch` · `nonew`.
+- **v9.34 — column probe, added after the first run came back 216/216 "no matching product."** I built the lookup direction from Jason's description instead of measuring it, and had it backwards. The probe now tests EVERY sheet column against EVERY product identifier (sp_sku, master_id, shopify_sku, asin, chewy_sku, walmart_item_id, barcode) and reports hit counts, with a **"These columns look reversed"** banner and a **⇄ Swap** button when the NEW column matches the catalog far better than the CURRENT one. Also added a **"Match products by"** picker for sheets keyed on something other than sp_sku. The target is always checked against `sp_sku` specifically, since that is the column being written.
+- **v9.35 — coverage callout + unmatched export.** Green headline reads `✓ 6 of 8 items (75%) already map to a product in the catalog`. `↓ Export unmatched (N)` writes a deduplicated CSV of everything that did not resolve (columns: lookup_value, lookup_column, matched_against, proposed_new_sku, new_sku_column, description, sheet_rows, reason), routed through the standard `promptCsvName`. **Bug caught in verification:** the button said (3) while the exporter wrote 2 — the callout counted mapping rows, the exporter deduped by lookup value. Both now count distinct lookup values so callout + button + file always agree.
+- **Open question, unresolved:** with D as current and B as new, this migrates the catalog ONTO the Petsmart item IDs (`MTCM001 → CB033`). If those products should instead keep their MTCM/DTC/CF SKUs and the Petsmart IDs be stored as a separate identifier, this is the wrong operation and needs the second-column build instead.
 
 ## v9.32 — Growth Model: REVERT v9.31's incremental-contribution gate (aggregate contribution % is the whole test)
 - **Jason, verbatim:** "YOU JUST UNDID AGAIN WHAT WE PREVIOUSLY FIXED. OMG. THIS IS GETTING RIDICULOUS. When contribution is above the threshold, SPEND THE MONEY."
