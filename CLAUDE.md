@@ -2,9 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.59**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.60**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.60 — Pricing Scenarios: per-unit rate column on the scenario ladder
+- **Jason:** *"i need to see our price per unit in here."* Two readings of "unit" and both are useful, so the new column shows whichever apply:
+  - **`$ / count`** (or oz, lb, whatever Your size unit is) = price ÷ total size. This is the figure that compares DIRECTLY against the Rate column in the competitor table right above it, so "at market $4.06" and "competitors charge $0.081/count" finally sit in the same units.
+  - **`$X.XX/pack`** on a second muted line when Bundle qty > 1, which is the per-package price the headline already quotes.
+- **Header adapts to the inputs:** `$ / count` when a size unit is set, `$ / pack` when only a bundle qty is, and a dash in the cells when neither applies (with a tooltip pointing at Step 1).
+- **`fmtRate` hoisted** from inside the market-panel IIFE to `pricingNewRender` scope so the ladder and the market panel format a rate identically — three decimals below $0.10, two above — rather than each having its own copy to drift.
+- **Verification:** five input shapes through the real render (50 count single, 4 × 50 bundle, an oz product, no size/unit single, no size/unit 3-pack) — header text, cell contents and the per-pack second line all correct in each. Column parity checked properly this time: header `th` count against every row's `td` count **scoped to the scenario table**, 8/8 across all five shapes plus the no-competitor case. An earlier version of that check reported a false mismatch because it compared the scenario header against the competitor table's body — the test was wrong, not the markup. Ad-spend suite and platform-components-sum assertions re-run unchanged. `node --check` clean.
 
 ## v9.59 — Pricing Scenarios: rich-text strategy notes saved with the scenario
 - **Jason:** *"let me add notes with rich text support to a pricing strategy."* The numbers say what the price should be; they never say WHY you landed there, which supplier quote it assumed, or who signed off. That reasoning is exactly what you need when the scenario is reopened weeks later.
