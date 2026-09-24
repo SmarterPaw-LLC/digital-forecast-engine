@@ -2,9 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.61**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.62**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.62 — Pricing Scenarios: Pack on competitor variants, and labelled variant fields
+- **Jason:** *"i can't add the pack size in the variant."* The data model carried `v.pack` from v9.61 and the rate maths already divided by it — there was simply no input, so a 4-pack variant could only be entered as a single unit and its $/count came out 4× too high.
+- **Pack field added** to each variant, paired with Price on its own row to mirror how the base card groups them.
+- **Every variant field now carries a persistent label** (Size · Unit · Price $ · Pack · Sold / mo). Five inputs relying on placeholder text alone was not readable — and the v9.46 lesson applies exactly here: a placeholder vanishes at the moment you most need to know what the number means. A variant reading `400 | count | 26.99 | 4 | 10000` with nothing above it is a guess.
+- **Variant read-out matches the base card:** `$24.99/unit · $0.25/count` when the variant is a multi-pack, just the rate when pack is 1.
+- **Variant labels include the pack** (`Earth Rated 100 count ×4`) so two variants of the same size but different bundle counts no longer render as identical rows in the market-opportunity table.
+- **Verification:** 18 card-render cases — all five field bindings present per variant, pack defaulting to 1, every label rendered, and the rate dividing by size AND pack (`26.99 / (400×1) = $0.067/count`; `99.96 / (100×4) = $0.25/count` with a `$24.99/unit` line). Confirmed the pack reaches `pricingCompEntries` and changes the rate the analysis sees. Variant, parser, sanitiser and scenario suites all re-run green. `node --check` clean.
 
 ## v9.61 — Pricing Scenarios: count is a size not a pack, low price bands show, competitor size variants
 Three fixes from one session, all on the competitor side of New Product Launch.
