@@ -2,9 +2,15 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.62**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.63**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.63 — Pricing Scenarios: variant field order matches the base card
+- **Jason:** *"why did you reverse the price and size fields for the variants? WHY INTRODUCE INCONSISTENCY FOR NO REASON????"* No reason. The base card runs Product → Price/Pack → Size/Unit → Sold/mo; the v9.62 variant block ran Size/Unit → Price/Pack → Sold/mo. Two layouts for the same five fields, stacked directly on top of each other on the same card.
+- **Fixed** by swapping the two rows so the variant reads Price/Pack → Size/Unit → Sold/mo, identical to the card above it.
+- **Now asserted, not eyeballed:** a test extracts the rendered label sequence from both the base card and the variant block and fails unless they match once Product is removed. A layout change to one and not the other now breaks the build rather than shipping.
+- Purely a markup reorder — no handler, binding or maths change. Card-render and variant suites re-run green; `node --check` clean.
 
 ## v9.62 — Pricing Scenarios: Pack on competitor variants, and labelled variant fields
 - **Jason:** *"i can't add the pack size in the variant."* The data model carried `v.pack` from v9.61 and the rate maths already divided by it — there was simply no input, so a 4-pack variant could only be entered as a single unit and its $/count came out 4× too high.
