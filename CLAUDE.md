@@ -2,9 +2,32 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.60**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.61**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.61 — Pricing Scenarios: count is a size not a pack, low price bands show, competitor size variants
+Three fixes from one session, all on the competitor side of New Product Launch.
+
+### 1. OCR was putting the size number in the Pack field
+- **Jason:** *"when i paste in the screenshot, it mixes up the pack and size number. it puts size as pack."*
+- **Cause:** the pack regex included `count|ct|pcs|pieces`, so `100 Count` set **pack = 100** — while `count` was not a size unit at all, so the Size field stayed empty. Exactly inverted against what the fields mean: Size is what is IN one package, Pack is how many separate packages are bundled. A 100 in Pack then divided that competitor's price by 100 in every per-unit calculation.
+- **Fix:** only genuine multi-package wording sets pack (`Pack of N`, `N Pack`, `N-Pack`, `Set/Box/Bundle of N`, `xN`), capped at 2–24 — Amazon says "3 Pack", never "100 Pack". Count words became a SIZE unit (`count/ct/cnt/pcs/pieces/wipes/sheets/treats/tablets/capsules/chews/bags/sachets`), consulted only when no weight or volume was found, so `2 lb bag, 60 treats` still reads 2 lb. A number too big to be a pack (`400 pack`) is read as a count rather than discarded.
+- **27 parser cases** cover the bug, genuine multi-packs, both together (`3 Pack of 100 Count` → pack 3, size 100 count), weight/volume precedence, and the must-not-set-a-bogus-pack set.
+
+### 2. A $4.99 competitor had nowhere to land
+- **Jason:** *"the price band needs to be lower. it's missing a $4.99 item."*
+- **Cause:** `pricingNewBands` filtered out every band with no CATALOG products in it. Meowijuana has nothing under $5, so the `$0–$5` band was dropped, and any competitor normalizing below $5 was reported as "falls outside every band" — including the $4.99 listing, which prices at $2.50 for a 50 count.
+- **Fix:** bands are all returned; the table filters to bands holding catalog products **or** competitors. An empty-but-occupied band renders with an orange `no catalog` tag, `N = 0` and dashes, which is the useful reading: the market sits at a price point you have never played at, so there is no fee benchmark to lean on. The fee lookup is unaffected — it already required `sampleSize >= 3` — and `pricingNewFindBand` now always resolves, so "could not be placed" drops to zero.
+
+### 3. Size variants per competitor
+- **Jason:** *"allow me to add variants for each competitor price. eg. 100 ct vs 400 ct."* The PawSono screenshot shows one listing with a size selector: 100 count at $14.39 ($0.14/count) and 400 count at $26.99 ($0.07/count).
+- **`+ size variant`** on each competitor card adds a compact size / unit / price / sold-per-month row, with its own `$/unit` read-out and a ✕. The unit is seeded from the base row. Forcing one card per size lost the fact that they are the same product; entering only one threw away the volume-discount curve, which is the shape you need when pricing your own size.
+- **`pricingCompEntries()`** is the new single source of truth: it flattens each card into one entry per price point (base + variants) and the analysis maps over it. When a card has variants, each row is labelled with its size (`PawSono 100 count` / `PawSono 400 count`) so the market table does not show three identical names. Cards without variants are untouched, label included.
+- Variants persist in scenarios and are part of `pricingScenarioSignature`, so editing one correctly marks the scenario unsaved.
+- **24 cases** cover flattening, the rates matching what Amazon prints ($0.1439 and $0.0675), labelling with and without variants, edits landing on the right variant object, add/remove index handling, and priceless variants being skipped downstream. Card render verified separately (variant block, both add buttons, the `$0.067/count` line, all four field bindings, no `undefined`).
+
+**Full regression re-run:** 27 parser + 24 variant + 38 sanitiser + 10 scenario round-trip + the ad-spend suite and platform-components-sum assertions, all green. `node --check` clean.
 
 ## v9.60 — Pricing Scenarios: per-unit rate column on the scenario ladder
 - **Jason:** *"i need to see our price per unit in here."* Two readings of "unit" and both are useful, so the new column shows whichever apply:
