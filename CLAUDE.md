@@ -2,9 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.53**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.54**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.54 — Pricing Scenarios: the competitor working set is wiped on every page load
+- **Jason, for the third time:** *"these screenshots still persist when a scenario isn't loaded. THIS CAUSES CONFUSION. there should not be screenshots showing on refresh."* v9.50 answered this with a provenance badge and v9.51 with verified writes. Both explained the state; neither removed it. This removes it.
+- **`pnew_screenshots_v1` is cleared once per page load**, by an IIFE at script-parse time — ahead of `init()` and ahead of any pricing render, so no code path can observe the stale value. Saved scenarios (`pnew_scenarios_v1`) are untouched and remain the durable store; the working set is scratch. Load a scenario to bring a set back.
+- **The clear is announced, not silent.** When a load actually discarded something, the scenario status bar reads `ℹ Cleared 2 competitor cards left over from your last session. Competitor screenshots no longer survive a refresh — load a saved scenario to bring a set back, or paste new ones.` The note disappears the moment anything replaces the set: `pricingScreenshotsSet` zeroes the counter, and it is the single funnel for add / update / remove / clear-all / scenario-apply.
+- **Corrected a line that this change turned into a lie.** The unsaved-working-set warning said *"These persist across reloads until you clear them."* It now reads *"These are wiped on refresh — save a scenario to keep them."* Same for the v9.50 comment block above `pricingScenarioSignature`, which described the old persistence as a feature.
+- **Trade-off, stated plainly:** pasted competitor cards are now lost on refresh unless saved as a scenario. That is the behaviour asked for, and the status bar names the save path in the same breath as the warning.
+- **Verification:** 14/14 storage cases — leftovers wiped with the count recorded, key actually removed, scenario apply repopulating and resetting the flag, a second reload wiping the applied set too, empty storage, corrupt JSON (dropped without throwing), a stored empty array reporting nothing, and saved scenarios surviving the load-clear. Plus four status-bar renders: cleared-note with and without saved scenarios, the `● Loaded:` badge after applying one, and the `⚠ Unsaved working set` warning with its new copy. `node --check` clean.
 
 ## v9.53 — Pricing Scenarios: the recommendation is MARKET-ANCHORED, not a cost floor
 - **The headline number now comes from the competitors.** Jason: *"what i've asked for REPEATEDLY is for the competitor pricing to be used in making the recommendation in the pricing strategy."* He was right and the tool was not doing it. `minPrice` is a **cost-up** number, the least you can charge and still clear your contribution floor. On his 100 count example that read $3.99 while the market pays ~$7.50, so the tool was handing back a number that gives away half the revenue and labelling it "Recommended."
