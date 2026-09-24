@@ -2,9 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.65**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.66**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.66 — Pricing scenarios are shared across all users
+- **Jason:** *"saved scenarios should show for all users."* Scenarios lived only in localStorage, so they were per-browser and per-device: a price plan one person built was invisible to everyone else and died with a cleared cache.
+- **⚠ SQL TO RUN:** `supabase_v9_66_pricing_scenarios.sql` — creates a SHARED `pricing_scenarios` table (name primary key, jsonb payload, `images_dropped`, `updated_at` via trigger, `updated_by` + `updated_by_email`), RLS on with an authenticated-all policy, grants to authenticated, anon revoked. Idempotent. Until it is run everything still works locally and the sync logs a warning naming the file.
+- **Deliberately NOT the `user_profiles` pattern** the other saved-view systems use (`forecast_saved_views`, `inventory_saved_views` and friends). Those are personal preferences; a pricing scenario is a piece of work you want colleagues to open, so it is one shared row per name rather than a per-user blob.
+- **Writes go per NAME, not as a whole-map replace.** `pricingScenariosSet` diffs the local map against the last known DB state and upserts only what moved, deleting names that disappeared. Two people saving different scenarios at the same time therefore do not clobber each other; same-name edits are last-write-wins, which is the honest behavior for a library this size.
+- **Supabase is the source of truth, localStorage the fast-paint cache** — the chips render instantly from cache and re-render when the fetch lands. On load the shared set replaces the local copy, so a stale browser-only scenario does not linger.
+- **Oversized scenarios drop their screenshots, not their numbers.** Past ~900KB serialized, competitor `dataUrl`s are stripped and `images_dropped` is set, because a scenario carrying six base64 screenshots would make every load slow for everyone. Prices, sizes, variants and notes are untouched, and the existing `no images` chip already reports it.
+- **The library says whose work it is:** the scenario bar is labeled `💾 Saved scenarios · shared` with a tooltip warning that saving, renaming or deleting changes it for the whole team, and each chip shows the saver's username.
+- **A bug the tests caught before shipping:** the loader adds `imagesDropped` from its own column, while the DB snapshot was serialized from the raw payload without it — so every loaded scenario compared as changed and the first save re-uploaded the entire library. Load and sync now build the comparison key through one shared `_pricingScenCompareKey`, which is the only way two sides of a diff stay honest.
+- **Verification:** 18 sync cases against a stubbed Supabase recording exactly what gets sent — shared set replacing the local cache, saver and images-dropped flags surfacing, only the changed scenario upserting, a no-op save writing nothing, adds and deletes, oversized payloads stripping images while keeping prices, signed-out staying local, and a missing table degrading without touching local data. Scenario round-trip, option, edit, variant, parser, card-render, field-order, sanitizer and fee suites all re-run green. `node --check` clean.
 
 ## v9.65 — Price option cards: editable price and name, and US spelling throughout
 - **Jason:** *"let me edit the price point here"* and *"and the name."* Both are click-to-edit on the card now: click the price or the title, type, Enter to commit or Escape to cancel. The ladder only offers six rungs and the price you actually want is often between two of them or a round number near one.
