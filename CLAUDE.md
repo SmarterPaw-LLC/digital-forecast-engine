@@ -2,9 +2,32 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.66**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.67**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.67 — Shared scenarios stopped deleting local ones, price options belong to a scenario, UI copy cut
+Three fixes from one message. Jason: *"1. i asked you to stop adding unnecessary copy that belongs in the changelog, NOT the UI. 2. this isn't appearing for another user logged in on refresh. but I don't see it either, so it must be a bug"* plus, mid-turn: *"also the price options are appearing even tho the scenario isn't loaded. WHAT IS HAPPENING"*
+
+### 1. The v9.66 loader was deleting scenarios (data loss)
+- **The bug:** `pricingScenariosLoadFromDb` replaced the local map with whatever the table returned. On the FIRST load after the migration that table is EMPTY, so the loader wrote `{}` over every scenario anyone had already saved in their browser. That is exactly what Jason saw: the bar read `No saved scenarios yet` for him AND for the second user, on a feature that was supposed to make scenarios MORE durable.
+- **The fix is merge, never replace.** A name only disappears locally when we previously SAW it in the table and it has since gone (someone deleted it). Anything the shared set has never heard of is local work, so it is kept AND published, which doubles as the one-time migration: the first load after running the SQL pushes every browser-only scenario up, and the rest of the team gets it on their next load.
+- **`_pricingScenDbSnapshot` is the thing that makes "deleted" and "never seen" distinguishable.** It is null on the first load of a session, so nothing can be deleted on that pass. After a load or a successful sync it holds the names the table actually had, so a subsequent load can tell a remote delete from a local addition. Without that distinction, merge-on-load would be an append-only set where nobody could ever delete anything.
+- **Verification:** the Supabase stub now PERSISTS its writes, so a load that follows a write sees the write. That round trip is the thing the merge depends on (a migrated scenario has to come back as a shared row, or the next load would read it as deleted). 25 cases, including the empty-table case that caused the loss, migrated scenarios not re-uploading on the next save, a remotely-deleted scenario still being removed while a local-only one is kept, and the missing-table path leaving local data untouched.
+
+### 2. Price options are scenario state, not browser state
+- **Jason:** *"the price options are appearing even tho the scenario isn't loaded."* v9.64 deliberately kept the cards across reloads, on the theory that an explicit save is not scratch. Wrong call, and it is the same mistake v9.54 fixed for competitor screenshots: a card is frozen against the inputs it was saved under, so a card floating above a blank Step 1 is a number with no context. That is the confusion the screenshot wipe existed to end.
+- **Now:** `pnew_price_options_v1` is wiped once per page load by an IIFE at script-parse time (ahead of any render), and the cards are saved with the scenario (`priceOptions` on the snapshot) and restored on apply. Applying a scenario that has no cards CLEARS the panel rather than leaving another scenario's cards sitting there.
+- **Folded into `pricingScenarioSignature`**, so saving, editing, renaming, adding or removing a card flips the badge from `● Loaded` to `⚠ Unsaved` the same way editing a note or a competitor does. Order-independent, so two scenarios holding the same set compare equal.
+- **Pre-v9.67 scenarios have no `priceOptions` field** and load with an empty panel.
+- **Verification:** 18 cases covering the load-time wipe, the snapshot carrying frozen prices, the badge moving on edit / rename / add / remove and moving back on revert, apply replacing and clearing, and a legacy scenario loading without throwing.
+
+### 3. UI copy cut
+- **Removed the v9.54 cleared-competitors banner entirely.** It read `ℹ Cleared 9 competitor cards left over from your last session. Competitor screenshots no longer survive a refresh, load a saved scenario to bring a set back, or paste new ones.` That is a changelog entry explaining a behavior change, printed above the saved-scenario bar on every load. The behavior is a year-old default by now; it does not need narrating. Its counter (`_pricingSsClearedOnLoad`) had no other reader and was removed with it.
+- **The unsaved-working-set line dropped from two sentences to a state:** `⚠ 6 competitor prices not saved to a scenario` plus a `✕ Clear` button whose tooltip carries the detail. Empty state dropped from `No saved scenarios yet. Set your inputs, add competitors, then click Save as scenario.` to `No saved scenarios yet.`
+- **The rule going forward:** the UI says what state a thing is in. Why the state changed between versions belongs here, in this file.
+
+**⚠ Still to run:** `supabase_v9_66_pricing_scenarios.sql`. Until it is run, scenarios stay local per browser and the console logs `pricing_scenarios table missing`. With the v9.67 merge that failure is now harmless (local data is untouched), which was not true in v9.66.
 
 ## v9.66 — Pricing scenarios are shared across all users
 - **Jason:** *"saved scenarios should show for all users."* Scenarios lived only in localStorage, so they were per-browser and per-device: a price plan one person built was invisible to everyone else and died with a cleared cache.
