@@ -2,9 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.67**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.68**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.68 — Local undo history for the scenario map
+- **Why:** v9.66 shipped a loader that overwrote the local scenario map with the contents of an empty table, and destroyed Jason's saved work. v9.67 turned that specific write into a merge, but the general lesson is the one that matters: this map is the only copy of something a person spent real time on, and every write to it is potentially the last one.
+- **Before any write replaces the map, the outgoing contents are stashed** to `pnew_scenarios_backup_v1` (last 5, newest first, each tagged `save` or `shared-load`). The shared-load call site is the exact line that caused the loss.
+- **Screenshots are stripped from backup copies.** They are the bulk of the bytes and the least of the recoverable value; prices, sizes, packs, variants, notes and fee assumptions are what take time to rebuild. Keeping the copies small means the backup can never be the thing that blows the quota, and a quota failure on the backup can never fail a real save.
+- **Recovery is two console calls:** `pricingScenariosBackupList()` prints a table of what is stored and when; `pricingScenariosRestore(0)` merges the newest backup back in. Restore never clobbers a scenario that currently exists under the same name, so it is safe to run twice.
+- **Consecutive identical stashes are suppressed** so a burst of no-op writes cannot push real history out of the 5-entry window.
+- **Verification:** 12 added cases inside the sync suite (37 total) — a destructive write being fully recoverable, competitor prices surviving while base64 is stripped, restore preferring the live copy over the backup, and repeated identical writes not stacking. Price-option, clear-on-load, notes, scenario, size, variant, card, option and edit suites all re-run green. `node --check` clean.
+
+### Forensics from the v9.66 loss, recorded so the cost is not abstract
+- Jason: *"so did my old scenario get wiped???"* then *"i lost all of my screenshots. that was the real effort."*
+- Confirmed by reading the Chrome profile's LevelDB directly rather than inferring: exactly one record existed for `pnew_scenarios_v1`, with value `{}`. No prior version survived, because that SSTable had already been compacted and the superseded value dropped.
+- **Recovered:** the saved price options (a different key, untouched) with full frozen economics, which also encoded the Step 1 inputs. **Not recoverable from storage:** the competitor set, which lived only inside the scenario payload, and the notes.
+- **The screenshots themselves were recovered from outside the app** — Windows was saving them to `Pictures\Screenshots`, and 20 product-page captures from that session were identifiable by aspect ratio (tall product pages vs wide dashboard grabs). Worth remembering as a recovery route: the working set is scratch inside the app, but the source images usually still exist on disk.
 
 ## v9.67 — Shared scenarios stopped deleting local ones, price options belong to a scenario, UI copy cut
 Three fixes from one message. Jason: *"1. i asked you to stop adding unnecessary copy that belongs in the changelog, NOT the UI. 2. this isn't appearing for another user logged in on refresh. but I don't see it either, so it must be a bug"* plus, mid-turn: *"also the price options are appearing even tho the scenario isn't loaded. WHAT IS HAPPENING"*
