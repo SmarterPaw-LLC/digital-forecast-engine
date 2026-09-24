@@ -2,9 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.56**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.57**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.57 — Pricing Scenarios: ad spend is its own column and its own input, defaulting to 0
+- **Jason:** *"i need ad spend with it's own column here. by default, it should be zero. let me set the ad spend. this should be a default value and not an override."*
+- **Ad spend is no longer inherited from the benchmark.** It is a plan, not a fee Amazon charges, so it starts at **0%** and is always editable — it sits outside the v9.56 override checkbox entirely. That checkbox now governs FBA + referral only and is relabelled `Override FBA + referral`. The catalog's own TACOS is shown beside the field as reference (`catalog runs 3.7% · yours is a plan, not inherited`) but is never used.
+- **New `Ad Spend/u` column in the scenario ladder**, between Platform Fee % and Net Proceeds/u. Shows the dollar cost at that price with the rate beneath, or a dash at 0%. `Est. Fee %` is renamed `Platform Fee %` and now carries FBA + referral only, so the two columns read as a breakout instead of one number that silently contained the other.
+- **`fee_pct` from the benchmark includes ad spend**, so it could not be used alongside an ad field without double counting. Platform load is now built from FBA + referral directly.
+- **Platform total is the SUM OF THE MEDIANS, deliberately, not the median of the sum.** They differ (46.4% vs 52.9% on Jason's Meowijuana set) because medians are not additive. The median-of-sum is arguably the better central estimate, but it can never be displayed as a breakout that adds up — and in a panel whose entire purpose is letting you see and edit each component, a total that disagrees with its own parts is the worse failure. Caught by a test asserting the displayed FBA + referral equal the platform figure in use; it did not, before this change. Same rule in both modes, and it ties the recommendation to the FBA % / REFERRAL % columns in the benchmark table. `medianFeeExAdPct` (added earlier in this same version) was removed as a result.
+- **Band refinement now varies the PLATFORM portion only** (`band.medianFbaPct + band.medianReferralPct`); the ad rate is the user's number at every rung.
+- **Benchmark table note** now states that the table describes what the catalog does today with ads included, while the recommendation uses platform fees from it plus the ad spend you set, so the two totals are not expected to match.
+- **Effect on the default read:** with ad at 0 the whole ladder is an ads-free contribution, and floors drop accordingly (regression case C moved $5.28 → $3.89). That is the point — you now add your own ad plan on top rather than inheriting what mature products happen to spend.
+- **Verification:** six fee states through the real `pricingNewRender` — default 0% (ad column dashes, ad input enabled while FBA is disabled), 10%, 25%, platform override with ad still set, platform override with ad back to 0, and the Reset path (platform back to benchmark, ad back to 0 rather than blank). Plus an explicit sum assertion in both modes (benchmark 32.9 + 13.5 = 46.4 vs 46.4 in use; override 22 + 15 = 37.0 vs 37.0) and the full 8-scenario regression re-run. `node --check` clean.
 
 ## v9.56 — Pricing Scenarios: fee assumptions are editable and broken into FBA / referral / ad
 - **Jason:** *"allow me to change the fee % - 58% is very high here - break it out into ad %, and Fba %"*. The fee load was a catalog median with no way to touch it, and it feeds `pricingNewMinPrice` directly — so it set the cost floor, and therefore the whole market-supports-this-or-not verdict, off an average of unrelated products.
