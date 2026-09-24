@@ -2,9 +2,17 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.63**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.64**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.64 — Pricing Scenarios: saved price options as comparison cards
+- **Jason:** *"let me save some price configurations options. these should appear as cards above the competitor screenshots panel."* Confirmed with him that an option is a candidate PRICE plus its economics, not another copy of the input set — Saved Scenarios already covers inputs — and that the cards should not carry a competitor snapshot.
+- **`+` on every rung of the recommendation ladder** saves that price as a card. Cards render in a new `💲 Saved price options` panel between Step 2 and Step 3, each showing price, per-unit rate (and per-pack when bundled), total fee %, the ad portion in dollars, net proceeds, COGS and contribution in $ and %. Contribution is green above the floor it was saved against, red below, with a ⚠ rather than being hidden — a below-floor option is a real thing to consider, not an error. With two or more cards the highest contributor gets a `★ most contribution per unit` marker.
+- **Every card carries the assumptions it was frozen under** (COGS, pack, size, platform % + ad %) and shows `⚠ inputs changed since saved` when the live inputs have moved, with a tooltip naming each difference (`COGS $1.29 → $1.75`, `ad 6.2% → 12.0%`). A frozen number presented as current is the exact failure this panel could otherwise introduce, so the staleness is stated on the card rather than left to be noticed.
+- **Persisted to `pnew_price_options_v1`** and kept across reloads. Deliberately unlike the competitor working set, which v9.54 wipes on load: these are explicit saves, not scratch.
+- **The save button passes an INDEX into `pricingLadderPayloads`, never an inlined JSON blob.** v7.53 shipped exactly that pattern on the fee-drill handler and the quotes silently broke every click on the page; the index avoids the escaping question entirely.
+- **Verification:** 26 option cases — empty state, saving from the ladder with the prompt naming the card, cancelling the prompt as a no-op, all six displayed figures, the best-contributor marker, a below-floor option flagged and still ranked, stale detection appearing and clearing as COGS and ad spend move and return, remove/clear, and persistence read back after a simulated reload. Ladder parity re-checked with the new column: 9 headers, 9 cells, one save button per row across four input shapes. Variant, parser, card-render, field-order, sanitiser, scenario and fee suites all re-run green. `node --check` clean.
 
 ## v9.63 — Pricing Scenarios: variant field order matches the base card
 - **Jason:** *"why did you reverse the price and size fields for the variants? WHY INTRODUCE INCONSISTENCY FOR NO REASON????"* No reason. The base card runs Product → Price/Pack → Size/Unit → Sold/mo; the v9.62 variant block ran Size/Unit → Price/Pack → Sold/mo. Two layouts for the same five fields, stacked directly on top of each other on the same card.
