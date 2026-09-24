@@ -2,9 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.57**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.58**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.58 — Pricing Scenarios: ad spend moves up into Step 1 with the other planning inputs
+- **Jason:** *"move ad spend to the top instead of in the override window."* Right — v9.57 made ad spend independent of the override checkbox but left it sitting inside the Fee assumptions box, which still read as though it belonged to the thing it had just been separated from.
+- **Ad spend (TACOS) % now sits in the Step 1 grid**, after Target contribution % floor. Both are decisions you make. The catalog-median hint renders underneath it.
+- **The fee box is renamed `Amazon fees`** and holds only FBA fulfilment % and Referral % — the two things Amazon actually charges, from the benchmark unless overridden. Checkbox copy and tooltips updated to point at Step 1 for ad spend.
+- **No math changed.** Same element IDs (`pnew-fee-ad`, `pnew-ad-hint`), so every read, the scenario snapshot/apply/signature, and `pricingNewResetFees` work untouched. The fee box's running total still shows the split (`Total 49.2% = 43.0% platform + 6.2% ad`) since that is where the platform half is set.
+- **Verification:** the six-state ad suite re-run unchanged (default 0 with dashes in the Ad Spend/u column, 10%, 25%, override with ad set, override with ad zeroed, Reset), the platform-components-sum assertion still true in both modes, element IDs confirmed unique after the move, `node --check` clean.
 
 ## v9.57 — Pricing Scenarios: ad spend is its own column and its own input, defaulting to 0
 - **Jason:** *"i need ad spend with it's own column here. by default, it should be zero. let me set the ad spend. this should be a default value and not an override."*
