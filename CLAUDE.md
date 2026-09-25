@@ -2,9 +2,18 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.68**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.69**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.69 — Saved price option cards show the brand they were priced against
+- **Jason:** *"i need to see the brand these are set for."* A card froze COGS, size, pack, fees and contribution, but not the Brand or Category filter, so two cards priced against different comparable sets looked identical.
+- **This is basis, not decoration.** The Brand and Category filters in Step 1 pick the products the platform fee % is derived from. v9.55 measured that exact swing: the same product read 67.5% fee load under All brands and 56.6% narrowed to a comparable set, which moved the cost floor across the market price and flipped the verdict. A frozen fee % with no record of which set produced it cannot be checked.
+- **Rendered as a brand chip under the card title**, using the same Meowijuana / Doggijuana / Kitty Ka-Zoom colors the rest of the app uses, with the category appended when one is set. Hovering explains which comparable set the fee % came from.
+- **`All brands` is shown as a value, not a blank**, because "priced against the whole catalog" is a real choice and reads differently from "unknown."
+- **Changing Brand or Category now trips the `⚠ inputs changed since saved` flag** alongside COGS, pack, size, unit, ad % and floor. Previously you could switch brands and every card would keep presenting a fee % drawn from products no longer in scope, with nothing saying so.
+- **Cards saved before v9.69 read `brand not recorded`** rather than defaulting to All brands, and are deliberately NOT marked stale on brand: there is no recorded basis to compare against, and a false staleness flag on every old card would train you to ignore the one signal that matters. Re-save from the ladder to record one.
+- **Verification:** 16 cases against the real render — brand and category appearing, the correct chip class per brand, All brands rendering without a brand color, brand and category changes each tripping the stale flag with the swap named, and legacy cards labeled honestly without being falsely flagged. Sync, price-option, clear-on-load, notes, scenario, option, edit, card, variant and size suites all re-run green. `node --check` clean. Browser-pane verification was not possible (the panel sits behind the login gate), so the cases assert the rendered card HTML directly.
 
 ## v9.68 — Local undo history for the scenario map
 - **Why:** v9.66 shipped a loader that overwrote the local scenario map with the contents of an empty table, and destroyed Jason's saved work. v9.67 turned that specific write into a merge, but the general lesson is the one that matters: this map is the only copy of something a person spent real time on, and every write to it is potentially the last one.
