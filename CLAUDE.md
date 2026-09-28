@@ -2,9 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.69**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.70**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.70 — Units Sold ran a week behind the Amazon P&L (upload wrote one table and skipped the other)
+- **Jason:** *"this data always seems to be a week behind (units sold page), despite me having uploaded data through 9/26. it shows up on my amazon p&l page."* Units Sold ended 9/14/26 while the P&L charted 9/21/26, from the same upload.
+- **Root cause.** One SKU Economics upload writes BOTH `sales_weekly` (Units Sold, Forecast, velocity) and `sku_economics` (Amazon P&L). The overlap dialog's answer was applied to `sales_weekly` ONLY — `econRows` is built from `econAgg`, which the `new_only` splice never touched, so `sku_economics` upserted regardless. Re-upload a week that already had any rows, answer *"Add new rows only"* (the conservative-sounding choice), and `sales_weekly` dropped the whole week while `sku_economics` took all of it. The P&L moved forward, Units Sold did not, and nothing on screen said the two tables had diverged.
+- **Second defect in the same block.** The overlap probe queried `chAsins.slice(0, 100)` and generalized the answer to the entire week. With ~660 products that let ~15% of the catalog decide for all of it: one overlapping ASIN marked the week as existing, and under `new_only` every genuinely-new ASIN in that week was discarded along with it.
+- **Fixes:**
+  - **The skip decision is now recorded and shared.** Rows skipped for `sales_weekly` go into a `skipKeys` set keyed `asin|region|week`, and `econRows` filters on the same set. The two tables can no longer drift.
+  - **The probe covers every ASIN**, chunked 100 per request, and the probe error is now thrown rather than ignored.
+  - **Skipping is per (asin, week), not per week.** A brand-new ASIN inside an overlapping week is written instead of discarded.
+  - The dialog's "existing rows" count is now the true matched-row count rather than a second sampled query.
+- **New Query Database preset `Units Sold vs P&L week coverage`** — full outer join of per-week row and unit counts between `sales_weekly` (amazon channels) and `sku_economics`, labeling each week `ok`, `MISSING from sales_weekly (Units Sold is behind)`, `MISSING from sku_economics (P&L is behind)`, or `row count differs`. This class of divergence was previously invisible until someone noticed two pages disagreeing.
+- **Existing data is not repaired by the code fix.** Weeks already missing from `sales_weekly` stay missing until re-uploaded. Re-upload the affected SKU Economics file and choose **Replace** (the delete+insert is scoped to exactly the (channel, asin, week) triples in the file, so it cannot touch anything outside it).
+- **Verification:** 20 cases driving the REAL extracted upload block against a stubbed Supabase that actually stores rows — Jason's exact scenario (partially-uploaded week + `new_only`) now keeping both tables in step, `replace` writing the full week to both without duplicating, a brand-new week uploading with no dialog, an overlap at the 130th ASIN being detected where the old 100-row sample would have missed it, and US/CA handled independently. `node --check` clean.
 
 ## v9.69 — Saved price option cards show the brand they were priced against
 - **Jason:** *"i need to see the brand these are set for."* A card froze COGS, size, pack, fees and contribution, but not the Brand or Category filter, so two cards priced against different comparable sets looked identical.
