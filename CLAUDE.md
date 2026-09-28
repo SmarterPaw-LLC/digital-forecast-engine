@@ -2,9 +2,30 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.70**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.71**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.71 — Units Sold chart was a week early: UTC date parsing in the week bucketer
+- **Jason:** *"this data always seems to be a week behind (units sold page) ... it shows up on my amazon p&l page"*, then, decisively, *"stop guessing. i can run queries."* He ran one, and it ended the argument:
+
+```
+sales_weekly,2026-09-21,250
+sku_economics,2026-09-21,250.00
+```
+
+  Identical in both tables, every week. Nothing was missing, nothing had diverged. The P&L plotted 250 at 9/21 and Units Sold plotted the same 250 at 9/14, so the whole series was rendering one week early.
+- **Cause.** All three copies of the chart's `toMondayKey` did `new Date(dateStr)`, which parses `'2026-09-21'` as **UTC midnight**. Read back in a UTC-negative timezone (Kansas City, UTC-5) that is Sep 20 at 19:00 local, so `getDay()` returns 0 (Sunday). The next line, `diff = dow === 0 ? -6 : (1 - dow)`, then subtracts 6 MORE days, landing on Sep 14. Amazon, Chewy and Walmart rows are all stored on Mondays, so every one of them shifted a full week earlier. Shopify daily rows were mostly unaffected, except days that themselves fall on a Monday.
+- **This is the v4.92 bug on the read side.** v4.92 fixed exactly this in the Shopify parser with `parseLocalDate` / `dateToMondayLocal` and documented it as a write-path issue. The read-path copies added later (v6.2 seasonality, v6.4 Units Sold chart, v7.69 fit chart) each re-introduced the raw `new Date(...)` parse. **Any date string touched with `new Date('YYYY-MM-DD')` anywhere in this file is suspect** — it is UTC, and every `getDay` / `getDate` / `getFullYear` read off it is local.
+- **Fix:** all three `toMondayKey` copies now use `parseLocalDate`, as does the Units Sold chart's `inRange` bounds check (which compared a UTC-parsed date against local `from` / `to`).
+- **Three surfaces were affected, not one:**
+  1. **Units Sold chart** (Total and By Channel) — the visible symptom.
+  2. **`computeProductSeasonality`** — weekly buckets feeding the seasonal curve were all shifted a week, so every calculated curve is offset by one ISO week. **Recompute affected products on the Seasonality tab** (per-product Calculate, or the bulk apply) to pick up corrected curves.
+  3. **The seasonality fit chart's per-channel overlay** (v7.69).
+- **Verification:** the real `parseLocalDate` + `toMondayKey` extracted and run under America/Chicago, America/Los_Angeles, America/New_York, UTC, Europe/London and Asia/Tokyo — Monday-stored weekly rows keeping their own date (including across a year boundary), daily rows bucketing to the Monday of their Mon-Sun week, and bad input returning null. Plus a regression guard that runs the pre-v9.71 implementation in UTC-negative zones and asserts it produces the WRONG answer, so the bug cannot silently return. Under UTC the old code passed every case, which is exactly why it survived this long.
+
+### Correction to v9.70
+v9.70 was diagnosed from the symptom without checking the stored data, and **was not the cause of this.** Its two fixes are real and worth keeping (the `new_only` choice applied only to `sales_weekly` while `sku_economics` upserted regardless, and the overlap probe sampled just the first 100 ASINs), but they describe a latent bug that had not fired here. **No re-upload was needed.** The lesson is the one Jason enforced: when two surfaces disagree and the data is queryable, query it before writing code.
 
 ## v9.70 — Units Sold ran a week behind the Amazon P&L (upload wrote one table and skipped the other)
 - **Jason:** *"this data always seems to be a week behind (units sold page), despite me having uploaded data through 9/26. it shows up on my amazon p&l page."* Units Sold ended 9/14/26 while the P&L charted 9/21/26, from the same upload.
