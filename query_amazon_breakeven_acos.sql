@@ -101,6 +101,27 @@ soh as (
   order by fis.asin, fis.snapshot_date desc
 ),
 
+-- Amazon's FBA Fee Preview: dimensions, weight, assigned size tier and
+-- Amazon's OWN expected fulfillment fee. That last field is "Should be FBA
+-- Fee" directly, so no fee-tier lookup has to be maintained here.
+-- Latest snapshot per ASIN wins. Coverage is per Seller Central account, so a
+-- brand whose export has not been uploaded comes back null rather than wrong.
+feeprev as (
+  select distinct on (fp.asin)
+         fp.asin,
+         fp.expected_fulfillment_fee_per_unit          as should_be_fba_fee,
+         fp.expected_future_fulfillment_fee_per_unit   as future_fba_fee,
+         fp.estimated_referral_fee_per_unit            as expected_referral_fee,
+         fp.product_size_tier,
+         fp.item_package_weight, fp.unit_of_weight,
+         fp.longest_side, fp.median_side, fp.shortest_side, fp.unit_of_dimension,
+         fp.snapshot_date                              as fee_snapshot_date
+  from fba_fee_preview fp
+  where fp.region = 'US'
+    and fp.asin is not null
+  order by fp.asin, fp.snapshot_date desc
+),
+
 base as (
   select
     p.sp_sku, p.asin, p.brand, p.title, p.msrp,
@@ -110,7 +131,11 @@ base as (
           / nullif(e.units_sold,0) * 100, 2)                    as refunds_pct,
     round(e.refund_cost  / nullif(e.net_units,0), 4)            as refund_cost_pu,
     round(e.fba_fee      / nullif(e.net_units,0), 4)            as amzn_fba_fee,
-    null::numeric                                               as should_be_fba_fee,
+    fpv.should_be_fba_fee,
+    fpv.future_fba_fee, fpv.expected_referral_fee,
+    fpv.product_size_tier, fpv.item_package_weight, fpv.unit_of_weight,
+    fpv.longest_side, fpv.median_side, fpv.shortest_side, fpv.unit_of_dimension,
+    fpv.fee_snapshot_date,
     round(e.referral_fee / nullif(e.net_units,0), 4)            as referral_pu,
     -- COGS + logistics bucket. v2 adds removal + AWD and nets the
     -- reimbursement credit, so this is now the full landed-to-shelf cost.
@@ -143,6 +168,7 @@ base as (
   left join vel v on v.master_id = p.master_id
   left join soh s on s.asin = e.asin
   left join ads a on a.asin = e.asin
+  left join feeprev fpv on fpv.asin = e.asin
   where p.active is not false
 ),
 
@@ -181,6 +207,7 @@ select
   refund_cost_pu       as "Refund Cost",
   amzn_fba_fee         as "AMZN FBA Fee",
   should_be_fba_fee    as "Should be FBA Fee",
+  round(amzn_fba_fee - should_be_fba_fee, 4)                as "FBA Fee Variance",
   referral_pu          as "Referral Fees",
   cogs_ship_storage    as "COGS+Shipping+Storage",
   finance_cost_adj     as "Finance cost Adjustment",
@@ -204,7 +231,18 @@ select
   nonsp_ad_spend       as "Ad Spend non-SP",
   total_ad_spend       as "Actual Ad Spend window",
   actual_acos_pct      as "Actual ACOS pct",
-  -- audit / reconciliation block
+  -- product dimensions + size tier, from Amazon FBA Fee Preview
+  product_size_tier    as "Size Tier",
+  item_package_weight  as "Pkg Weight",
+  unit_of_weight       as "Weight Unit",
+  longest_side         as "Longest Side",
+  median_side          as "Median Side",
+  shortest_side        as "Shortest Side",
+  unit_of_dimension    as "Dim Unit",
+  future_fba_fee       as "Expected Future FBA Fee",
+  expected_referral_fee as "Expected Referral Fee",
+  fee_snapshot_date    as "Fee Preview As Of",
+    -- audit / reconciliation block
   inbound_pu           as "aud Inbound per unit",
   storage_pu           as "aud Storage per unit",
   removal_pu           as "aud Removal per unit",

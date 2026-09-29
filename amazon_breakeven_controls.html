@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Amazon Break-Even Controls</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single reading column, data tables break out to full width and scroll on narrow */
+:root{
+  --bg:#faf8f5; --surface:#ffffff; --surface-2:#f4f0ea;
+  --fg:#1c1a17; --fg-2:#56504a; --fg-3:#8a8279;
+  --line:#e4ded5; --line-2:#d2c9bc;
+  --accent:#b45309; --good:#15803d; --bad:#b91c1c;
+  --display:"Newsreader",Georgia,"Times New Roman",serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#17150f; --surface:#211e18; --surface-2:#2a251d;
+  --fg:#f2ede5; --fg-2:#b8b0a4; --fg-3:#8b8276;
+  --line:#332e26; --line-2:#443d32;
+  --accent:#f0a45c; --good:#4ade80; --bad:#f87171;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#17150f; --surface:#211e18; --surface-2:#2a251d;
+  --fg:#f2ede5; --fg-2:#b8b0a4; --fg-3:#8b8276;
+  --line:#332e26; --line-2:#443d32;
+  --accent:#f0a45c; --good:#4ade80; --bad:#f87171;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.6;margin:0}
+.wrap{max-width:900px;margin:0 auto;padding-inline:20px;padding-block:44px 72px}
+h1{font-family:var(--display);font-weight:600;font-size:clamp(28px,5vw,40px);line-height:1.15;margin:0 0 10px;text-wrap:balance;letter-spacing:-.01em}
+h2{font-family:var(--display);font-weight:600;font-size:clamp(20px,3.4vw,26px);line-height:1.2;margin:56px 0 14px;text-wrap:balance;padding-top:22px;border-top:1px solid var(--line)}
+h3{font-family:var(--body);font-weight:600;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3);margin:30px 0 10px}
+p{margin:0 0 14px;max-width:68ch}
+.lede{font-size:17px;color:var(--fg-2);max-width:62ch}
+ul{margin:0 0 14px;padding-left:20px;max-width:68ch}
+li{margin-bottom:7px}
+strong{font-weight:600}
+code{font-family:var(--mono);font-size:.88em;background:var(--surface-2);padding:1px 5px;border-radius:3px}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0}
+.tag{font-family:var(--mono);font-size:11.5px;color:var(--fg-2);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:4px 9px}
+.scroll{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:520px}
+th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--fg-3);font-weight:500;padding:11px 14px;border-bottom:1px solid var(--line-2);white-space:nowrap;background:var(--surface-2)}
+td{padding:10px 14px;border-top:1px solid var(--line);vertical-align:top;min-width:0}
+td.n{font-family:var(--mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+th.n{text-align:right}
+td.c{font-family:var(--mono);font-size:12.5px;white-space:nowrap;color:var(--accent)}
+tbody tr:nth-child(even){background:var(--surface-2)}
+.good{color:var(--good);font-weight:500}
+.bad{color:var(--bad);font-weight:500}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin:0 0 22px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.card .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--fg-3);margin-bottom:6px}
+.card .v{font-family:var(--display);font-size:25px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+.card .s{font-size:12px;color:var(--fg-3);margin-top:4px;line-height:1.4}
+.note{background:var(--surface);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:14px 18px;margin:0 0 20px}
+.note p:last-child{margin-bottom:0}
+.note .h{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--fg-3)}
+@media (max-width:520px){.wrap{padding-block:32px 56px}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<h1>Amazon Break-Even Controls</h1>
+<p class="lede">Per-SKU all-in cost, break-even ACOS and ROAS, and stock cover for the Amazon US channel. Built to refresh monthly.</p>
+<div class="meta">
+  <span class="tag">2026-07-06 → 2026-09-21</span>
+  <span class="tag">12 weeks</span>
+  <span class="tag">158 SKUs</span>
+  <span class="tag">Amazon US</span>
+</div>
+
+<h2>Where the numbers land</h2>
+
+<div class="cards">
+  <div class="card"><div class="k">Net sales</div><div class="v">$305,728</div><div class="s">Across 158 active SKUs</div></div>
+  <div class="card"><div class="k">Total ad spend</div><div class="v">$34,442</div><div class="s">$33,066 SP + $1,376 non-SP</div></div>
+  <div class="card"><div class="k">Blended ACOS</div><div class="v">11.3%</div><div class="s">Against ~47% median break-even</div></div>
+  <div class="card"><div class="k">Reconciliation</div><div class="v good">$0.00</div><div class="s">Median gap vs Amazon's own net proceeds</div></div>
+</div>
+
+<h2>The cost model ties out to Amazon</h2>
+
+<p>Every fee in the model is checked against Amazon's own <code>net_proceeds_total</code>, which is Amazon's calculation of what it paid out after its fees. If our fee capture were incomplete, our derived figure would sit consistently above Amazon's.</p>
+
+<div class="scroll"><table>
+<thead><tr><th>Check</th><th class="n">Result</th><th>Reading</th></tr></thead>
+<tbody>
+<tr><td>Median gap per unit</td><td class="n good">$0.0000</td><td>No systematic fee omission</td></tr>
+<tr><td>Within ±$0.25 per unit</td><td class="n">107 of 158</td><td>68% of SKUs tie out closely</td></tr>
+<tr><td>Dollar-weighted gap</td><td class="n">$1,162</td><td>0.38% of net sales over the window</td></tr>
+<tr><td>Largest per-unit gaps</td><td class="n">1–7 units</td><td>All on single-digit-unit SKUs, where rounding dominates</td></tr>
+</tbody>
+</table></div>
+
+<p>The model captures FBA fulfillment, referral, refund administration, referral refunds, monthly storage, aged inventory, storage utilization surcharge, low inventory fees, inbound placement, inbound transport, removal, and Amazon Warehousing &amp; Distribution, with FBA reimbursements applied as a credit.</p>
+
+<h2>Finding 1 — Nothing is genuinely unprofitable</h2>
+
+<p>Ten SKUs show negative Non-Ad Profit, which produces a negative break-even ROAS. <strong>All ten sold fewer than 25 units in the window</strong> and are flagged accordingly.</p>
+
+<p>The cause is cost allocation, not economics. Storage and inbound fees are divided across units sold in the period. One SKU sold a single unit and absorbed a full quarter of storage on it, producing a per-unit cost of $162 on a $23.99 product.</p>
+
+<div class="note">
+  <div class="h">How to read a negative break-even ROAS</div>
+  <p>It means the SKU does not cover its costs before advertising. It is not a ROAS target that can be achieved. On flagged low-volume rows, treat it as a measurement artifact rather than a finding.</p>
+</div>
+
+<div class="scroll"><table>
+<thead><tr><th>Segment</th><th class="n">SKUs</th><th class="n">Share of SKUs</th><th class="n">Share of net sales</th></tr></thead>
+<tbody>
+<tr><td>Flagged low volume (&lt;25 units)</td><td class="n">106</td><td class="n">67%</td><td class="n">4.4%</td></tr>
+<tr><td>Unflagged, reliable costing</td><td class="n">52</td><td class="n">33%</td><td class="n">95.6%</td></tr>
+<tr><td>Negative Non-Ad Profit</td><td class="n">10</td><td class="n">6%</td><td class="n">0.2%</td></tr>
+<tr><td class="good">Negative and <em>not</em> low volume</td><td class="n good">0</td><td class="n">—</td><td class="n">—</td></tr>
+</tbody>
+</table></div>
+
+<h2>Finding 2 — Advertising is running far below break-even</h2>
+
+<p>Filtering to the 43 SKUs with reliable costing and meaningful volume: <strong>39 are spending under half their break-even ACOS, and none are over it.</strong> Blended spend is 11.3% against a median break-even near 47%.</p>
+
+<div class="scroll"><table>
+<thead><tr><th>SKU</th><th>Product</th><th class="n">Break-even ACOS</th><th class="n">Actual ACOS</th><th class="n">Net sales</th><th class="n">Ad spend</th></tr></thead>
+<tbody>
+<tr><td class="c">CF312</td><td>Catnip Spray 3 oz</td><td class="n">45.8%</td><td class="n">15.6%</td><td class="n">$57,817</td><td class="n">$9,012</td></tr>
+<tr><td class="c">CF103</td><td>Jar of Catnibas Pawty Mix</td><td class="n">43.1%</td><td class="n">15.7%</td><td class="n">$57,145</td><td class="n">$8,968</td></tr>
+<tr><td class="c">CF007</td><td>Meowi-Waui</td><td class="n">45.5%</td><td class="n">18.6%</td><td class="n">$32,792</td><td class="n">$6,091</td></tr>
+<tr><td class="c">KF316</td><td>Kitty Ka-Zoom Liquid Catnip Spray</td><td class="n">22.9%</td><td class="n">6.0%</td><td class="n">$19,506</td><td class="n">$1,163</td></tr>
+<tr><td class="c">CF102</td><td>Jar Catnibas Catnip Buds</td><td class="n">50.5%</td><td class="n">13.6%</td><td class="n">$12,570</td><td class="n">$1,707</td></tr>
+<tr><td class="c">CB2583</td><td>Purr-Effect Trio Pack</td><td class="n">50.6%</td><td class="n">0.2%</td><td class="n">$10,639</td><td class="n">$20</td></tr>
+<tr><td class="c">CF316</td><td>3 oz Catnip and Silvervine Spray</td><td class="n">45.7%</td><td class="n">0.0%</td><td class="n">$9,027</td><td class="n">$0</td></tr>
+<tr><td class="c">DB2508</td><td>Doggijuana Juananip Refill Bottle</td><td class="n">45.3%</td><td class="n">6.3%</td><td class="n">$8,714</td><td class="n">$546</td></tr>
+<tr><td class="c">CF001</td><td>Kalico Kush</td><td class="n">44.1%</td><td class="n">3.1%</td><td class="n">$8,602</td><td class="n">$266</td></tr>
+<tr><td class="c">DTC040</td><td>Doggijuana Treats for Dogs</td><td class="n">45.1%</td><td class="n">4.8%</td><td class="n">$7,794</td><td class="n">$376</td></tr>
+</tbody>
+</table></div>
+
+<p>Two rows stand out: CB2583 and CF316 together produced $19,666 in net sales on $20 of combined ad spend. Their ad headroom has never been tested.</p>
+
+<h2>Finding 3 — Margin structure differs sharply by brand</h2>
+
+<div class="scroll"><table>
+<thead><tr><th>Brand</th><th class="n">SKUs</th><th class="n">Net sales</th><th class="n">Ad spend</th><th class="n">Actual ACOS</th><th class="n">Median break-even ACOS</th></tr></thead>
+<tbody>
+<tr><td>Meowijuana</td><td class="n">28</td><td class="n">$222,627</td><td class="n">$27,542</td><td class="n">12.4%</td><td class="n">46.8%</td></tr>
+<tr><td>Doggijuana</td><td class="n">11</td><td class="n">$37,987</td><td class="n">$3,372</td><td class="n">8.9%</td><td class="n">45.1%</td></tr>
+<tr><td>Kitty Ka-Zoom</td><td class="n">4</td><td class="n">$28,046</td><td class="n">$1,163</td><td class="n">4.1%</td><td class="n">22.3%</td></tr>
+</tbody>
+</table></div>
+
+<p>Kitty Ka-Zoom carries roughly half the break-even headroom of the other two brands, so it supports materially less advertising per dollar of revenue. Any blended ACOS target applied across all three brands will over-spend Kitty Ka-Zoom or under-spend Meowijuana.</p>
+
+<h2>Finding 4 — FBA fee variance, and what the Fee Preview actually shows</h2>
+
+<p>Amazon's FBA Fee Preview report supplies the missing inputs: longest, median and shortest side, length and girth, package weight, assigned size tier, and Amazon's own <em>expected fulfillment fee per unit</em>. No fee-tier lookup has to be built, because Amazon publishes the answer.</p>
+
+<h3>Coverage is one account of three</h3>
+
+<p>The export covers the Meowijuana Seller Central account only. Doggijuana and Kitty Ka-Zoom are absent entirely, which removes 26% of net sales from the comparison.</p>
+
+<div class="scroll"><table>
+<thead><tr><th>Brand</th><th class="n">SKUs matched</th><th class="n">Net sales without a fee row</th></tr></thead>
+<tbody>
+<tr><td>Meowijuana</td><td class="n">69 of 94</td><td class="n">$4,729</td></tr>
+<tr><td>Doggijuana</td><td class="n bad">0 of 42</td><td class="n">$43,089</td></tr>
+<tr><td>Kitty Ka-Zoom</td><td class="n bad">0 of 22</td><td class="n">$30,352</td></tr>
+</tbody>
+</table></div>
+
+<p>The same report pulled from the Doggijuana and Kitty Ka-Zoom accounts closes this. Kitty Ka-Zoom matters most, since it already shows roughly half the break-even headroom of the other brands and its fee structure is the likeliest reason.</p>
+
+<h3>Actual and expected fees are not on the same rate basis</h3>
+
+<p>Across the 69 matched SKUs, the fee Amazon charged runs <strong>below</strong> its stated expected fee, by a median of $0.70 per unit. Only 5 SKUs were charged more than expected, totalling $44.69 across the window.</p>
+
+<div class="scroll"><table>
+<thead><tr><th>Comparison</th><th class="n">SKUs</th><th>Reading</th></tr></thead>
+<tbody>
+<tr><td>Charged more than expected</td><td class="n">5</td><td>$44.69 over the window, roughly $194 annualized</td></tr>
+<tr><td>Charged less than expected</td><td class="n">57</td><td>Systematic, median −$0.70 per unit</td></tr>
+<tr><td>Within $0.10</td><td class="n">7</td><td>—</td></tr>
+</tbody>
+</table></div>
+
+<div class="note">
+  <div class="h">Before this column becomes a control</div>
+  <p>A one-directional gap across 57 of 69 SKUs points at a rate-basis difference rather than mis-measurement. Actual charges cover July through September; the Fee Preview reflects the rate card at the time of export, which in late September can already carry Q4 peak fulfillment rates. Same product, two different rate periods.</p>
+  <p>The practical consequence: as written, this column reads as a forward signal of what fulfillment will cost, not as an overcharge detector. Aligning the periods, or using Amazon's own historical fee basis, is needed before variance here supports a reimbursement claim.</p>
+</div>
+
+<p>On genuine overcharges, the exposure found is immaterial. The five cases total under $200 annualized, all on low-volume SKUs. That is a finding worth having, since it rules out a size-tier problem in the Meowijuana catalog rather than leaving it an open question.</p>
+
+<h3>Size tiers on file</h3>
+
+<div class="scroll"><table>
+<thead><tr><th>Size tier</th><th class="n">SKUs</th></tr></thead>
+<tbody>
+<tr><td>US large standard</td><td class="n">58</td></tr>
+<tr><td>Standard</td><td class="n">11</td></tr>
+<tr><td>US small standard</td><td class="n">4</td></tr>
+<tr><td>Envelope</td><td class="n">1</td></tr>
+<tr><td>Small oversize</td><td class="n">1</td></tr>
+</tbody>
+</table></div>
+
+<p>One SKU sits in small oversize. Oversize carries materially higher fulfillment cost, so it is the single listing where a dimension reduction would pay back most directly.</p>
+
+<h2>Column reference</h2>
+
+<h3>Identity</h3>
+<div class="scroll"><table>
+<thead><tr><th>Column</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td class="c">SKU</td><td>SmarterPaw internal SKU. Six products currently have none and arrive blank.</td></tr>
+<tr><td class="c">ASIN</td><td>Amazon listing identifier</td></tr>
+<tr><td class="c">Brand</td><td>Meowijuana, Doggijuana or Kitty Ka-Zoom</td></tr>
+<tr><td class="c">Product Title</td><td>Catalog title</td></tr>
+<tr><td class="c">MSRP list</td><td>List price where recorded. Not used in any calculation.</td></tr>
+</tbody>
+</table></div>
+
+<h3>Price and returns</h3>
+<div class="scroll"><table>
+<thead><tr><th>Column</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td class="c">Price</td><td>Realized average selling price: net sales ÷ net units. Already reflects promotions, coupons and Subscribe &amp; Save, so it runs below MSRP.</td></tr>
+<tr><td class="c">Refunds pct</td><td>Units returned ÷ units sold</td></tr>
+<tr><td class="c">Refund Cost</td><td>Referral fee refunds plus refund administration fees, per unit</td></tr>
+</tbody>
+</table></div>
+
+<h3>Amazon fees</h3>
+<div class="scroll"><table>
+<thead><tr><th>Column</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td class="c">AMZN FBA Fee</td><td>FBA fulfillment fees actually charged, per unit</td></tr>
+<tr><td class="c">Should be FBA Fee</td><td><strong>Source secured, coverage partial.</strong> Amazon's FBA Fee Preview report supplies dimensions, weight, size tier and Amazon's own expected fulfillment fee. The current export covers the Meowijuana account only. See Finding 4.</td></tr>
+<tr><td class="c">Referral Fees</td><td>Amazon referral fee, per unit</td></tr>
+</tbody>
+</table></div>
+
+<h3>Cost stack</h3>
+<div class="scroll"><table>
+<thead><tr><th>Column</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td class="c">COGS+Shipping+Storage</td><td>SmarterPaw landed cost (goods, freight, duty) plus prep and production labor, plus per-unit Amazon inbound placement, inbound transport, monthly storage, aged inventory, low inventory, storage utilization surcharge, removal and AWD fees, less FBA reimbursement credits.</td></tr>
+<tr><td class="c">Finance cost Adjustment</td><td><strong>Reads zero.</strong> Awaiting an annual cost-of-capital rate. The column applies that rate against inventory holding period once set.</td></tr>
+<tr><td class="c">Total Cost</td><td>Refund cost + FBA fee + referral + COGS/shipping/storage + finance adjustment</td></tr>
+</tbody>
+</table></div>
+
+<h3>Break-even</h3>
+<div class="scroll"><table>
+<thead><tr><th>Column</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td class="c">Non-Ad Profit</td><td>Price − Total Cost. The maximum spendable on advertising per unit while remaining profitable.</td></tr>
+<tr><td class="c">Break Even ACOS pct</td><td>Non-Ad Profit ÷ Price. Advertising above this loses money on the unit.</td></tr>
+<tr><td class="c">Break Even ROAS</td><td>Price ÷ Non-Ad Profit. Always the reciprocal of break-even ACOS.</td></tr>
+<tr><td class="c">Confidence Flag</td><td>Marks SKUs under 25 units in the window, where per-unit cost allocation is unreliable. Read break-even figures on flagged rows with caution.</td></tr>
+</tbody>
+</table></div>
+
+<h3>Demand and inventory</h3>
+<div class="scroll"><table>
+<thead><tr><th>Column</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td class="c">Daily Sales Velocity</td><td>Amazon US units ÷ 90 days. Feeds supply planning.</td></tr>
+<tr><td class="c">Avg Units per Month 3mo</td><td>Trailing three-month average monthly units</td></tr>
+<tr><td class="c">SOH total</td><td>Fulfillable + reserved + inbound units at Amazon</td></tr>
+<tr><td class="c">SOH Available</td><td>Fulfillable only, sellable today</td></tr>
+<tr><td class="c">SOH Inbound</td><td>Working, shipped and receiving</td></tr>
+<tr><td class="c">SOH As Of</td><td>Date of the inventory snapshot</td></tr>
+<tr><td class="c">Stock Cover Months</td><td>SOH total ÷ trailing three-month average monthly sales</td></tr>
+<tr><td class="c">SOH Target Assumption Months</td><td><strong>Placeholder of 2.0 applied uniformly.</strong> Awaiting a cover policy.</td></tr>
+<tr><td class="c">SOH Target Units</td><td>Average monthly units × target months</td></tr>
+<tr><td class="c">Excess Stock</td><td>SOH total − SOH Target Units. Positive is overstock, negative is shortfall.</td></tr>
+</tbody>
+</table></div>
+
+<h3>Advertising</h3>
+<div class="scroll"><table>
+<thead><tr><th>Column</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td class="c">Ad Spend SP</td><td>Sponsored Products, from Amazon SKU Economics</td></tr>
+<tr><td class="c">Ad Spend non-SP</td><td>Sponsored Brands and Sponsored Display attributed to this ASIN. DSP and Sponsored TV are audience-level and carry no ASIN, so they are excluded rather than allocated on an assumption.</td></tr>
+<tr><td class="c">Actual Ad Spend window</td><td>SP + non-SP</td></tr>
+<tr><td class="c">Actual ACOS pct</td><td>Total ad spend ÷ net sales. Compare against Break Even ACOS.</td></tr>
+</tbody>
+</table></div>
+
+<h3>Audit block</h3>
+<p>Columns prefixed <code>aud</code> exist to verify the cost stack rather than to be reported. They break out inbound, storage, removal, AWD and reimbursement per unit, then compare our derived net proceeds against Amazon's own figure.</p>
+<div class="scroll"><table>
+<thead><tr><th>Column</th><th>Definition</th></tr></thead>
+<tbody>
+<tr><td class="c">aud Amzn Net Proceeds per unit</td><td>Amazon's stated net proceeds ÷ net units</td></tr>
+<tr><td class="c">aud Derived Net Proceeds per unit</td><td>Price less every fee we capture, less Sponsored Products spend</td></tr>
+<tr><td class="c">aud Recon Delta</td><td>Derived − Amazon. Near zero means complete fee capture. A persistent gap means a fee line is missing.</td></tr>
+</tbody>
+</table></div>
+
+<h2>Open items</h2>
+
+<div class="scroll"><table>
+<thead><tr><th>Item</th><th>Blocking</th><th>Owner</th></tr></thead>
+<tbody>
+<tr><td>Should be FBA Fee — remaining accounts</td><td>Fee Preview secured for Meowijuana. Pull the same report from the Doggijuana and Kitty Ka-Zoom Seller Central accounts to cover the other $73,441 of net sales.</td><td>SmarterPaw</td></tr>
+<tr><td>Should be FBA Fee — rate basis</td><td>Actual and expected fees currently sit on different rate periods, producing a systematic −$0.70 per unit gap. Align the periods before treating variance as recoverable.</td><td>SmarterPaw</td></tr>
+<tr><td>Finance cost Adjustment</td><td>Needs an annual cost-of-capital rate. Column is built and reads zero until set.</td><td>Finance</td></tr>
+<tr><td>SOH Target Assumption</td><td>Needs a cover policy. Can be applied per SKU using existing lead times and safety stock rather than one uniform figure.</td><td>Supply chain</td></tr>
+<tr><td>Stock Forward Cover Months</td><td>Six-month seasonally adjusted forecast exists in the planning tool but not in this extract. Available today as a separate export.</td><td>SmarterPaw</td></tr>
+<tr><td>Six blank SKUs</td><td>Products carry no internal SKU. Largest is Catnip Sampler Bundle at $2,109 net sales.</td><td>SmarterPaw</td></tr>
+<tr><td>Non-SP ad spend coverage</td><td>Non-SP registers 4% of total ad spend against a historical norm nearer 25%. Worth confirming the Amazon Ads export is current before relying on the ACOS columns.</td><td>SmarterPaw</td></tr>
+</tbody>
+</table></div>
+
+<h2>How to read the file</h2>
+
+<ul>
+<li><strong>Minimum volume.</strong> Below roughly 25 units per quarter, storage and inbound allocation makes per-unit cost unreliable. Those rows carry a Confidence Flag.</li>
+<li><strong>Stock on hand includes inbound.</strong> Available and inbound are also broken out separately if a narrower definition is preferred.</li>
+<li><strong>Costing is contribution margin.</strong> General overhead is not allocated. Flag if fully absorbed costing is required instead.</li>
+<li><strong>Break-even is independent of advertising.</strong> It is calculated before ad spend, so gaps in the ad columns do not affect it.</li>
+<li><strong>Velocity divisor.</strong> The window is 12 weeks but divides by three months, so average monthly units run about 7% low and stock cover about 7% high.</li>
+</ul>
+
+<footer>
+Amazon US, 2026-07-06 to 2026-09-21. Sources: Amazon SKU Economics, Amazon Ads, FBA inventory snapshots, and SmarterPaw cost records. Refreshes monthly.
+</footer>
+
+</div>
+
+</body>
+</html>
