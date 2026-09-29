@@ -20,3 +20,6 @@ ehthumbs.db
 *.tmp
 .env
 .env.local
+
+# stray Windows shortcuts
+*.lnk
