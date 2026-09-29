@@ -2,9 +2,33 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.71**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.72**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.72 — Query Database results are exportable; Missing-COGS banner names the products
+Two fixes from one session.
+
+### 1. Top-bar ↓ CSV did nothing on the Query Database tab
+- **Jason:** *"i can't export the csv data"* — screenshot showed a 158-row result set and an Export CSV dialog reading `Everything (0 rows)`.
+- **Cause.** `exportCSV()` routes P&L and Forecast sub-views explicitly, then falls through to `showExportDialog(activeTab)`. `activeTab` is `data`, and that dialog has no case for the Query Database sub-view — so it reported 0 rows no matter what the query returned. The results header's own `Copy CSV` button worked the whole time, but it copies to the clipboard rather than downloading, and it is easy to miss next to the top-bar button every other page uses.
+- **This violated the standing rule** from v8.00 ([[feedback_always_csv_export]]): every data-bearing page or sub-view must be CSV-exportable from the top-bar button before shipping. The Query Database tab shipped in v4.42 and was never wired up.
+- **Fixes:**
+  - **New `downloadQueryResultsCSV()`** — real file download (Blob + anchor, with the anchor attached to the DOM because Firefox no-ops a detached one). Routed through `promptCsvName()` like every other export, and **named after the saved query when one is loaded**, so exporting `Amazon Break-Even ACOS + ROAS` lands as that filename rather than something generic. UTF-8 BOM prepended so Excel reads the encoding (product titles carry ® / ™ / smart quotes).
+  - **`exportCSV()` gained a `data` branch** — `if (activeTab === 'data' && dataView === 'query') return downloadQueryResultsCSV();`
+  - **New `↓ Download CSV` button** in the results header, green-accented, left of the existing Copy CSV button (which is now labeled with a copy glyph so the two read as distinct actions).
+  - **One shared `buildQueryResultsCsv()`** feeds both Copy and Download so they cannot drift. Quoting is stricter than the old copy path, which only quoted on a comma: a value containing a double-quote or newline (inch marks in a product title, a multi-line note) previously produced a CSV that Excel silently mis-parsed into extra columns.
+- **Audit log** records `query.export` with row count + filename.
+
+### 2. Missing Amazon COGS banner now expands to name the products
+- **Jason:** *"on the P&L page, give me a list of what products need COGS is an expandable view"*. The v4.64 banner reported `8 products in this view had sales ($5,014.94 net sales) but no COGS` — accurate, but not actionable. You then had to switch to the COGS page and re-derive which eight.
+- **Banner is now a `<details>`.** Collapsed state is unchanged (same red border, same headline, same `Fix in COGS →` button) plus a `click to see which` hint. Expanded, it lists every affected product: brand chip · title (with the standard `↗ card` button to open the product modal) · ASIN · units · net sales.
+- **Sorted by net sales descending** so the biggest distortion to Contribution Profit is at the top — that is the one worth fixing first.
+- **`Fix in COGS →` calls `stopPropagation` + `preventDefault`** so clicking it navigates instead of toggling the disclosure open.
+- **Capped at 50 rows** with an `… and N more` line pointing at the COGS page's `Missing Amazon COGS` filter, so a catalog-wide gap does not render a 300-row table inside a scorecard strip. Body scrolls at 320px.
+- Honors every active P&L filter (region / period / brand / category / search / quick), because it reads the same `missingCogsRows` the banner count already used.
+
+**Verification:** `node --check` clean on the extracted app script (3.18MB). Both patches applied by index-based splice rather than exact-text match — the surrounding code is dense with nested template literals and a unicode check mark, and exact matching through two layers of shell quoting kept failing (same class of problem as the v9.71 heredoc note; the Write tool is the reliable path for this file).
 
 ## v9.71 — Units Sold chart was a week early: UTC date parsing in the week bucketer
 - **Jason:** *"this data always seems to be a week behind (units sold page) ... it shows up on my amazon p&l page"*, then, decisively, *"stop guessing. i can run queries."* He ran one, and it ended the argument:
