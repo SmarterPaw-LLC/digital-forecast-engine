@@ -2,9 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.75**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.76**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.76 — Dimensions on the product card
+- **Jason:** *"does this appear on the product card and as a selectable column?"* The column half was already true (v9.75 registered five of them). The card half was not — nothing in `openProductModal` / `saveProduct` touched the dims fields, so the only way to read a product's measurements was to enable a column on the Products table. Fixed.
+- **New `📏 Dimensions · Amazon-measured` section** on the product modal, between Classification and the Bill of Materials block. Six read-outs in a 3-up grid: **Size tier** (the fee driver, rendered as a chip), **Package weight** + unit, **Dims (L×M×S)** + unit, **Length + girth** (held since v9.75 but never surfaced anywhere — it is what Amazon's oversize thresholds are measured against), **Measured as of** (snapshot date, with a relative-age note that turns orange past 90 days), and **Source**.
+- **Read-only, and the card says why.** No input, no save path. A note under the grid states that these are Amazon's measurements, that the Fee Preview uploader rewrites them on every upload, and that disputing Amazon's numbers would need our own separate fields. This is the same design call as v9.75 — an editable field here would be a lie, because the next upload would silently overwrite it. The alternative (make it editable and have the uploader skip non-empty values) was rejected: it would mean the fee math could silently run off a stale hand-entered number.
+- **Two distinct empty states**, because the fix differs:
+  - Product HAS an ASIN but no dims → points at `Data → Uploads → 📏 Amazon FBA Fee Preview`, since the data simply has not been uploaded for that account yet.
+  - Product has NO ASIN → adds an orange line saying it will never appear in a Fee Preview report at all. Without this the user would keep re-uploading looking for a row that cannot exist.
+- **Hidden entirely on a new product** — an empty-state panel on a product that does not exist yet is noise.
+- **Verification:** `pfRenderDims` extracted and driven against six product shapes under a stubbed DOM — new product (section hidden), full dims (all 10 expected values present, age note correct), no-dims-with-ASIN (uploader pointer shown, no-ASIN warning correctly absent), no-dims-without-ASIN (warning present), partial dims (weight only → sides fall back to an em-dash rather than rendering `?×?×?`), and stale dims (>90d → orange). Every case asserted free of leaked `undefined` / `NaN` / `null` / `[object`. `node --check` clean on the 3.21MB script.
+- **Process note worth keeping:** the first patch attempt died with `UnicodeEncodeError: surrogates not allowed` — a Python string literal `'ud83d + udccf'` is two lone surrogates, not the 📏 character; the correct escape is `'📏'`. **The temp-file + `os.replace` pattern meant `index.html` was never touched** — the write threw before the replace, and the file was verified byte-identical + clean in git. This is exactly the failure that truncated CLAUDE.md to 0 bytes in v9.73 when the script wrote directly to the target path. Also: `/tmp` resolves under Git Bash but NOT from Python on Windows (it wants the real Windows temp path under AppData/Local/Temp)), so a bash-written script edited by a Python one-liner needs the real Windows path.
 
 ## v9.75 — Weight + dimensions copied onto `products`
 - **Jason:** *"can you copy over the weight and dims to the product table?"* `fba_fee_preview` is a time series (one row per sku × marketplace × snapshot), which is right for tracking how Amazon's measurements and fees drift but awkward for every other part of the app, which works per product. Every read had to join and then de-duplicate a snapshot table.
