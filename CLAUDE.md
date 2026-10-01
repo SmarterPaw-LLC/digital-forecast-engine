@@ -2,9 +2,35 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.74**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.75**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.75 — Weight + dimensions copied onto `products`
+- **Jason:** *"can you copy over the weight and dims to the product table?"* `fba_fee_preview` is a time series (one row per sku × marketplace × snapshot), which is right for tracking how Amazon's measurements and fees drift but awkward for every other part of the app, which works per product. Every read had to join and then de-duplicate a snapshot table.
+- **⚠ SQL TO RUN:** `supabase_v9_75_product_dims.sql` — adds 10 columns to `products` (`item_package_weight`, `unit_of_weight`, `longest_side`, `median_side`, `shortest_side`, `length_and_girth`, `unit_of_dimension`, `product_size_tier`, `dims_source`, `dims_updated_at`) plus an index on `product_size_tier`, then backfills from the latest Fee Preview snapshot per ASIN. Idempotent (`add column if not exists`). The backfill uses `distinct on (fp.asin) … order by fp.asin, (fp.region = 'US') desc, fp.snapshot_date desc` so **US wins** when a product has rows for several marketplaces (the break-even model is US), falling back to whatever marketplace exists.
+- **The Fee Preview uploader now mirrors dims onto `products`** after writing its snapshot rows, so the two never drift. Same US-preferred, newest-snapshot dedupe as the SQL backfill, expressed in JS:
+  ```js
+  const better = !prev
+    || (r.region === 'US' && prev.region !== 'US')
+    || (r.region === prev.region && r.snapshot_date > prev.snapshot_date);
+  ```
+  Only rows carrying an actual measurement (weight, longest side, or size tier) are written, then `loadProducts()` refreshes the in-memory catalog. The status line reports it: `· ✎ dims on N product(s)`.
+- **These are AMAZON'S measurements, and the uploader refreshes them on every upload.** That is the whole reason to hold them: they are what the fulfillment fee is calculated from. The consequence is that **a manual edit here will be overwritten by the next Fee Preview upload**, so no edit affordance was added. If SmarterPaw ever wants its OWN measured dims (to dispute Amazon's), those belong in a separate pair of columns rather than fighting this one for the same fields. `dims_source` is already on the table to tell the two apart.
+- **5 new Products columns** in a new `DIMENSIONS` group, **all `default:false`** so nobody's saved column set shifts:
+  - **Size Tier** — Amazon's assigned tier, the thing that actually drives the fee.
+  - **Pkg Weight** — value plus its unit (`2.40 lb`), sorts numerically.
+  - **Dims (L×M×S)** — all three sides in one cell with the unit; **sorts by longest side**.
+  - **Longest Side** — the same number alone, as its own sortable column, because it is the dimension most likely to push a product into a higher tier.
+  - **Dims As Of** — snapshot date the measurements came from, so staleness is visible.
+  Each has a `csv` so the Products export carries them; the combined cell exports as `6.1x4.2x1.8 inches`.
+- **Registering the group was the bug worth recording.** The Products column picker builds its checkboxes from a separate declarative `PROD_COL_GROUPS` array, not from the groups present in `PROD_COLUMNS`. Adding columns in a group that array does not know about gives them **no checkbox at all**, and since they are `default:false` they are permanently unreachable. This is exactly the v6.61 bug (the Inventory popup hid the Walmart and Bundle Need groups the same way, and Bundle had been silently broken for 11 versions). Fixed here by registering `dims` AND by porting v6.61's guard: the popup now appends any group found in `PROD_COLUMNS` but missing from `PROD_COL_GROUPS` rather than dropping it. **Check this array whenever adding a Products column group** — or rather, do not have to any more.
+- **Verification:** `node --check` clean on the extracted script (3.20MB). Confirmed all 5 columns register under `group:'dims'`, the group appears in the picker's list, and the straggler guard is in place.
+- **Architecture Rule #8 audit turned up two REAL gaps, both now fixed.** Adding columns to `products` is exactly the trigger for this audit, and it caught more than the column itself:
+  1. **The 10 new `products` columns are now in `runMerge`'s backfill**, as an ATOMIC bundle (section `1e`) rather than field-by-field. A weight with no sides, or sides with no unit, is nonsense — the uploader always writes the set together, so all-or-nothing matches reality. Fires only when the survivor has no dims at all (`item_package_weight`, `longest_side` and `product_size_tier` all empty); a survivor that already carries a measurement keeps its own, since the uploader refreshes on every upload and the survivor's is newer by definition. Worth doing even though the next Fee Preview upload would repopulate: between the merge and that upload, the survivor would otherwise show `—` in every Dimensions column.
+  2. **`fba_fee_preview` (v9.73) was NEVER wired into the merge tool or the SP-TEMP promotion path.** Its FK is `on delete set null`, so merging a duplicate left its snapshot rows alive with `master_id` nulled: orphaned history, and the uploader's dims mirror (which keys on `master_id`) could never touch those rows again. Added `reassignMasterId('fba_fee_preview')` to `runMerge` and the matching `update({ master_id })` to the promotion block. **This is the same bug class that has bitten this project 7+ times now** (v4.145 sku_economics_eu, v5.44/v5.76 chewy_sales_weekly, v6.98 fba_inventory_snapshots + 4 others) — a table ships with a `master_id` FK and the two FK-migration lists don't get updated.
+- **`doRestore` needed no change** — it upserts whole product-row objects rather than enumerating columns, and the backup side uses `select('*')`, so new columns flow through automatically. Same for the merge's own undo snapshots (`select('*')` on both src and tgt).
+- **Still open from this audit, NOT fixed here** (deliberately out of scope): the SP-TEMP promotion path is missing five more master_id-bearing tables that `runMerge` does handle — `fba_inventory_snapshots`, `fba_shipments`, `shopify_sales_daily`, `amazon_ad_spend`, `product_cogs`. Both the FBA Inventory and Amazon Ads uploaders auto-create SP-TEMPs, so those tables genuinely can hold rows for a product that is about to be promoted, and those rows are currently orphaned by the promotion. Separate fix, flagged as its own task.
 
 ## v9.74 — Correct the Fee Preview deep link
 - **Jason supplied the real URL:** `https://sellercentral.amazon.com/reportcentral/ESTIMATED_FBA_FEES/1`. The v9.73 card linked to `report-central/FEE_PREVIEW`, which I guessed at rather than verified, and which does not resolve.
