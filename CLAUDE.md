@@ -2,9 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.78**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.79**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.79 — Dimensions columns sorted wrong across mixed units
+- **Found while checking whether Shopify could supply dims.** Jason's Products screenshot shows Amazon returning MIXED units in the same Fee Preview feed: most rows come back `0.29 pounds` / `11.5×8.4×2.3 inches`, but some land `340.19 grams` / `11.4×11.3×5.1 centimeters`. The v9.75 sortVals compared the raw number (`Number(p.item_package_weight)`), so **340.19 grams sorted as heavier than 2 pounds**, and an 11.4 cm side sorted as longer than an 11.5 in side. Sorting by Pkg Weight, Dims or Longest Side was wrong wherever units differed.
+- **Fix:** `dimsWeightToLb(v, unit)` and `dimsLengthToIn(v, unit)` normalize before comparing — grams / kilograms / ounces → pounds, cm / mm / m / ft → inches, with pounds and inches as the defaults since that is what Amazon returns for most US rows.
+- **Display is deliberately unchanged.** Cells and the product card still show Amazon's native unit, which is the honest thing to render; only the comparison key is normalized. The two column tooltips now say so, so the behaviour is discoverable.
+- **Verification:** 13 conversion cases (pounds, grams, kilograms, ounces, inches, cm, mm, meters, plus null and zero), then the two orderings from the actual screenshot — 340.19 g now correctly sorts above 0.29 lb, and 11.4 cm correctly sorts below 11.5 in. `node --check` clean.
+- **Shopify dims: investigated and dropped.** Jason sent a full Shopify products export (2,383 rows / 706 variants / 94 columns) to see whether it could fill the gap for no-ASIN products. `Variant Grams` is 98.6% populated, but `Variant Packed Length` / `Width` / `Height` / `Dimension Unit` are **blank on every row**, and none of the 34 metafields in the export hold dimensions. Jason's call: *"ignore it - if we don't have them in shopify it doesn't make sense to build this."* Agreed — an uploader for a field that is empty everywhere is dead weight. **If packed dimensions ever get filled in on the Shopify side, the export already carries the columns**, so this becomes a small parser rather than a schema question. Also noted from that export: 10 SKUs carry a zero weight, 6 of them active (Chewin' Trio, Tote Bag, 4× Purrfect Pairings, Hemp Cat Collar) — a Shopify-side data gap, not a dashboard one.
 
 ## v9.78 — Product images open in an in-app viewer, not a new browser tab
 - **Jason:** *"if i click on a product image on the products page, it opens in separate tab rather than opening a image viewer in the app."* Right — clicking a 36px thumbnail threw you out of the dashboard onto a raw `m.media-amazon.com` URL, and getting back meant closing the tab.
