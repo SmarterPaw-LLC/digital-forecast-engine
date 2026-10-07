@@ -2,9 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.97**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.98**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.98 — FBA In showed the number the model THROWS AWAY, and the row said the same thing three times
+- **Jason, in three passes:** *"why is the middle number even here? i don't understand where it comes from. the 3,750. it just adds confusion."* → *"and also the inbound units number shows too"* → *"i don't need the inbound detail, i can open the view button."*
+- **He was right on all three, and the first one was worse than clutter.** Since v9.96 the model uses `max(snapshot inbound, your open shipments)`. On his row that is `max(3,750, 4,500) = 4,500`. So the figure sitting in the cell as the HEADLINE — Amazon's 3,750 — was **the one being discarded**, while the number actually driving Status, the Gap columns and the reorder trigger was demoted to a chip beside it. Exactly backwards, and no label anywhere said which one won.
+- **Then the same 4,500 appeared twice more** in the same row: once in the `🚧` chip, once in the Inbound Units column, with Inbound Detail restating the per-shipment split beside it. Four columns, three renderings of one figure, no stated relationship between them.
+- **The row now reads as one answer plus its sources:**
+  - **FBA In** shows the effective figure and nothing else. Provenance moved into the tooltip, which names both sources only when they disagree, and closes with the position the model uses: `FBA position: 3,172 + 4,500 = 7,672`. A dotted underline is the only mark, and only when the two sources differ — a quiet "there is more here", not a second number.
+  - **Inbound Units → `Open Ship (u)`.** Same figure as before; the old name read as a second pool to be added, which is precisely the double count v9.96 removed. The name now says it is a SOURCE, and the tip says outright that FBA In shows whichever of it and the snapshot is higher. Still `default:false`, still there for CSV.
+  - **Inbound Detail removed.** The Shipments column's `View` button opens the per-shipment list interactively, which is what Jason actually uses. Its dead CSV branch went with it.
+- **⚠ Consequence worth recording:** the pipe-separated `ShipmentID:status:qty | …` CSV cell is gone. The Shipments column still exports `N active · M total · K units in transit`. If a spreadsheet ever needs the per-shipment breakdown again, re-add the column — `ipShipmentsFor(r)` is unchanged and still returns the full list.
+- **The pattern across v9.95 → v9.98 is one mistake repeated.** v9.95 and v9.96 each corrected real math, and each left the SURROUNDING DISPLAY describing the old behaviour: v9.96's own tooltips still said in-transit was added on top (fixed in v9.97), the Vel/day column never showed the bundle slice that v9.93 had corrected (fixed in v9.97), and this cell kept presenting the losing input as the answer. **Changing which number a model uses is not finished until every surface that renders it has been re-read.** The audit that catches this is cheap — grep for the field name and read every hit — and I have now skipped it three versions running.
+- **Verification:** `node --check` clean, no dangling `inbound_detail` reference anywhere. The real column renderer driven across all four states: both sources disagreeing (shows 4,500, dotted, tooltip names 3,750 vs 4,500 and the 7,672 position), sources agreeing (shows 180, no dotted cue, no disagreement line), snapshot-confirmed zero (dim `0`), and no snapshot (`—`, says so). All twelve suites green — 508 tests — after re-pointing five v9.95 / v9.96 assertions at the new single-number markup.
 
 ## v9.97 — Vel/day doubled with no visible cause: a correct fix that landed silently
 - **Jason:** *"WHY did the velocity per day jump to 189 all of a sudden???"* CF312 went 96.73 → 189.16 across every view, with no control touched. He was right that I caused it; wrong only about which version.
