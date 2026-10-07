@@ -2,9 +2,40 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.95**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.96**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.96 — Amazon's inbound buckets and our open shipments are the SAME units; the model added both
+- **Jason:** *"where are these 3,750 + 4,500 numbers coming from? there are only 4 open shipments with the 4,500 number."* That observation is the bug.
+  - **`fba_inbound` (3,750)** = `afn-inbound-working + shipped + receiving` from the FBA Inventory snapshot — **Amazon's** view of the open shipments.
+  - **`ipInTransitFor` (4,500)** = `sum(quantity_shipped − quantity_received)` over every non-Closed, non-Cancelled shipment — **our** view of the same 4 shipments.
+  - The model summed them: `3,172 + 3,750 + 4,500 = 11,422` for a pipeline that holds about **4,500**.
+- **How it got there:** v4.180 added in-transit for shipments *"not yet on Amazon's afn-inbound buckets"* — a real gap, since the snapshot lags a freshly-created shipment by days. But **the filter never excluded shipments that ARE in those buckets**, and it cannot: the snapshot is aggregated per ASIN, so there is no shipment id to exclude on. Every acknowledged shipment was therefore counted on both sides.
+- **Fix — take the HIGHER, never the sum.** `ipEffectiveInbound(r) = max(fba_inbound, ipInTransitFor(r))`. Both measure one pipeline, so the max keeps whichever source is ahead without ever counting a unit twice:
+  - our CSV leads → a shipment Amazon has not acknowledged yet is still counted
+  - the snapshot leads → a shipment missing from a stale Shipment Summary CSV is still counted
+- **⚠ The blast radius was wider than the FBA pool.** `total_onhand` is `fba_available + fba_inbound + warehouse`, so **every `total_onhand + ipInTransitFor(r)` was the same double count** — the 30d and Active Gap columns (render AND sortVal), the On Hand and Gap scorecards, and the Amazon-mode FBA Stock tile. New `ipEffectiveOnHand(r)` = `fba_available + warehouse + ipEffectiveInbound(r)` replaces all of them. Six sites in total; a grep for the old pattern now returns only the comments explaining it.
+- **The 🚧 chip now reports the SURPLUS, not the whole in-transit figure** (`ipInboundSurplus` = `max(0, ours − Amazon's)`). It used to say "includes 4,500 units in transit" on a row where 3,750 of those were already in the number beside it. On Jason's row it now reads `+750`.
+- **This compounds with v9.95.** The seasonal trigger reads cover off that pool, so the inflated figure was making it look like far more cover than existed: for Jason's record at 50/day Amazon velocity, flat cover drops **228.4d → 153.4d** and the order-by day **138d → 63d** — from outside the 120-day horizon to inside it. v9.95 fixed the trigger's *math*; v9.96 fixed its *input*.
+- **Tooltips cut.** Jason: *"you need to REDUCE the amount of text you use in the tooltips. you are OVER EXPLAINING."* v9.95 shipped an 11-line, ~600-character essay on the FBA In cell. Now **3 lines, 186 characters**, and it states the max() rather than claiming a sum:
+  ```
+  3,750 on Amazon's inbound buckets (snapshot 2026-10-05)
+  4,500 on your open shipments — same pipeline, so the HIGHER is used, not the sum
+  FBA position: 3,172 avail + 4,500 inbound = 7,672
+  ```
+  Same treatment for the other three v9.95 additions: the Need tooltip's cover line is one line with the flat figure riding on the end only when it actually disagrees (`FBA cover: 89.4d seasonal (flat would read 228d)`); the no-fire tooltip dropped from 30 words to 10; the Amazon reorder tooltip lost its bracket-and-parenthetical stacking. **Standing preference: a tooltip states the number and its source. The reasoning belongs here, not on hover.**
+- **Verification:** `node --check` clean. 42 tests driving the REAL sliced `ipInTransitFor` / `ipEffectiveInbound` / `ipEffectiveOnHand` / `ipInboundSurplus` / `inventoryNeedBreakdown` plus the real `fba_inbound` renderer.
+  - Jason's exact numbers asserted end to end, with a **regression guard proving the old sum returned 11,422** and the corrected pool returning 7,672.
+  - All six lead/lag shapes through `max()` — including both-agree (4,500 + 4,500 must never read 9,000) and no-snapshot-at-all.
+  - `ipEffectiveOnHand` equal to `total_onhand` when our shipments sit below the snapshot, and gaining **only the surplus** when they sit above — against the old formula's inflated figure in both directions.
+  - v8.37 region scoping intact (US-pinned, CA-pinned, pooled `US+CA`).
+  - End to end: cover 153.4d not 228.4d, order-by 63d not 138d, a reorder now firing where it did not, and **v9.84's partition property still holding**.
+  - v9.95's seasonal trigger still working on the corrected pool, with `flatDos` reporting 153.4d.
+  - Six record shapes including `null` / `undefined` returning finite numbers without throwing.
+  - Tooltip brevity asserted as a **test**, not a habit: ≤ 3 lines and < 220 characters.
+  - All eleven prior suites re-run green (54 + 39 + 26 + 47 + 40 + 87 + 52 + 25 + 19 + 23 + 54 = 466, plus 42 = **508**).
+  - **Two prior harnesses updated, and the reason matters:** `test_v984` and `test_v995` both slice `inventoryNeedBreakdown`, so each needed an `ipEffectiveInbound` stub. v9.84's expectations are unchanged (it has no in-transit, so max() is just `fba_inbound`). **v9.95's section D had to be reshaped** — it carried its 11,422-unit pool *as the double count*, so after v9.96 the same record fires a reorder and its "no reorder under a flat curve" guard no longer held. Re-expressed as `3,172 available + 8,250 inbound`, same arithmetic, no double count. A test that only passes because of a bug is worth noticing.
 
 ## v9.95 — The FBA reorder TRIGGER was flat; only the QUANTITY was seasonal
 - **Jason:** *"our seasonality chart predicts us needing sprays at essentially 2x weekly volume in the holiday months. the amazon reorder columns show us needing only 3,000 additional over the holiday period, and this is largely from chewy. the bulk of our sales is on amazon. is the forecast not using the seasonality schedule???"*
