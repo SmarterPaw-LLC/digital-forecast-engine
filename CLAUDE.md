@@ -2,9 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.99**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.0**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.0 — the Excel export was colouring the top tier GREY
+- **Jason, with a screenshot of the .xlsx:** *"this is what the formatting on excel looks like. can we call them out more on the export?"*
+- **⚠ Worse than under-styled — inverted.** The Excel writer's trend branch tested `/Accel|Growing|New/` for green and `/Declin|Slowing/` for red. v9.99 added `Surging` the day before and never touched that regex, so the new top tier matched NEITHER and fell through to `C.mute` — **exported grey, dimmer than Accelerating**. The strongest signal in the column rendered as the weakest. Visible in Jason's screenshot as dark text on the Surging rows while everything around it was green.
+- **This is the v9.95→v9.98 pattern one more time:** a classifier gained a tier and a downstream surface that string-matches on its output was not re-read. The CSV strip-regex and the on-screen renderer were both updated with v9.99; the Excel writer sits ~8,000 lines away and was missed. **Any change to a label's TEXT has to be grepped for across every consumer that matches on it.**
+- **Fixed, and tiered the whole column while in there:**
+  - **`Surging` gets a solid green FILL + white bold**, mirroring the on-screen chip. It is the only bucket in the column with a background, so it survives being scanned in a static sheet — which is the whole point of an export.
+  - **`Accelerating`** keeps green bold · **`Growing`** drops to a softer green and loses bold, so it recedes the way it now does on screen · **`Slowing`** amber · **`Declining`** red bold · **Steady / No data** grey. One flat green became five weights.
+- **The exported CELL now carries the magnitude too** — `Surging +280%`, not bare `Surging`. On screen you can hover for the split; a static sheet has no hover, so the label alone left the reader unable to rank the callouts without separately enabling the `Δ Vel %` column. Steady is deliberately left bare, because a 0% delta is noise.
+- **Verification:** `node --check` clean. 30 tests driving the REAL `csv()` and the REAL Excel styling branch, both lifted verbatim out of index.html so the test cannot drift from what ships. Includes a **regression guard that runs the pre-v10.0 regex and asserts it really did return `C.mute` for Surging**, the fill appearing on Surging and on nothing else (6 other buckets checked), all five weights below it, every bucket resolving to a valid `FFRRGGBB`, and a check that the new `+280%` suffix cannot make one bucket's text match another's pattern. All twelve prior suites green (508).
+- **Version rolled 9.99 → 10.0.** Nothing depends on the prefix; the chip is a plain string. The bump rule is unchanged — chip only, never a global replace (v9.85).
 
 ## v9.99 — "a lot of green": the trend column had stopped carrying information
 - **Jason:** *"i need a larger callout and format for high acceleration items — there is a lot of green on here."* His screenshot showed roughly four rows in five reading `↑↑ Accelerating`. A column where almost every row says the same thing is not a signal, it is wallpaper.
