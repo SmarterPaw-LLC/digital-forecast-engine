@@ -2,9 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.86**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.87**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.87 — Chewy Forecasts: past months showed the drained residual, not the forecast
+- **Jason:** *"on chewy forecast page - if the past months checkbox is checked, it appears the units showing forecasted here is not correct. the number of units is very small."* Correct — past-month columns were reading roughly 10× low.
+- **Cause.** v6.96 established that Chewy's snapshot value for a month **counts down as units ship** — it is a remaining-units figure, not a static forecast. v6.96 handled that for the CURRENT month (the `remaining / peak` cell) but computed `peak` for `nowMonth` **only**. Every other month fell through to the generic "latest snapshot value" render. For a month that has fully ELAPSED, the latest snapshot carries only whatever was still unshipped when it was taken — a residual. So with *Include past months* on, 2026-09 rendered `40` when Chewy had actually planned `1,000`.
+- **Fix.** Peaks are now computed for **every** month, not just the current one, and each month picks its basis:
+  - **Past month** → the **PEAK** (highest value Chewy ever quoted for it across all snapshots) — what they actually planned to buy. Header renders italic with a `ᵖ` marker; the cell carries a dotted underline and a tooltip stating the peak, the residual the latest snapshot now shows, and why the two differ.
+  - **Current month** → unchanged `remaining / peak`.
+  - **Future month** → unchanged latest-snapshot value + revision arrow.
+- **The arrow on a past month is now peak-vs-peak** (peak as of the latest snapshot vs peak as of the previous one), which is a genuine Chewy revision. Comparing raw latest-vs-previous there would have been pure drawdown noise.
+- **Footer totals follow the same basis** — a past-month total sums PEAKs. Summing residuals produced a number that meant nothing.
+- **Scorecards are untouched.** The 30/60/90/120-day figures are forward-looking and never included past months, so this bug never reached them. The v4.150 Revision Tracker is also unaffected — it already reasons about first / pre-month-lock / latest explicitly.
+- **`currentMonthPeak` / `currentMonthPeakAtPrev` kept as aliases** onto the new per-month maps, because the scorecard consumption-adjustment (`adjustMap`) and the Revision Tracker both read those names.
+- **Verification:** `node --check` clean, then the REAL `renderChewyForecast` driven in the browser against synthetic snapshots reproducing the exact symptom — an earlier snapshot quoting 800 / 1,000 / 1,200 / 1,300 across two past months, the current month and a future month, and a later snapshot where the past months had drained to 10 / 40. After the fix the past columns read **800** and **1,000** (not 10 / 40), the current month still reads `900 / 1,200`, the future month still reads `1,400 ↑100`, past headers are italic + `ᵖ`, and with a second SKU added the past-month footer total reads **1,500** (sum of peaks) rather than 60 (sum of residuals). Scorecards unchanged.
 
 ## v9.86 — Inventory Planning: velocity trend vs a previous window
 - **Jason:** *"there is a velocity/day and status dim, but the status shows up as 'no data'. how is this status wired? … what i need is a way to compare velocity against some previous reporting window (for example, against last month, last quarter, etc.)."*
