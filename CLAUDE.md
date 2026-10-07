@@ -2,9 +2,37 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.96**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.97**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.97 — Vel/day doubled with no visible cause: a correct fix that landed silently
+- **Jason:** *"WHY did the velocity per day jump to 189 all of a sudden???"* CF312 went 96.73 → 189.16 across every view, with no control touched. He was right that I caused it; wrong only about which version.
+- **Root cause: v9.93.** That commit added `clearVelMemo()` to the END of `loadSalesAnalytics` — after `salesData` is populated, and before the v9.69 `records.forEach(recomputeRecordVelocity)` that runs a few lines later. `recomputeRecordVelocity` builds `blended_daily = daily_v{window} + bundleVel + walmartVel`, and `bundleVel` comes from the `_velMemo`-cached `getBundleAttrDailyVelocity`. Clearing the memo on the far side of the await means that recompute now resolves bundle attribution against the FULL sales history instead of whatever was cached during the load.
+- **So 96.73 was the wrong number — it was missing bundle-attributed demand.** 189.16 is the corrected one. The `+B 92.40` is Catnip Spray 3 oz being a component in bundles that sell. It moved on every page at once because `records[]` is shared by all of them.
+- **⚠ The real defect is that a load-bearing correction shipped INVISIBLY.** The Forecast page has rendered a `+B n` badge on Vel/day since v4.88. The Inventory Planning column never did:
+  ```js
+  render: r => `<td class="num"><span class="num-hi">${r.adj_daily}</span></td>`
+  ```
+  No badge, and a one-line tip that never mentioned bundles. So on the page Jason was actually using, roughly half the number had no visible source — and the only honest read was "it changed for no reason." **A fix that moves a number on screen has to move the number's EXPLANATION with it.** Fourth instance of this class (v4.169, v7.96, v9.93, now this), and the first where the silent surface was a column that already had a working precedent one page over.
+- **Fixed:** the Inventory Planning Vel/day cell now carries the `+B` badge and a per-row split on hover — `141.16/day blended × 1.34× seasonal = 189.16` / `sales 48.76 + bundle 92.40`. The column tip names all three inputs (window velocity, bundle attribution, Walmart 1P) instead of just saying "blended_daily".
+- **This also explains the 16,137 from the same session.** Every Need column is driven off `adj_daily`, so the corrected (higher) velocity flows straight through to the reorder quantities.
+
+### Tooltip audit — pass 1 (correctness)
+Jason: *"i need you to review ALL tooltips. make sure they are correct and do a brevity sweep."* Inventoried all **858** of them (`tip:` 164 · `headerTitle:` 53 · literal `title="…"` 641). Distribution: 493 under 80 chars, 204 at 80–160, 118 at 160–300, 39 at 300–600, 4 over 600.
+
+**Eight were factually WRONG**, all invalidated by changes shipped hours earlier:
+- **Both Gap column tips** still defined effective on-hand as `total_onhand + in-transit` — the exact double count v9.96 removed. Now: `FBA available + warehouse + the HIGHER of (Amazon's inbound, your open shipments)`.
+- **The Gap surplus cell + the Gap scorecard** still said "in-transit folded in" over a number that is now only the SURPLUS. v9.96 fixed the shortage branch and missed both of these.
+- **The in-transit chip** claimed its units "aren't yet on Amazon's afn-inbound buckets but are folded into the effective FBA position" — false on both halves after v9.96.
+- **The Total On-hand tip** was right for its own column but never said the Gap columns use a different (effective) figure.
+- **The Status tip and the US FBA threshold tip** both described cover as a flat `stock ÷ velocity`, which v9.95 replaced with a seasonal burn-down.
+
+**Brevity:** the FBA In header tip dropped 447 → 232 chars by cutting two version markers. 18 tooltips carry changelog prose (`v7.21 — …`, ~939 chars of it); the remaining trims are staged in `patch_v998_brevity_rest.txt` for v9.98 — deferred, not dropped, because the escaping churn was costing more than the edits were worth mid-investigation.
+
+**Standing rule, now recorded:** a tooltip states the number and its source. The reasoning behind a behaviour change belongs in this file, not on hover.
+
+- **Verification:** `node --check` clean. All twelve suites green (54 + 39 + 26 + 47 + 40 + 87 + 52 + 25 + 19 + 23 + 54 + 42 = **508**). The new Vel/day renderer was driven directly with a record shaped like Jason's (`blended 141.16 · bundle 92.40 · sea 1.34×`) and produces the badge plus a two-line tooltip whose arithmetic ties out to 189.16. One v9.96 assertion was re-pointed at the trimmed FBA In wording.
 
 ## v9.96 — Amazon's inbound buckets and our open shipments are the SAME units; the model added both
 - **Jason:** *"where are these 3,750 + 4,500 numbers coming from? there are only 4 open shipments with the 4,500 number."* That observation is the bug.
