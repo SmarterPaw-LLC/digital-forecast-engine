@@ -2,9 +2,23 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.93**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.94**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.94 — Amazon sales were discarded when the ASIN field was blank; and an all-zero production row now explains itself
+- **Jason:** *"for paw natural og jar — i initially had hardcoded a unit/day, but now we have some sales history. it doesn't look like this is updated though."* The in-house weekly production schedule showed `—` across all 23 weeks.
+- **The gate that did it:** `const amzVel = isNewOverride ? rate : !r.asin ? 0 : invAmazonVel(r);`. That middle clause was **redundant AND harmful**. `invAmazonVel` reads `salesData` keyed by `master_id` and already returns 0 for a product with no Amazon rows — the ASIN field never entered into it. So the gate changed the outcome in exactly one case: a record that HAS real Amazon sales attributed to it but an empty `asin`. There it threw the sales away.
+- **That is precisely the shape of a product graduating off the launch override.** v7.16 lets an in-house SKU exist with no channel ID at all so it can be production-planned pre-launch; v7.19 lets the manual `new_amazon_daily_units` rate drive demand while there is no ASIN. Turn the override off once real sales arrive — the obvious thing to do — and the fallback hits `!r.asin` and collapses to zero. **An empty ASIN field is a catalog-hygiene gap, not a reason to discard demand that is demonstrably in the data.** Gate removed.
+- **⚠ I could not confirm from here that this is Jason's specific cause** — it depends on his row's data, which I cannot read. The fix is correct regardless (it only ever adds back real sales), but the second half of this version is what actually answers the question, for this row and every future one.
+- **An all-zero schedule row now carries a `⚠` chip naming the cause**, because a row of dashes is not an answer and the causes need different fixes:
+  - **`no demand`** — nothing on any channel, no Chewy PO forecast, no bundle demand, no launch rate. The tooltip calls out the most likely remaining explanation by name: **the sales are attributed to a different master_id** (an SP-TEMP placeholder auto-created by the first upload that saw the ASIN / SKU), and points at Products → Needs Review + the merge tool. It also names the active velocity window, since sales older than it legitimately read as zero.
+  - **`channel filtered`** — demand exists but only on channels the "Need by" filter excludes. Names which, and which box to tick.
+  - **`FBA covered`** — Amazon demand is real, but FBA is a replenishment SHIPMENT rather than a continuous drain, and the next one is not due inside the window. Shows velocity, FBA cover in days, and the reorder threshold.
+  - **`deprecated`** — Amazon reorder forced to 0 by the flag.
+  - **`nothing due`** — demand found and selected, just nothing landing in this window; lists what it found.
+- **Standing lesson, now the third instance** (v4.169 warehouse Status, v7.96 chart overlay, v9.93 trend): when a cell can read zero for several different reasons, rendering a bare dash makes every one of them look like the same — and usually like the worst one. Name which it is.
+- **Verification:** `node --check` clean. 23 tests driving the REAL sliced functions, with the `amzVel` expression **lifted verbatim out of index.html** (so the test cannot drift from what ships) plus a static assertion that the gate is gone and a **regression guard running the pre-v9.94 expression against the same record to prove it returned 0**. Covers: 240 units ÷ 60d window = 4.00/day with a blank ASIN, no-ASIN-and-no-sales still 0, Shopify sales not leaking into Amazon velocity, an ASIN-bearing record behaving byte-identically, the launch override still winning, and a 0 rate correctly falling through to history. All five diagnosis branches asserted on their text AND their numbers, plus five record shapes checked for leaked `undefined` / `NaN` and for throwing. All nine prior suites re-run green — including v9.84's partition property over `inventoryNeedBreakdown`, which is what proves the channel math did not move.
 
 ## v9.93 — Velocity Trend read "— No data" on every row: a cache poisoned during the sales load
 - **Jason:** *"this totally broke the velocity trend."* Every row read `— No data` while `Vel/day` beside it showed real numbers (96.73, 46.96, 35.2…).
