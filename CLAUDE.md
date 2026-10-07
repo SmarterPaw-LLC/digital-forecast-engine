@@ -2,9 +2,33 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.98**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v9.99**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v9.99 — "a lot of green": the trend column had stopped carrying information
+- **Jason:** *"i need a larger callout and format for high acceleration items — there is a lot of green on here."* His screenshot showed roughly four rows in five reading `↑↑ Accelerating`. A column where almost every row says the same thing is not a signal, it is wallpaper.
+- **Two causes, and the first is the one that mattered:**
+  1. **Everything above 1.3× collapsed into ONE bucket.** A product up 31% and a product up 280% rendered identically. With the trend seasonally adjusted since v9.90, a catalog-wide ramp into the holiday curve puts most of the list over 1.3× at once — so the top bucket swallowed the field exactly when the ranking mattered most.
+  2. **The label never showed MAGNITUDE.** The only way to rank the green was to switch on the opt-in `Δ Vel %` column or sort by it. The information existed; the column just refused to show it.
+- **Fix — a top tier, inline magnitude, and three levels of visual weight:**
+  - **`🔥 Surging` at ≥2×**, rendered as a filled chip (solid green, white, bold) rather than coloured text. It is the only thing on the column with a background, so the eye lands on it first.
+  - **Every non-Steady row now carries its % inline** — `↑↑ Accelerating +45%`. The column became rankable by eye without sorting it or enabling a second column.
+  - **`↑ Growing` and `→ Steady` dim to 60% opacity.** The sea of green quiets down so the genuine movers stand out; nothing is hidden, it just stops competing.
+  ```
+    CHIP  3.8x  ->  🔥 Surging +280%
+    CHIP  2.0x  ->  🔥 Surging +100%      <- tier edge
+          1.9x  ->  ↑↑ Accelerating +90%
+          1.31x ->  ↑↑ Accelerating +31%     <- old top edge
+    dim   1.15x ->  ↑ Growing +15%
+    dim   1.0x  ->  → Steady
+  ```
+- **⚠ Both pages moved together, because they are contractually the same scale.** v9.86 made the Inventory Planning buckets reuse the Demand Forecast thresholds verbatim and added a parity test that drives ratios through both classifiers and asserts they agree. Changing one alone would have broken that test — correctly. The Forecast page builds `rec.trend` as a plain string in **four** separate ternaries (two identical, two with different whitespace), so all four needed the new tier, plus `fcTrendSortValue`, which ranks by arrow shape and would otherwise have sorted an arrow-less `🔥 Surging` down with Steady.
+- **Sorting and CSV follow.** `rank: 4` puts Surging above Accelerating on the Vel Trend sort; the CSV strip-regex gained the glyph (and a `u` flag, since it is astral) so exports stay plain text.
+- **Note on escapes, now the fourth instance this session:** `ipVelTrendLabel` stores its arrows as LITERAL `\u2191` escape sequences in the source, while the Demand Forecast ternaries store real characters. A patch anchor that works on one silently matches zero on the other. Check which form a region uses before anchoring — `sed -n 'N,Mp' file | cat -A` settles it in one command.
+- **Verification:** `node --check` clean. The real classifier and the real column renderer driven across ten ratios from 3.8× to 0.45×, asserting the tier boundary at exactly 2.0×, the chip appearing only on `strong`, the dimming only on `quiet`, and the magnitude text on every non-Steady row. All twelve suites green (508). **v9.90's parity test caught the divergence as designed** — its reference implementation and its "doubling demand" case were updated to the new scale, which is the test doing its job rather than a test that needed silencing.
+
+> **Next version is v10.0.** Nothing structural depends on the 9.x prefix — the chip is a plain string — but the version-bump rule still applies: the chip only, never a global replace (v9.85).
 
 ## v9.98 — FBA In showed the number the model THROWS AWAY, and the row said the same thing three times
 - **Jason, in three passes:** *"why is the middle number even here? i don't understand where it comes from. the 3,750. it just adds confusion."* → *"and also the inbound units number shows too"* → *"i don't need the inbound detail, i can open the view button."*
