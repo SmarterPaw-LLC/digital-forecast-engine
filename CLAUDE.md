@@ -2,9 +2,41 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.9**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.10**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.10 — Amazon FBA status was using the SUPPLIER lead time
+- **Jason:** *"the fba status math is wrong. I don't know where the lead time 60d is even set for the product (it should be set on the product card), but this is meant to be used with our suppliers, not for when to send amazon shipments. the amazon reorder threshold should be used for this math. additionally, the 'send to...' should specify which region."*
+- **⚠ SQL TO RUN:** `supabase_v10_10_product_lead_time.sql` — adds `products.lead_time_days` + `products.safety_stock`. Idempotent, nothing backfilled, so no row changes tier until a value is actually set.
+
+### The bug was an inconsistency, not just a wrong default
+- The Amazon **reorder QUANTITY** (`inventoryNeedBreakdown`'s amazon block) has fired off `reorder_threshold_days` since v5.1. The Amazon **status TIER** fired off `lead_time + safety_stock`. **Two different triggers for one decision** — so the Status column could read "Send to FBA" on a row whose Reorder columns had nothing queued, or the reverse, and nothing on screen explained the disagreement.
+- The two questions are genuinely different and now stay apart:
+  - `lead_time + safety` → supplier → **warehouse**. A manufacturer PO. Still drives Warehouse / In-house modes, correctly.
+  - `reorder_threshold_days` → warehouse → **FBA**. Days of FBA cover at which a shipment must already be moving. Per region, because the pools are separate and Jason sets them separately (45 / 45 / 90).
+- **Cover comes from the SAME `fbaSeasonalReorderPoint` burn-down the quantity uses** (`amazon.meta.dos`), so tier and quantity now cannot disagree by construction rather than by coincidence.
+- **On Jason's screenshot row:** FBA 7,672u at 124.0u/day → 62d cover. Old: `lead 60 + safety 14 = ROP 74` → slack −12 → 🔴 **Send to FBA**. New: `62 − 45 = 17d slack` → 🟡 **FBA Soon · US**. You have seventeen days, not none.
+
+### The 60d he could not find was never set
+- It was a hardcoded `r.lead_time || 60` fallback for a null column. `lead_time` lived **only** on `inventory` (per asin × region, in the Inventory row editor) — there was no product-level field at all, so there was genuinely nowhere on the product card to look.
+- **`products.lead_time_days` + `products.safety_stock`** are now real, visible, editable defaults on the product card, in their own **🚚 Supplier → warehouse** block that states outright it does **not** drive Amazon FBA. Resolution: region override → product default → 60 / 14.
+- **`??` not `||`** when resolving, so a deliberate 0 is honoured instead of falling through to the fallback — and the records carry `lead_time_src` / `safety_src` so the tooltip can say *which layer* supplied the number ("Lead 60d (from built-in default (nothing set))").
+
+### Status now names the region
+- Per-region tiers via `amazonStatusRollup`, and **a pooled US+CA row takes the WORST region, not an average**. Summing the pools is how an empty region hides behind a full one: 9,000u US + 50u CA reads 905d of cover in aggregate and 🟢 OK, while CA is five days from stocking out. It now reads **🔴 Send to FBA · CA**.
+- Suffix forms: `· US` · `· US + CA` · `· All` when every region is at the worst tier. **Only on actionable tiers** — "FBA OK · All" is noise in a column you scan.
+- `nodata` is ranked last, so a region with no data cannot mask one that needs a shipment.
+- **The tooltip was rewritten for Amazon mode** and now shows the per-region math, the threshold that fired, where cover came from, and an explicit line that supplier lead time is *not* used here. The old one printed "Lead 60d + Safety 14d → ROP 74d" on an FBA row — wrong trigger and a phantom number, which is exactly what sent Jason hunting.
+
+### Verification
+- `node --check` clean. **45 tests** driving the REAL sliced `amazonStatusOne` / `amazonStatusRollup` / `amazonRegionsOf` / `amazonRegionSuffix` / `getStatusLabelFor`: Jason's exact row with a **regression guard asserting the old ROP math really did say order-now**, the threshold ladder at 90/62/45/20/1 days against a fixed 62d cover, a pooled row taking the worst region (with a guard that the pooled SUM would have read OK), `· All` only when every region qualifies, per-region thresholds producing different tiers from identical cover (his 45/45/90), no suffix on OK, no-velocity / no-cover / deep-cover cases, `nodata` not masking a real signal, four region-enumeration shapes, and a throwing breakdown being caught rather than taking the row down. Plus 14 static assertions.
+- **Then the real page:** the screenshot row reproduced against the shipped functions — `17d slack → 🟡 FBA Soon · US`, tooltip confirmed free of any lead-time mention; the pooled case rendering `🔴 Send to FBA · CA` with the per-region breakdown and the worst-region note; `· All` when both are short; and the product card's new fields present with the "does NOT drive Amazon FBA" warning.
+
+### ⚠ The regression suites were evaporating — they now live in the repo
+- They had always been written to the session scratchpad under `%TEMP%`. **8 of 20 vanished between turns** when that directory was cleaned, including the three guarding this very area: `test_v984` (the partition property), `test_v995` (seasonal reorder point) and `test_v996` (in-transit double count). The generated `.js` harnesses survived but embed a snapshot of the source from generation time, so re-running them proves nothing about the current file.
+- Surviving suites moved to **`tests/`** with a README covering how to run them, the conventions (slice don't reimplement; name the bug; assert the site count), the Python-raw-string escape trap, and a table of what the 8 lost suites covered so they can be rewritten. **`v984` / `v995` / `v996` are the ones worth rewriting first** — they cover the Amazon reorder math, the most-edited and least-obvious part of the model.
+- **Honest scope of this release's verification:** 12 suites green, not 20. The lost three are the relevant ones, so instead of claiming coverage I do not have, the v10.10 diff was checked directly: all four mentions of `inventoryNeedBreakdown` / `fbaSeasonalReorderPoint` / `ipEffectiveInbound` in the diff are **additions** (two comments, two new call sites). No existing line of that math was modified or deleted — v10.10 only *calls* it.
 
 ## v10.9 — Customize columns joins the page chrome
 - **Jason:** *"move customize columns up between the search bar and settings icon."*
