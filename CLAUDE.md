@@ -2,9 +2,35 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.0**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.2**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.2 — Demand Forecast gets the trend engine; both pages get per-channel trends and a Growth filter
+- **Jason:** *"i think the demand page is obsolete. the inventory planning is used instead of it. it should be used for demand forecasting, but the inventory page has been receiving updates here. bring it up to parity and add new ways to view products that are growing (using the new labels like surging etc) by channel and across all."*
+- **He was right about the drift.** Measured before touching anything: **Inventory Planning 109 columns, Demand Forecast 61**. The entire velocity-trend system (v9.86 → v10.0 — seasonal basis, per-channel lag anchoring, the comparison-window dropdown, the Surging tier) was built on Inventory Planning. The Forecast page had only the crude `trend` string — a bare `v60/v90` ratio with no seasonal adjustment, no channel awareness and no comparison control — even though demand forecasting is what that page is FOR.
+
+### The engine now answers for ANY channel set
+- `ipVelTrendFor(r)` was hard-wired to Inventory Planning's "Need by" selection. Split into **`ipVelTrendForKeys(r, keys)`** with thin wrappers: Inventory Planning passes its Need-by set, the Forecast page passes its FORECAST BY set (`fcVelTrendFor`), and the per-channel columns pass one key at a time. One implementation, one seasonal basis, one lag-anchoring rule — the alternative was a second copy, which is exactly how the v10.0 Excel bug happened.
+- **The cell renderer, sort key and export value were also extracted** (`velTrendCell` / `velTrendSortVal` / `velTrendCsv`). Three pages render the same chip from one function now.
+- **⚠ The comparison window became a shared SETTING, not a per-page DOM read.** `ipVelCompareMode()` used to read `#ip-vel-cmp` directly. With the control existing on both pages that silently breaks: both pages are in the DOM at once and only one is visible, so Inventory Planning's dropdown would have won while the user changed the Forecast page's. It now reads `localStorage.velCmpMode`, and `setVelCmpMode()` syncs both dropdowns and clears the velocity memo. This matches how the velocity WINDOW has always worked — `ipVelWindowDays()` reads the Forecast page's `#fVelocityWindow` cross-page.
+
+### Demand Forecast reaches parity
+- Full **VELOCITY TREND** group: `Vel Now` · `Vel Prior` · `Δ Vel/day` · `Δ Vel %` · `Vel Trend`, plus its own **Vel vs** dropdown. Only `Vel Trend` defaults on; the rest are opt-in, so no existing column set shifts.
+- It follows the page's own **FORECAST BY** checkboxes, with the same rule Inventory Planning uses: every box checked IS the unfiltered state and resolves to the Vel/day recipe (Amazon + Shopify + Walmart), not "all four" — otherwise the trend stops tying out against the column beside it the moment Chewy folds in by default rather than by choice.
+
+### "By channel and across all"
+- **Four per-channel trend columns on BOTH pages** — `Amz Trend` · `Shop Trend` · `Chwy Trend` · `Wmt Trend`, generated from one descriptor so they cannot drift. Same windows, same seasonal basis, same buckets; one channel each. All default OFF.
+- **A `Growth` filter on both pages**, in two halves, because "which products are growing?" has two readings that disagree constantly:
+  - **Across the selected channels** — blended: Surging · Accelerating+ · Growing+ · Slowing− · Declining.
+  - **On ANY single channel** — Surging / Accelerating+ / Declining on any one channel alone.
+- **That second half is the point.** The test case makes it concrete: Amazon 10→40/day, Shopify 20→5, Walmart flat. Blended that is 40→55/day — **1.375×, which reads merely "Accelerating"** — while Amazon is **Surging (4.0×)** and Shopify is **Declining (0.25×)** underneath it. A blended view cannot show you a channel rotating; the any-channel filter is how you catch it.
+- The Growth predicate is deliberately **last in both filter chains** — it walks the velocity windows (memoised, but still the most expensive test there), so brand / region / category / status reject a row first.
+
+- **Verification:** `node --check` clean. 49 new tests driving the REAL sliced engine and the REAL generated columns: the per-channel ratios (4.0× / 0.25× / flat) and their labels, the blend-hides-the-channels case asserted end to end, the full blended-vs-any-channel filter matrix, the bucket ladder's monotonicity at every rank, both registries receiving all four columns as default-OFF, the generated columns proving the channel argument is live (Amz and Shop render different cells and sort in the right order), the Forecast channel resolver's all-checked / narrowed / nothing-checked cases, and the shared compare-mode syncing both dropdowns and clearing the memo. Plus 10 static assertions against the shipped source — including that the Growth filter really is wired at **all four** Inventory Planning filter sites, the v9.84 trap.
+- **Three prior suites needed re-pointing, all harness drift rather than behaviour change:** v9.90 stubbed `#ip-vel-cmp` as a DOM element (now a localStorage stub backed by the same variable, so every existing assignment in that suite works untouched), v9.93's label regex predated the Surging tier, and v10.0's extraction anchor followed the csv body into `velTrendCsv`. **All 14 suites green — 587 tests.**
+
+> **Still open:** ~25 tooltip brevity trims staged in `patch_v998_brevity_rest.txt`, and the Amazon FBA consumption column offered during the 16,137 investigation.
 
 ## v10.0 — the Excel export was colouring the top tier GREY
 - **Jason, with a screenshot of the .xlsx:** *"this is what the formatting on excel looks like. can we call them out more on the export?"*
