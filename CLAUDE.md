@@ -2,9 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.8**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.9**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.9 — Customize columns joins the page chrome
+- **Jason:** *"move customize columns up between the search bar and settings icon."*
+- The sticky bar now reads **search → 📋 Customize columns → ⚙** on every page, and the filter strips underneath lost their last piece of page chrome. Together with v10.7 that is the whole pattern in one place: what this page SHOWS (columns), how it BEHAVES for you (settings), and what you are LOOKING for (search).
+- **⚠ The buttons MOVED; their ids did not — and that was the whole design decision.** The obvious implementation is one dispatcher button that calls the current page's opener. It would have broken **~35 call sites**: every column popup re-opens itself after a mutation via `document.getElementById('fc-cols-btn')` and friends, and several position themselves off that element's `getBoundingClientRect()`. That is the v10.7 `fc-sort-btn` failure, six times over. So all six real buttons were relocated into the bar and only the one belonging to the current page is shown — every lookup resolves, every anchor rect is real, and **not one opener needed changing**.
+- **Hiding them instead of moving them would have been worse, not safer.** A `display:none` anchor returns a zero rect, so the Units Sold reports popup and the sort dialog — the two that actually read the rect — would have opened at the viewport origin. Verified both, plus the Inventory popup, landing on screen from the new location.
+- **`PAGE_COLUMN_BUTTONS`**, resolved by the same nav key the gear and the search bar use, so the three cannot disagree about which page you are on. One hook inside `globalSearchSyncFromTarget()` covers all five nav paths. Pages with no picker (Seasonality, Walmart P&L, Chewy P&L, COGS, Bundles, Data, Settings, Pricing Scenarios, Chewy Forecasts, FBA Shipments) show none.
+- **They start `display:none`** so nothing flashes in the bar before the nav key resolves, and they were restyled to one look — they arrived carrying three different font stacks from three different filter strips.
+- **Units Sold still reads 📋 Saved reports**, because that button has no column picker and a uniform label would be a label that lies.
+- **Verification:** `node --check` clean. **44 tests** — exactly one button visible for each of the 7 picker pages, none on the 11 pages without one, switching pages swapping correctly, registry shape (unique ids, no nav key claimed twice), a missing element skipped rather than fatal, four malformed nav keys. Plus 14 static assertions: all six inside `#globalSearchBar`, positioned after the search and before the gear, each appearing exactly once in the file, ids preserved for all ~35 lookups, openers untouched, and the v10.7 sort re-anchor still pointing at a live element.
+- **Then the real page:** left-to-right geometry confirmed by measured rects (search x=389 → columns x=799 → gear x=965, same row), only `ip-view-btn` visible on Inventory Planning, zero buttons left in any filter strip, and all three rect-anchored popups opening on screen. Screenshot of the bar.
+- **One v10.7 assertion re-pointed:** the `navKeys` count was file-wide and `PAGE_COLUMN_BUTTONS` legitimately adds six more, so it is now scoped to the `CATVIS_PAGES` slab — which is what it was ever about. **All 20 suites green (632 counted assertions).**
 
 ## v10.8 — v10.7 deleted a function it was still calling
 - **Jason:** *"i think this deploy failed."*
