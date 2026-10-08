@@ -2,9 +2,27 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.2**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.3**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.3 — the top search bar said "no search on this page" on pages that had one
+- **Jason:** *"why is the top search not usable in the seasonality module? remove the legacy search and make top search active. this should be the implementation on ALL pages."*
+- **The Seasonality page has had a search since v4.76.** The v8.40 dispatch map just never learned about it — it carried `forecast_seasonality: { id: null }` with the comment *"no dedicated search yet"*, which stopped being true four versions later. So the bar greyed itself out and said "No search on this page" while a second, fully-working search box sat in the page directly beneath it. Mapped to `#sea-search`.
+- **Auditing the rest turned up a second miss.** Extracting every search input from the markup and diffing against the map found **the Amazon P&L Change Log** (`#cl-search`, v8.04) unmapped as well — and worse, mis-pointed: `globalSearchCurrentKey()` collapsed all four Amazon sub-views onto `pnl_amazon`, so on the Change Log the bar silently drove the **Summary** table's filter instead. The key now consults `pnlAmazonView`, and `switchPnlAmazonView` re-points the bar and hides the newly-shown local input (it was the one nav path never wired to do either).
+- **The legacy inputs are already removed from the user's point of view** — v8.43's `hideLocalSearchDuplicates()` hides every input in the map and the global bar writes `value` + fires a native `input` event into them, so each page's own handler still runs untouched. Deleting the elements outright would mean rewriting every page's filter wiring for no visible gain. Once Seasonality was mapped, its visible duplicate disappeared with it.
+- **⚠ Three inputs are deliberately NOT mapped, and the distinction is "page filter vs picker":**
+  - `#pricing-search` — Pricing Scenarios: a typeahead that POPULATES a scenario, with results in a popover anchored to the input. Hiding it would break the flow it belongs to.
+  - `#catsy-search-input`, `#merge-src` / `#merge-tgt`, `#bom-search-${i}` — pickers inside a modal or a table row, not page searches.
+  So exactly three surfaces legitimately reach the disabled state: Data, Settings and Pricing Scenarios. Anything else landing there means the map is missing an entry, and that is now written next to the code that renders it.
+- **Verification:** `node --check` clean. 43 tests driving the REAL `globalSearchCurrentKey` / `globalSearchTargetInput` / `globalSearchDispatch` / `globalSearchSyncFromTarget` / `hideLocalSearchDuplicates`, against a DOM stub built from **the actual input ids and placeholders scraped out of the shipped markup** — so a renamed id fails the suite rather than passing against a fiction. Covers: all **18 page/sub-view combinations** resolving to the right input, the Seasonality bug end to end (resolves → enables → mirrors the placeholder → dispatches → fires `input`), a **regression guard that the Change Log no longer resolves to the Summary input**, the three legitimately-searchless surfaces disabling the bar, all 16 mapped inputs hidden (idempotently), and the pricing picker left visible.
+- **One assertion earns its keep:** a sweep that fails if ANY search-shaped input in the markup is neither mapped nor on an explicit exclusion list. It immediately surfaced `#bom-search-${i}`, the per-row BOM component picker I had not enumerated. Every future search box now has to be classified as a page filter or a picker before this suite passes.
+
+### Answering a question from the same session
+- **Jason:** *"on demand planning is the sold by chewy using the sales data or the forecast upload?"* — **Sold and Forecast use different sources, by design:**
+  - **`Sold … Chewy`** → `fcSoldByChannel` reads `salesData`, whose Chewy rows come from **`chewy_sales_weekly`** (v7.73) — Chewy's actual retail sell-through, mapped in as `channel:'chewy'`, `region:'US'`, `units_sold → units_ordered`.
+  - **`Forecast … Chewy`** → `fcForecastByChannel` short-circuits on `channelKey === 'chewy'` to **`getChewyFcUnits`**, i.e. **`chewy_forecasts`** — Chewy's own forward monthly PO forecast from the Vendor Statement upload. It does NOT extrapolate the sold figure the way the other channels do.
+  - **Worth knowing when reading the Sold column:** that is sell-THROUGH (what Chewy's customers bought), not our sell-IN to Chewy, and the feed runs roughly two months behind — which is why v9.88 anchors Chewy's trend window to its own latest data rather than to today. The note in v4.51 saying the Chewy Sold column would be empty predates v7.73 and is no longer true.
 
 ## v10.2 — Demand Forecast gets the trend engine; both pages get per-channel trends and a Growth filter
 - **Jason:** *"i think the demand page is obsolete. the inventory planning is used instead of it. it should be used for demand forecasting, but the inventory page has been receiving updates here. bring it up to parity and add new ways to view products that are growing (using the new labels like surging etc) by channel and across all."*
