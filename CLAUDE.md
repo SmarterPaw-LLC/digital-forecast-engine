@@ -2,9 +2,32 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.27**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.28**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.28 — view defaults move into the page-settings gear; printed prose cut
+- **Jason, on where it belongs:** *"i do NOT want the global settings on the setting pages — it is supposed to be a global settings per page for all users default — we already have the module"* (pointing at the gear next to Customize columns).
+- **He is right and v10.26 built it in the wrong place.** `PAGE_SETTINGS_PANELS` (v10.7) **is** the module for *how this page behaves* — it already resolves the current page through the same nav key the gear and the global search bar use, so a panel there is per-page for free. A separate slab on Settings was a second place to look for one concept, which is the exact thing v10.7 existed to stop.
+- **Restructured, not relocated:**
+  - Storage goes from one flat object to **one entry per page** — `{ forecast: {…}, inventory: {…}, products: {…}, sales: {…}, pnl: {…}, cogs: {…} }`. Still the same `app_settings` key v9.85's table already supports, so still no migration.
+  - `VIEW_DEFAULT_PAGES` descriptors declare **only the settings each page actually has**, so the panel renders exactly what applies: Demand Forecast and Inventory Planning get all three; Products gets active-only + sort; Units Sold gets hide-bundles only; Amazon P&L gets sort only; COGS gets active-only only. Verified live.
+  - **The admin gesture is "save this page's current view as everyone's default"** — the v10.6 *make this my global default* pattern Jason already uses. Set the filters and sort on the page the way you want them, then click save. That is strictly better than a second set of tri-state widgets duplicating controls the page already has.
+- **The v10.26 Settings panel is deleted, not hidden** — `users-global-view`, `renderGlobalViewDefaults`, `onGlobalViewSortChange` and `VIEW_SORT_PAGES` are all gone, asserted by name so they cannot drift back.
+- Everything v10.26 got right is kept: **"not set" is a real third state** (absent ≠ false), the **Products filter is only steered while idle**, a **personal sort outranks the org default** on Products, applied **before `init()` paints**, and **fails open** on a broken read. Plus a new one — a default set on Forecast must not leak onto Inventory, which per-page storage makes testable.
+
+### ⚠ The copy problem was in the gear itself, so it got fixed at the root
+- **Jason:** *"also jfc, what did i say about extra unnecssary copy"* — pointing at the three-line orange *"Tab visibility is UI scoping, not data security"* banner on Settings → Users.
+- **The gear was PRINTING `panel.hint` as a visible paragraph on every panel.** So every panel shipped a block of prose, and the one I was adding would have made it three. Trimming my own panel would have treated the symptom. The hint now renders as a **tooltip on the panel label** (`ⓘ`, help cursor) — one change at the render site, fixes all three panels, and the next panel cannot re-introduce it.
+- **The v9.82 banner is load-bearing** — nobody should build a compliance story on a nav toggle — so it is not deleted, it moves onto the **"N users" status line it qualifies**, as a tooltip. Asserted both ways: the banner element is gone AND the warning text still exists.
+- **My panel body is state + two buttons: 113 visible characters**, measured on the real page. The how-to instruction lives on the save button's tooltip, one hover away at the moment you would want it. There is an assertion that the panel body ships no long prose string, so this does not creep back.
+- **This is the v9.67 / v9.96 / v10.24 rule, now the fourth time:** a tooltip states the number and its source; the reasoning belongs in this file, not the UI.
+
+### Verification
+- `node --check` clean. **27 static + 24 behaviour assertions** on the real sliced `applyGlobalViewDefaults` / `saveCurrentViewAsDefault`: per-page scoping (a Forecast default not leaking onto Inventory), the third state and a non-boolean being ignored rather than coerced, the Products-filter guard in both directions, per-page sort with the personal-sort override, the Forecast chain, junk directions, five degenerate shapes, and the save snapshot capturing only the settings a page actually has (Units Sold writes `{hideBundles}` and nothing else; an unknown page writes nothing).
+- **Then the real page:** all six page descriptors resolving with the right setting mix, the summary line reading `active only · bundles shown · sort ≤30d Need ↓`, admin seeing the save button, non-admin read-only, no leaked `undefined`, and the 113-character body.
+- **test_v1026 deleted** — its functions no longer exist; test_v1028 supersedes it. **All 27 suites green.**
+- **One harness note worth keeping:** lifting the four `_vd*` helper consts needed a **depth-aware slice**, not a regex. `^const _vdSetSel = .*?;$` with non-greedy DOTALL stops at the first line ending in `;` — which inside that helper is its own first statement — leaving an unbalanced brace and `SyntaxError: Unexpected end of input`. Scan forward tracking `()` `{}` `[]` and stop at the first `;` at depth 0. Same class as the v10.4 "slice by balance, don't rstrip a brace" note.
 
 ## v10.27 — Products bulk edit: 7 fields → 17, and a records[] staleness bug
 - **Jason:** *"why is this all that i can bulk edit? i should be able to bulk edit other attributes, like categorie, sub category, active, seasonal ect"*

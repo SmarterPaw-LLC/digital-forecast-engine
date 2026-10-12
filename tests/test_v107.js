@@ -153,6 +153,20 @@ const PAGE_SETTINGS_PANELS = [
     summary: (which) => freezeCurrentLabel(which),
     render:  (host, which, onAfterChange) => freezeRenderControls(host, which, onAfterChange),
   },
+  {
+    // v10.28 — the org-wide default for THIS page. Lives here rather than on
+    // the Settings page because this is already the per-page settings surface:
+    // it resolves the current page through the same nav key the gear and the
+    // global search bar use, so "per page" comes for free.
+    id: 'viewdefault',
+    icon: '\u{1F310}',
+    label: 'Default view for everyone',
+    hint: 'What this page looks like when anyone opens it \u2014 active-only, hide-bundles and the default sort, whichever this page has. Admin-only to change. A personal choice always wins over it.',
+    pageKeyFor: (navKey) => (viewDefaultPageFor(navKey) || {}).key || null,
+    isSet:   (pageKey) => !!(_globalViewDefaults || {})[pageKey],
+    summary: (pageKey) => viewDefaultSummary(pageKey),
+    render:  (host, pageKey, onAfterChange) => viewDefaultRenderControls(host, pageKey, onAfterChange),
+  },
 ];
 
 // v4.142 freeze, relocated. The state has always lived in localStorage and
