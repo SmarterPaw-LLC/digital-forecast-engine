@@ -66,9 +66,19 @@ m = re.search(r'const BREAKEVEN_SQL_BODY = `(.*?)`;\n', js, re.S)
 ok(m is not None, 'BREAKEVEN_SQL_BODY is embedded')
 body = m.group(1) if m else ''
 
-fileCols = re.findall(r'as "([^"]*)"', sqlfile)
-embedCols = re.findall(r'as "([^"]*)"', body)
-ok(len(fileCols) == 55, 'the .sql file still emits 55 columns (got %d)' % len(fileCols))
+# Strip -- comments first. A comment that happens to contain `as "Foo"` reads
+# as a column to a naive extractor, which is exactly what tripped this guard
+# when v10.21 added one.
+def outcols(text):
+    nocomments = re.sub(r'--[^\n]*', '', text)
+    return re.findall(r'as "([^"]*)"', nocomments)
+
+fileCols = outcols(sqlfile)
+embedCols = outcols(body)
+ok(len(fileCols) == 58, 'the .sql file still emits 58 columns (got %d)' % len(fileCols))
+ok(len(set(fileCols)) == len(fileCols),
+   'no duplicate column names (dupes: %s)'
+   % sorted({c for c in fileCols if fileCols.count(c) > 1}))
 ok(embedCols == fileCols,
    'embedded SQL emits the SAME columns in the SAME order as the .sql file')
 

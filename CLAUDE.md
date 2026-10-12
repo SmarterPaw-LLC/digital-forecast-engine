@@ -2,9 +2,39 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.20**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.21**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.21 — Break-Even: contribution totals, sortable columns, and the window in dates
+- **Jason:** *"does this show contribution/unit and contribution total product? is this break even answering the questions posed by blake? i should be able to sort by any column"* and *"also what is the date range?"*
+
+### Contribution: one of the four numbers was there, under another name
+- **Contribution per unit was already present as `Non-Ad Profit`** (`price − total_cost`, where total_cost excludes ad spend by construction). Nothing said so, and "Non-Ad Profit" does not read as "contribution" to anyone who did not write the query.
+- **Three columns added:** `Contribution Total pre-ad`, `Contribution per Unit post-ad`, `Contribution Total post-ad`.
+- **⚠ The post-ad pair is the one that was actually missing, and it matters.** `Non-Ad Profit` answers *what this unit can carry in ad spend*. It cannot answer *did this SKU make money after what we really spent on it* — which is the question a financial control on ad spend exists to settle. Everywhere else in this app "Contribution" already means **after** ads (Amazon P&L: Net Proceeds − COGS, and Net Proceeds is net of ad spend), so a column called Contribution that silently meant pre-ad would have contradicted the rest of the dashboard. The names carry `pre-ad` / `post-ad` for that reason.
+- **Appended at the END of the select, deliberately.** Blake's sheet consumes this CSV and I cannot see whether it reads by header or by column position. Appending cannot break a positional reader; inserting next to `Non-Ad Profit` where they logically belong would shift every column after it. Asserted — the new columns must sort after the pre-existing tail.
+- **Column count 55 → 58**, and the CSV button no longer hardcodes the number, because it had already drifted by the time I looked at it.
+
+### Sorting
+- Every column, including the ones only visible with audit columns on. Click to sort, click again to flip; a different column resets to descending.
+- **⚠ PostgREST returns `numeric()` columns as STRINGS.** A naive comparator therefore sorts `"9.99"` above `"100.00"` — the table looks sorted and is wrong, which is the worst failure mode available here. `breakevenIsNumericCol` decides per column **from the data, not the column name**, and a column with even one non-numeric value is treated as text so that row cannot sort as `NaN`. There is a named test asserting `"100.00"` beats `"9.99"`.
+- **Blanks sink on both directions.** A column of dashes floating to the top is never what you clicked for, whichever arrow you used.
+- Sorting copies before ordering, so the query's own result set is never reordered in place.
+
+### The window
+- **It was set in DAYS and never resolved to dates on screen.** Per [[feedback_window_labeling]] — every reported number gets its explicit range. The row-count line now leads with `90d window · weeks starting 2026-07-14 → 2026-10-12`.
+- The query filters `week_start >= current_date − win_days`, and `week_start` is a Monday, so the effective start is the first Monday on or after that boundary. The per-row `Window Start` / `Window End` columns are a different thing — the weeks each individual SKU actually has inside the window — and are left alone.
+- **The CSV gained a context line**, like every other export here: window, finance rate, SOH target, min-units, and a note naming which contribution column is the pre-ad one. A 58-column file with no stated window is unreadable three weeks later.
+
+### Verification
+- `node --check` clean. **24 static assertions** — the four contribution columns, their position after the original tail, the arithmetic read out of the SQL rather than restated, the drift guard still matching the `.sql` file column for column, the window resolved on run and shown at both ends, and the CSV context line.
+- **17 behaviour tests** on the real sliced sorter, driven against **string-typed** numeric data because that is what PostgREST actually returns: numeric desc/asc, negatives ordering as numbers rather than as text starting with `-`, text columns comparing as text, nulls and empties sinking in both directions while real values stay correctly ordered, a mixed column falling back to text, direction toggling, no-sort preserving the query order, and the source array not being mutated.
+- **Then the real page:** header click-to-sort with the indicator moving, `"100.00"` sorting above `"9.99"` on live DOM, nulls at the bottom either way, negative contribution ordering correctly, and the row-count line reading the resolved window. **All 23 suites green.**
+
+### One guard fixed, one still open
+- **The v10.19 drift guard fired correctly** on the column count and then reported 59 where the SQL has 58 — because a **comment** I had just written contained the text `as "Non-Ad Profit"`, and the extractor was reading it as a column. Comment reworded, and the extractor now strips `--` comments before matching. Added a duplicate-name assertion while in there, since that is what made the miscount legible.
+- **Still open: whether this answers Blake's questions.** I have the query that was built from his request and the two gaps the notes record (`Should be FBA Fee`, closed by v9.73/v9.75; `Finance cost Adjustment`, still a param defaulting to 0). I do **not** have his original ask, so I cannot verify coverage — only say what the table does and does not compute. The contribution columns above are the gap I could see from the arithmetic; there may be others only his request would reveal.
 
 ## v10.20 — two literal `\u2014` escapes rendering as text, and what Autoship % means
 - **Jason:** *"you have some escaped characters here"* — the Chewy chart's metric dropdown read **`Merch Sales \u2014 Chewy retail ($)`**. And, separately: *"what is this autoship % based on?"*

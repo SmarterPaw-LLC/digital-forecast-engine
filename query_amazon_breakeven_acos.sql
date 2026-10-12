@@ -253,6 +253,16 @@ select
   round(derived_np_pu - amzn_np_pu, 4)                      as "aud Recon Delta",
   net_units            as "Net Units window",
   round(net_sales,2)   as "Net Sales window",
+  -- v10.21 — Jason: "does this show contribution/unit and contribution total
+  -- product?" Per-unit was already here, under the name Non-Ad Profit
+  -- (price - total_cost, which excludes ad spend by construction). These add
+  -- the totals, and the post-ad view: Non-Ad Profit answers what the unit CAN
+  -- carry, post-ad answers what it DID earn after what we actually spent.
+  -- Appended at the end so existing column positions are untouched.
+  round((price - total_cost) * net_units, 2)                as "Contribution Total pre-ad",
+  round(price - total_cost
+        - (total_ad_spend / nullif(net_units,0)), 4)        as "Contribution per Unit post-ad",
+  round((price - total_cost) * net_units - total_ad_spend, 2) as "Contribution Total post-ad",
   first_week           as "Window Start",
   last_week            as "Window End"
 from final
