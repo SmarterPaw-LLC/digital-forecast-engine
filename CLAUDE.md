@@ -2,9 +2,53 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.11**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.12**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.12 — every P&L page opens on a sales trend, with a stacked-area toggle
+- **Jason:** *"on every p&L page, i should see a sales line chart when no products are selected as a default state. it should be based on total sales over the default period. i want a toggle to show by area and stack the product sales"*
+
+### The default state of four pages was an empty space
+- Amazon, Shopify and Walmart each had a trend chart that **hid itself whenever nothing was selected** — so the first thing you saw on every P&L page was the chart's absence, and "how are sales trending" needed clicks before it could be asked. **The Chewy P&L had no chart at all.**
+- Now: no selection → **one Total line across every product currently in the table**, honouring the page's active filters and period. Select products and it behaves as before, one line each.
+
+### ⚠ One engine, four pages — not four copies
+- The four builders were already near-identical, and adding two behaviours to each separately is precisely how the v10.4 two-Trend-columns mistake happened. So `pnlTrendSeries` / `pnlTrendRender` / `pnlSlotAdd` / `pnlChartMode` / `pnlInjectChartModeToggle` / `pnlTrendSubtitle` are defined **once** and called by all four. Asserted: exactly one definition each, and exactly four callers.
+- The toggle's markup has **one source** too (`pnlInjectChartModeToggle`), injected per panel. Four hand-written copies of the same two buttons is how a label and its handler drift apart.
+- The mode is one shared preference (`localStorage.pnlChartMode`), so flipping to stacked on Amazon and walking to Walmart does not silently flip back.
+
+### ⚠ The stacking contract, which is easy to get subtly wrong
+- Chart.js stacked areas **chain their fills**: the first dataset fills to `origin`, every later one fills to `'-1'` (the band below). Using `fill: true` instead fills every band to zero and the upper ones paint over the lower ones — which looks correct exactly as long as one series dominates, and falls apart the moment the mix evens out. That is the **v4.135 Units Sold bug**, and there is a named test for it here.
+- **A gap inside a stacked band must be 0, not null.** A null breaks the fill chain and every band above it detaches from the one below. Line mode keeps nulls, because there a gap honestly means "no data", not "sold nothing".
+- Bands are near-opaque (`d9`) so they read as layers rather than a translucent haze (the v9.99 lesson); line mode stays at `22`.
+- **Asserted at every bucket: the stacked bands sum to exactly the total the line mode draws.** That equality is the whole claim the chart makes, so it is a test rather than a hope.
+
+### ⚠ COGS is now accumulated as DOLLARS, on all four pages
+- Every page used to hold a per-unit COGS *rate* and multiply it in at draw time. That works per product and breaks the moment you sum products, because **a rate cannot be summed** — and summing products is exactly what the total line and the stacked bands do. Each page's per-bucket slot now carries COGS dollars, computed against that row's own product rate at aggregation time.
+- Consequence worth stating: `metricOf(slot)` is now valid on a **summed** slot as readily as a per-product one, which is what lets one code path serve both.
+
+### ⚠ Percentages are recomputed, never averaged — and never stacked
+- A total Contribution % is `sum(contribution) / sum(net sales)`, not the mean of each product's percentage. On the test shape those differ by 3.3 points (66.7% vs a naive 70%), and the gap widens as volumes diverge. **Named regression guard asserts the total is NOT the naive average.**
+- Stacking a percentage is meaningless — three products at 40% do not make 120% — so stacked mode **falls back to lines for a percentage metric and says so in the subtitle** rather than drawing a confident nonsense.
+
+### Readable at catalog scale
+- Stacked with no selection would otherwise draw one sliver per SKU across hundreds of products. The top **8** by period value get their own band, the tail rolls into a single grey **"Other · N SKUs"**, and the stack still sums to the true grand total. An explicit **selection is never truncated** — if you picked 25 products you get 25 bands, because you asked for them.
+- Largest product is the bottom band so the stack has a stable base as weeks change.
+- The subtitle states the whole state in one line: `all 42 products · total · stacked · 9 bands · 13 weeks · 2026-07-14 → 2026-10-12 · US`. In stacked mode the total is hidden behind the bands, so the tooltip grows a **Total** footer.
+
+### The Chewy chart is the one that needed v10.11 first
+- It offers both revenue lines the Chewy P&L now carries: **Merch Sales** (Chewy's retail sell-through) and **Our Revenue / Vendor Contribution** (what Chewy pays *us*, via the catalog cost). A vendor metric with no catalog behind it would draw a flat zero line and read as "we sold nothing", so the subtitle says `⚠ no catalog cost — upload it on the Cost to Chewy tab` instead.
+- It reads the **same `chewyPnlSalesVisibleRows` snapshot the table does**, so the chart can never show a different set of products than the rows beneath it.
+
+### Verification
+- `node --check` clean. **54 behaviour tests** driving the REAL sliced `pnlTrendSeries` / `pnlSlotAdd` / `pnlChartMode` / `pnlTrendSubtitle` against a three-product fixture with a deliberate hole: the single-total default, per-selection lines, the fill chain, holes as 0 vs null, bands summing to the total at every bucket, largest-first ordering, opacity, top-N + Other summing to the grand total, a 25-product selection not being truncated, the percentage regression guard, the stacked-percentage fallback, mode persistence and junk-value degradation, singular/plural subtitles, colour cycling past the palette, and four degenerate shapes checked for throws. **37 static assertions** including that no page still hides its chart when nothing is selected.
+- **Then all four real pages in a browser**: Amazon default total `1700 / 1450 / 1900` hand-checked, stacked bands summing to the identical figures, a sales-weighted 38.235% where the naive average would read differently, Shopify `500 / 500 / 150`, Walmart `800 / 300 / 600`, and Chewy Vendor Contribution `$196.50` (100u × $4.50 − 23% − $150 COGS) — then **pixel-sampled the canvas** to prove three bands actually painted at the right proportions rather than trusting the config. Only console errors were the expected 401s from running unauthenticated.
+- **All 14 suites green.**
+
+### Two test-harness conventions, now written down in `tests/README.md`
+- **Never assert the version chip, and never hardcode a count a later release will legitimately change.** v10.11's suite asserted `v10.11 · <date>`, so it failed the moment v10.12 shipped — the same shape as v10.7's hardcoded "10 catVis pages". Both now assert the invariant their own label claims (my provenance marker still exists / every registry entry declares navKeys), which never needs bumping. A suite that goes red on every release trains everyone to ignore red suites.
+- **Slicing a function with a destructured parameter** (`function f({a, b})`) must balance the parameter list first — the first `{` after the name is the destructuring pattern, not the body, so a naive slice truncates the function and the harness will not parse. Cost one debugging round here.
 
 ## v10.11 — Cost to Chewy: the vendor-portal catalog, normalised off Purchase UOM
 - **Jason:** *"on the chewy P&L, i need a way to see cost to Chewy (so i can set our price to them)"* → then, with the file: *"i need to be able to upload this file - it's from chewy vendor portal. i do not need this on the uploads page - it is too cluttered there. note that the purchase UOM indicates whether the Cost is by case or each, so this needs to be factored into the chewy P&L"*

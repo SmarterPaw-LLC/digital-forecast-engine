@@ -506,12 +506,13 @@ sok(src.count('function chewyCatalogPricePerEach') == 1,
 sok('NOT the case pack' in src or 'not the case pack' in src.lower(),
     'source warns that MOQ is not the case pack')
 
-# Version chip bumped, and ONLY the chip.
-sok('v10.11 · 2026-10-12' in src, 'version chip is v10.11')
-sok(src.count('v10.11 · 2026-10-12') == 1, 'chip bumped exactly once')
-sok('v10.10 · 2026-10-08' not in src, 'old chip gone')
+# Provenance, NOT the version chip. A suite that asserts the chip asserts
+# "what release is it right now", which is false the moment the next one
+# ships - so every past suite would break on every bump. Assert instead
+# that this release's own markers, and its neighbours', survived.
+sok(src.count('v10.11 —') >= 1, "v10.11's own provenance markers survive")
 for marker in ('v10.10 —', 'v10.9 —', 'v10.6 —'):
-    sok(marker in src, 'provenance marker %r preserved' % marker)
+    sok(marker in src, 'earlier provenance marker preserved: %s' % marker.split(' ')[0])
 
 print('\n  static: %d failed' % len(sfail))
 if sfail:

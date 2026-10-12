@@ -61,3 +61,18 @@ math, which is the most-edited and least-obvious part of the model.
 - **Escapes:** the harness is a Python raw string, so `\uXXXX` reaches JS
   verbatim (valid) but `\U0001FXXX` does not — JS wants `\u{1FXXX}`. Simplest is
   to paste the real character.
+- **Never assert the version chip, and never hardcode a count a later
+  release will legitimately change.** Both make *past* suites fail on every
+  bump, which trains everyone to ignore a red suite. Assert the invariant
+  the label claims instead — "my own `## vX.Y —` provenance marker still
+  exists", or "every entry in this registry declares navKeys" rather than
+  "there are exactly 10 entries". v10.7 and v10.11 both had to be re-pointed.
+- **Slicing a function with a DESTRUCTURED parameter** (`function f({a, b})`)
+  needs the parameter list balanced first — the first `{` after the name is
+  the destructuring pattern, not the body, so a naive slice truncates the
+  function and the harness fails to parse.
+- **The Write tool converts `\uXXXX` to real characters on disk**, so a patch
+  script anchoring on a test file must use the real character.
+- **Windows + `python -I`:** isolated mode ignores `PYTHONIOENCODING`, so a
+  `print` containing a check mark dies on a cp1252 console. Start a suite with
+  `sys.stdout.reconfigure(encoding='utf-8')` inside a try/except.
