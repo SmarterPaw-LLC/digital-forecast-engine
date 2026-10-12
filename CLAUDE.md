@@ -2,9 +2,36 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.25**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.26**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.26 — org-wide view defaults (active-only · hide-bundles · default sort)
+- **Jason:** *"on the global defaults settings, i want to be able to set more global defaults, like only showing active products, choosing default sort, etc."* Confirmed with him: **org-wide** (everyone, admin-only to change), covering active-only, hide-bundles and per-page default sort.
+- **No migration.** v9.85 built `app_settings` as a generic key/value jsonb table; this is a second key (`view_defaults`) on it. That genericity is exactly what it was for.
+- **New `🌐 Global view defaults` panel** in Settings → Users, directly under the v9.85 tab-access panel so the two org-wide settings sit together. Non-admins see the same state read-only — it changes what everyone sees, so it is not theirs to edit.
+- **Resolution order is the same one the app already uses** for tab access (v9.85) and category visibility (v10.6): **personal choice → org default → the page's built-in default.** The org default sets the *starting point*; anyone can still change it for themselves on the page.
+
+### ⚠ "Not set" is a real third state, and that is the assertion that earns its keep
+- A missing key means **the admin has never expressed an opinion** — it does NOT mean `false`. A truthiness check (`if (d.activeOnly)`) collapses those two, so an admin who sets *hide bundles* and nothing else would silently force *show inactive everywhere* on the whole team. Every read is `typeof d.X === 'boolean'`, and the tri-state control offers **not set** as a first-class third button that deletes the key rather than writing `false`.
+- There is a **named regression guard** that runs the truthiness version against the absent case and asserts it really does get the answer wrong.
+
+### ⚠ The Products filter is multi-purpose, so it is only steered while it is idle
+- `#prodFilter` is one dropdown doing ten jobs (bundles only / needs review / missing ASIN / seasonal / …). Writing `active` into it unconditionally would silently clobber whatever someone was in the middle of using. It is only set while it is sitting on its own default (`''`) or on the value we ourselves set (`active`) — so the setting still works and still releases cleanly, without ever eating a live filter. Asserted both directions.
+- Same defensiveness on the selects: a value the `<select>` does not actually offer is never written (that would blank the control).
+
+### Default sort
+- Four pages — **Products · Inventory Planning · Demand Forecast · Amazon P&L** — each with a column picker built from that page's own registry (`PROD_COLUMNS` / `IP_COLUMNS` / `FC_COLUMNS` / `PNL_COLUMNS`), so a column added later appears in the picker for free. Verified live against the real registries: 32 / 113 / 65 / 33 sortable columns.
+- **⚠ Products is the one page that already persists its sort** (v5.70 writes `prodSortKey` to localStorage), so a stored key means the user has clicked a header and owns that choice — the org default steps aside. The other three do not persist, so there is no personal choice to outrank and the default always applies. `hasPersonal()` per page descriptor rather than a blanket rule.
+- Forecast writes the whole `sortChain` (v4.101) rather than a stray key, and re-syncs the legacy mirror.
+- A junk direction normalises to desc on BOTH write and apply; a saved column that no longer exists is skipped without throwing.
+
+### Applied before the first paint
+- Loaded in parallel with the profile and the tab defaults, then `applyGlobalViewDefaults()` runs **before `init()`** — otherwise the first render shows the built-in default and visibly flips a beat later. Asserted by ordering, with comments stripped first (the comment at that call site literally contains the words *"before init() paints"*, and matching that instead of the real call is how the assertion first went red).
+- Saving repaints whatever is on screen, so an admin sees the effect immediately rather than on the next navigation.
+- **Fails open** like v9.82 / v9.85 — a broken read leaves every page on its own default. A settings read that cannot complete must never change what anyone sees.
+- **Verification:** `node --check` clean. **46 behaviour tests** on the real sliced `applyGlobalViewDefaults` / `setGlobalViewDefault` / `setGlobalViewSort` / `renderGlobalViewDefaults`: the third state and its regression guard, explicit `false` applying as a real choice, the Products-filter guard in both directions, an unknown select value not written, all three bundle checkboxes, personal-sort-wins, the Forecast chain, junk directions, an unknown column, six degenerate config shapes, a non-boolean ignored rather than coerced, and the non-admin read-only render. **Then the real page:** the panel rendered against the live registries with no leaked `undefined`, and the applier driven against the real DOM controls — absent keys left hide-inactive untouched, a set key moved all three bundle checkboxes, a full config flipped every control, and a `needs_review` filter was preserved. **All 26 suites green.**
+- **Not covered, deliberately:** Seasonality has no hide-inactive control to steer, and sort defaults stop at the four data-dense pages rather than every table in the app. Easy to extend — one entry in `VIEW_SORT_PAGES`.
 
 ## v10.25 — the Break-Even tab was broken on every run since v10.22
 - **Jason, with a screenshot of the tab:** `✗ column "amzn_net_proceeds" does not exist`, printed twice. The tab had been dead since v10.22 — **three releases**.
