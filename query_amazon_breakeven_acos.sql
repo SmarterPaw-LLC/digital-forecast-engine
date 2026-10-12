@@ -150,6 +150,11 @@ base as (
     round(e.reimbursement  / nullif(e.net_units,0), 4)          as reimb_pu,
     round(e.inbound_fees   / nullif(e.net_units,0), 4)          as inbound_pu,
     round(e.storage_fees   / nullif(e.net_units,0), 4)          as storage_pu,
+    -- v10.25 - carry the raw TOTAL forward, not just the per-unit form. The
+    -- v10.22 Contribution columns in the final select read amzn_net_proceeds
+    -- directly; without this line it is out of scope there and every run of
+    -- the query fails with: column "amzn_net_proceeds" does not exist.
+    round(e.amzn_net_proceeds, 2)                               as amzn_net_proceeds,
     round(e.amzn_net_proceeds / nullif(e.net_units,0), 4)       as amzn_np_pu,
     s.snapshot_date, s.fba_available, s.fba_inbound, s.soh_total,
     round(v.units_per_day, 3)                                   as units_per_day,

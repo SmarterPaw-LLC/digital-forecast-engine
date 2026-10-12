@@ -94,9 +94,11 @@ ok(cols.index('Break Even ROAS') < cols.index('Contribution Profit'),
 # that agree today diverge the first time one is edited.
 ok('pre-ad' not in ' '.join(cols) and 'post-ad' not in ' '.join(cols),
    'no coined qualifiers left in any column name')
-ok('same numbers the Summary tab shows' in src,
+# v10.24 moved the explainer prose into BREAKEVEN_COL_TIPS, so this is now
+# asserted on the tooltip that hangs off the column itself.
+ok('same formula as the Summary tab' in src,
    'the page says these match the Summary tab')
-ok('Non-Ad Profit</strong> is not a duplicate' in src,
+ok("'Non-Ad Profit':" in src and 'an ad budget ceiling, not a profit figure' in src,
    'and says how Non-Ad Profit differs, rather than qualifying it')
 
 # The maths, read out of the SQL rather than restated.

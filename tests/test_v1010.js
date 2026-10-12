@@ -128,7 +128,7 @@ t('  with ?? so a deliberate 0 is not swallowed', true);
 t('  and the source of the number is recorded for the tooltip', true);
 t('the product card exposes supplier lead time', true);
 t('  loaded on open and saved on save', true);
-t('  and the card says it does NOT drive Amazon FBA', true);
+t('  and the card still warns it does NOT drive Amazon FBA', true);
 t('the Amazon tooltip stops printing a phantom lead time', true);
 t('  and the warehouse tooltip names where lead time came from', true);
 t('the migration exists', true);

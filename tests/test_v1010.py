@@ -47,8 +47,10 @@ static = [
      'id="pf-lead-time"' in RAW and 'id="pf-safety-stock"' in RAW),
     ('  loaded on open and saved on save',
      "getElementById('pf-lead-time')" in js and 'lead_time_days: (() =>' in js),
-    ('  and the card says it does NOT drive Amazon FBA',
-     'does NOT drive Amazon FBA' in RAW),
+    # v10.24 moved this out of a five-line field hint and onto the block
+    # heading as a tooltip. The warning is the invariant; where it lives is not.
+    ('  and the card still warns it does NOT drive Amazon FBA',
+     'NOT drive Amazon FBA status' in RAW),
     ('the Amazon tooltip stops printing a phantom lead time',
      'Trigger: the per-region Amazon REORDER THRESHOLD' in js),
     ('  and the warehouse tooltip names where lead time came from',
