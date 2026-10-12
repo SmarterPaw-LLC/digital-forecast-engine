@@ -2,9 +2,36 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.29**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.30**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.30 — "if i click 'yes' nothing happens" (and no, nothing of Jason's was removed)
+- **Jason:** *"if i click 'yes' nothing happens. wtf is wrong right now, this has taken more than 2 tries. WHY DID YOU GET RID OF THE GLOBAL SETTINGS I HAD ALREADY SET??? I SHOULD HAVE GLOBAL defaults for tabs and categories that apply to everyone"*
+
+### Nothing of his was removed — and that is now asserted, not reassured
+- **The org-wide settings he had configured are all intact**: the v9.85 **global default tab access** panel (`renderGlobalTabDefaults`, its Settings mount, its heading, `setGlobalDefaultTabs`) and the v10.6 **category visibility global default** (`catVisPromoteToGlobal`, *"Make this my global default"*). His own screenshot shows the category buttons sitting directly above the new panel.
+- v10.28 removed exactly two things, both mine: the **v10.26 Settings-page panel** (which he had just told me did not belong there) and the standing **UI-scoping banner**, whose text moved to a tooltip. Neither was a setting.
+- **Section C of `test_v1030` now asserts all six markers by name**, so "did you delete my settings" is answerable by running the suite instead of by me saying no.
+
+### The click bug was mine, and the defensive code is what hid it
+- **The write was SUCCEEDING.** The panel never repainted, so there was no feedback and it looked dead.
+  ```js
+  function pageSettingsRefresh() {
+    try { if (typeof renderPageSettingsMenu === 'function') renderPageSettingsMenu(); } catch {}
+    try { if (typeof syncPageSettingsGear === 'function') syncPageSettingsGear(); } catch {}
+  }
+  ```
+- **Neither function exists.** I guessed both names instead of reading them out of the file — the real ones are `openPageSettingsMenu` / `pageSettingsSyncIndicator`. The `typeof … === 'function'` guard plus the per-call `try/catch` meant the mistake could not even reach the console. **The code written to make it robust is precisely what turned a typo into a silent no-op.**
+- **Fix:** the panel repaints **in place** — the same thing every other panel in that gear does through its `onAfterChange` callback — rather than rebuilding the whole menu under the cursor. `viewDefaultRenderControls` records its host per page (`_vdHosts`) so a click can find it again; `afterViewDefaultChange(pageKey)` applies to the live page, re-renders that page's table, then repaints the panel and syncs the gear dot. `clearViewDefault` routes through the same path.
+- **The swallowing try/catch is gone.** A refresh that fails is a bug worth seeing in the console, not noise worth hiding.
+
+### ⚠ v10.8's sweep existed for this exact class and missed it
+- v10.8 built a called-but-undefined sweep after a span replacement deleted a function that was still being called. It did not catch this one because it matches **by namespace prefix** (`catVis*` / `pageSettings*` / `freeze*`) — and `renderPageSettingsMenu` starts with "render" while `syncPageSettingsGear` starts with "sync". Both sailed straight past it.
+- So `test_v1030`'s sweep is **call-site-scoped, not prefix-scoped**: it walks every function the view-defaults feature owns and asserts each name it invokes is defined somewhere. A guessed name is caught regardless of what it is called. **Verified to have teeth** — run against the pre-v10.30 body it flags both invented names.
+- **It cried wolf on its first run and was narrowed, not shipped noisy.** It flagged `onAfterChange()`, which is a destructured local (`const { host, onAfterChange } = _vdHosts[pageKey]`). That is the v10.8 finding verbatim — naively that sweep reported 18 "missing" functions, all parameters or destructured bindings. Added `local_names()` to collect parameters, declarations, destructured bindings, catch bindings and arrow params, and excluded them.
+- **Both guards guard themselves** (the v10.20 lesson — a masking bug makes a sweep pass against an empty haystack): the stripper is asserted to keep a real call while removing a name that only appears in a comment, and `local_names` is asserted to recognise a destructured local **while NOT** writing off a genuine free call.
+- **Verification:** `node --check` clean, zero live references to either invented name (the two that remain are inside the comment naming the bug). **Then the real click driven in the browser** — the actual `yes` button, through the real handler with only the network write stubbed: value saved as `{products:{activeOnly:true}}`, panel repainted, `yes` turned green, summary line refreshed, host registered. **All 28 suites green.**
 
 ## v10.29 — the gear panel gets real controls
 - **Jason:** *"I CANNOT SET IT HERE"* — screenshot of the panel reading `Only active products: not set / Default sort: not set` above a save button.
