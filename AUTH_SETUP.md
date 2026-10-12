@@ -56,7 +56,9 @@ This enables the "Sign in with Google" button on the login page.
 
 ### 3b. Configure the Google provider in Supabase
 
-1. Supabase dashboard → **Authentication** → **Providers**
+1. Supabase dashboard → **Authentication** → **Sign In / Providers**
+   (Supabase renamed this from plain "Providers" — it sits under the
+   **CONFIGURATION** heading in the left sidebar, under *Policies*.)
 2. Find **Google**, click to expand
 3. Toggle **Enabled** on
 4. Paste the **Client ID** from step 3a
@@ -67,6 +69,7 @@ This enables the "Sign in with Google" button on the login page.
 ### 3c. Set the Site URL (so redirects come back correctly)
 
 1. Supabase dashboard → **Authentication** → **URL Configuration**
+   (also under **CONFIGURATION** in the left sidebar)
 2. **Site URL**: `https://smarterpaw-llc.github.io/digital-forecast-engine/`
 3. **Redirect URLs** (add each as a separate entry, click `Add URL` after each):
    - `https://smarterpaw-llc.github.io/digital-forecast-engine/`
