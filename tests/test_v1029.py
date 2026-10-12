@@ -1,7 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-v10.28 — org view defaults move into the page-settings gear, per page, and the
-printed prose gets cut.
+v10.29 — the gear panel gets REAL CONTROLS (supersedes test_v1028).
+
+Jason: "I CANNOT SET IT HERE" — the v10.28 panel was a read-out plus a "save
+this page's current view" button, so setting a default meant leaving the panel,
+configuring the page, then coming back. Every other panel in this gear writes
+on change; this one does now too.
+
+Also still guards v10.28's two placement/copy rules, which are unchanged:
 
 Jason, twice:
   "i do NOT want the global settings on the setting pages — it is supposed to
@@ -147,8 +153,11 @@ ok('status.title =' in fn('renderUsersList'),
 body = fn('viewDefaultRenderControls')
 prose = re.findall(r"'([A-Z][a-z][^']{60,})'", body)
 ok(not prose, 'the panel body ships no long prose string' + ('' if not prose else ' — found: ' + prose[0][:70]))
-ok('title="Set the filters and sort' in body or 'title=\\"Set the filters' in body or 'Set the filters and sort' in body,
-   'the how-to instruction is on the button, one hover away')
+# v10.29 — the save-the-current-view button is gone, so what matters now is
+# that the panel actually lets you SET things rather than only report them.
+ok('setViewDefaultField(' in body, 'the panel sets fields directly')
+ok('onViewDefaultSortChange(' in body, '  and offers a sort picker')
+ok('saveCurrentViewAsDefault' not in src, 'the save-the-page-view gesture is gone')
 
 
 # ═════════ C. behaviour — per-page apply ═════════
@@ -265,8 +274,8 @@ if r.returncode != 0:
     fails.append('per-page apply behaviour')
 
 
-# ═════════ D. save captures the page's CURRENT view ═════════
-print('\nD. save — snapshots what the page is showing right now')
+# ═════════ D. the setters — writing from the panel ═════════
+print('\nD. setters — set it in the panel, writes on change')
 
 h2 = r"""
 let P = 0, F = 0;
@@ -275,76 +284,86 @@ const t = (label, got, want) => {
   if (g === w) { P++; console.log('  ok  ' + label); }
   else { F++; console.log('  FAIL ' + label + ' — got ' + g + ', want ' + w); }
 };
-const EL = {
-  'fHideInactive': { checked: false }, 'fHideBundles': { checked: true },
-  'ip-hide-inactive': { checked: true }, 'ip-hide-bundles': { checked: true },
-  'salesHideBundles': { checked: false },
-  'prodFilter': { value: 'active', options: [{ value: '' }, { value: 'active' }] },
-  'cogs-status-filter': { value: 'all', options: [{ value: 'active' }, { value: 'all' }] },
-};
-const document = { getElementById: id => EL[id] || null };
-let prodSortKey = 'msrp', prodSortDir = 1;
-let ipSortKey = 'need30', ipSortDir = -1;
-let pnlSortKey = 'net_sales', pnlSortDir = -1;
-let sortChain = [{ key: 'adj_daily', dir: -1 }];
-const localStorage = { getItem: () => null, setItem: () => {} };
-const PROD_COLUMNS = [{ key: 'msrp', label: 'MSRP', sortVal: () => 0 }];
-const IP_COLUMNS = [{ key: 'need30', label: '30d Need', sortVal: () => 0 }];
-const FC_COLUMNS = [{ key: 'adj_daily', label: 'Vel/day', get: () => 0 }];
-const PNL_COLUMNS = [{ key: 'net_sales', label: 'Net Sales' }];
 let _globalViewDefaults = null;
-let written = null, alerted = null;
-const alert = m => { alerted = m; };
-async function writeGlobalViewDefaults(n) { written = n; _globalViewDefaults = n; }
+let written, applied = 0, repainted = [];
+// Mirrors the real function's normalisation: an empty object is stored as
+// null, so "every page cleared" and "never set" are the same state.
+async function writeGlobalViewDefaults(n) {
+  written = (n && Object.keys(n).length) ? n : null;
+  _globalViewDefaults = written;
+}
 async function logAudit() {}
+function viewDefaultError(e) { throw e; }
+function applyGlobalViewDefaults() { applied++; }
 function pageSettingsRefresh() {}
-function viewDefaultError(e) { alerted = String(e); }
+const window = {};
+const VIEW_DEFAULT_PAGES = [{ key: 'inventory', rerender: 'renderInventoryTbl' },
+                            { key: 'products',  rerender: 'renderProductsTbl' }];
+const document = { getElementById: id => ({ 'vds-inventory': { value: 'need30' },
+                                            'vdd-inventory': { value: '1' } })[id] || null };
 
-PAGES
-SAVE
+FIELD
+SORT
+AFTER
+ONCHANGE
 
 (async () => {
-  // Forecast: both flags + the sort chain, exactly as the page is showing them.
-  await saveCurrentViewAsDefault('forecast');
-  t('captures the page as it stands',
-    written.forecast, { activeOnly: false, hideBundles: true, sort: { key: 'adj_daily', dir: -1 } });
+  _globalViewDefaults = null;
+  await setViewDefaultField('inventory', 'activeOnly', true);
+  t('setting a field from empty', written, { inventory: { activeOnly: true } });
+  t('  applies to the live page immediately', applied > 0, true);
 
-  // A second page joins without disturbing the first.
-  await saveCurrentViewAsDefault('inventory');
-  t('a second page joins it', Object.keys(written).sort(), ['forecast', 'inventory']);
-  t('  and the first is unchanged', written.forecast.hideBundles, true);
+  await setViewDefaultField('inventory', 'hideBundles', false);
+  t('a second field joins without disturbing the first',
+    written.inventory, { activeOnly: true, hideBundles: false });
 
-  // Units Sold has ONLY hideBundles — it must not invent fields it has no
-  // control for.
-  await saveCurrentViewAsDefault('sales');
-  t('a page only saves the settings it actually has', written.sales, { hideBundles: false });
+  // ⚠ "not set" must DELETE the field. Storing false would turn "no opinion"
+  // into "show everything", which is a different instruction.
+  await setViewDefaultField('inventory', 'activeOnly', null);
+  t('"not set" deletes the field rather than storing false',
+    written.inventory, { hideBundles: false });
 
-  // COGS reads its activeOnly off the status dropdown.
-  await saveCurrentViewAsDefault('cogs');
-  t('COGS reads active-only from its status filter', written.cogs, { activeOnly: false });
+  // Clearing the LAST field drops the page entirely rather than leaving {}.
+  await setViewDefaultField('inventory', 'hideBundles', null);
+  t('clearing the last field drops the page entry', written, null);
 
-  // Products: filter + persisted sort.
-  await saveCurrentViewAsDefault('products');
-  t('Products captures filter + sort', written.products, { activeOnly: true, sort: { key: 'msrp', dir: 1 } });
+  // Pages stay independent.
+  _globalViewDefaults = null;
+  await setViewDefaultField('inventory', 'activeOnly', true);
+  await setViewDefaultField('products', 'activeOnly', false);
+  t('pages are independent',
+    written, { inventory: { activeOnly: true }, products: { activeOnly: false } });
 
-  // An unknown page is a no-op, not a crash.
-  written = null;
-  await saveCurrentViewAsDefault('nosuchpage');
-  t('an unknown page writes nothing', written, null);
+  await setViewDefaultSort('inventory', 'need30', 1);
+  t('sort nests inside its page',
+    written.inventory, { activeOnly: true, sort: { key: 'need30', dir: 1 } });
+
+  await setViewDefaultSort('inventory', 'need30', 'junk');
+  t('a junk direction normalises to desc', written.inventory.sort.dir, -1);
+
+  await setViewDefaultSort('inventory', '', -1);
+  t('clearing sort leaves the other fields', written.inventory, { activeOnly: true });
+
+  // The dropdown handler reads both selects and routes to the setter.
+  await onViewDefaultSortChange('inventory');
+  t('the sort dropdown handler reads column + direction',
+    written.inventory.sort, { key: 'need30', dir: 1 });
 
   console.log('\n  ' + P + ' passed, ' + F + ' failed');
   if (F) process.exit(1);
 })();
 """
-h2 = (h2.replace('PAGES', vd_helpers() + '\n' + const_arr('VIEW_DEFAULT_PAGES'))
-        .replace('SAVE', fn('saveCurrentViewAsDefault')))
-tmp2 = os.path.join(tempfile.gettempdir(), 'test_v1028_save.js')
+h2 = (h2.replace('FIELD', fn('setViewDefaultField'))
+        .replace('SORT', fn('setViewDefaultSort'))
+        .replace('AFTER', fn('afterViewDefaultChange'))
+        .replace('ONCHANGE', fn('onViewDefaultSortChange')))
+tmp2 = os.path.join(tempfile.gettempdir(), 'test_v1029_set.js')
 io.open(tmp2, 'w', encoding='utf-8', newline='').write(h2)
 r2 = subprocess.run(['node', tmp2], capture_output=True, text=True, encoding='utf-8')
 print(r2.stdout.rstrip())
 if r2.returncode != 0:
     print(r2.stderr.rstrip())
-    fails.append('save snapshot')
+    fails.append('panel setters')
 
 
 # ═════════ E. wiring ═════════
@@ -361,4 +380,4 @@ print('\n' + ('=' * 60))
 if fails:
     print('FAILED (%d): %s' % (len(fails), ', '.join(fails)))
     sys.exit(1)
-print('v10.28 — all green')
+print('v10.29 — all green')

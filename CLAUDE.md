@@ -2,9 +2,22 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.28**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.29**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.29 — the gear panel gets real controls
+- **Jason:** *"I CANNOT SET IT HERE"* — screenshot of the panel reading `Only active products: not set / Default sort: not set` above a save button.
+- **He is right.** v10.28 shipped a **read-out** plus a *"save this page's current view as everyone's default"* button. Setting a default therefore meant: leave the panel, configure the page, come back, click save. **Every other panel in this gear sets its thing directly and writes on change** — category visibility writes on checkbox click, freeze columns on select change. Making this one a two-step snapshot gesture was inconsistent with the module it lives in, and it read as broken because the panel showed state it could not change.
+- **Replaced with direct controls:**
+  - **Only active products** / **Hide bundles** → `yes | no | not set`, writes on click.
+  - **Default sort** → column + direction selects, writes on change.
+  - `saveCurrentViewAsDefault` is deleted, not left as dead code.
+- **Writing also applies to the live page immediately** (`afterViewDefaultChange` → `applyGlobalViewDefaults()` + that page's own re-render), so the effect is visible without navigating away and back.
+- **"not set" stays a first-class option** and genuinely DELETES the field — writing `false` would turn *no opinion* into *show everything*, which is a different instruction. Clearing the last field on a page drops the page entry entirely rather than leaving `{}` behind, and `writeGlobalViewDefaults` normalises an empty object to `null` so "every page cleared" and "never set" are the same stored state.
+- **Verification:** `node --check` clean, zero `saveCurrentViewAsDefault` references left. **10 behaviour tests** on the real sliced `setViewDefaultField` / `setViewDefaultSort` / `afterViewDefaultChange` / `onViewDefaultSortChange`: setting from empty, a second field joining without disturbing the first, `not set` deleting rather than storing false, clearing the last field dropping the page, pages staying independent, sort nesting inside its page, junk directions normalising, clearing sort leaving the other fields, and the dropdown handler reading both selects. **Then the real page:** 3 tri-state buttons + 2 selects rendered for Products, the click handler wired to `setViewDefaultField`, stored state reflected back (`msrp` selected, ascending selected, `yes` highlighted green), no leaked `undefined`. **All 27 suites green.**
+- **One test-stub finding worth keeping:** the suite initially failed on *"clearing the last field drops the page entry"* because my stub captured `writeGlobalViewDefaults`'s raw argument while the real function normalises `{}` → `null` before writing. The code was right and the stub was lying about the contract — fixed by having the stub mirror the normalisation. A stub that does not reproduce the real function's edge-case handling will either hide a bug or invent one.
+- **test_v1028 superseded by test_v1029** (same file, section D re-pointed at the new setters).
 
 ## v10.28 — view defaults move into the page-settings gear; printed prose cut
 - **Jason, on where it belongs:** *"i do NOT want the global settings on the setting pages — it is supposed to be a global settings per page for all users default — we already have the module"* (pointing at the gear next to Customize columns).
