@@ -2,9 +2,29 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.30**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.31**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.31 — deleting a block took a declaration with it; the whole Users section died
+- **Jason:** *"you DID NOT BRING BACK MY DEFAULT TABS GLOBAL SETTING"* — and he was right, even though v10.30 had just asserted it was present.
+- **v10.28 deleted the v9.82 UI-scoping banner block** to turn it into a tooltip. That block opened with:
+  ```js
+  const wrap = document.getElementById('users-tbl-wrap');
+  ```
+  and the **v9.85 global-tab-access code below it still used `wrap`**. The declaration went out with the banner, so every line after it threw `ReferenceError` and **`renderUsersList` died before painting anything** — the users table AND the global tab-access panel both vanished. One deleted line, two features gone.
+- **Fix:** `wrap` is declared on its own line now, with a comment saying why it lives there, so the next person trimming copy does not take it out again.
+
+### ⚠ Two guards failed, and how each failed is the lesson
+- **`node --check` passes** — an undeclared identifier is a RUNTIME error, not a syntax one. Same blind spot as v10.8 (calling an undefined function) and v10.25 (a SQL column out of scope). The syntax check keeps proving it cannot see this class.
+- **v10.30 section C asserted the markers were PRESENT IN THE FILE.** They were — the entire time the panel was broken. **Text presence is not rendering.** Grepping the source for a string proves nothing about whether the code runs, and I shipped that assertion while telling Jason his settings were intact. The claim was true about the file and false about his screen.
+- **This is the v10.8 lesson restated and still not learned:** *"a wholesale span replacement silently drops whatever the old span defined — any repspan-style replacement must diff the set of functions defined before against after."* I did a slice-deletion and diffed nothing. **Deleting a block means checking what it DECLARED, not just what it rendered.**
+
+### The guards that replace them
+- **`test_v1031` sweeps for undeclared identifiers** across `renderUsersList`, `renderGlobalTabDefaults`, `viewDefaultRenderControls`, `pageSettingsRefresh`, `applyGlobalViewDefaults` and `afterViewDefaultChange` — collecting parameters, declarations, destructured bindings, catch and loop vars, arrow params and module scope, then flagging anything left. **Verified to have teeth:** re-run against a `renderUsersList` with the declaration removed, it flags `wrap`; with it restored, it does not.
+- **Section B drives `renderUsersList` for real** against a DOM stub and asserts it does not throw, that it reaches `renderGlobalTabDefaults()`, that the panel mounts, and that the UI-scoping tooltip survived. That is the assertion v10.30 should have made instead of a text search.
+- **Verified in the browser too**, which is how this should have been checked the first time: `renderUsersList()` runs clean, the panel is in the DOM with all **8 tab checkboxes** and the `↺ all tabs` reset button, and the status tooltip is intact.
+- **All 29 suites green.**
 
 ## v10.30 — "if i click 'yes' nothing happens" (and no, nothing of Jason's was removed)
 - **Jason:** *"if i click 'yes' nothing happens. wtf is wrong right now, this has taken more than 2 tries. WHY DID YOU GET RID OF THE GLOBAL SETTINGS I HAD ALREADY SET??? I SHOULD HAVE GLOBAL defaults for tabs and categories that apply to everyone"*
