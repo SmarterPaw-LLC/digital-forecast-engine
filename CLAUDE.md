@@ -2,9 +2,32 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.13**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.14**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.14 — Cost to Chewy: set units-per-case in the cell that says it is missing
+- **Jason:** *"on the cost to chewy, i should be able to click in here and set the num/case"* — with a screenshot of a Case column full of `⚠ set`.
+- He is right, and v10.11 was half a feature. The gaps panel **named** every SKU missing a case pack and then sent you to the product card one at a time to fix them. On a CS row `case_qty` is the single value that blocks Price/ea and every column right of it, so the cell that reports it missing is now the cell that fixes it.
+
+### How it behaves
+- **Click any Case cell** → numeric editor, focused and selected. **Enter** saves, **Escape** cancels, **blur** saves. The row recomputes in place, so Price/ea, Allow/u, GM $, GM %, Target and Δ all populate the instant you hit Enter, and the gaps panel loses a line.
+- All four cell states are clickable (`⚠ set` · a set number · `ea` · `—`), from **one** handler definition interpolated into each branch. On an `EA` row the tooltip says outright that Chewy quotes that one per each so no divisor is needed for Price/ea — but it stays editable, because `case_qty` is a real product field that Inventory Planning's Case Qty / Cases Needed columns read.
+- **`case_qty` lives on `products` (v7.27), not `product_cogs`**, so the write targets `products` and touches only that one field.
+
+### ⚠ Enter saves DIRECTLY — it does not lean on blur()
+- The obvious implementation is `Enter → input.blur()` and let the blur handler save, which is what the COGS page does. **`.blur()` is a no-op when the field is not the focused element**, and the edit then evaporates with no error, no saved value and no clue — the worst possible shape for a data-entry cell. Caught driving the real cell in a browser, where a focus quirk in the preview pane reproduced exactly that.
+- So Enter calls the save directly and blurs afterwards only so the caret leaves. **`chewyCaseSave` claims the edit on entry** (`dataset.cancelled = '1'`) which makes it idempotent, so the blur that naturally follows an Enter-save cannot run the whole thing a second time. Asserted.
+
+### ⚠ Caches, and the write that must not lie
+- **Both in-memory caches are mirrored** — `allProducts` AND every per-region entry in `records[]` — the v7.34 lesson. Without it, Inventory Planning's Case Qty and Cases Needed columns keep serving the old value until a full page reload: the silent-staleness class that fix exists for. A visible Inventory Planning grid is re-rendered too.
+- **The caches are only touched after the write succeeds.** A rejected write (RLS, network) leaves `allProducts` and `records` exactly as they were and surfaces the real error, rather than showing a value the database does not hold. Asserted with a stubbed failure.
+- `event.stopPropagation()` on the cell click and on the input, because the row's own `onclick` opens the product modal — clicking to edit must not also launch a modal over the top of the editor.
+
+### Verification
+- `node --check` clean. **43 behaviour tests** on the REAL sliced `chewyCaseSave` / `chewyCaseKey`: the write targeting `products` with only `case_qty` in the payload and scoped to one master_id, both caches mirrored while a neighbouring product stays untouched, four invalid inputs (`0`, `-3`, `-1`, `abc`) rejected with an alert and no write, a decimal truncating to a whole case, whitespace trimmed, blank clearing to null, two shapes of no-op writing nothing, the idempotency guard under a trailing blur, Enter routing through the save rather than blur, ESC cancelling, and a failed write leaving every cache and the audit log alone. **22 static assertions.**
+- **Then the real cell in a browser**: a genuine DOM click opening the editor with the product modal suppressed, typing 12 and pressing Enter producing exactly one `products` update, both caches at 12, and the row recomputing to `$4.50 / $1.04 / $1.96 / 43.7%` with the gap cleared and the gaps panel emptied — plus Escape, unchanged, `0`, `-3`, blank, the no-double-write case and an EA row, each driven through the real handlers. Screenshot of the editor open. Only console errors were the expected 401s from running unauthenticated.
+- **All 16 suites green.**
 
 ## v10.13 — "All time" on every date picker; Units Sold joins the default-trend pages
 - **Jason:** *"on all of the data pickers, i want an 'all time' selection"* → then, mid-build, *"units sold page does not have the default trend lines"*.
