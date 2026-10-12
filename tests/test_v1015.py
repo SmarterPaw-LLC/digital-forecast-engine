@@ -96,8 +96,11 @@ ok(len(re.findall(r'chewyPnlCostShowGap\(', src)) >= 2,
 # The dead end is gone.
 ok('see the console warning from the upload for the list' not in src,
    'the "see the console warning" dead end is gone')
-ok('unmatchedCatalogRows' in js,
-   'unmatched catalog rows are captured so they can be listed inline')
+# v10.18 re-pointed this: unmatched catalog rows used to be listed inline in
+# the panel because they had no table row. They are real rows now (gap
+# not-in-system), which is strictly better, so assert the newer guarantee.
+ok("gap: 'not-in-system'" in js,
+   'unmatched catalog rows become real table rows (v10.18)')
 
 # allRows is pushed BEFORE the quick filters, or the panel loses rows the
 # active filter excluded — which is the whole point.

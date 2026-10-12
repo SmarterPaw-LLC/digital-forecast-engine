@@ -2,9 +2,33 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.17**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.18**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.18 — the gaps panel was shouting about the direction that does not matter
+- **Jason:** *"so these are skus that are not in the uploaded catalog but have a chewy sku? so what -- these are mostly old skus. if they are in the catalog but not in the system, then i need to know."*
+- He is right, and v10.15 made it worse by giving the wrong direction a prominent chip. There are **two** directions and they are not equally interesting:
+  - **Our product carries a Chewy SKU, Chewy's catalog does not list it** — mostly discontinued product. This was the loud orange bullet (35 of them).
+  - **Chewy's catalog row matches no product on our side** — Chewy is set up to buy something we are not tracking. This was a footnote that ended *"see the console warning from the upload for the list"*, and it had **no row in the table at all**.
+
+### The reverse direction is now a real row, not a footnote
+- Unmatched catalog rows have no `master_id`, which is exactly why they had no table row and no filter could reach them. They are now built as rows in their own right — sortable, filterable, CSV-exportable like everything else — carrying Chewy's cost (and, on an `EA` row, the **per-each price**, which is the number you want when deciding whether a SKU is worth setting up).
+- Red **`NOT IN SYSTEM`** badge in place of the brand chip, and the row is **deliberately not clickable** — there is no product to open, so it does not pretend otherwise (explicit `cursor:default`, since `tbody tr { cursor:pointer }` is global).
+- **No COGS means no margin, and none is fabricated.** `cogs` / `gm` / `gmPct` / `target` / `verdict` all stay null, so these rows cannot drift into the Losing-money or Under-target counts.
+- **Held out while a brand or category filter is on.** They have neither, so listing them under "Doggijuana" would be a lie. The panel says so in that state rather than silently showing a smaller number.
+- Its bullet now **leads** the panel, in red, and names the fix: create the product, or set `products.chewy_sku` / barcode on the one it belongs to.
+
+### The our-side direction splits on sell-through
+- **Still selling on Chewy but missing from the catalog export** → stays a gap. Genuinely surprising: either the Catalog Details export was filtered, or our `chewy_sku` is stale.
+- **No Chewy sales on record** → rendered **outside** the orange box in a muted line reading *"almost certainly discontinued. Not counted as a gap."* Still filterable (`gap:no-catalog-dormant`) for anyone auditing, but it stops competing for attention with real work. That is the "so what" population.
+- **⚠ The dormant test is lifetime, not the context period.** Chewy's sell-through feed runs ~2 months behind (v9.88), so a 90-day window would mislabel a live SKU as discontinued. `everSold` is built unscoped by date; a product only reads dormant if it has **never** sold on Chewy. Asserted in both directions.
+
+### Verification
+- `node --check` clean. **27 static assertions** — every gap kind has a dropdown option, a `GAP_MSG` and a `GAP_LABEL`; `not-in-system` is pushed before the our-side bullet; the dormant line is built outside the gaps box; all seven buckets still count off `allRows` (the v10.15 invariant); the retired footnote and its dead helper vars are gone.
+- **27 behaviour tests** on the real sliced row-builder and the real split line. **The one that earns its keep is the partition:** every catalog row with no `master_id` becomes exactly one `not-in-system` row — drop one and a SKU Chewy is buying silently disappears from the page that exists to price it. Plus: matched rows not duplicated into it, an EA orphan priced while a CS orphan is not (but still shows its raw cost), no COGS / margin / verdict fabricated, `master_id` empty rather than faked, a nameless row falling back to its Chewy SKU, brand and category filters holding them out while search still matches across sku / name / UPC, an empty catalog inventing nothing, and all six branches of the dormant split.
+- **Then the real page in a browser** against a fixture carrying both directions: panel leads with *"2 rows in Chewy's catalog have no product in our system"*, then *"1 SKU is still selling on Chewy but missing from the catalog export"*, with the dormant SKU in a muted line beneath the box. Both new chips filter correctly, the other bullets stay listed while filtered, the `NOT IN SYSTEM` rows show `$9.00 /EA` and `$36.00 /CS` with no click handler and a default cursor, and the brand filter holds them out with the explanation shown. Only console errors were the expected 401s from running unauthenticated.
+- **One v10.15 assertion re-pointed** — it checked that unmatched catalog rows were *captured for an inline list*; they are table rows now, which is strictly better, so it asserts the newer guarantee instead. **All 20 suites green.**
 
 ## v10.17 — one sub-tab look for every page that has sub-pages
 - **Jason:** *"can you make all the pages that have multiple subpages use this tab layout?"* — pointing at the Chewy P&L browser-tab strip.
