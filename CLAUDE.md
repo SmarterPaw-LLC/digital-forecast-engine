@@ -2,9 +2,30 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.12**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.13**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.13 — "All time" on every date picker; Units Sold joins the default-trend pages
+- **Jason:** *"on all of the data pickers, i want an 'all time' selection"* → then, mid-build, *"units sold page does not have the default trend lines"*.
+
+### All time
+- Four pickers already had one (Demand Forecast, Units Sold, Chewy Rebates, FBA Shipments). The **five P&L windows did not**: Amazon, Shopify, Walmart, Chewy Sales and the Chewy Cost context window. All five now offer it, placed **just before Custom range** so it does not interrupt the common path, and the PDF report builder offers it as a period too.
+- **It resolves to the EARLIEST date actually present in that page's data, not a `1970-01-01` sentinel.** A sentinel filters identically but makes the subtitle, the scorecard footer and the CSV context line all claim a window that starts decades before anything was sold. `pnlAllTimeFrom(rows, field)` scans the page's own cache; ISO dates compare correctly as strings, so it is a single pass with no date parsing. Empty data falls back to the epoch, which is the one case where a sentinel is the honest answer.
+- **⚠ Delta chips are suppressed under All time.** "All time" has **no prior period by construction**, so every scorecard would render `▲ new · no prior data` — technically true, uniformly useless, and it reads as breakage. One module flag (`_pnlSuppressDeltas`), set by whichever DOM date resolver ran last, checked in the **single** place every page builds its chips (`pnlDeltaChip`). The alternative was a null-guard at the six separate sites that compute a prior window, each of which dereferences `prevRange.from` and would have thrown.
+- **`computePnlDateRange` deliberately stays pure** and does NOT set the flag. It is the DOM-free variant the PDF builder calls in a loop over arbitrary periods; a side effect there would leave the flag set from whichever period happened to be last. Asserted — and the assertion looks for an *assignment*, not a mention, because the function's own comment names the flag to explain why it does not touch it.
+
+### Units Sold had no default trend either
+- Same shape as the four P&L pages before v10.12, but worse: `updateSalesChart` opened with `if (salesSelected.size === 0) { closeSalesDrill(); return; }`, so an empty selection actively **closed** the panel. Now it charts every product currently visible in the table (all filters honoured) and collapses them to one **Total** line; the title reads `All products · N in view`.
+- **Collapsed by post-processing the per-product datasets, not by a second aggregation path.** Bundle attribution, the v7.99 staleness cutoff and the v6.4 Monday bucketing are gnarly enough once; computing them twice is how the two states drift apart. The existing loop runs over `chartMids` (selection, else visible), and the result is summed afterwards.
+- **Stacked keeps doing something useful by default**: top 8 products plus a single `Other · N SKUs` band, mirroring v10.12. **⚠ The area fills are re-chained after the sort** — `origin` then `-1` — because reordering datasets for a stacked area and leaving `fill: true` is exactly the v4.135 bug, on exactly this chart.
+- **Every call site had to change too, and that was the real work.** The chart was redrawn from six places, *all* gated on `salesSelected.size > 0` — which is precisely the state the new default exists for. Three in the markup (period + both custom-date inputs), the tail of `renderSalesTbl`, the row-toggle and select-all handlers (which called `closeSalesDrill()` on an empty selection, so unticking your last row still killed the panel), and the chart-type change. A new default view is worth nothing if nothing calls it.
+- **By Channel inherits it for free**: that tab reads `salesRawWeekData`, which is now built over the visible set, so it shows the channel mix across everything in view rather than nothing.
+
+### Verification
+- `node --check` clean. **20 behaviour tests** on the REAL sliced `pnlAllTimeFrom` and `pnlDeltaChip`: earliest-date selection across year / month / day boundaries, six degenerate inputs (empty, null, undefined, missing field, null row, blank value) all landing on the epoch rather than `undefined`, the field name being honoured, suppression across all four chip variants, the flag toggling back cleanly, and direction / colour unaffected. **60 static assertions** including that all nine pickers carry the option, each resolver derives from real data, and no Units Sold call site still gates on a selection.
+- **Then the real pages in a browser**: all nine pickers offering it, all five resolvers returning the true earliest date (`2024-03-04` from a three-row fixture, `1970-01-01` on empty), chips suppressed under All time and restored at 90 days — and on Units Sold the default total `170 / 145 / 190` hand-checked, one line when one product is selected, two for two, **falling back to the total when the last row is unticked**, stacked bands summing to the identical totals with chained fills, and By Channel showing Amazon US `120 / 145 / 120` + Shopify `50 / 0 / 70` with nothing selected. Only console errors were the expected 401s from running unauthenticated.
+- **All 15 suites green.**
 
 ## v10.12 — every P&L page opens on a sales trend, with a stacked-area toggle
 - **Jason:** *"on every p&L page, i should see a sales line chart when no products are selected as a default state. it should be based on total sales over the default period. i want a toggle to show by area and stack the product sales"*
