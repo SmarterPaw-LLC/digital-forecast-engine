@@ -2,9 +2,34 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.26**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.27**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.27 — Products bulk edit: 7 fields → 17, and a records[] staleness bug
+- **Jason:** *"why is this all that i can bulk edit? i should be able to bulk edit other attributes, like categorie, sub category, active, seasonal ect"*
+- **Two different things were true at once:**
+  1. **Sub-category was ALREADY bulk-editable and badly labelled.** `products.category_id` is a FK to a `(category, subcategory)` **pair**, and `prodBulkCatOpts` has always rendered the options as `Toys / Teasers`. The field was just called **Category**, so there was no way to know picking it set both. Renamed to **Category / Sub-category**, with a hint under the picker saying so outright. Nothing about the behaviour changed — only the thing that made it findable.
+  2. **The list genuinely stopped short.** Category, Active and Seasonal were all there (Jason's screenshot was showing the collapsed dropdown on `Brand`), but the flags and the whole supply block were not.
+- **7 → 17 fields, in 6 `<optgroup>`s** so the dropdown stays scannable: **Classification** (brand · category/sub-category · seasonality type) · **Flags** (active · seasonal · in-house production · top product · bundle) · **Amazon** (FBA/FBM) · **Pricing** (MSRP · wholesale) · **Supply** (supplier · case qty · supplier lead time · safety stock) · **Notes** (notes · forecast notes).
+- **Identifiers stay out** — title / SP SKU / ASIN / Shopify SKU / Chewy SKU / barcode are unique per product, so bulk-setting them would collide every row onto one value. Asserted by name so a later edit cannot quietly add one.
+
+### ⚠ The bug worth the most: the bulk path never mirrored into `records[]`
+- `prodBulkApply` wrote to Supabase and mirrored into `allProducts` — and stopped there. **`records[]` was never touched.** That is the **v7.34 staleness bug living in the bulk path**: bulk-set `in-house production` on 40 SKUs and Inventory Planning would keep filtering on the old value until a full page reload, because its rows are built from `records`, not `allProducts`.
+- New `prodBulkMirrorToRecords(ids, field, value)` pushes the change onto every per-region record of each edited product, then the apply repaints Inventory Planning, Demand Forecast, Seasonality and COGS. Only the fields `records[]` actually carries are listed; everything else (notes, wholesale, …) is read off `allProducts` at render time and needs nothing.
+- **⚠ `lead_time_days` / `safety_stock` are the awkward pair.** Records resolve them as `(inventory.X ?? products.X)`, so a region row with its own override must **not** be stomped by a master-level bulk edit. The `lead_time_src` / `safety_src` markers set during the records build are what tell them apart — a `region` source is left alone, a `product`/`default` source moves. Asserted in both directions, including that clearing falls back to the 60 / 14 defaults and relabels the source.
+- `category_id` also refreshes the resolved `category` / `subcategory` names on the record, and an id that no longer exists clears them to `''` rather than leaking `undefined` into the table.
+
+### Two structural edits now say they are structural
+- **`is_bundle`** decides whether a product carries a BOM at all, so flipping it in bulk asks for confirmation naming the count and the consequence (turning it off leaves existing BOM rows orphaned). It is not another checkbox.
+- **Notes / forecast notes** overwrite rather than append, which destroys per-product work. The editor says so in orange before you type.
+
+### Verification
+- `node --check` clean. **The assertion that earns its keep is the ROUND TRIP**: every option in the field dropdown must produce a working `prod-bulk-value` input, and every field the editor special-cases must be reachable from the dropdown. Either gap ships a dead menu entry that silently writes `null` — which is exactly the failure mode a hand-maintained if/else chain produces. Both directions asserted, so adding field #18 without its editor fails the build.
+- **23 behaviour tests** on the real sliced `prodBulkFieldChange` / `prodBulkMirrorToRecords`: all 17 editors, no leaked `undefined`, whole-number inputs on the int fields while MSRP keeps its cents, both structural warnings, every region of an edited product moving, an unknown category clearing cleanly, the region-override guard on both lead time and safety stock, fields `records[]` does not carry being a safe no-op, and degenerate id lists.
+- **Then the real page:** 17 options across 6 groups, every one producing a usable editor, and the category picker carrying its pairing hint.
+- **All 27 suites green.**
+- **Deliberately not offered:** the per-region Amazon lifecycle flags (`new_product_amazon` / `deprecated_product_amazon` / rate). Since v5.1 those live on `inventory` per region and `products.*` is only the fallback default, so a bulk edit there would look like it set them and mostly not — a worse outcome than not offering it. Wants a per-region bulk editor, which is its own job.
 
 ## v10.26 — org-wide view defaults (active-only · hide-bundles · default sort)
 - **Jason:** *"on the global defaults settings, i want to be able to set more global defaults, like only showing active products, choosing default sort, etc."* Confirmed with him: **org-wide** (everyone, admin-only to change), covering active-only, hide-bundles and per-page default sort.
