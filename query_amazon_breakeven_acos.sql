@@ -253,16 +253,31 @@ select
   round(derived_np_pu - amzn_np_pu, 4)                      as "aud Recon Delta",
   net_units            as "Net Units window",
   round(net_sales,2)   as "Net Sales window",
-  -- v10.21 — Jason: "does this show contribution/unit and contribution total
-  -- product?" Per-unit was already here, under the name Non-Ad Profit
-  -- (price - total_cost, which excludes ad spend by construction). These add
-  -- the totals, and the post-ad view: Non-Ad Profit answers what the unit CAN
-  -- carry, post-ad answers what it DID earn after what we actually spent.
-  -- Appended at the end so existing column positions are untouched.
-  round((price - total_cost) * net_units, 2)                as "Contribution Total pre-ad",
-  round(price - total_cost
-        - (total_ad_spend / nullif(net_units,0)), 4)        as "Contribution per Unit post-ad",
-  round((price - total_cost) * net_units - total_ad_spend, 2) as "Contribution Total post-ad",
+  -- v10.22 — Contribution, in the SAME terms the Summary page has used since
+  -- v4.47 and states on its own explainer:
+  --     Net Proceeds        = net_proceeds_total MINUS non-SP ad spend (v6.76:
+  --                           Amazon's figure nets out Sponsored Products only,
+  --                           it knows nothing about SB / SD / DSP / TV)
+  --     Total COGS          = product_cogs.amazon_cogs x net units
+  --     Contribution Profit = Net Proceeds - Total COGS
+  --     Contribution %      = Contribution Profit / Net Sales
+  -- v10.21 shipped these as "pre-ad" / "post-ad", inventing a second vocabulary
+  -- two tabs away from the first. Jason: "why is this not in the same language
+  -- as the summary page?" Reverted to the one that already existed.
+  --
+  -- Non-Ad Profit above is NOT a duplicate of these: it is price minus the cost
+  -- stack EXCLUDING ad spend, i.e. the break-even headroom. Different quantity,
+  -- Blake's name for it, left alone.
+  round(amzn_net_proceeds - coalesce(nonsp_ad_spend,0), 2)      as "Net Proceeds",
+  round(unit_cogs_only * net_units, 2)                          as "Total COGS",
+  round(amzn_net_proceeds - coalesce(nonsp_ad_spend,0)
+        - unit_cogs_only * net_units, 2)                        as "Contribution Profit",
+  round((amzn_net_proceeds - coalesce(nonsp_ad_spend,0)
+        - unit_cogs_only * net_units)
+        / nullif(net_units,0), 4)                               as "Contribution per Unit",
+  round((amzn_net_proceeds - coalesce(nonsp_ad_spend,0)
+        - unit_cogs_only * net_units)
+        / nullif(net_sales,0) * 100, 2)                         as "Contribution %",
   first_week           as "Window Start",
   last_week            as "Window End"
 from final

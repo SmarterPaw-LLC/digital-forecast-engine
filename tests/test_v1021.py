@@ -63,38 +63,66 @@ def outcols(text):
 
 
 # ═════════ A. the contribution columns ═════════
-print('\nA. contribution — per unit AND total, pre-ad AND post-ad')
+print('\nA. contribution — in the Summary tab own words')
 
 cols = outcols(sqlfile)
-for c in ['Non-Ad Profit', 'Contribution Total pre-ad',
-          'Contribution per Unit post-ad', 'Contribution Total post-ad']:
+# v10.22 re-pointed these. v10.21 shipped "pre-ad" / "post-ad", which coined a
+# second vocabulary for a number the Summary tab had already defined. Jason:
+# "why is this not in the same language as the summary page?" These now assert
+# the Summary's own names.
+for c in ['Non-Ad Profit', 'Net Proceeds', 'Total COGS',
+          'Contribution Profit', 'Contribution per Unit', 'Contribution %']:
     ok(c in cols, 'column present: %s' % c)
+
+# The invented vocabulary must not come back.
+for bad in ['Contribution Total pre-ad', 'Contribution per Unit post-ad',
+            'Contribution Total post-ad']:
+    ok(bad not in cols, 'the coined term is gone: %s' % bad)
 
 # Appended, not inserted — Blake's sheet consumes this CSV and I cannot see
 # whether it reads by header or by position. Appending cannot break a
 # positional reader; inserting mid-list would shift everything after it.
 oldTail = ['Net Units window', 'Net Sales window']
 for c in oldTail:
-    ok(cols.index(c) < cols.index('Contribution Total pre-ad'),
+    ok(cols.index(c) < cols.index('Contribution Profit'),
        'the new columns come AFTER the pre-existing "%s"' % c)
-ok(cols.index('Break Even ROAS') < cols.index('Contribution Total pre-ad'),
+ok(cols.index('Break Even ROAS') < cols.index('Contribution Profit'),
    'and after the whole original profit block')
 
-# The pre-ad / post-ad distinction has to be visible, not implied — every
-# other "Contribution" in this app (Amazon P&L) is already post-ad.
-ok('pre-ad' in ' '.join(cols) and 'post-ad' in ' '.join(cols),
-   'the names say which side of ad spend they sit on')
-ok('before</em> ad spend' in src or 'before ad spend' in src,
-   'the page explains that Non-Ad Profit is the pre-ad one')
+# ⚠ The whole point of v10.22: these must be computed from the SAME fields the
+# Summary tab uses, not an equivalent-looking recomputation. Two definitions
+# that agree today diverge the first time one is edited.
+ok('pre-ad' not in ' '.join(cols) and 'post-ad' not in ' '.join(cols),
+   'no coined qualifiers left in any column name')
+ok('same numbers the Summary tab shows' in src,
+   'the page says these match the Summary tab')
+ok('Non-Ad Profit</strong> is not a duplicate' in src,
+   'and says how Non-Ad Profit differs, rather than qualifying it')
 
 # The maths, read out of the SQL rather than restated.
 sqlNoC = re.sub(r'--[^\n]*', '', sqlfile)
-ok(re.search(r'round\(\(price - total_cost\) \* net_units, 2\)\s*as "Contribution Total pre-ad"', sqlNoC) is not None,
-   'pre-ad total = (price - total_cost) x net_units')
-ok(re.search(r'total_ad_spend / nullif\(net_units,0\)', sqlNoC) is not None,
-   'post-ad per unit subtracts ad spend per unit (nullif-guarded)')
-ok(re.search(r'\* net_units - total_ad_spend, 2\)\s*as "Contribution Total post-ad"', sqlNoC) is not None,
-   'post-ad total subtracts the whole window ad spend')
+# Net Proceeds must subtract non-SP ad spend. Amazon's net_proceeds_total nets
+# out Sponsored Products ONLY — it knows nothing about SB / SD / DSP / TV. The
+# Summary tab has corrected for this since v6.76; skip it here and the two tabs
+# would disagree on every SKU that runs Sponsored Brands.
+ok(re.search(r'amzn_net_proceeds - coalesce\(nonsp_ad_spend,0\), 2\)\s*as "Net Proceeds"', sqlNoC) is not None,
+   'Net Proceeds = Amazon figure MINUS non-SP ad spend (the v6.76 rule)')
+# COGS basis must be product_cogs.amazon_cogs, the same field the Summary reads,
+# NOT the broader cogs_ship_storage the break-even stack uses.
+ok('coalesce(pc.amazon_cogs,0)' in sqlNoC and 'as unit_cogs_only' in sqlNoC,
+   'unit_cogs_only is product_cogs.amazon_cogs')
+ok(re.search(r'unit_cogs_only \* net_units, 2\)\s*as "Total COGS"', sqlNoC) is not None,
+   'Total COGS = amazon_cogs x net units, like the Summary')
+ok(re.search(r'as "Contribution Profit"', sqlNoC) is not None
+   and re.search(r'unit_cogs_only \* net_units, 2\)\s*as "Contribution Profit"', sqlNoC) is not None,
+   'Contribution Profit = Net Proceeds - Total COGS')
+ok(re.search(r'/ nullif\(net_sales,0\) \* 100, 2\)\s*as "Contribution %"', sqlNoC) is not None,
+   'Contribution % divides by Net Sales, like the Summary')
+ok(re.search(r'/ nullif\(net_units,0\), 4\)\s*as "Contribution per Unit"', sqlNoC) is not None,
+   'Contribution per Unit divides the same profit by units')
+# Non-Ad Profit is a DIFFERENT quantity and must be left alone.
+ok(re.search(r'round\(price - total_cost, 4\)\s*as "Non-Ad Profit"', sqlNoC) is not None,
+   'Non-Ad Profit is untouched (break-even headroom, excludes ad spend)')
 
 # Drift guard still holds after the edit.
 m = re.search(r'const BREAKEVEN_SQL_BODY = `(.*?)`;\n', js, re.S)
@@ -118,7 +146,7 @@ ok('# Amazon break-even' in csv, 'the CSV carries a context line')
 ok('trailing ${breakevenWindow.days}d' in csv, 'naming the window')
 ok('finance rate' in csv and 'SOH target' in csv,
    'and the assumptions behind the numbers')
-ok('Non-Ad Profit' in csv, 'and flags which contribution column is pre-ad')
+ok('Non-Ad Profit' in csv, 'and names Non-Ad Profit so it is not read as contribution')
 
 # A hardcoded count in the button label drifts the moment a column is added,
 # which is exactly what just happened.

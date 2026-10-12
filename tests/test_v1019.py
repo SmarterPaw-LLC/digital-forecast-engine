@@ -75,7 +75,7 @@ def outcols(text):
 
 fileCols = outcols(sqlfile)
 embedCols = outcols(body)
-ok(len(fileCols) == 58, 'the .sql file still emits 58 columns (got %d)' % len(fileCols))
+ok(len(fileCols) == 60, 'the .sql file still emits 60 columns (got %d)' % len(fileCols))
 ok(len(set(fileCols)) == len(fileCols),
    'no duplicate column names (dupes: %s)'
    % sorted({c for c in fileCols if fileCols.count(c) > 1}))
