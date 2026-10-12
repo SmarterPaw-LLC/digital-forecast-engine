@@ -57,8 +57,13 @@ static = [
      "if (typeof pageSettingsSyncIndicator === 'function') pageSettingsSyncIndicator();\n}" in js),
     # v10.9 re-point: PAGE_COLUMN_BUTTONS also uses navKeys, so a file-wide count
     # overshoots. Scope it to the CATVIS_PAGES slab, which is what it was ever about.
+    # v10.11 re-point: was hardcoded at 10 pages, so every new catVis page
+    # broke it. Assert the invariant the label actually claims instead -
+    # every entry in the slab declares navKeys - which needs no bumping.
     ('every catVis page declares its nav keys',
-     slab('const CATVIS_PAGES = [', '];').count('navKeys: [') == 10),
+     slab('const CATVIS_PAGES = [', '];').count('navKeys: [')
+     == slab('const CATVIS_PAGES = [', '];').count('{ key:')
+     > 0),
 
     # ── freeze moved ──
     ('the Forecast freeze dropdown is gone from the filter strip',

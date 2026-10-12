@@ -20,11 +20,19 @@ no such cases exist, it is exact.
 """
 import io, os, re, sys
 
+# Windows consoles default to cp1252 and `python -I` ignores
+# PYTHONIOENCODING, so printing a check mark crashed a PASSING sweep.
+try: sys.stdout.reconfigure(encoding='utf-8')
+except Exception: pass
+
 SRC = r'C:\Users\Jason\digital-forecast-engine\index.html'
 RAW = io.open(SRC, encoding='utf-8').read()
 js  = max(re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', RAW, re.S), key=len)
 
-OWNED = re.compile(r'^(catVis|pageSettings|freeze[A-Z])')
+# v10.11 - chewy* joins the sweep. That release added a parser, a loader,
+# two exporters and a renderer plus ~20 new call sites across three
+# surfaces; a typo'd call there is the same silent class as v10.7's.
+OWNED = re.compile(r'^(catVis|pageSettings|freeze[A-Z]|chewy|_chewy)')
 
 # ── definitions ──────────────────────────────────────────────────────────────
 defined = set(re.findall(r'\bfunction\s+([A-Za-z_$][\w$]*)\s*\(', js))
@@ -52,7 +60,7 @@ soft = {n: c for n, c in missing.items() if n in guarded}
 
 owned_defs = sorted(n for n in defined if OWNED.match(n))
 
-print('=== v10.8 \u00b7 called-but-undefined sweep (catVis / pageSettings / freeze) ===')
+print('=== v10.8 \u00b7 called-but-undefined sweep (catVis / pageSettings / freeze / chewy) ===')
 print('  definitions in these namespaces: %d' % len(owned_defs))
 if hard:
     print('\n  \u2717 UNGUARDED calls with no definition:')

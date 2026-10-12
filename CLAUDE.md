@@ -2,9 +2,60 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.10**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.11**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.11 — Cost to Chewy: the vendor-portal catalog, normalised off Purchase UOM
+- **Jason:** *"on the chewy P&L, i need a way to see cost to Chewy (so i can set our price to them)"* → then, with the file: *"i need to be able to upload this file - it's from chewy vendor portal. i do not need this on the uploads page - it is too cluttered there. note that the purchase UOM indicates whether the Cost is by case or each, so this needs to be factored into the chewy P&L"*
+- **⚠ SQL TO RUN:** `supabase_v10_11_chewy_catalog.sql` — creates `chewy_catalog` (one current row per Chewy SKU, upsert on re-upload). RLS + authenticated grants + anon revoke per the v6.47 rule. Idempotent.
+
+### The second message changed the answer, and that was the right call
+- I had started building a **modelled** floor: landed COGS plus the derived allowance stack, solved into a break-even wholesale. Useful, but it was guessing at a number Chewy already tells us. The vendor portal's **Catalog Details** export carries `Cost` — what Chewy actually pays us. So the tab is built on the real figure and the modelled floor demoted to the Target column, which is where a modelled number belongs: next to the actual one, as the gap to close.
+
+### ⚠ `Cost` is quoted per Purchase UOM, and reading it raw is wrong by the pack size
+- On the real export **106 of 127 rows are `CS`** (case) and 21 are `EA`. CF007 reads `54.00 / CS` against a `$9.99` MSRP — taken literally that says we charge Chewy **5.4× retail**. Divided by its 12-pack it is **$4.50**, 45% of MSRP, which is what a 1P wholesale actually looks like.
+- **The case pack is NOT in Chewy's file.** It comes from `products.case_qty` (v7.27). **`MOQ` is the trap** — it sits right there in the export, reads 1 / 6 / 24, and is a minimum ORDER quantity, not a pack size; substituting it would have divided a 12-pack by 1 and been silently 12× high. The source says so where someone would reach for it, the SQL comment says so, and there is a named test that MOQ is never used as a fallback.
+- **A row that cannot be normalised reads blank, never guessed**, and `chewyCatalogPricePerEach` returns a distinct `reason` per gap (`no-catalog` / `no-cost` / `no-case-qty` / `unknown-uom`) so the UI names WHICH gap and its specific fix — the v9.94 "a blank cell has to say why" rule. A case-priced SKU with no `case_qty` is the one gap that blocks everything to its right, so it gets its own line in the gaps panel pointing at the product card.
+
+### The uploader is on the Chewy P&L, not Data → Uploads
+- Jason asked for that explicitly, and it is the better place anyway: it sits directly above the numbers it feeds. A static assertion checks `f-chewy-catalog` is **absent** from the Uploads markup and **present** on the Cost tab, so a later tidy-up cannot quietly move it back.
+- **Three format quirks handled rather than asked of the operator:** the file is **UTF-16LE with a BOM despite the .csv extension** (`readAsText` would mangle it, so it is read as bytes and decoded off the BOM), it is **TAB-delimited**, and there is a **junk spacer row above the real header** — so the header is found by content (`Chewy SKU` + `Cost`), not by position. Header names also carry trailing spaces (`"Cost "`, `"Purchase UOM "`), so matching normalises to alphanumerics — the v9.73 Amazon stray-byte lesson.
+- **A file with no `Purchase UOM` column is REFUSED**, not parsed on a guess. Without it a case cost reads as a unit cost and every number downstream is wrong by the pack size, which is precisely the failure this release exists to prevent.
+- **Match keys, in order:** `chewy_sku` → `UPC`→`barcode` → `vendor_part_number` against sp_sku / barcode / shopify_sku. That last fallback is load-bearing: Vendor Part Number is an sp_sku on some rows (`CF102`) and a bare UPC on others (`714929807373`) **in the same export**.
+
+### What the tab shows
+- **Cost · Case · Price/ea · COGS/u · Allow/u · GM $/u · GM % · Target $ · Δ to target.** `Δ to target` is the actionable column — "raise this SKU $2.67/unit", with the per-case equivalent in the tooltip since that is the unit Chewy negotiates in.
+- **GM % is on the invoice (wholesale) value**, matching the v9.81 Pricing Scenarios convention, because that is the basis Chewy charges allowances against.
+- **Promos are excluded from the standing floor** and reported separately. A per-campaign allowance folded into a standing price floor would quietly raise every SKU's "required" price for a campaign that may never run.
+- Quick filter for 🔴 Losing money / 🟠 Under target / ⚠ Data gaps / Priced, because the whole point is to find the rows that need action.
+
+### One resolver, two surfaces
+- `chewyAllowanceStack()` is the single source for the stack, read by both the Pricing Scenarios Chewy tab and the Chewy P&L. It prefers the Pricing Scenarios working copy when one exists and otherwise derives from `chewy_rebates`, and **always reports `source`** (`invoices` / `edited` / `none`) which every caller renders. Two copies of this math is how the v10.4 two-Trend-columns mistake happened.
+- **`source: 'none'` is surfaced loudly**: with no rate-bearing invoices the floor collapses to plain COGS and every margin on screen reads too high. It says so rather than quietly flattering the numbers.
+- `cogs + allowance@target` and `target × (1 - margin)` are the **same quantity by algebra**, so the Cost/u column cannot drift from the Target column beside it. Asserted as a test rather than left as a coincidence.
+
+### The Chewy P&L is now actually a P&L
+- The Sales tab reported Chewy's **retail** sell-through — what Chewy's customers pay Chewy — which is sell-through health, not money we receive. Its banner even said the wholesale margin was "not yet subtracted". With real catalog cost that gap closes: two new columns, **Our Rev** (units × price per each) and **Vendor Contrib** (minus standing allowances, minus COGS), plus matching scorecards. Per-SKU GM% on the Cost tab and Vendor Contrib % on the Sales tab agree to the cent because both run through the same helpers.
+- The banner was rewritten to name the two revenue lines rather than repeat a claim that is no longer true.
+
+### Three pre-existing bugs fixed in passing
+- **The Chewy Sales tab had no CSV exporter at all** (since v8.38). `exportCSV` routed every Chewy sub-tab to the **rebates** exporter, so pressing ↓ CSV while looking at the Sales table downloaded rebate lines. Now routed per sub-tab, all three exportable — the standing [[feedback_always_csv_export]] rule.
+- **`chewyPricingOnProduct` read `r.units_sold`**, which does not exist on `chewyPnlSalesData` (the loader maps it to `units`). It always summed 0, so the retail / units auto-fill on the Pricing Scenarios Chewy tab could never fire — despite the v9.81 notes claiming it was verified, because that check stubbed raw DB-shaped rows rather than the mapped cache. That tab now also seeds the wholesale price from the catalog, instead of asking you to type in a price you are already being paid.
+- **Architecture Rule #8:** `chewy_catalog.master_id` added to `runMerge` AND the SP-TEMP promotion. The FK is `on delete set null`, so omitting it would leave a merged duplicate's catalog row alive with a null master_id — the cost-to-Chewy for that SKU silently vanishing from the survivor. Eighth instance of this class; both sites are asserted.
+
+### Verification
+- `node --check` clean. **114 behaviour tests** driving the REAL sliced `chewyCatalogPricePerEach` / `chewyVendorUnitEcon` / `chewyAllowanceStack` / `_chewyCatalogDecode` / `parseChewyCatalog`, **including against the actual vendor-portal export bytes**: 127 rows, 106 CS / 21 EA with every row classified, all three match routes resolving, field mapping and boolean/currency parsing on a known row, and the upsert targeting `chewy_catalog` on the plain `chewy_sku` conflict key.
+  - **Named regression guard:** the naive `cost` read is asserted to be exactly 12× the normalised price on CF007, and to exceed MSRP while the normalised price does not.
+  - Plus: the MOQ trap, every CS/EA alias, four bad `case_qty` shapes, the margin identity, floor/target round-trips (pricing AT the floor yields exactly $0, AT the target yields exactly the target), the verdict ladder, unreachable targets, the derived-vs-edited-vs-none stack, a throwing rebate cache, a refused no-UOM file, a wrong file, comma-delimited input, duplicate SKUs, `$1,234.56` parsing, and a missing table naming the migration file. **33 static assertions** on top.
+- **Then the real page in a browser** against the shipped file: the upload driven end to end through a synthetic UTF-16LE/TAB/spacer-row file (parse → upsert → reload → repaint, status green, `Kitty Ka Zoom` normalised to `Kitty Ka-Zoom`), every rendered figure checked against hand arithmetic, all four quick filters, sorting both directions, the target input moving Target/Δ/counts, both CSVs captured with matching header/row column counts and a verified UTF-8 BOM, and a screenshot. Only console errors were the expected 401s from running unauthenticated.
+- **Two things the browser caught that the tests did not**, which is the argument for doing both:
+  1. **A blank `Target $` with no reason** when allowances + target reach 100% of the invoice. Every other blank on that table names its cause; this one read as missing data rather than an impossible ask. Now `n/a` with the arithmetic in the tooltip and a line on the row-count.
+  2. **A failed post-upload REFRESH reported the upload as failed.** The rows were already written; re-reading and repainting is a refresh, not part of the write, and it shared the one catch block. Now separately guarded — a hiccup there reads "saved, but the view could not refresh", not "✗".
+- **All 13 suites green.** Two harness fixes: v10.7 hardcoded "10 catVis pages" so every new page broke it (now asserts the invariant its own label claims — every entry declares navKeys — which needs no bumping), and v10.8 crashed printing a check mark on a cp1252 console under `python -I`, which ignores `PYTHONIOENCODING`, so a PASSING sweep reported failure. **The v10.8 called-but-undefined sweep now also covers the `chewy*` namespace**, which is where this release added ~20 call sites.
+
+### Known gap, stated rather than papered over
+- Per-each pricing needs `products.case_qty` on every case-priced SKU. The gaps panel counts them and links the fix, and the Cost column still shows Chewy's raw `54.00 /CS` so nothing is hidden — but until those are filled in, those SKUs carry no margin. Chewy does not publish the pack size, and inferring it from a cost/MSRP ratio would be a guess dressed as data.
 
 ## v10.10 — Amazon FBA status was using the SUPPLIER lead time
 - **Jason:** *"the fba status math is wrong. I don't know where the lead time 60d is even set for the product (it should be set on the product card), but this is meant to be used with our suppliers, not for when to send amazon shipments. the amazon reorder threshold should be used for this math. additionally, the 'send to...' should specify which region."*
