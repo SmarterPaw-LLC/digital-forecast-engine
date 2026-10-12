@@ -2,9 +2,49 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.18**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.20**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.20 — two literal `\u2014` escapes rendering as text, and what Autoship % means
+- **Jason:** *"you have some escaped characters here"* — the Chewy chart's metric dropdown read **`Merch Sales \u2014 Chewy retail ($)`**. And, separately: *"what is this autoship % based on?"*
+
+### The escapes, and why only two of ~490 mattered
+- `index.html` carries roughly **490** `\uXXXX` sequences. Inside `<script>` the JS parser turns them into real characters, so those are a style wart and nothing more. In **raw markup nothing interprets them** and they render as the literal six characters. Exactly two were in markup — both `<option>` labels added by v10.12 — and both are now real em dashes.
+- **The first sweep I wrote reported 494 hits and was wrong.** It masked `<script>` bodies with `re.finditer(r'<(script|style)\b[^>]*>(.*?)</\1>')` and then used `m.start(1), m.end(1)` — group 1 is the **tag name**, not the body. It blanked the word "script" and left 3.5MB of JS in the haystack. Fixed to group 2; the real count is 2.
+- **A sweep is now a test** (`test_v1020`), because this class keeps coming back: v9.99 and v10.11 both record it, and it bit three more times in the session that produced this fix. It never comes from someone typing it — it comes from a patch script where a raw string, a shell heredoc, or the Write tool's own escape handling leaves `\u2014` literal. A human will not notice two characters in a dropdown; a sweep will.
+- **⚠ The test guards its own guard.** A masking bug makes the sweep pass on an empty haystack, which is exactly how the first version looked fine. So it asserts a JS-only string is **absent** from the masked text and a markup-only string is **present** before trusting the result. Counting characters does not work — masking writes spaces, so the length never changes.
+
+### Autoship %
+- It is `autoship_units ÷ units_sold`, both summed over the page's period, straight from Chewy's weekly sell-through file (their `AS units sold` and `Units Sold` columns). Nothing derived or estimated. **It is a share of UNITS, not of revenue** — which is the part worth saying out loud, because every column beside it on that table is dollars.
+- Now a tooltip on the column header **and** on the Autoship Units scorecard, since the same ratio is printed in both places.
+- **The header could not carry a tooltip at all.** `chpnl-sales-thead-row` rendered no `title` attribute, so adding `t:` to the column definition would have gone nowhere — the header builder needed the attribute first. Added, with a help cursor on any column that has one.
+- **No math changed.** Both ratio expressions are asserted byte-for-byte untouched; this release is labelling.
+
+## v10.19 — Break-Even: Blake's financial-controls table as a page
+- **Jason:** *"i want to build a page that matches the columns we built from his request."* Also: *"rename Amazon SKU Economics to Amazon P&L."*
+- The rename is the P&L nav item only. The uploader and Upload History labels still say **SKU Economics** on purpose — that is the actual name of the Seller Central report, and renaming it there would send someone looking for a report that does not exist.
+
+### It runs the SQL rather than reimplementing it
+- Blake Anderssen refreshes a per-SKU all-in cost table monthly: the full stack (FBA fulfilment + referral + storage + inbound + removal + AWD, less FBA reimbursement, plus COGS and shipping) down to **Break Even ACOS %** and **Break Even ROAS**. It lives in `query_amazon_breakeven_acos.sql` — ~250 lines, 55 columns — and the workflow was *run it in Data → Query Database, Copy CSV*.
+- **⚠ The page executes that same SQL through `exec_sql`. It does not port the math to JS.** A port would be a second source of truth for numbers Blake has already signed off on, and the first time the two disagreed nobody would know which one was lying. The body is embedded (the app ships as one file) and **a test asserts the embedded copy and the `.sql` file emit the same 55 columns in the same order**, so they cannot silently drift.
+- **The params CTE is deliberately NOT embedded.** Its three values — window days, cost of capital, SOH target months — were the thing you had to hand-edit at the top of the SQL every month. They are inputs on the page now, and the CTE is **rebuilt from numbers** rather than string-patched, so a malformed input cannot land in the query as syntax. Asserted against eight junk inputs including `'; drop table products'`.
+- **A blank box means "use the default", not zero.** `Number('')` is `0`, which would have quietly turned an empty Window field into a **one-day** window. Caught by the suite, not by reading the code.
+- US only, like the query — its fee-preview, ad-spend and snapshot joins are all region-pinned.
+
+### What the page adds over the CSV
+- **The one comparison the table exists to make is colour-coded:** Actual ACOS vs Break Even ACOS. Rows spending past break-even are tinted, and a filter narrows to just those. Nothing else is coloured, because everything else is an input to that one number.
+- Low-volume rows (under the min-units threshold) are dimmed rather than hidden — a SKU with 4 units is not unprofitable, its per-unit cost is just noise.
+- The eight `aud ` reconciliation columns are **hidden on screen and always in the CSV**. The export carries every column with Blake's exact header names regardless of what is visible, because his sheet reads the full set.
+- **⚠ The shared Amazon P&L filter strip is hidden on this tab.** Region / Period / Brand / Category / Ad-HR target do nothing here — the view is US-only with its own trailing window. Caught in the browser: a live-looking control that is ignored is worse than no control.
+
+### Two suites caught the new surfaces, as designed
+- **v10.17** failed on *"no stray .subtab buttons beyond the 20 accounted for"* — an 8th tab. **v10.3** failed on *"no unmapped page-search inputs remain: `be-search`"* — every search box must be classified as a page filter or a picker. Both were the right failures; `be-search` is mapped as `pnl_amazon_breakeven`, exactly like the Change Log's.
+- **Verification:** `node --check` clean. **27 static + 29 behaviour assertions** — the drift guard, every one of Blake's named columns, the params CTE rebuilt purely from numerics under junk input, clamping, the tab + panel + search wiring, and the CSV exporting every column with a BOM. **Then the real page**: tab switches, panel shows, generated SQL carries `180 as win_days / 0.1200::numeric / 3.50::numeric / 40::int` with 55 columns, blank inputs fall back to 90, the filter strip hides and comes back, and a stubbed result set renders with the two over-break-even rows tinted and the low-volume row dimmed. **All 22 suites green.**
+- **Not verified here:** an end-to-end run against the live database — that needs a signed-in session. The SQL body is the file Jason already runs, and the drift test proves the column list matches; the only new SQL is the generated params CTE, which is asserted to be numeric-only.
+
+### Chewy is NOT done
+- He asked for break-even *"for amazon and chewy"* and picked per-channel views. **Only Amazon shipped.** There is no Chewy artifact to match: Chewy is 1P wholesale, so there is no ACOS, and the equivalent question — what price clears a margin after the allowance stack — is already most of the **Cost to Chewy** tab. Building a Chewy "break-even" without agreeing the columns first would be inventing a deliverable rather than matching one.
 
 ## v10.18 — the gaps panel was shouting about the direction that does not matter
 - **Jason:** *"so these are skus that are not in the uploaded catalog but have a chewy sku? so what -- these are mostly old skus. if they are in the catalog but not in the system, then i need to know."*

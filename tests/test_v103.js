@@ -7,6 +7,7 @@ function mk(id, ph) { return EL[id] = { id, placeholder: ph, value: '', style: {
 const document = { getElementById: (id) => EL[id] || null };
 class Event { constructor(t) { this.type = t; } }
 
+mk('be-search', 'Search SKU / ASIN / title…');
 mk('bom-search-${i}', 'Search by name or ID…');
 mk('bundleSrch', 'Search bundle…');
 mk('catsy-search-input', 'Type to filter — title, SP SKU, master_id, ASIN, Shopify SKU…');
@@ -58,6 +59,7 @@ const GLOBAL_SEARCH_MAP = {
   // v10.3 — the Amazon P&L's Change Log sub-view has its own filter and was
   // never mapped either, so the bar went dead there too.
   pnl_amazon_changelog: { id: 'cl-search' },
+  pnl_amazon_breakeven: { id: 'be-search' },             // v10.19
   // Deliberately NOT mapped: #pricing-search is a typeahead PICKER that
   // populates a scenario, not a page filter — its results render in a popover
   // anchored to the input, so hiding it would break the flow it belongs to.
@@ -80,6 +82,7 @@ function globalSearchCurrentKey() {
     if (sub === 'amazon') {
       const av = (typeof pnlAmazonView !== 'undefined' && pnlAmazonView) ? pnlAmazonView : 'summary';
       if (av === 'changelog') return 'pnl_amazon_changelog';
+      if (av === 'breakeven') return 'pnl_amazon_breakeven';   // v10.19
     }
     return `pnl_${sub}`;
   }
@@ -255,7 +258,7 @@ console.log('\n== F. Nothing in the markup is left unmapped by accident ==');
 // one per component row).
 const EXCLUDE = new Set(['globalSearch', 'pricing-search', 'catsy-search-input',
                          'merge-src', 'merge-tgt', 'bom-search-${i}']);
-const unmapped = ["bom-search-${i}", "bundleSrch", "catsy-search-input", "chpnl-cost-search", "chpnl-sales-search", "chpnl-search", "chwy-search", "cl-search", "cogs-search", "fba-ship-srch", "ip-srch", "ipr-srch", "pnl-search", "pricing-search", "prodSrch", "salesSrch", "sea-search", "spnl-search", "srchInput", "wmpnl-search"].filter(id => !EXCLUDE.has(id) && !mapped.includes(id));
+const unmapped = ["be-search", "bom-search-${i}", "bundleSrch", "catsy-search-input", "chpnl-cost-search", "chpnl-sales-search", "chpnl-search", "chwy-search", "cl-search", "cogs-search", "fba-ship-srch", "ip-srch", "ipr-srch", "pnl-search", "pricing-search", "prodSrch", "salesSrch", "sea-search", "spnl-search", "srchInput", "wmpnl-search"].filter(id => !EXCLUDE.has(id) && !mapped.includes(id));
 t('no unmapped page-search inputs remain', unmapped.length === 0, unmapped);
 
 console.log('\n' + (fail ? '\u2717 ' + fail + ' FAILED, ' : '\u2713 ') + pass + ' passed');
