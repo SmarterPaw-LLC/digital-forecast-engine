@@ -2,9 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.32**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.33**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.33 — invite failures now say WHY and what to do
+- **Jason:** *"i cannot add people because of this"* — screenshot of `✗ email rate limit exceeded` under the invite box.
+- **Not a bug in the app.** `inviteUser()` calls `signInWithOtp({shouldCreateUser:true})`, and Supabase's **built-in email sender is capped at a couple of messages per hour**. It is documented as test-only — it exists so a new project can exercise the auth flow, not to carry real invites. Inviting two or three people in one sitting hits the cap.
+- **The app was surfacing Supabase's raw string**, which names a symptom and no cause or remedy. It now detects the rate-limit family (`rate limit` / `too many requests` / `over_email_send_rate`) and prints both paths:
+  - **Unblock now, no email involved:** Supabase → Authentication → Users → **Add user** → set a password + tick Auto Confirm. They sign in and change it under Settings → 🔑 Change password (v4.131). The v9.82 trigger creates their `user_profiles` row, so they appear in the Users list with the global default tabs.
+  - **Stop it recurring:** Supabase → Project Settings → Authentication → **SMTP Settings** → point at Resend / SendGrid / SES, then raise the email rate limit off its default.
+- **⚠ The per-email cooldown is deliberately NOT matched.** *"For security purposes, you can only request this after 48 seconds"* is a different failure with a different fix (wait), so it still surfaces raw — giving it the SMTP advice would send someone reconfiguring their project over a 48-second wait. Detector verified against six real Supabase strings: three match, three do not.
+- Rendered orange rather than red: this is a configuration limit with a known workaround, not a failure.
+- **No service_role key is involved**, deliberately — the whole reason invite uses the OTP flow is to keep that key out of client code. Creating users without email therefore has to happen in the Supabase dashboard, which is what the message says.
+- **Verification:** `node --check` clean, detector exercised against the real strings, all 29 suites green.
 
 ## v10.32 — P&L nav: "Shopify DTC" → "DTC P&L", "Walmart 1P" → "Walmart P&L"
 - **Jason:** *"rename walmart 1p to walmart p&l"* then *"and shopify dtc to DTC p&L"*.
