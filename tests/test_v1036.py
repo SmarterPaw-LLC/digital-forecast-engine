@@ -113,7 +113,7 @@ ok('chewy_ad_spend' not in restore and 'chewy_catalog' not in restore,
 
 # ═════════ C. wiring — nothing invented ═════════
 print('\nC. static — wiring')
-for i in ['chpnl-tab-breakeven', 'chpnl-view-breakeven', 'f-chewy-ads', 'st-chewy-ads',
+for i in ['chpnl-tab-breakeven', 'chpnl-view-breakeven',
           'chpnl-be-tbody', 'chpnl-be-thead-row', 'chpnl-be-scorecards', 'chpnl-be-explain',
           'chpnl-be-gaps', 'chpnl-be-row-count', 'chpnl-be-freshness']:
     ok('id="%s"' % i in src, 'markup carries %s' % i)
@@ -150,22 +150,39 @@ for col in ['break_even_roas_pct', 'contribution_per_unit', 'realised_roas_pct',
 ok('RETAIL' in exp, '  CSV context line names direct_sales as RETAIL')
 ok('campaign-level only' in exp, '  CSV context line says LTV ROAS is campaign-only')
 
-# The uploader is inline on this tab, NOT on Data -> Uploads. Same call v10.11
-# and v10.16 made, and Jason has said so twice.
-up_markup = src[src.index('id="chpnl-view-breakeven"'):]
-up_markup = up_markup[:up_markup.index('<!-- /chpnl-view-breakeven -->')]
-ok('id="f-chewy-ads"' in up_markup, 'the uploader lives on the Break-Even tab')
-uploads_page = src[src.index('id="data-view-uploads"'):] if 'id="data-view-uploads"' in src else ''
-ok('f-chewy-ads' not in uploads_page.split('id="chpnl-view')[0],
-   '  and NOT on Data -> Uploads')
-# A dangling data-currency chip is worse than a plain one (v10.16).
+# ⚠ v10.39 — the uploader lives on Data -> Uploads, NOT inline on this tab.
+# v10.36 put it inline on the v10.11 / v10.16 precedent, but those were the
+# CATALOG and the REBATE invoices — occasional reference files. Jason: "this is
+# a weekly list that i will upload, so it should be on the uploads table."
+# Cadence is the distinction, not which page consumes the numbers.
+be_markup = src[src.index('id="chpnl-view-breakeven"'):]
+be_markup = be_markup[:be_markup.index('<!-- /chpnl-view-breakeven -->')]
+ok('f-chewy-ads' not in be_markup, 'the uploader is NOT inline on the Break-Even tab')
+ok('id="grp-chewy-ads"' in src, 'there is a Chewy Ads group on Data -> Uploads')
+grp = src[src.index('id="grp-chewy-ads"'):]
+grp = grp[:grp.index('</div>\n        </div>')]
+for i in ['f-chewy-ads', 'st-chewy-ads', 'last-chewy-ads', 'dz-chewy-ads']:
+    ok('id="%s"' % i in grp, '  the group carries %s' % i)
+ok('class="dz"' in grp, '  built as a .dz card')
+# ⚠ Being a .dz card is what gives it drag-and-drop for free. The inline bar
+# had to hand-roll chewyAdDrop; that is now dead code and is deleted rather
+# than left as a second implementation to keep in step.
+ok('initUploadDropTargets' in js, '  so initUploadDropTargets wires drag-and-drop')
+ok('function chewyAdDrop' not in js, '  and the hand-rolled chewyAdDrop is gone')
+ok('ondrop="chewyAdDrop' not in src, '  with no caller left behind')
+# Now that there IS a group, the data-currency chip must click through to it
+# (v7.97) rather than being an inert span.
 tmap = js[js.index('const TABLE_TO_UPLOAD_GROUP'):]
 tmap = tmap[:tmap.index('};')]
-ok('chewy_ad_spend' not in tmap,
-   'chewy_ad_spend is NOT in TABLE_TO_UPLOAD_GROUP (no dead-end chip)')
-ok('chewy_catalog' not in tmap, '  consistent with chewy_catalog')
-ok('chewyAdDrop' in js and 'ondrop="chewyAdDrop' in src,
-   'drag-and-drop wired by hand (the v10.16 lesson — initUploadDropTargets does not run here)')
+ok("chewy_ad_spend:" in tmap and 'grp-chewy-ads' in tmap,
+   'chewy_ad_spend maps to its upload group (clickable currency chip)')
+# v10.16: every surviving entry must name a group that actually exists.
+import re as _re
+for _t, _g in _re.findall(r"(\w+):\s*'(grp-[\w-]+)'", tmap):
+    ok('id="%s"' % _g in src, '  %s -> %s exists' % (_t, _g))
+ok('last-chewy-ads-grp' in js, 'the group has a freshness probe')
+ok("chewy_ad_spend:" in js[js.index('const UH_SOURCES'):js.index('const UH_SOURCES') + 3000],
+   'and an Upload History source (retroactive session delete)')
 
 
 # ═════════ D. the escape trap that actually bit this release ═════════
@@ -465,7 +482,7 @@ print('\nH. static — called-but-undefined / undeclared-identifier sweep')
 # for it, so it runs over every function v10.36 added.
 NEW_FNS = ['parseChewyAdSpend', 'handleChewyAdSpendUpload', 'loadChewyAdSpend',
            'chewyBreakevenEcon', 'renderChewyBreakeven', 'loadChewyBreakeven',
-           'downloadChewyBreakevenCSV', 'chewyAdDrop', 'chewyBeShowGap',
+           'downloadChewyBreakevenCSV', 'chewyBeShowGap',
            'getChewyBreakevenDateRange', 'chewyBreakevenSetSort',
            '_chewyAdCol', '_chewyAdNum']
 

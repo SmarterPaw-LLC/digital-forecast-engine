@@ -2,9 +2,20 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.38**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.39**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.39 — Chewy Ads uploader moves to Data → Uploads
+- **Jason:** *"this is a weekly list that i will upload, so it should be on the uploads table."*
+- **v10.36 put it inline on the Break-Even tab, on the v10.11 / v10.16 precedent.** That precedent does not apply: those were the **catalog** and the **rebate invoices**, occasional reference files Jason explicitly did not want on a cluttered Uploads page. This is a **scheduled weekly report**, which is what the Uploads page is for. **Cadence is the distinction, not which page consumes the numbers.**
+- **New `grp-chewy-ads` group** in Sales & P&L, after Chewy Weekly Sales Actuals. Built as a standard `.dz` card, which pays for itself three ways:
+  - **Drag-and-drop comes free** from `initUploadDropTargets()` (it walks `.dz` cards on that page). The hand-rolled `chewyAdDrop` the inline bar needed is **deleted**, not left as a second implementation to drift.
+  - **`chewy_ad_spend` joins `TABLE_TO_UPLOAD_GROUP`**, so the data-currency chip on the Break-Even tab now **clicks through** to the uploader instead of being an inert span (v7.97). The v10.36 reasoning for leaving it out — *a dangling chip is worse than a plain one* — was right while there was no group; now there is one.
+  - **Freshness probe + Upload History source**, so the group header shows `thru 2026-10-13 (today)` and a mis-uploaded session can be deleted retroactively (v6.88).
+- **Empty state re-pointed** — now names *Data → Uploads → 🎯 Chewy Ads* rather than "the bar above", which no longer exists.
+- **Three assertions in `test_v1036` section C asserted the opposite of what is now true** and were re-pointed, not deleted — each still asserts the guarantee its own label claims. Added: the group is a `.dz` card, `chewyAdDrop` is gone with no caller left behind, and **every** `TABLE_TO_UPLOAD_GROUP` entry names a group that exists in the markup (the v10.16 dangling-chip guard, now run across the whole map rather than one row).
+- **Verification:** `node --check` clean · **32 suites green** · called-but-undefined sweep clean across the remaining 12 functions.
 
 ## v10.37 / v10.38 — Break-Even: tooltip not prose, name the blocker, drop a duplicate control
 - **Jason, on the explainer banner:** *"this should be a tooltip. i've asked so many times to stop the text bloat and you keep doing it over and over again."* Then: *"stop editorializing. i JUST need descriptions."*
