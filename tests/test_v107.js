@@ -231,8 +231,9 @@ const PAGE_COLUMN_BUTTONS = [
   { id: 'ip-view-btn',   navKeys: ['forecast_inventory'] },
   { id: 'prod-view-btn', navKeys: ['products'] },
   { id: 'sales-view-btn',navKeys: ['sales'] },
-  { id: 'pnl-cols-btn',  navKeys: ['pnl_amazon', 'pnl_amazon_changelog'] },
+  { id: 'pnl-cols-btn',  navKeys: ['pnl_amazon', 'pnl_amazon_changelog'] },   // NOT breakeven — it has its own (v10.43)
   { id: 'spnl-cols-btn', navKeys: ['pnl_shopify'] },
+  { id: 'be-view-btn',   navKeys: ['pnl_amazon_breakeven'] },   // v10.43
 ];
 function pageColsSyncButton() {
   const navKey = (typeof pageSettingsCurrentNavKey === 'function') ? pageSettingsCurrentNavKey() : '';

@@ -2,9 +2,41 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.40**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.43**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.41 / v10.42 / v10.43 — Break-Even column parity, COGS on the product card, a real column picker
+
+### v10.41 — the overlapping measures now exist on both Break-Even tabs
+- **Jason:** *"the chewy and amazon break even have different metrics - i understand why, but i would at least like the same columns to appear where similar measures overlap (in addition to blake's columns)."*
+- **Blake's 60 Amazon columns are untouched.** Each side gains what the other already had for the same measure.
+- **Chewy gains:** `Our Rev` (Amazon: *Net Sales window*) · `Vendor Contrib` (*Contribution Profit*) · `GM %` (*Contribution %*) · `BE ACOS %` (*Break Even ACOS pct*) · `Actual ACOS %` (*Actual ACOS pct*) · a **Min units** control that dims low-volume rows (*Confidence Flag* + the v10.19 dimming). `Our Rev` is deliberately our **wholesale** revenue from the ad-driven units, which is what Amazon's Net Sales window is; `Direct $` stays Chewy retail.
+- **Amazon gains:** `Ad Cost / Unit` (Chewy: *Cost/unit*) · `ACOS Headroom pts` (*Headroom*). **Computed in JS, not SQL** — the v10.23 call. Both are pure arithmetic on columns the query already returns, so the `.sql` file and its embedded twin stay byte-identical and the **v10.19 drift guard keeps comparing like for like**. Adding them to the SQL was the obvious wrong move; a test asserts neither name appears there.
+- **⚠ VOCABULARY, and it was my own v10.36 mistake.** Chewy BE called `net − cogs` **"Contrib/u"** while the Cost to Chewy tab calls the **identical number "GM $/u"**, one tab away on the same page. That is the v10.22 rule broken ([[feedback_use_existing_vocabulary]]). Renamed to **GM $/u**. Amazon's word for the same *concept* is Blake's **Non-Ad Profit**; that is NOT renamed — the tooltip names the equivalence instead.
+- **ACOS is asserted as the reciprocal of ROAS**, not as a second formula copy, so the two can't drift. The `N × contribution` identity test from v10.36 now also checks that clearing break-even means headroom positive **and** actual ACOS below break-even ACOS — the two tabs' sign conventions agreeing.
+
+### v10.42 — every COGS field on the product card
+- **Jason:** *"i should be able to set cogs costs on the product card modal."* The card had **one** field (Amazon COGS). The COGS page has **ten**: six building blocks and four channel totals. Editing DTC or Chewy COGS, or any input the totals derive from, meant leaving the card.
+- **All ten are on the card now**, in a `💵 COGS` block: Landed cost · Fulfill (Amz) · Fulfill (DTC) · Overhead (DTC) · Shipping · Prod. labor, then Amazon · DTC · Chewy · Amazon EU.
+- **⚠ The derive rule is NOT re-implemented** — it is the same one `cogsEditSave` / `cogsBulkApply` use, **including the v6.20 landed_cost gate**. Without landed cost a "total" is only fees, and presenting that as COGS is exactly what that gate exists to stop. Totals recompute **live** as you type a block, so what is on screen is what gets saved.
+- **Typing into a total marks it a manual override** (`dataset.manual`) and the live derive stops touching it; a `↺ auto` button clears it. **On load, a stored total that disagrees with its blocks by more than half a cent is detected as a pre-existing override** — otherwise opening the card would silently overwrite work done on the COGS page.
+- **Chewy and Amazon EU are never derived.** Different freight and import duty, so they stay manual — the same call the COGS page makes.
+- **`pf-cogs` keeps its id** (it is now the Amazon total), so every existing reader is untouched.
+- **One stub-fidelity finding worth keeping** (the v10.29 lesson): a real `<input>` coerces `.value` to a String on assignment; my plain-object stub kept the Number, which both invented failures and hid a real one (`pfCogsNum` calls `.trim()` on it). The stub now defines `value` as a coercing accessor. *A stub that does not reproduce the real contract will either hide a bug or invent one.*
+
+### v10.43 — a real column picker on Amazon Break-Even, in the View popup, button next to search
+- **Jason, in three messages:** *"allow me to pick the columns here"* → *"should be in the view"* → *"and saved views should be up next to search - stay consistent with design patterns please."*
+- **Two existing conventions, not a third.** v10.7: one popup per page holding **Saved views + Columns**, labelled **Customize columns** on every page that has a picker. v10.9: that button lives in the **global sticky search bar**, between the search box and the ⚙ gear, driven by `PAGE_COLUMN_BUTTONS`. Break-Even was labelled *"Saved views"* precisely **because** it had no picker (same reason Units Sold is *"Saved reports"*). It has one now, so it takes the standard name and the standard place.
+- **⚠ The button MOVED; its id did not.** `be-view-btn` is unchanged — v10.9's whole design note is that the popups re-open themselves by `getElementById` and position off that element's rect. Asserted.
+- **61 columns, grouped — by KEYWORD, not a hardcoded list.** Identity · Break-even · Advertising · Price & fees · Contribution · Velocity & stock · Dimensions & fee preview · Window · Audit, plus an **Other** bucket. A fixed list is how the v6.61 bug worked: a group the picker did not know about left its columns permanently unreachable once they defaulted to hidden. Here a column added to the SQL later always lands somewhere.
+- **`null` means "no explicit choice"** (the built-in default: everything but the audit block). An **empty Set is a real choice** — hide everything. Collapsing the two would make "hide everything" silently reset. `↺ defaults` returns to `null`, not to an empty Set.
+- **The audit checkbox still works** as the one-click way in and out of that block; a per-column choice layers on top.
+- **A saved view carries its column set** (`hiddenCols`). A view saved before v10.43 has **no such key at all**, and apply leaves the current choice alone rather than wiping it.
+- **The CSV still exports every column** regardless of the picker — Blake's sheet reads the full set, which is why the button says *"↓ CSV (every column)"*.
+- **Two suites went red and were re-pointed, not silenced:** `test_v109` counts the uniform-look buttons (5 → 6, and it caught that my new button used its own padding — that uniformity IS what v10.9 was for), and `test_v1035`'s harness needed `breakevenHiddenCols` lifted from source since `fn()` does not capture `let`.
+- **Verification:** `node --check` clean · **33 suites green** · new `test_v1042` covers the measure-pairs in both directions, that neither Amazon addition touched the SQL, the one-name-per-number rule, the full derive rule incl. the landed-cost gate and override round-trip, header/body and CSV header/row parity, and the picker's grouping + persistence + view round-trip.
+- **The `\U` escape trap bit twice more** (v10.36 note): an astral escape written through a Python string survived into the JS, where there is no `\U` escape. `node --check` is clean on it both times. Fixed at source and swept.
 
 ## v10.40 — the ROAS columns say RETAIL out loud
 - **Jason:** *"the ROAS figures are based on Chewy POS, right? our price to them is different (recorded in the cost to chewy section). is this being factored in to ROAS?"*

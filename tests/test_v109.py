@@ -29,7 +29,7 @@ REAL = slab('const PAGE_COLUMN_BUTTONS = [', 'function pageColsSyncButton') \
      + '\n' + fn('pageColsSyncButton')
 
 BTN_IDS = ['fc-cols-btn', 'ip-view-btn', 'prod-view-btn',
-           'pnl-cols-btn', 'spnl-cols-btn', 'sales-view-btn']
+           'pnl-cols-btn', 'spnl-cols-btn', 'sales-view-btn', 'be-view-btn']
 
 bar_a = RAW.index('id="globalSearchBar"')
 bar_b = RAW.index('<!-- SHEETS BAR', bar_a)
@@ -66,8 +66,10 @@ static = [
     ('  and once auth resolves', js.count('pageColsSyncButton();   // v10.9') == 2),
     ('Units Sold keeps its honest label',
      '\U0001F4CB Saved reports</button>' in RAW),
-    ('the other five say Customize columns',
-     bar.count('\U0001F4CB Customize columns</button>') == 5),
+    # v10.43 — six now: Break-Even gained a real column picker, so by the
+    # v10.7 convention it takes the standard label instead of "Saved views".
+    ('the other six say Customize columns',
+     bar.count('\U0001F4CB Customize columns</button>') == 6),
 ]
 
 HARNESS = r"""

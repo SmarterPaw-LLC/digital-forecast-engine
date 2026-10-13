@@ -94,6 +94,10 @@ const mkc = (id, c) => EL[id] = { id, checked: c };
 const document = { getElementById: id => EL[id] || null,
                    addEventListener(){}, removeEventListener(){} };
 let breakevenSortKey = 'Non-Ad Profit', breakevenSortDir = -1;
+// v10.43 added a module-level column-visibility Set that the snapshot reads.
+// fn() does not capture let/const, so it is injected here.
+BE_HIDDEN
+function breakevenPersistHiddenCols() {}
 let breakevenSavedViews = {};
 let _stored = null;
 const localStorage = { getItem: () => _stored, setItem: (k, v) => { _stored = v; } };
@@ -173,6 +177,12 @@ t('does NOT capture the result set', 'rows' in snap || 'breakevenRows' in snap, 
   if (F) process.exit(1);
 })();
 """
+# ⚠ Lifted from source rather than restated, so a change there breaks this
+# test instead of silently passing against a stale copy (the v10.34 lesson).
+_hidden = re.search(r'^let breakevenHiddenCols = null;$', js, re.M)
+if not _hidden:
+    raise SystemExit('FAIL: cannot find let breakevenHiddenCols')
+harness = harness.replace('BE_HIDDEN', _hidden.group(0))
 harness = (harness
            .replace('CARDBTN', fn('breakevenCardBtn'))
            .replace('SNAPSHOT', fn('breakevenSnapshotView'))

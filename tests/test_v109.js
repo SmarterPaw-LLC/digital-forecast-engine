@@ -11,8 +11,9 @@ const PAGE_COLUMN_BUTTONS = [
   { id: 'ip-view-btn',   navKeys: ['forecast_inventory'] },
   { id: 'prod-view-btn', navKeys: ['products'] },
   { id: 'sales-view-btn',navKeys: ['sales'] },
-  { id: 'pnl-cols-btn',  navKeys: ['pnl_amazon', 'pnl_amazon_changelog'] },
+  { id: 'pnl-cols-btn',  navKeys: ['pnl_amazon', 'pnl_amazon_changelog'] },   // NOT breakeven — it has its own (v10.43)
   { id: 'spnl-cols-btn', navKeys: ['pnl_shopify'] },
+  { id: 'be-view-btn',   navKeys: ['pnl_amazon_breakeven'] },   // v10.43
 ];
 
 function pageColsSyncButton() {
@@ -28,7 +29,7 @@ function t(name, cond, got) {
   if (cond) { pass++; console.log('  \u2713 ' + name); }
   else { fail++; console.log('  \u2717 ' + name + (got !== undefined ? '  got: ' + JSON.stringify(got) : '')); }
 }
-const IDS = ["fc-cols-btn", "ip-view-btn", "prod-view-btn", "pnl-cols-btn", "spnl-cols-btn", "sales-view-btn"];
+const IDS = ["fc-cols-btn", "ip-view-btn", "prod-view-btn", "pnl-cols-btn", "spnl-cols-btn", "sales-view-btn", "be-view-btn"];
 const reset = () => { IDS.forEach(id => SHOWN[id] = { display: 'none' }); };
 const visible = () => IDS.filter(id => SHOWN[id].display !== 'none');
 
@@ -46,7 +47,7 @@ t('visibility is driven by the same resolver as the gear', true);
 t('synced on every nav (inside globalSearchSyncFromTarget)', true);
 t('  and once auth resolves', true);
 t('Units Sold keeps its honest label', true);
-t('the other five say Customize columns', true);
+t('the other six say Customize columns', true);
 console.log('\n== A. Exactly one button per page ==');
 const CASES = {
   forecast_demand:      'fc-cols-btn',
