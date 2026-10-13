@@ -2,9 +2,16 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.31**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.32**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.32 — P&L nav: "Shopify DTC" → "DTC P&L", "Walmart 1P" → "Walmart P&L"
+- **Jason:** *"rename walmart 1p to walmart p&l"* then *"and shopify dtc to DTC p&L"*.
+- The P&L dropdown now reads **Amazon P&L · DTC P&L · Walmart P&L · Chewy P&L · COGS** — every sub-view named the same way instead of three of them naming a channel and two naming a report.
+- **Exactly two lines changed.** Neither sub-view has its own in-page title (they open straight into the filter bar), so the nav label IS the page title and nothing else needed updating.
+- **⚠ Deliberately NOT renamed elsewhere.** "Shopify DTC" and "Walmart 1P" appear ~25 more times across the file — the Units Sold chart legend, the Inventory Planning Need columns and their tooltips, the uploader cards, the Upload History source picker. Every one of those names a **channel** or a **data source**, not this page. `1P` in particular is load-bearing domain language: it says Walmart is a first-party wholesale relationship (we invoice them, they set retail), which is exactly why that channel's math is a continuous warehouse draw with no reorder pool. Renaming it there would erase the distinction the Need columns depend on.
+- **Verification:** nav reads correctly, the channel + data-source names confirmed untouched, `node --check` clean, all 29 suites green.
 
 ## v10.31 — deleting a block took a declaration with it; the whole Users section died
 - **Jason:** *"you DID NOT BRING BACK MY DEFAULT TABS GLOBAL SETTING"* — and he was right, even though v10.30 had just asserted it was present.
