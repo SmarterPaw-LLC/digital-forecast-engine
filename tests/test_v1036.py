@@ -624,7 +624,10 @@ print('\nK. static — retail vs wholesale is named on the columns')
 # different (recorded in the cost to chewy section). is this being factored in
 # to ROAS?" It is — in the THRESHOLD, not the numerator. The Direct $ tooltip
 # said RETAIL; the two ROAS tooltips did not, which is where the ambiguity was.
-_cols = be_block[be_block.index('const COLS = ['):]
+# v10.54 renamed the registry to ALL_COLS; `COLS` is now the user-visible subset
+# left after the decision-set filter. These assertions are about what the tab CAN
+# show, so they still read the full registry.
+_cols = be_block[be_block.index('const ALL_COLS = ['):]
 _cols = _cols[:_cols.index('\n  ];')]
 for _k in ['directRoas', 'realisedRoas', 'listPrice']:
     _row = [l for l in _cols.split('\n') if "key: '%s'" % _k in l]

@@ -61,7 +61,10 @@ def fn(name):
 
 be = js[js.index('function renderChewyBreakeven'):]
 be = be[:be.index('function chewyBeShowGap')]
-cols = be[be.index('const COLS = ['):]
+# v10.54 renamed the registry to ALL_COLS (COLS is now the filtered subset). The
+# measure-parity assertions are about what the tab CAN show, so they read the
+# full registry.
+cols = be[be.index('const ALL_COLS = ['):]
 cols = cols[:cols.index('\n  ];')]
 
 
@@ -202,11 +205,21 @@ if r.returncode != 0:
 
 # ═════════ E. the table still lines up ═════════
 print('\nE. static — header and body agree')
-ncols = len(re.findall(r"\{ key: '", cols))
+# v10.54 made this structural rather than countable: the body row used to be a
+# hardcoded sequence of cells in column order with nothing tying it to the
+# registry, so a new column shifted every cell one to the left silently. It is
+# now KEYED and emitted from the same filtered list the header reads, so the
+# assertion moves from "the two counts match" to "every column has a cell".
+col_keys = re.findall(r"\{ key: '([A-Za-z_0-9]+)'", cols)
 body = be[be.index('tb.innerHTML = rows.map'):]
 body = body[:body.index('</tr>`')]
-ncells = len(re.findall(r'\$\{(?:cell|r\.\w+ == null \? gapCell)', body))
-ok(ncols == ncells, 'COLS (%d) == body cells (%d)' % (ncols, ncells))
+cell_keys = set(re.findall(r'^\s{10}([A-Za-z_0-9]+):\s', body, re.M))
+missing = [k for k in col_keys if k not in cell_keys]
+ok(len(col_keys) >= 18 and not missing,
+   'every one of the %d registry columns has a keyed body cell%s'
+   % (len(col_keys), (' — MISSING: ' + ', '.join(missing)) if missing else ''))
+ok('COLS.map(c => CELLS[c.key]' in body,
+   '  and the row is emitted from the same filtered list the header reads')
 # feedback_always_csv_export — the new measures reach the file too.
 exp = fn('downloadChewyBreakevenCSV')
 for c in ['our_revenue_wholesale', 'vendor_contribution', 'gm_per_unit', 'gm_pct',

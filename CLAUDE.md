@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.53**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.54**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -34,6 +34,23 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.54 — stop making the operator translate the Chewy page
+
+- **Jason:** *"i feel like we've created a frankenstein monster"* then, flatly, *"i'm so lost."* v10.53 made the labels honest. It did not make the page readable, which is the thing he was actually asking for.
+- **⚠ The root of every Chewy confusion is one fact nothing on the page stated: Chewy is 1P, so TWO prices exist for every unit** — what Chewy's customer pays Chewy (RETAIL) and what Chewy pays us (WHOLESALE). The Sales tab is retail. Cost to Chewy is wholesale. Break-Even is a retail ROAS measured against a wholesale threshold. No tab said which, so every number needed a translation in the operator's head.
+- **One short line under the sub-tab strip now names the question AND the basis**, with the detail on the tooltip (the v10.37 rule — a line, not a paragraph):
+  - Sales → `Is it selling? · RETAIL basis — what Chewy's customer paid Chewy`
+  - Cost to Chewy → `Does our price work? · WHOLESALE basis — what Chewy pays us`
+  - Break-Even → `Do the ads pay? · retail ROAS measured against a wholesale threshold`
+  - Rebates → `What did Chewy deduct? · invoice dollars, reporting only`
+  - The Rebates tooltip says outright that **nothing on it reconciles against the modelled allowance rate** the other two tabs use. That gap is now visible instead of implied.
+- **Break-Even opens on EIGHT columns, not eighteen.** `Spend · Ad Units · Direct $` (what the ads did) → `Realised ROAS vs BE ROAS` (the comparison the page exists for) → `Headroom` (the verdict). The other ten are the working-out — they show HOW the two ROAS figures were built — and sit behind one `+ 10 detail columns` toggle on the row-count line. Choice persists per browser (`chewyBeShowAllCols`).
+- **One text toggle, deliberately NOT another popup.** Amazon Break-Even's Customize-columns popup (v10.43) is the right pattern for 61 columns; for 18 it is a control to learn on a page the operator already said he could not read. The row-count line already states the table's scope, so the column scope belongs there.
+- **⚠ The structural half: the Break-Even body row was a hardcoded sequence of cells in column order with NOTHING tying it to the registry.** Header came from `COLS.map(...)`, body was 18 literal `${cell(...)}` calls in the right order by hand. Add a column and every cell shifts one to the left silently. The body is now **KEYED** (`CELLS[c.key]`) and both header and body are emitted from the same filtered list, so they cannot drift. `test_v1042`'s header/body assertion moved from "the two counts match" to "every registry column has a keyed body cell" — the stronger guarantee.
+- **Registry renamed `COLS` → `ALL_COLS`**, with `COLS` now meaning "what is actually on screen". Two suites sliced on the old name and went red; **both were re-pointed, not silenced** — their assertions are about what the tab CAN show, so they read the full registry.
+- **Verification:** `node --check` clean · **42 suites green** · driven in the browser against a stubbed row: default header 8 / body 8 in matching order, toggled header 18 / body 18 in matching order, the toggle round-trips and persists, and all four basis lines render. Realised ROAS on the stub reads 532% = `(500 + 32 recurring) ÷ 100`, confirming the v10.52 autoship split still holds through the keyed rewrite. Only console errors were the expected 401s from running unauthenticated.
+- **Still open, and these are the two that cost real money** — neither is a UI problem: **(1)** Rebates reconciles against nothing ($106,766 of invoices next to a modelled 26.50% rate, never compared); **(2)** `trade_allowance` contributes 0% because the FTAS rates live in the rebate NAME, not `rebate_pct_rate`, so every Chewy GM / Target $ / BE ROAS reads better than reality. Needs one answer from Chewy.
 
 ## v10.53 — one label, one measure across the Chewy tabs
 
