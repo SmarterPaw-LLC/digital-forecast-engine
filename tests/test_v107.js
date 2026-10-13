@@ -28,6 +28,28 @@ function ipPopulateFreezeDropdown() {}
 function onFcFreezeChange() {}
 function onIpFreezeChange() {}
 
+const _CATVIS_INVISIBLE = /[\u200B-\u200D\uFEFF\u2060\u00AD]/g;
+const _CATVIS_SPACES    = /[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g;
+let _catVisUniv = null;
+function catVisMatchKey(v) { return catVisNorm(v).toLowerCase(); }
+function _catVisDedupe(values) {
+  const seen = new Map();
+  for (const raw of values) {
+    const disp = catVisNorm(raw);
+    if (!disp) continue;
+    const k = catVisMatchKey(disp);
+    if (!seen.has(k)) seen.set(k, disp);
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
+function catVisUniverse() {
+  if (_catVisUniv) return _catVisUniv;
+  _catVisUniv = {
+    cats: new Set(catVisAllCats().map(catVisMatchKey)),
+    subs: new Set(catVisAllSubcats().map(catVisMatchKey)),
+  };
+  return _catVisUniv;
+}
 const CATVIS_GLOBAL = '_global';
 const CATVIS_LS_KEY = 'catVisConfig';
 
@@ -59,7 +81,7 @@ function catVisPageDef(key) { return CATVIS_PAGES.find(p => p.key === key) || nu
 
 
 function catVisPageDef(key) { return CATVIS_PAGES.find(p => p.key === key) || null; }
-function catVisInvalidate() { _catVisCache = {}; _catVisIdMap = null; }
+function catVisInvalidate() { _catVisCache = {}; _catVisIdMap = null; _catVisUniv = null; }
 function catVisResolved(pageKey) {
   if (_catVisCache[pageKey]) return _catVisCache[pageKey];
   const mk = (src, source) => ({
@@ -74,11 +96,18 @@ function catVisResolved(pageKey) {
   _catVisCache[pageKey] = res;
   return res;
 }
-function catVisNorm(v) { return String(v == null ? '' : v).trim(); }
+function catVisNorm(v) {
+  return String(v == null ? '' : v)
+    .replace(_CATVIS_INVISIBLE, '')
+    .replace(_CATVIS_SPACES, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 function catVisSetHas(set, value) {
   if (!set) return true;
   if (set.has(value)) return true;
-  for (const v of set) if (catVisNorm(v) === value) return true;
+  const k = catVisMatchKey(value);
+  for (const v of set) if (catVisMatchKey(v) === k) return true;
   return false;
 }
 function catVisIdMap() {
@@ -104,25 +133,32 @@ function catVisPass(pageKey, obj) {
   // ⚠ v10.45 — both sides trimmed. A stored set written before v10.45 can hold
   // an untrimmed name, and `categories` rows can carry stray whitespace; either
   // one made a product fail a membership test it visibly passed on screen.
-  if (r.cats    && cat && !catVisSetHas(r.cats, cat)) return false;
-  if (r.subcats && sub && !catVisSetHas(r.subcats, sub)) return false;
+  // ⚠ v10.46 — a value that is NOT in the universe has no checkbox, so the
+  // operator cannot have unchecked it. Hiding on it is hiding on something
+  // nobody chose, and it is unrecoverable from the UI: there is no row to
+  // re-tick. Only values the picker actually renders may hide a product.
+  const uni = catVisUniverse();
+  if (r.cats    && cat && uni.cats.has(catVisMatchKey(cat))
+      && !catVisSetHas(r.cats, cat)) return false;
+  if (r.subcats && sub && uni.subs.has(catVisMatchKey(sub))
+      && !catVisSetHas(r.subcats, sub)) return false;
   return true;
 }
 function catVisAllCats() {
   if (typeof getCategories === 'function') {
     try {
       const g = getCategories();
-      if (g) return [...new Set(g.map(catVisNorm).filter(Boolean))].sort();
+      if (g) return _catVisDedupe(g);
     } catch {}
   }
   if (typeof allCategories !== 'undefined' && Array.isArray(allCategories)) {
-    return [...new Set(allCategories.map(c => catVisNorm(c.category)).filter(Boolean))].sort();
+    return _catVisDedupe(allCategories.map(c => c.category));
   }
   return [];
 }
 function catVisAllSubcats() {
   if (typeof allCategories !== 'undefined' && Array.isArray(allCategories)) {
-    return [...new Set(allCategories.map(c => catVisNorm(c.subcategory)).filter(Boolean))].sort();
+    return _catVisDedupe(allCategories.map(c => c.subcategory));
   }
   return [];
 }
@@ -155,6 +191,14 @@ function catVisSummaryText(pageKey) {
   if (h.subs) bits.push(`${h.subs} sub-categor${h.subs === 1 ? 'y' : 'ies'}`);
   return bits.join(' + ') + ' hidden';
 }
+function catVisSummaryNamed(pageKey) {
+  const h = catVisHiddenCount(pageKey);
+  if (!h.total) return 'nothing hidden';
+  const bits = [];
+  if (h.cats) bits.push('hiding ' + catVisNameList(h.catNames));
+  if (h.subs) bits.push('hiding sub ' + catVisNameList(h.subNames));
+  return bits.join(' \u00b7 ');
+}
 const PAGE_SETTINGS_PANELS = [
   {
     // v10.34 — listed FIRST on purpose. "Why can't I see my product?" is the
@@ -182,7 +226,8 @@ const PAGE_SETTINGS_PANELS = [
     summary: (pageKey) => {
       const h = catVisHiddenCount(pageKey);
       if (!h.total) return 'nothing hidden';
-      return catVisSummaryText(pageKey) + (h.source === 'global' ? ' · global' : ' · this page');
+      // v10.46 — the count alone sent Jason scrolling a 33-row list twice.
+      return catVisSummaryNamed(pageKey) + (h.source === 'global' ? ' · global' : ' · this page');
     },
     render:  (host, pageKey, onAfterChange) => catVisRenderControls(host, pageKey, { onAfterChange }),
   },
@@ -377,14 +422,20 @@ reset({});
 t('unset reads "nothing hidden"', cvPanel.summary('inventory') === 'nothing hidden');
 t('  and isSet is false', cvPanel.isSet('inventory') === false);
 reset({ inventory: { cats: ['Sprays', 'Treats', 'Toys'], subcats: null } });
-t('a page override says so', cvPanel.summary('inventory') === '1 category hidden \u00b7 this page',
+// \u26a0 v10.46 — the gear summary NAMES the hidden values instead of counting
+// them. The count sent Jason scrolling a 33-row checkbox list twice looking for
+// which three were off; naming them is the whole point, so this moves with it.
+t('a page override NAMES what it hides',
+  cvPanel.summary('inventory') === 'hiding Apparel \u00b7 this page',
   cvPanel.summary('inventory'));
 reset({ _global: { cats: ['Sprays'], subcats: null } });
-t('an inherited scope is labelled global',
-  cvPanel.summary('inventory') === '3 categories hidden \u00b7 global', cvPanel.summary('inventory'));
+t('an inherited scope is labelled global and still names them',
+  cvPanel.summary('inventory') === 'hiding Apparel, Toys, Treats \u00b7 global',
+  cvPanel.summary('inventory'));
 reset({ _global: { cats: ['Sprays'], subcats: ['3 oz'] } });
-t('both axes are counted',
-  cvPanel.summary('cogs') === '3 categories + 4 sub-categories hidden \u00b7 global', cvPanel.summary('cogs'));
+t('both axes are named',
+  cvPanel.summary('cogs') === 'hiding Apparel, Toys, Treats \u00b7 hiding sub 6 oz, Crunchy, Kickers, Tees \u00b7 global',
+  cvPanel.summary('cogs'));
 
 console.log('\n== F. Registry shape \u2014 adding a panel must stay cheap ==');
 for (const p of PAGE_SETTINGS_PANELS) {

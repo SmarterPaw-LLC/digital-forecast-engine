@@ -25,7 +25,25 @@ def slab(start, end):
     return js[a:b]
 
 
-REAL = '\n'.join([
+# v10.46 — catVisNorm now depends on two module-level regex consts, and the
+# predicate on a cached universe. fn() captures function bodies only, so these
+# are lifted from source rather than restated.
+def constline(name):
+    m = re.search(r'^const %s\s*=.*$' % re.escape(name), js, re.M)
+    if not m:
+        raise SystemExit('FAIL: cannot find const %s' % name)
+    return m.group(0)
+
+V1046 = '\n'.join([
+    constline('_CATVIS_INVISIBLE'),
+    constline('_CATVIS_SPACES'),
+    'let _catVisUniv = null;',
+    fn('catVisMatchKey'),
+    fn('_catVisDedupe'),
+    fn('catVisUniverse'),
+])
+
+REAL = V1046 + '\n' + '\n'.join([
     slab("const CATVIS_GLOBAL = '_global';", 'let catVisConfig = {};'),
     fn('catVisPageDef'), fn('catVisInvalidate'), fn('catVisResolved'),
     # v10.45 — catVisNorm / catVisSetHas are what the predicate and the
@@ -33,6 +51,8 @@ REAL = '\n'.join([
     fn('catVisNorm'), fn('catVisSetHas'),
     fn('catVisIdMap'), fn('catVisPass'), fn('catVisAllCats'), fn('catVisAllSubcats'),
     fn('catVisHiddenCount'), fn('catVisNameList'), fn('catVisSummaryText'),
+    # v10.46 — the gear summary NAMES the hidden values now.
+    fn('catVisSummaryNamed'),
     slab('const PAGE_SETTINGS_PANELS = [', 'function pageSettingsCurrentNavKey'),
     fn('freezeCurrentKey'), fn('freezeCurrentLabel'),
     fn('pageSettingsPanelsFor'),
@@ -201,14 +221,20 @@ reset({});
 t('unset reads "nothing hidden"', cvPanel.summary('inventory') === 'nothing hidden');
 t('  and isSet is false', cvPanel.isSet('inventory') === false);
 reset({ inventory: { cats: ['Sprays', 'Treats', 'Toys'], subcats: null } });
-t('a page override says so', cvPanel.summary('inventory') === '1 category hidden \u00b7 this page',
+// \u26a0 v10.46 — the gear summary NAMES the hidden values instead of counting
+// them. The count sent Jason scrolling a 33-row checkbox list twice looking for
+// which three were off; naming them is the whole point, so this moves with it.
+t('a page override NAMES what it hides',
+  cvPanel.summary('inventory') === 'hiding Apparel \u00b7 this page',
   cvPanel.summary('inventory'));
 reset({ _global: { cats: ['Sprays'], subcats: null } });
-t('an inherited scope is labelled global',
-  cvPanel.summary('inventory') === '3 categories hidden \u00b7 global', cvPanel.summary('inventory'));
+t('an inherited scope is labelled global and still names them',
+  cvPanel.summary('inventory') === 'hiding Apparel, Toys, Treats \u00b7 global',
+  cvPanel.summary('inventory'));
 reset({ _global: { cats: ['Sprays'], subcats: ['3 oz'] } });
-t('both axes are counted',
-  cvPanel.summary('cogs') === '3 categories + 4 sub-categories hidden \u00b7 global', cvPanel.summary('cogs'));
+t('both axes are named',
+  cvPanel.summary('cogs') === 'hiding Apparel, Toys, Treats \u00b7 hiding sub 6 oz, Crunchy, Kickers, Tees \u00b7 global',
+  cvPanel.summary('cogs'));
 
 console.log('\n== F. Registry shape \u2014 adding a panel must stay cheap ==');
 for (const p of PAGE_SETTINGS_PANELS) {

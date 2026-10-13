@@ -34,7 +34,25 @@ _SUPPRESS = re.search(r'^const _catVisSuppressed = new Set\(\);$', js, re.M)
 if not _SUPPRESS:
     raise SystemExit('FAIL: cannot find const _catVisSuppressed')
 
-REAL = (slab("const CATVIS_GLOBAL = '_global';", 'let catVisConfig = {};')
+# v10.46 — catVisNorm now depends on two module-level regex consts, and the
+# predicate on a cached universe. fn() captures function bodies only, so these
+# are lifted from source rather than restated.
+def constline(name):
+    m = re.search(r'^const %s\s*=.*$' % re.escape(name), js, re.M)
+    if not m:
+        raise SystemExit('FAIL: cannot find const %s' % name)
+    return m.group(0)
+
+V1046 = '\n'.join([
+    constline('_CATVIS_INVISIBLE'),
+    constline('_CATVIS_SPACES'),
+    'let _catVisUniv = null;',
+    fn('catVisMatchKey'),
+    fn('_catVisDedupe'),
+    fn('catVisUniverse'),
+])
+
+REAL = (V1046 + '\n' + slab("const CATVIS_GLOBAL = '_global';", 'let catVisConfig = {};')
         + '\n' + _SUPPRESS.group(0) + '\n' + '\n'.join([
     fn('catVisPageDef'),
     fn('catVisInvalidate'),
@@ -70,7 +88,11 @@ static = [
     ('Products no longer runs the v5.76 localStorage predicate',
      '!prodCatFilter.has(catName)' not in js and '!prodSubcatFilter.has(subName)' not in js),
     ('  it delegates to the shared engine instead',
-     "if (!catVisPass('products', p)) return false;" in js),
+     "catVisPass('products', p)" in js
+     # v10.46 — exactly one caller may skip it: the diagnostic recount that
+     # tells the operator how many rows category visibility removed.
+     and "if (!(opts && opts.ignoreCatVis) && !catVisPass('products', p)) return false;" in js
+     and js.count("opts.ignoreCatVis") == 1),
     # Markup assertions check RAW, not the extracted <script>. Checking `js`
     # here made the button-removal test a false pass: HTML is not in the script.
     ('the two v5.76 Products buttons are gone from the markup',

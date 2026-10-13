@@ -148,11 +148,17 @@ let allCategories = [
 let catVisConfig = {};
 let _catVisCache = {};
 let _catVisIdMap = null;
+let _catVisUniv = null;
 const CATVIS_GLOBAL = '_global';
 const _catVisSuppressed = new Set();
-function catVisInvalidate() { _catVisCache = {}; _catVisIdMap = null; }
+function catVisInvalidate() { _catVisCache = {}; _catVisIdMap = null; _catVisUniv = null; }
 
+//<<INVISIBLE>>
+//<<SPACES>>
 //<<NORM>>
+//<<MATCHKEY>>
+//<<DEDUPE>>
+//<<UNIVERSE>>
 //<<SETHAS>>
 //<<IDMAP>>
 //<<RESOLVED>>
@@ -219,7 +225,18 @@ t('nothing hidden says so', (catVisConfig['products'] = { cats: null, subcats: n
 console.log('\n  ' + P + ' passed, ' + F + ' failed');
 if (F) process.exit(1);
 """
-for tok, body in [('NORM', fn('catVisNorm')), ('SETHAS', fn('catVisSetHas')),
+def constline(name):
+    m = re.search(r'^const %s\s*=.*$' % re.escape(name), js, re.M)
+    if not m:
+        raise SystemExit('FAIL: cannot find const %s' % name)
+    return m.group(0)
+
+for tok, body in [('INVISIBLE', constline('_CATVIS_INVISIBLE')),
+                  ('SPACES', constline('_CATVIS_SPACES')),
+                  ('MATCHKEY', fn('catVisMatchKey')),
+                  ('DEDUPE', fn('_catVisDedupe')),
+                  ('UNIVERSE', fn('catVisUniverse')),
+                  ('NORM', fn('catVisNorm')), ('SETHAS', fn('catVisSetHas')),
                   ('IDMAP', fn('catVisIdMap')), ('RESOLVED', fn('catVisResolved')),
                   ('PASS', fn('catVisPass')), ('ALLCATS', fn('catVisAllCats')),
                   ('ALLSUBS', fn('catVisAllSubcats')), ('HIDDEN', fn('catVisHiddenCount')),
