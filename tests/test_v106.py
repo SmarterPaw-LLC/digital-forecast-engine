@@ -26,7 +26,16 @@ def slab(start, end):
 
 
 # Constants + registry + the pure logic. The DOM/Supabase halves are stubbed.
-REAL = slab("const CATVIS_GLOBAL = '_global';", 'let catVisConfig = {};') + '\n' + '\n'.join([
+# v10.34 added a session-only suppression Set that catVisPass consults. It is
+# a module-level const, so fn() does not capture it — lifted from source
+# rather than restated, so a change there breaks this test instead of
+# silently passing against a stale copy.
+_SUPPRESS = re.search(r'^const _catVisSuppressed = new Set\(\);$', js, re.M)
+if not _SUPPRESS:
+    raise SystemExit('FAIL: cannot find const _catVisSuppressed')
+
+REAL = (slab("const CATVIS_GLOBAL = '_global';", 'let catVisConfig = {};')
+        + '\n' + _SUPPRESS.group(0) + '\n' + '\n'.join([
     fn('catVisPageDef'),
     fn('catVisInvalidate'),
     fn('catVisResolved'),
@@ -38,7 +47,7 @@ REAL = slab("const CATVIS_GLOBAL = '_global';", 'let catVisConfig = {};') + '\n'
     fn('catVisClearPageOverride'),
     fn('catVisPromoteToGlobal'),
     fn('catVisMigrateProductsLocal'),
-])
+]))
 
 # ── static assertions against the shipped source ─────────────────────────────
 PAGES = ['forecast', 'inventory', 'seasonality', 'products', 'sales',

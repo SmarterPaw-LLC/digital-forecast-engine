@@ -82,6 +82,7 @@ function catVisIdMap() {
   return _catVisIdMap;
 }
 function catVisPass(pageKey, obj) {
+  if (_catVisSuppressed.has(pageKey)) return true;   // dismissed for this session
   const r = catVisResolved(pageKey);
   if (!r.cats && !r.subcats) return true;          // fast path — nothing hidden
   if (!obj) return true;
@@ -125,6 +126,18 @@ function catVisSummaryText(pageKey) {
   return bits.join(' + ') + ' hidden';
 }
 const PAGE_SETTINGS_PANELS = [
+  {
+    // v10.34 — listed FIRST on purpose. "Why can't I see my product?" is the
+    // question people open this menu with, and the answer is here.
+    id: 'activefilters',
+    icon: '\u{1F50D}',
+    label: 'Active filters',
+    hint: 'Everything currently narrowing this page, from the filter bar, the Top Products chip, category visibility and the org default. Clearing one is for this session only \u2014 your saved settings come back on reload.',
+    pageKeyFor: (navKey) => (PAGE_FILTERS[navKey] ? navKey : null),
+    isSet:   (navKey) => activeFiltersFor(navKey).length > 0,
+    summary: (navKey) => activeFiltersSummary(navKey),
+    render:  (host, navKey) => activeFiltersRenderControls(host, navKey),
+  },
   {
     id: 'catvis',
     icon: '\u{1F441}',

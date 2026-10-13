@@ -49,6 +49,7 @@ const CATVIS_PAGES = [
 function catVisPageDef(key) { return CATVIS_PAGES.find(p => p.key === key) || null; }
 
 
+const _catVisSuppressed = new Set();
 function catVisPageDef(key) { return CATVIS_PAGES.find(p => p.key === key) || null; }
 function catVisInvalidate() { _catVisCache = {}; _catVisIdMap = null; }
 function catVisResolved(pageKey) {
@@ -74,6 +75,7 @@ function catVisIdMap() {
   return _catVisIdMap;
 }
 function catVisPass(pageKey, obj) {
+  if (_catVisSuppressed.has(pageKey)) return true;   // dismissed for this session
   const r = catVisResolved(pageKey);
   if (!r.cats && !r.subcats) return true;          // fast path — nothing hidden
   if (!obj) return true;
