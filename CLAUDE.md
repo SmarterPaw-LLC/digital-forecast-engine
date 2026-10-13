@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.51**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.52**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -27,6 +27,20 @@ A label must never carry two different icons on two pages (v10.50: Break-Even wa
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.52 — Realised ROAS was double-counting the first Autoship order
+
+- **Chewy's own metric tooltips, pulled by Jason, settle it.** *"Autoship actualized orders: ... attributed to an ad click, **including the first order** and all recurring shipments."* and *"Direct sales: Sales attributed to campaigns **excluding recurring** Autoship orders."* The word *recurring* is doing deliberate work: if Direct excluded all autoship they would have said so. **The first autoship order sits in BOTH**, and `Realised = Direct + Autoship` counted it twice on every SKU.
+- **⚠ On his data that is nearly the whole autoship figure.** Over 91 days: **977 sign-ups against 1,065 actualized orders**, so **92% of autoship orders are first orders**. Of $11,985 autoship, ~$10,995 was already inside the $80,641 of Direct. Blended Realised ROAS goes **491% → 433%**, against a Direct ROAS of 427% — so the realised "uplift" was almost entirely the double count.
+- **Confirmed independently by the data before the tooltip arrived.** On the first day a SKU ever recorded a sign-up, autoship sales are already non-zero and land exactly on sign-ups × list (SKU 692518: 2 sign-ups, $13.98 = 2 × $6.99). No lag, because that IS the sign-up order.
+- **`chewyBreakevenEcon` is deliberately NOT touched** — 29 behaviour tests ride on it, and its `realisedSales = directSales + autoshipSales` becomes correct the moment the value handed to it is the incremental one. The split happens at the call site.
+- **Split per SKU over the WHOLE window, never per row.** A sign-up and the order it produces are attributed on different dates, so a daily subtraction would go negative constantly. `recurring orders = actualized orders − sign-ups`, valued at the window's own average order value, clamped to the gross.
+- **A SKU with autoship sales but no order count is FLAGGED, not guessed** (`autoship_unsplit`). It contributes nothing to Realised and the scorecard names the count. Given 92% of orders are first orders, excluding is the closer approximation — but silence is the bug class this whole thread is about.
+- **Every surface moved with the math:** the column is now `Autoship ↺ $` reading the recurring figure with the per-SKU split on hover, the scorecard names the excluded first-order dollars, the Realised ROAS sub-line reads *(direct + recurring autoship) ÷ spend*, and the CSV carries gross, recurring, first-order and the order count so the split is auditable downstream.
+- **⚠ Headroom moves with it**, which is the column the page exists for. SKUs sitting on a thin positive margin can flip: Fruit Sticks at **+5 pts** was carrying ~7 points of autoship.
+- **Verification:** `node --check` clean · **41 suites green** · behaviour driven on Jason's actual portfolio totals plus every degenerate shape (all-first, no sign-ups, more sign-ups than orders, no order count, a clean half-and-half).
+- **One arithmetic slip of mine, caught by the suite:** I hand-computed the portfolio split as $989.93/$10,995.33. It is $990.33/$10,994.93. The code was right.
+- **⚠ Still worth confirming, and it is the one thing that would reverse this:** whether `direct_units` actually counts the autoship sign-up order. The query is in the chat. If rows exist with `autoship_signups > 0` and `direct_units = 0`, Direct does NOT contain the first order and this change reverts.
 
 ## v10.51 — Satisfaction Guarantee was silently dropped from the Chewy allowance floor
 
