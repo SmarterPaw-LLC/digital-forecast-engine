@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.50**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.51**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -27,6 +27,19 @@ A label must never carry two different icons on two pages (v10.50: Break-Even wa
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.51 — Satisfaction Guarantee was silently dropped from the Chewy allowance floor
+
+- **Found while answering Jason's** *"MDF/Coop is 16%, where does this go into P&L?"*
+- **Where MDF goes:** nowhere as a dollar line. It is one component of the STANDING ALLOWANCE RATE, and at 16% it is **the single largest** one. That rate flows into `Allow/u` and `GM $/u` on **Cost to Chewy**, into `contribution/unit` and therefore **BE ROAS and Headroom** on **Chewy Break-Even**, into **Vendor Contrib** on **Chewy P&L → Sales**, and into the editable stack on **Pricing Scenarios → Chewy**. The $106,766.86 of invoices on the Rebates tab is reporting only — **nothing reconciles invoice dollars against the modelled rate.**
+- **⚠ And the floor was wrong.** `chewyDeriveCategory` emits **eleven** categories. `CHEWY_STANDING_CATS` listed six, `CHEWY_PROMO_CATS` three. **`satisfaction_guarantee` was in neither**, so a 2% charge that comes off every Chewy invoice contributed 0% to the floor and appeared in no total anywhere. `other` was orphaned the same way.
+- **The proof is arithmetic, not opinion.** His invoice REB00224894 carries MDF 16% + Damages 2% + Freight 1.5% + Satisfaction 2%, with Auto Ship 5% on REB00206944, and the page displayed **24.50%**. `16 + 2 + 1.5 + 5 = 24.50` exactly. Satisfaction's two points were the gap.
+- **Floor goes 24.50% → 26.50%.** Every Chewy GM $/u, GM %, Target $, Vendor Contrib and break-even ROAS has been reading better than reality, and all of them move. Same class as the v10.44 Chewy-COGS fix: a correction, not a regression.
+- **⚠ Also surfaced while in there: `trade_allowance` contributes 0%.** The FTAS lines carry their rate inside the rebate NAME (*"Treats 35% FTAS"*) and parse with `rebate_pct_rate = null`, so they are rate-less to the model. Deliberately NOT patched — those read as per-segment promotional rates (35 / 25 / 15%), and summing them into a standing floor would be worse than leaving them out. **If there is a flat contractual FTAS rate, it needs to be entered on Pricing Scenarios → Chewy; the invoices do not carry it.** Same for the onsite-ad lines, which are correctly 0% here because actual Chewy ad spend is counted per SKU from `chewy_ad_spend` on the Break-Even tab — a rate too would double count.
+- **`unclassifiedPct` is new on the stack** and names any rate sitting in NEITHER total (today that is `other`). The Cost tab renders it in orange rather than letting it vanish. **That silence is the entire bug class.**
+- **The durable half: the three lists are now asserted EXHAUSTIVE over the classifier's own return values.** `test_v1051` reads the `return '...'` literals straight out of `chewyDeriveCategory` and fails when one is in no list, when one is in two, or when a list names a category that can never be produced. A twelfth category cannot silently vanish.
+- **Verification:** `node --check` clean · **40 suites green** · behaviour driven against Jason's real invoice shape, including rate-less FTAS contributing nothing, an `other` rate reported but not folded in, latest-per-name REPLACING rather than adding, and two distinct names in one category summing.
+- **One logic bug of mine, caught by the suite before it shipped:** `unclassifiedPct` first filtered on a combined `CHEWY_ALL_CATS` list — which contains `other`, so the metric could only ever return 0. The exhaustiveness guarantee made the set it was testing for empty by construction. Re-pointed to "in neither total", and the now-dead combined list was deleted rather than left beside the rule for the next person to reach for.
 
 ## v10.50 — one concept, one glyph; and the sweep that keeps it that way
 
