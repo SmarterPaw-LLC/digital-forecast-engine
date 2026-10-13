@@ -46,6 +46,7 @@ const CATVIS_PAGES = [
   { key: 'pnl_walmart', label: 'Walmart P&L',        selectId: 'wmpnl-cat',        navKeys: ['pnl_walmart'],        rerender: () => { if (typeof renderWalmartPnl === 'function') renderWalmartPnl(); } },
   { key: 'pnl_chewy',   label: 'Chewy P&L — Sales',  selectId: 'chpnl-sales-cat',  navKeys: ['pnl_chewy_sales'],  rerender: () => { if (typeof renderChewyPnlSales === 'function') renderChewyPnlSales(); } },
   { key: 'pnl_chewy_cost', label: 'Chewy P&L — Cost',  selectId: 'chpnl-cost-cat',   navKeys: ['pnl_chewy_cost'],   rerender: () => { if (typeof renderChewyPnlCost === 'function') renderChewyPnlCost(); } },
+  { key: 'pnl_chewy_be', label: 'Chewy P&L — Break-Even', selectId: 'chpnl-be-cat', navKeys: ['pnl_chewy_breakeven'], rerender: () => { if (typeof renderChewyBreakeven === 'function') renderChewyBreakeven(); } },
   { key: 'cogs',        label: 'COGS',               selectId: 'cogs-cat',         navKeys: ['pnl_cogs'],         rerender: () => { if (typeof renderCogsTbl === 'function') renderCogsTbl(); } },
 ];
 // Deliberately NOT wired:

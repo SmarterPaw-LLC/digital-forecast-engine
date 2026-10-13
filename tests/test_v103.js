@@ -11,6 +11,7 @@ mk('be-search', 'Search SKU / ASIN / title…');
 mk('bom-search-${i}', 'Search by name or ID…');
 mk('bundleSrch', 'Search bundle…');
 mk('catsy-search-input', 'Type to filter — title, SP SKU, master_id, ASIN, Shopify SKU…');
+mk('chpnl-be-search', 'Search product…');
 mk('chpnl-cost-search', 'Search product…');
 mk('chpnl-sales-search', 'Search product…');
 mk('chpnl-search', 'Search invoice # / rebate name…');
@@ -54,6 +55,7 @@ const GLOBAL_SEARCH_MAP = {
   pnl_walmart:     { id: 'wmpnl-search' },
   pnl_chewy_sales: { id: 'chpnl-sales-search' },
   pnl_chewy_cost: { id: 'chpnl-cost-search' },           // v10.11
+  pnl_chewy_breakeven: { id: 'chpnl-be-search' },        // v10.36
   pnl_chewy_rebates: { id: 'chpnl-search' },
   pnl_cogs:        { id: 'cogs-search' },
   // v10.3 — the Amazon P&L's Change Log sub-view has its own filter and was
@@ -258,7 +260,7 @@ console.log('\n== F. Nothing in the markup is left unmapped by accident ==');
 // one per component row).
 const EXCLUDE = new Set(['globalSearch', 'pricing-search', 'catsy-search-input',
                          'merge-src', 'merge-tgt', 'bom-search-${i}']);
-const unmapped = ["be-search", "bom-search-${i}", "bundleSrch", "catsy-search-input", "chpnl-cost-search", "chpnl-sales-search", "chpnl-search", "chwy-search", "cl-search", "cogs-search", "fba-ship-srch", "ip-srch", "ipr-srch", "pnl-search", "pricing-search", "prodSrch", "salesSrch", "sea-search", "spnl-search", "srchInput", "wmpnl-search"].filter(id => !EXCLUDE.has(id) && !mapped.includes(id));
+const unmapped = ["be-search", "bom-search-${i}", "bundleSrch", "catsy-search-input", "chpnl-be-search", "chpnl-cost-search", "chpnl-sales-search", "chpnl-search", "chwy-search", "cl-search", "cogs-search", "fba-ship-srch", "ip-srch", "ipr-srch", "pnl-search", "pricing-search", "prodSrch", "salesSrch", "sea-search", "spnl-search", "srchInput", "wmpnl-search"].filter(id => !EXCLUDE.has(id) && !mapped.includes(id));
 t('no unmapped page-search inputs remain', unmapped.length === 0, unmapped);
 
 console.log('\n' + (fail ? '\u2717 ' + fail + ' FAILED, ' : '\u2713 ') + pass + ' passed');

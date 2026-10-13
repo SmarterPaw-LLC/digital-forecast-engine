@@ -58,7 +58,9 @@ def fn(name):
 
 # The six strips that were unified, and the sub-view each tab maps to.
 STRIPS = {
-    'Chewy P&L':          ['chpnl-tab-sales', 'chpnl-tab-cost', 'chpnl-tab-rebates'],
+    # v10.36 added the Break-Even sub-tab (Chewy ad spend vs contribution
+    # per unit). This count going red is the test doing its job.
+    'Chewy P&L':          ['chpnl-tab-sales', 'chpnl-tab-cost', 'chpnl-tab-breakeven', 'chpnl-tab-rebates'],
     'Data':               ['dst-uploads', 'dst-history', 'dst-query'],
     'Amazon P&L':         ['pnl-amzn-tab-summary', 'pnl-amzn-tab-perf', 'pnl-amzn-tab-diag',
                            'pnl-amzn-tab-changelog', 'pnl-amzn-tab-growth',

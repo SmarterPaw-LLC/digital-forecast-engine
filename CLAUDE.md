@@ -2,9 +2,50 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.35**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.36**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.36 — Chewy Ads ingest + the Chewy Break-Even tab
+- **Jason:** *"i created that report. is there an uploader for it wired? also, i do not see the chewy break even on the chewy p&l"* — no to both. This builds the uploader AND the tab.
+- **⚠ SQL TO RUN:** `supabase_v10_36_chewy_ad_spend.sql` — creates `chewy_ad_spend` (per-SKU, per-day, per-campaign ad spend + direct units/sales + autoship actualised). RLS + authenticated policy + grants + anon revoke per the v6.47 hard rule. Idempotent.
+
+### The math, which is the part worth getting right
+Amazon asks *what ACOS makes this unit stop paying for itself*. Chewy is 1P so there is no ACOS — but there IS per-SKU ad spend, and the same question has a clean answer in Chewy's terms:
+```
+wholesale/each    = catalog Cost normalised off Purchase UOM (CS / case_qty)   [v10.11]
+net to us         = wholesale x (1 - standing allowance %)                     [v10.11]
+contribution/unit = net to us - COGS            <- the per-unit ad budget
+BREAK-EVEN ROAS   = Chewy list price / contribution per unit
+```
+- **⚠ The last line looks wrong until you work it through, and that is why it is a test rather than a comment.** Chewy reports ROAS against **retail** sales (what the customer paid Chewy) while our contribution is on the **wholesale** side. For N ad-driven units break-even is `spend = N × contribution`, so `ROAS at break-even = (N × retail) / (N × contribution) = retail / contribution`. The N cancels — the two sides never have to be reconciled unit-for-unit, which is exactly what makes this computable from data we already hold. There is a test that spends *exactly* `N × contribution` against `N × retail` and asserts realised ROAS lands on break-even to 1e-6.
+- **Judged on BOTH Direct ROAS and a realised ROAS** that folds in `autoship_actualized_sales`. Autoship is a large share of Chewy revenue and **backfills for weeks after the click**, so condemning a SKU on direct alone is wrong for anything subscription-heavy. Asserted: a SKU at 300% direct / 550% realised against a 405% break-even reads **losing on direct and clear on realised**.
+- **⚠ `contribution ≤ 0` gets its OWN verdict and a NULL break-even ROAS**, not a huge number. "You need 4,000% ROAS" reads like a target; this is *no ad spend can ever pay on this SKU*. Asserted, including that an enormous realised ROAS does not rescue it.
+- **Verdict bands:** `🔴 past BE` below break-even · `🟠 tight` under 1.25× · `🟢 clear` above. A test pins the boundaries, including the case worth knowing: **500% against a 405% break-even is a +94-point cushion and still reads TIGHT** — the cushion looks comfortable and the band deliberately says otherwise.
+- **⚠ LTV ROAS is absent on purpose.** Chewy reports it **per campaign only**, never per SKU. A SKU-level LTV would have to be invented, so the page says so and a test asserts no column claims one.
+
+### Ingest
+- **Source: Chewy Ads → Reports → Promoted products, Group by = Day.** The only Chewy report carrying per-SKU spend WITH a date, and the only one spanning all three advertisers in one file. The Performance → Products UI export ties out to the cent but is per-advertiser and has no date, so it cannot drive a trailing window.
+- **The parser names the wrong-report case explicitly.** Keywords, Purchased Products and the Products UI export share most columns, so half-parsing one into nonsense is worse than refusing it: each is detected and refused **by name**, and a missing Date column says *"re-create the report with Group by = Day"* rather than erroring generically. Four refusals asserted.
+- **DELETE+INSERT over the covered date range**, scoped to the advertisers in the file — so a weekly re-upload of an **overlapping** window refreshes rather than duplicating. That is the whole reason the report is scheduled on a trailing window. In-file dedup on `(date, advertiser, chewy_sku, campaign_id)` first, because a duplicate would break the write.
+- **Unique index is plain-column (no `coalesce`)**, so Architecture Rule #5 does not apply here — but the writer still DELETE+INSERTs for the idempotency above. Asserted both ways so the distinction stays legible.
+- **An ad SKU with no product is STORED unlinked and surfaced**, not dropped — the volume still matters and the fix (set `products.chewy_sku`) is named in the status line. Matches the `walmart_sales_weekly` convention.
+- **Uploader is inline on the Break-Even tab, NOT on Data → Uploads** — the same call v10.11 and v10.16 made, and Jason has said so twice (*"i do not need this on the uploads page - it is too cluttered there"*). Drag-and-drop is wired by hand because `initUploadDropTargets()` only walks `.dz` cards on the Uploads page (the v10.16 lesson). `chewy_ad_spend` is deliberately **absent** from `TABLE_TO_UPLOAD_GROUP` so its data-currency chip stays non-clickable rather than dead-ending (v7.97) — consistent with `chewy_catalog` and `chewy_rebates`.
+
+### The tab
+- **Fourth sub-tab on Chewy P&L** — one row in the v10.11 `switchChewyPnlView` TABS registry, which was built for exactly this.
+- **Columns:** Spend · Units · Cost/unit · Direct $ · Direct ROAS · Autoship $ · Realised ROAS · List $ · Contrib/u · BE ROAS · Headroom. **Cost/unit is colour-coded against Contrib/u** — above it, the unit lost money on direct alone. List price is **impression-weighted** across the window so a one-impression promo day cannot drag a SKU's break-even around; falls back to catalog MSRP.
+- **A blank cell names WHICH gap it is** (the v9.94 rule) — `no-case-qty` / `no-cogs` / `no-catalog` / `no-cost` / `unknown-uom` / `no-list-price`, each with its own filter and a message naming the fix. **The gaps panel reports blocked SPEND, not just the row count**, because that is the number that says how much of the decision is unanswerable: on Jason's current data **79 case-priced SKUs carrying ~98% of the ad spend have no `case_qty`**, and a row count alone hides that.
+- **An empty allowance stack is called out loudly** — with no rate-bearing `chewy_rebates` lines, contribution is computed BEFORE allowances and every break-even ROAS on the page reads **too low** (too optimistic). The banner says so in red rather than quietly flattering the numbers.
+- **CSV export** (feedback_always_csv_export) carries every input and output plus a context line stating that `direct_sales` is Chewy RETAIL revenue, the contribution formula with the live allowance rate, and that LTV ROAS is campaign-level only. Routed through the top-bar ↓ CSV button per Chewy sub-tab.
+
+### ⚠ Architecture Rule #8, and the escape trap that actually bit
+- **`chewy_ad_spend.master_id` added to `runMerge` AND the SP-TEMP promotion.** The FK is `on delete set null`, so omitting it would leave a merged duplicate's ad rows alive with `master_id` nulled — **every dollar of that SKU's Chewy ad spend silently vanishing from the survivor's Break-Even tab.** Ninth instance of this class (v4.145, v5.44, v5.45, v5.76, v6.98, v7.00, v10.11). `doRestore` is deliberately untouched — the JSON backup's scope is products / bom / inventory / sales_weekly only, and `chewy_catalog` is absent there too; a test asserts that consistency so the absence is not misread as the v6.98 bug.
+- **The engine was authored through a Python RAW string, so `\U0001f4e3`-style escapes survived verbatim into the JS.** JS has **no `\U` escape** — `"\U0001f4e3"` evaluates to the literal text `U0001f4e3`, so **eight icons would have rendered as garbage**. `node --check` is clean on it, because it is valid JavaScript. Caught by reading the output rather than trusting the patch; now a test sweeps the v10.36 block for surviving `\U` escapes. This is the escape-mangling class again (v9.99, v10.11, v10.20) in a new costume: lowercase `\uXXXX` is fine in JS, uppercase `\U` is not.
+- **Verification:** `node --check` clean · **32 suites green** (new `test_v1036`: SQL shape, Rule #8 coverage, an 11-element ID sweep, the `\U` sweep, **29 behaviour tests on the real sliced `chewyBreakevenEcon`** incl. the retail-vs-wholesale identity and all four verdict boundaries, **25 on the real `parseChewyAdSpend`** incl. all four wrong-file refusals, quote-aware splitting, Chewy's `--` blank marker, in-file dedup and a non-ISO date being skipped rather than guessed) · called-but-undefined + undeclared-identifier sweep clean across all 13 new functions.
+- **test_v1017 went red on the sub-tab count and was updated, not silenced** — that is the guard doing its job (20 → 21 tabs).
+- **One test expectation was wrong and the code was right:** I had asserted 500% ROAS against a 405% break-even reads `clear`. It reads `tight` (1.23× < 1.25×). Fixed the test and kept the case, with a comment, because it is the counter-intuitive one.
+- **Still owed:** one output from Jason's scheduled *Promoted Products Week* report, to confirm the scheduled file's columns match the manual export. The parser resolves columns by normalised name rather than position precisely so a rename degrades to a clear error instead of silent nonsense — but a real sample is still the check.
 
 ## v10.35 — Break-Even: open the product card from a row, and save the view
 - **Jason, items 2 and 3:** *"i should be able to save the view on the break-even like the patter on other pages"* and *"i should be able to open the product card if i click on a card button — like on the summary page"*.
