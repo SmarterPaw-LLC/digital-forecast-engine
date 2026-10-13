@@ -2,9 +2,41 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.49**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.50**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## Design-pattern consistency (HARD RULE)
+
+**Jason, twice in one session:** *"please, please be consistent with design patterns"* → *"please LOG IN YOUR INSTRUCTIONS TO STAY CONSISTENT."* This section is that log. Read it before adding ANY user-facing surface.
+
+**1. Find the existing implementation first. Reuse it, do not copy it.**
+Before building a scorecard, tab strip, popup, chip, badge, column picker, empty state, filter control or banner, grep for one that already exists and call ITS renderer. If the pattern exists in two or more places with different markup, **that divergence IS the bug** — consolidate to one helper in the same change, rather than patching the page in front of you and leaving the other copies. Shipping a second copy is how every one of these got out of hand:
+- v10.49 — FOUR scorecard markups across seven P&L strips; one referenced three CSS classes that do not exist, so it rendered as unstyled text. Now one `pnlCard()`.
+- v10.17 — SIX sub-tab strips in four different looks. Now one `.subtab` class + `subtabApply()`.
+- v10.7 / v10.9 — one popup per page holding Saved views + Columns, labelled **Customize columns**, living in the global search bar between the search box and the ⚙ gear. Not a third pattern.
+- v10.0 — the Excel export coloured the top trend tier grey because a second copy of the classifier's output was never updated.
+
+**2. One concept, one glyph. One glyph, one concept.**
+A label must never carry two different icons on two pages (v10.50: Break-Even was `💰` on Amazon and `🎯` on Chewy), and a glyph must never appear twice inside one strip. Before assigning an icon, grep for it: if it already means something else, pick another. **`tests/test_v1050.py` enforces this across every sub-tab in the app** — a new tab with a borrowed icon fails the build.
+
+**3. Reuse the app's existing vocabulary for a number before coining a word** — see [[feedback_use_existing_vocabulary]] and v10.22 / v10.41. If a genuinely different quantity needs a name, give it its own; never qualify an existing term.
+
+**4. The convention is whatever the page Jason names as the reference does.** When he says "like the Amazon P&L", that page is canonical and must not move; every other surface converges on it.
+
+**5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
+
+**Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.50 — one concept, one glyph; and the sweep that keeps it that way
+
+- **Jason:** *"the icon for break even is different for chewy vs amazon. please LOG IN YOUR INSTRUCTIONS TO STAY CONSISTENT."*
+- **Audit of all 22 sub-tab buttons found exactly one label carrying two glyphs:** Amazon P&L `💰 Break-Even` vs Chewy P&L `🎯 Break-Even`.
+- **The target wins.** Break-even IS a threshold; the money bag is already the P&L nav icon AND the Chewy **Sales** tab; and the Chewy Ads upload card's description already cross-references *"P&L → Chewy → 🎯 Break-Even"*. Changing Chewy would have broken that reference too.
+- **Growth Model moves to 🚀.** The target was Growth Model's icon on the Amazon strip, so taking it for Break-Even would have put the same glyph twice in one row. The rocket is not a fresh invention: this app already uses it for scale / invest / launch (Opportunities' *UNDER-INVESTED WINNER*, the *Scale candidates* filter, the *Launch ads* action). Its empty-state header moved with it so the tab and the panel agree.
+- **⚠ The instruction is logged in the new "Design-pattern consistency (HARD RULE)" section at the top of this file** — above the changelog, where the next change will actually read it — and in `[[feedback_design_pattern_consistency]]`.
+- **⚠ A rule nobody can run is a rule that drifts, so `test_v1050` IS the enforcement.** It walks every sub-tab button in the app (attribute-order agnostic, and it matches the ACTIVE tab's `class="subtab on"`, which a naive `class="subtab"` sweep misses — that is why a first pass found 16 of 22) and fails when a label carries two glyphs, when one strip repeats a glyph, or when a tab ships with no glyph. Strips are grouped by the id minus its last segment, so a new strip groups itself. It also asserts the rule section exists in this file and sits above the changelog.
+- **Verification:** `node --check` clean · **39 suites green**.
 
 ## v10.49 — ONE scorecard renderer for every P&L surface
 
