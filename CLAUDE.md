@@ -2,9 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.48**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.49**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.49 — ONE scorecard renderer for every P&L surface
+
+- **Jason:** *"these scorecard should be formatted like the amazon P&L scorecards. please, please be consistent with design patterns."*
+- **⚠ The Chewy Break-Even cards were not styled at all.** They rendered `class="sc-l"` / `"sc-v"` / `"sc-s"`, and **none of those three classes exists in the stylesheet** — only `.sc-lbl` / `.sc-val` / `.sc-sub` do. So the label was not mono-uppercase, the value was not 22px bold, the sub was not muted: plain body text in a `.sc` box. Mine, shipped in v10.36. `node --check` cannot see a class name that resolves to nothing, and no test asserted the strip's shape.
+- **And fixing that page alone would have left three more variants standing**, which is how it reached four:
+  - **Amazon + Shopify** — `--surface2`, 10px radius, 14/16 padding, mono sub, supports `badge` + `delta`.
+  - **Walmart + Chewy Sales + Chewy Cost** — `--surface`, 8px radius, 12/14 padding, non-mono sub; Walmart additionally hardcoded `color:var(--text)` so **no Walmart card could ever be red or green**, and carried no delta chip at all.
+  - **Chewy Rebates** — four hand-written divs, 12/16 padding.
+  - **Chewy Break-Even** — the dead classes above.
+- **`pnlCard({label, val, sub, color, tip, badge, delta})` + `pnlCardStrip(cards)`**, declared once next to `pnlDeltaChip`. All seven strips route through it. The Amazon P&L card IS the canonical shape, so **nothing on the page Jason named as the reference moves**.
+- **Consequences beyond the look:** Walmart cards can now colour-code; every strip gets the help cursor + attribute-escaped tooltip for free; a card that passes no colour falls back to `--text` instead of rendering `color:undefined`.
+- **The banded `.scorecards` / `.sc-lbl` strip is deliberately untouched** — Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use an edge-to-edge dense band with 1px gaps and 28px values, including Inventory's v4.188 three-row sizing. That is a different layout, not a drifted copy of this one, and Jason named the P&L. **Converting those is a separate call to make.**
+- **Verification:** `node --check` clean · **38 suites green** · new `test_v1049` pins the guarantee that matters (**exactly one place decides what a card looks like, and all seven strips go through it**) rather than the pixel values, plus the card contract — badge inline after the value, delta beneath the sub, colour fallback, tooltip escaping — and drives the real sliced `pnlCard` for every optional field including a tip containing a double quote.
+- **Two of my own assertions were wrong, not the code.** A padding sweep matched two Rebates PANEL wrappers that are not scorecards, and `'.sc-l' in css` is true because **`.sc-l` is a substring of `.sc-lbl`** (same for `.sc-v`/`.sc-val`, `.sc-s`/`.sc-sub`). Both re-pointed to selector-boundary matches, and the suite now also asserts the three REAL classes still exist for the banded strip.
 
 ## v10.48 — Amazon + Chewy fulfilment are FLAT per bundle, never BOM-summed
 
