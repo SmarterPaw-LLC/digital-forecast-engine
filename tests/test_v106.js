@@ -75,32 +75,47 @@ function catVisIdMap() {
   }
   return _catVisIdMap;
 }
+function catVisNorm(v) { return String(v == null ? '' : v).trim(); }
+function catVisSetHas(set, value) {
+  if (!set) return true;
+  if (set.has(value)) return true;
+  for (const v of set) if (catVisNorm(v) === value) return true;
+  return false;
+}
 function catVisPass(pageKey, obj) {
   if (_catVisSuppressed.has(pageKey)) return true;   // dismissed for this session
   const r = catVisResolved(pageKey);
   if (!r.cats && !r.subcats) return true;          // fast path — nothing hidden
   if (!obj) return true;
-  let cat = obj.category || '';
-  let sub = obj.subcategory || '';
+  let cat = catVisNorm(obj.category);
+  let sub = catVisNorm(obj.subcategory);
   if ((!cat || !sub) && obj.category_id != null) {
     const row = catVisIdMap().get(obj.category_id);
-    if (row) { cat = cat || row.category || ''; sub = sub || row.subcategory || ''; }
+    if (row) { cat = cat || catVisNorm(row.category); sub = sub || catVisNorm(row.subcategory); }
   }
   if (!cat && !sub) return true;                   // unclassifiable → visible
-  if (r.cats    && cat && !r.cats.has(cat))    return false;
-  if (r.subcats && sub && !r.subcats.has(sub)) return false;
+  // ⚠ v10.45 — both sides trimmed. A stored set written before v10.45 can hold
+  // an untrimmed name, and `categories` rows can carry stray whitespace; either
+  // one made a product fail a membership test it visibly passed on screen.
+  if (r.cats    && cat && !catVisSetHas(r.cats, cat)) return false;
+  if (r.subcats && sub && !catVisSetHas(r.subcats, sub)) return false;
   return true;
 }
 function catVisAllCats() {
-  if (typeof getCategories === 'function') { try { return getCategories() || []; } catch {} }
+  if (typeof getCategories === 'function') {
+    try {
+      const g = getCategories();
+      if (g) return [...new Set(g.map(catVisNorm).filter(Boolean))].sort();
+    } catch {}
+  }
   if (typeof allCategories !== 'undefined' && Array.isArray(allCategories)) {
-    return [...new Set(allCategories.map(c => c.category).filter(Boolean))].sort();
+    return [...new Set(allCategories.map(c => catVisNorm(c.category)).filter(Boolean))].sort();
   }
   return [];
 }
 function catVisAllSubcats() {
   if (typeof allCategories !== 'undefined' && Array.isArray(allCategories)) {
-    return [...new Set(allCategories.map(c => c.subcategory).filter(Boolean))].sort();
+    return [...new Set(allCategories.map(c => catVisNorm(c.subcategory)).filter(Boolean))].sort();
   }
   return [];
 }

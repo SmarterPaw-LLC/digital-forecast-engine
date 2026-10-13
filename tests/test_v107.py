@@ -28,8 +28,11 @@ def slab(start, end):
 REAL = '\n'.join([
     slab("const CATVIS_GLOBAL = '_global';", 'let catVisConfig = {};'),
     fn('catVisPageDef'), fn('catVisInvalidate'), fn('catVisResolved'),
+    # v10.45 — catVisNorm / catVisSetHas are what the predicate and the
+    # hidden-count now compare through; catVisNameList is what names them.
+    fn('catVisNorm'), fn('catVisSetHas'),
     fn('catVisIdMap'), fn('catVisPass'), fn('catVisAllCats'), fn('catVisAllSubcats'),
-    fn('catVisHiddenCount'), fn('catVisSummaryText'),
+    fn('catVisHiddenCount'), fn('catVisNameList'), fn('catVisSummaryText'),
     slab('const PAGE_SETTINGS_PANELS = [', 'function pageSettingsCurrentNavKey'),
     fn('freezeCurrentKey'), fn('freezeCurrentLabel'),
     fn('pageSettingsPanelsFor'),

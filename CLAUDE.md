@@ -2,9 +2,29 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.43**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.45**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.44 / v10.45 — Chewy fulfillment as a COGS block, and the filter that hid a visibly-checked product
+
+### v10.44 — what Chewy COGS was actually pulling from
+- **Jason:** *"what is chewy pulling from for cogs? the cogs field is empty. we should default chewy fulfilment to $.03"*
+- **The answer, and it was worse than "empty".** `chewyPnlCogs()` walks `chewy_cogs → landed_cost → dtc_cogs → amazon_cogs`. `chewy_cogs` was the **only channel total with no building blocks behind it**, so it was null on every product and the fallback was the *normal* path: **Chewy units were costed at bare landed cost with no fulfillment in them at all.** Every Chewy margin, every Vendor Contrib and every break-even ROAS read better than reality.
+- **⚠ SQL TO RUN:** `supabase_v10_44_fulfillment_chewy.sql` — adds `product_cogs.fulfillment_chewy numeric(12,4) default 0.03`. The default backfills existing rows (PG11+ non-volatile default), which is the intent; the explicit UPDATE makes it idempotent. No RLS/grant work — a new column inherits both.
+- **`chewy_cogs = landed_cost + fulfillment_chewy + production_labor`**, mirroring Amazon. Gated on landed cost like the others (v6.20). Surfaced everywhere the other blocks are: a `Fulfill Chwy` column on the COGS page, an input on the product card, the CSV download + upload, bulk edit, and BOM roll-up for bundles. **`shipping_cost` stays out of the BOM roll-up** — it is flat per bundle (the v6.27 fix).
+- **⚠ THE REAL RISK WAS DRIFT, NOT THE MATH.** The two derive formulas were copy-pasted across **seven** sites. Chewy would have been an eighth copy. They are now **one declaration** (`COGS_DERIVED_INPUTS`) that every site references, and a test asserts no site restates a formula inline.
+- **The suite caught a genuine bug on its first run:** these payloads **enumerate** all ten cost fields to preserve the ones an operation is not changing, so a field missing from a list is written as absent — i.e. **the upsert nulls it**. Bulk edit, inline edit, BOM apply and the preview swap would all have silently wiped `fulfillment_chewy`. **This is Architecture Rule #8 one level down: adding a COLUMN means auditing every site that enumerates columns, not just the ones that read the new value.**
+- **Deliberately NO `next_fulfillment_chewy`.** The v8.46 modeling columns are their own set; writing that key would fail the upsert with *column does not exist*. A scheduled revision therefore moves Chewy COGS only through `landed_cost` / `production_labor`. Noted at the call site, and asserted by matching the **key**, not the word (the comment names it — matching prose instead of a real reference is the v10.26 trap).
+
+### v10.45 — "buds jar is being hidden ... but it wasn't one of the hidden sub-categories"
+- **He was right, and the predicate was wrong.** The sub-category universe was the **distinct RAW `categories.subcategory` values**, so `'Jar'` and `'Jar '` were **two rows** — and **HTML collapses the trailing space, so they rendered identically** in the checkbox list. Uncheck one and a product sitting on the other variant vanishes while the list still shows a checked "Jar". A regression guard reproduces the old predicate and asserts it really did hide that product.
+- **Fixed on both sides:** the universe trims and de-duplicates, and the membership test (`catVisSetHas`) tolerates whitespace on **either** side — a set stored before v10.45 can itself hold an untrimmed name, so trimming only the incoming value would not have been enough.
+- **⚠ The reason Jason could not answer this himself is the other half.** v10.34 built the Active filters panel to answer *"why did this product vanish"* — and for category visibility it said **"3 sub-categories hidden"** and stopped. Which three? You had to open the gear and scan a 33-row checkbox list against the product card. **It names them now** (`hiding sub Apparel, Jar, Tote +2 more`, capped so it stays a chip not a paragraph), in the Active filters row and the gear summary.
+- **Checkbox ids were collision-prone too:** built as the name with every non-alphanumeric replaced by `_`, so `'Stick n Lick'` and `'Stick-n-Lick'` collapsed to the same id and their two `<label for=…>` drove **one** checkbox. Index-based now.
+- **Three suites went red and were re-pointed, not silenced** — two harnesses needed the new helpers lifted from source (`fn()` does not capture `const`), and `test_v1034`'s expectation moves because naming the values is the entire point of the change.
+- **Verification:** `node --check` clean · **34 suites green** · new `test_v1045` covers the migration shape, the one-declaration rule, every payload preserving the new column, the trimmed universe, both whitespace directions, records-shaped rows, the naming + capping, the collision-proof ids, and the regression guard.
+- **One self-inflicted mess worth recording:** the first payload patch used a 4-space anchor that is a **substring of the 6-space one**, so the second replacement matched inside lines the first had just inserted — duplicate keys and broken indentation across four blocks. Repaired with a line-based pass rather than left half-fixed. **When two anchors differ only by leading whitespace, one of them is a substring of the other.**
 
 ## v10.41 / v10.42 / v10.43 — Break-Even column parity, COGS on the product card, a real column picker
 

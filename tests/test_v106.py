@@ -40,6 +40,8 @@ REAL = (slab("const CATVIS_GLOBAL = '_global';", 'let catVisConfig = {};')
     fn('catVisInvalidate'),
     fn('catVisResolved'),
     fn('catVisIdMap'),
+    # v10.45 — catVisPass now routes membership through these two.
+    fn('catVisNorm'), fn('catVisSetHas'),
     fn('catVisPass'),
     fn('catVisAllCats'),
     fn('catVisAllSubcats'),

@@ -233,12 +233,28 @@ ok('pfCogsPayload(' in fn('saveProduct'), 'saveProduct calls the payload builder
 # ⚠ v6.20 landed_cost gate: without landed cost a "total" is only fees.
 rec = fn('pfCogsRecalc')
 ok('b.landed_cost != null' in rec, 'the v6.20 landed_cost gate is enforced')
-ok("'fulfillment_amazon', 'production_labor'" in rec, 'Amazon = landed + fulfill(Amz) + labor')
-ok("'overhead_dtc', 'fulfillment_dtc', 'shipping_cost', 'production_labor'" in rec,
+# ⚠ v10.44 — the formulas are ONE declaration now. They were copy-pasted
+# across seven sites and Chewy would have been an eighth copy, which is how a
+# set of duplicated formulas falls out of step. Assert the declaration, and
+# that every site references it rather than restating it.
+decl = js[js.index('const COGS_DERIVED_INPUTS'):]
+decl = decl[:decl.index('};') + 2]
+ok("'landed_cost', 'fulfillment_amazon', 'production_labor'" in decl,
+   'Amazon = landed + fulfill(Amz) + labor')
+ok("'landed_cost', 'overhead_dtc', 'fulfillment_dtc', 'shipping_cost', 'production_labor'" in decl,
    'DTC = landed + overhead + fulfill(DTC) + shipping + labor')
-# chewy_cogs / amazon_cogs_eu have their own cost structures — never derived.
-ok('pf-cogs-chewy' not in rec and 'pf-cogs-eu' not in rec,
-   'Chewy and Amazon EU are never auto-derived (own cost structures)')
+ok("'landed_cost', 'fulfillment_chewy', 'production_labor'" in decl,
+   'Chewy = landed + fulfill(Chwy) + labor   (v10.44)')
+ok('amazon_cogs_eu' not in decl,
+   'Amazon EU is NOT derived (different freight + import duty, no blocks)')
+ok(decl.count('landed_cost') == 3, '  landed cost gates all three')
+# No site may restate a formula; they all spread the shared lists.
+inline_amz = js.count("sumOrNull('landed_cost', 'fulfillment_amazon', 'production_labor')")
+inline_dtc = js.count("sumOrNull('landed_cost', 'overhead_dtc', 'fulfillment_dtc', 'shipping_cost', 'production_labor')")
+ok(inline_amz == 0 and inline_dtc == 0,
+   'no site restates a formula inline (amz=%d dtc=%d)' % (inline_amz, inline_dtc))
+ok(rec.count('COGS_DERIVED_INPUTS') == 3, 'the product card derives all three channels')
+ok('pf-cogs-eu' not in rec, '  and never Amazon EU')
 ok("dataset.manual" in rec, 'a manual override stops the live derive')
 ok('pfCogsClearManual' in js, '  and can be cleared')
 ok('Math.abs(Number(c[field]) - derived) > 0.005' in load,
@@ -272,6 +288,7 @@ const mk = (id, v) => {
 };
 const document = { getElementById: id => EL[id] || null };
 
+//<<DERIVED>>
 //<<MAPS>>
 //<<NUM>>
 //<<MARK>>
@@ -282,7 +299,7 @@ const document = { getElementById: id => EL[id] || null };
 //<<PAYLOAD>>
 
 const reset = (o) => {
-  for (const id of ['pf-cb-landed','pf-cb-fulfill-amz','pf-cb-fulfill-dtc',
+  for (const id of ['pf-cb-landed','pf-cb-fulfill-amz','pf-cb-fulfill-chewy','pf-cb-fulfill-dtc',
                     'pf-cb-overhead-dtc','pf-cb-shipping','pf-cb-labor',
                     'pf-cogs','pf-cogs-dtc','pf-cogs-chewy','pf-cogs-eu']) mk(id, '');
   mk('pf-cogs-derived-note', '');
@@ -321,11 +338,22 @@ t('  while the un-overridden total still moves', EL['pf-cogs-dtc'].value, '2');
 pfCogsClearManual('pf-cogs');
 t('clearing the override re-derives', EL['pf-cogs'].value, '2.03');
 
-// Chewy / Amazon EU are never touched by the derive.
-reset({ 'pf-cb-landed': 1.40, 'pf-cogs-chewy': 3.33, 'pf-cogs-eu': 4.44 });
+// ⚠ v10.44 — Chewy DERIVES now. Before this it was the only channel total
+// with no blocks behind it, so it stayed null and chewyPnlCogs() fell back to
+// bare landed_cost: Chewy units carried NO fulfillment and every Chewy margin
+// read better than reality.
+reset({ 'pf-cb-landed': 1.40, 'pf-cb-fulfill-chewy': 0.03, 'pf-cb-labor': 0.10 });
 pfCogsRecalc();
-t('Chewy COGS is untouched', EL['pf-cogs-chewy'].value, '3.33');
+t('Chewy COGS derives from landed + fulfill(Chwy) + labor', EL['pf-cogs-chewy'].value, '1.53');
+t('  and does not pick up the DTC-only blocks', EL['pf-cogs-dtc'].value, '1.5');
+// Amazon EU has its own freight and duty and no blocks — still never derived.
+reset({ 'pf-cb-landed': 1.40, 'pf-cogs-eu': 4.44 });
+pfCogsRecalc();
 t('Amazon EU COGS is untouched', EL['pf-cogs-eu'].value, '4.44');
+// The default Jason asked for: $0.03.
+reset({ 'pf-cb-landed': 1.40, 'pf-cb-fulfill-chewy': 0.03 });
+pfCogsRecalc();
+t('the $0.03 default lands in Chewy COGS', EL['pf-cogs-chewy'].value, '1.43');
 
 // The payload reads every field from the form, so a cleared input CLEARS.
 reset({ 'pf-cb-landed': 1.40, 'pf-cb-fulfill-amz': 0.03, 'pf-cogs': 1.43, 'pf-cogs-chewy': 3.33 });
@@ -335,7 +363,8 @@ t('  every set field', [p.landed_cost, p.fulfillment_amazon, p.amazon_cogs, p.ch
   [1.40, 0.03, 1.43, 3.33]);
 t('  and nulls the cleared ones', [p.dtc_cogs, p.shipping_cost, p.amazon_cogs_eu],
   [null, null, null]);
-t('  with all ten fields present', Object.keys(p).length, 11);
+t('  with all eleven fields present', Object.keys(p).length, 12);
+t('  including fulfillment_chewy', 'fulfillment_chewy' in p, true);
 
 // Negative / junk input reads as cleared rather than poisoning the sum.
 reset({ 'pf-cb-landed': '-5', 'pf-cb-fulfill-amz': 'abc' });
@@ -356,12 +385,14 @@ t('  so the live derive leaves it alone', EL['pf-cogs'].value, '5');
 console.log('\n  ' + P + ' passed, ' + F + ' failed');
 if (F) process.exit(1);
 """
+derived_decl = js[js.index('const COGS_BUILDING_BLOCKS'):]
+derived_decl = derived_decl[:derived_decl.index('const COGS_ALL_FIELDS')]
 maps = js[js.index('const PF_COGS_BLOCKS'):]
 maps = maps[:maps.index('function pfCogsNum')]
 # ⚠ Tokens, not bare words. A bare `.replace('NOTE', ...)` matched the NOTE
 # inside `pfCogsSyncNote()` in an already-injected body, and `LOAD` ate the
 # tail of `PAYLOAD`. Order-independent now.
-for _tok, _body in [('MAPS', maps), ('NUM', fn('pfCogsNum')), ('MARK', fn('pfCogsMarkManual')),
+for _tok, _body in [('DERIVED', derived_decl), ('MAPS', maps), ('NUM', fn('pfCogsNum')), ('MARK', fn('pfCogsMarkManual')),
                     ('CLEAR', fn('pfCogsClearManual')), ('RECALC', fn('pfCogsRecalc')),
                     ('NOTE', fn('pfCogsSyncNote')), ('PAYLOAD', fn('pfCogsPayload')),
                     ('LOAD', fn('pfCogsLoad'))]:

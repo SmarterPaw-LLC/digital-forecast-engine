@@ -141,6 +141,10 @@ const _catVisSuppressed = new Set();
 let _hidden = { cats: 2, subs: 0, total: 2, source: 'global' };
 function catVisHiddenCount() { return _hidden; }
 function catVisSummaryText() { return '2 hidden'; }
+// v10.45 — the Active filters row names the hidden VALUES now, which is
+// the whole point of the change: "3 sub-categories hidden" never told
+// anyone WHICH three.
+function catVisSummaryNamed() { return 'hiding sub Apparel, Jar'; }
 function catVisInvalidate() {}
 function pageSettingsRefresh() {}
 function pageSettingsSyncIndicator() {}
@@ -181,7 +185,8 @@ const on = activeFiltersFor('products');
 t('every surface narrowing the page is listed',
   on.map(f => f.key), ['topproduct', 'prodFilter', 'catvis', 'prodSrch']);
 t('  including the chip, named by product', on.find(f => f.key === 'topproduct').display, 'Buds Jar');
-t('  the gear-hidden category visibility', on.find(f => f.key === 'catvis').display, '2 hidden · global');
+// v10.45 — NAMES the hidden values, not just a count.
+t('  the gear-hidden category visibility NAMES what is hidden', on.find(f => f.key === 'catvis').display, 'hiding sub Apparel, Jar · global');
 t('  and the search text', on.find(f => f.key === 'prodSrch').display, '"buds jar"');
 t('  summary counts them', activeFiltersSummary('products'), '4 filters on');
 
