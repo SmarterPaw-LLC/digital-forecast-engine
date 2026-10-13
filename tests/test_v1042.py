@@ -70,8 +70,11 @@ print('\nA. static — overlapping measures, both directions')
 
 # Amazon had these; Chewy now does too.
 PAIRS = [
-    ('ourRev',        'Our Rev',       'Net Sales window'),
-    ('vendorContrib', 'Vendor Contrib', 'Contribution Profit'),
+    # v10.53 scoped both labels: the bare forms live on the Chewy Sales tab over
+    # ALL sell-through units, while these two are ad-driven units only. Same
+    # measures as the Amazon columns beside them; the prefix names the scope.
+    ('ourRev',        'Ad Our Rev',        'Net Sales window'),
+    ('vendorContrib', 'Ad Vendor Contrib', 'Contribution Profit'),
     ('gmPct',         'GM %',          'Contribution %'),
     ('beAcos',        'BE ACOS %',     'Break Even ACOS pct'),
     ('actualAcos',    'Actual ACOS %', 'Actual ACOS pct'),

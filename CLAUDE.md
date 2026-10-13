@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.52**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.53**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -22,11 +22,36 @@ A label must never carry two different icons on two pages (v10.50: Break-Even wa
 
 **3. Reuse the app's existing vocabulary for a number before coining a word** — see [[feedback_use_existing_vocabulary]] and v10.22 / v10.41. If a genuinely different quantity needs a name, give it its own; never qualify an existing term.
 
+**3a. ONE LABEL, ONE MEASURE — and sweep the whole page group, not the page you are on.**
+Jason: *"why is it not part of your method to make sure you aren't adding confusing or contradictory measures? in what world would i want to add so much confusion?"* Rules 1 and 2 covered renderers and icons and said nothing about the NUMBERS, so v10.53 found four labels on the Chewy tabs that meant two different things — `Units` was sell-through on two tabs and AD-DRIVEN ONLY on the third.
+- **Before adding or renaming any column / scorecard, grep that label across every sibling tab.** If it already exists and means something else, one of the two has to be scoped (`Ad Units`, `Ad $/unit`) — never leave the same word carrying two meanings one click apart.
+- **A different SCOPE is a different measure.** Same arithmetic over a narrower population (ad-driven units, a single region, one channel) needs the scope in the name. v10.53's convention: `Ad …` = ad-driven activity only · `GM …` = WHOLESALE basis · `Contrib …` = RETAIL basis.
+- **Abbreviations are the ONE allowed duplicate**, and only when declared. A narrow table column may abbreviate what its scorecard spells out (`COGS` / `Total COGS`) — the v10.22 convention, a space convention and NOT a meaning conflict. Declare the pair so the two can never drift apart in definition.
+- **`CHEWY_MEASURE_VOCAB` + `CHEWY_MEASURE_ALIASES` are the enforcement**, and `tests/test_v1053.py` fails on an undeclared label, on two labels claiming the same meaning without being declared an abbreviation pair, on an abbreviation whose definition drifts from its long form, and on a declared measure that no longer renders anywhere. **Extend the same pattern to any other page group that grows a third tab.**
+
 **4. The convention is whatever the page Jason names as the reference does.** When he says "like the Amazon P&L", that page is canonical and must not move; every other surface converges on it.
 
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.53 — one label, one measure across the Chewy tabs
+
+- **Jason:** *"i swear to god. why is it not part of your method to make sure you aren't adding confusing or contradictory measures? in what world would i want to add so much confusion?"* He is right, and asking "Go?" at the end of the audit was the wrong move — the audit WAS the work.
+- **Why it happened:** the hard rule logged in v10.50 covered RENDERERS and ICONS. It said nothing about the NUMBERS. The Sales (v8.38), Cost to Chewy (v10.11) and Break-Even (v10.36) tabs were each built without auditing the other two.
+- **⚠ Four labels meant two different things, one click apart.** Worst of them `Units` — **sell-through** on Sales and Cost to Chewy, **ad-driven only** on Break-Even. Renamed on Break-Even, where the narrower scope lives:
+  - `Units` → **`Ad Units`** · `Cost/unit` → **`Ad $/unit`** · `Our Rev` → **`Ad Our Rev`** · `Vendor Contrib` → **`Ad Vendor Contrib`**
+  - The bare forms stay on the Sales tab, over all sell-through units. **Column KEYS are untouched**, so saved views and CSV headers survive.
+  - `Cost/unit` was doubly bad: `Cost` on the Cost to Chewy tab is money **IN** (what Chewy pays us); `Cost/unit` on Break-Even was money **OUT** (ad spend ÷ units).
+- **⚠ I over-reported my own audit, and the correction matters.** I flagged the Sales tab's `COGS` / `Contrib %` / `Our Rev` columns as colliding with its `Total COGS` / `Contribution %` / `Our Revenue` scorecards. **They do not.** That is the app-wide abbreviation convention documented in v10.22 — *"abbreviation in narrow table columns vs scorecards … a space convention, not a meaning conflict."* The real list was only the four ad-scope collisions above.
+- **The durable half: `CHEWY_MEASURE_VOCAB`** — all 41 column + scorecard labels on those tabs declared in one place with what each means, and the standing conventions stated out loud: `GM …` = WHOLESALE basis · `Contrib …` = RETAIL basis · `Ad …` = scoped to ad-driven activity only.
+- **`CHEWY_MEASURE_ALIASES`** declares the six deliberate abbreviation pairs (`Total COGS`/`COGS`, `Contribution %`/`Contrib %`, `Our Revenue`/`Our Rev`, `Ad Spend`/`Spend`, `Direct Sales (retail)`/`Direct $`, `Autoship ↺ (recurring)`/`Autoship ↺ $`) so the convention is encoded rather than remembered.
+- **⚠ A rule nobody can run is a rule that drifts, so `test_v1053` IS the enforcement.** It fails when a label is undeclared, when a declared measure no longer renders anywhere, when two labels claim the same meaning WITHOUT being a declared abbreviation pair, and when an abbreviation's definition drifts away from its long form. All three teeth-checks are asserted against deliberately-broken copies of the vocabulary first, so the suite cannot pass vacuously.
+- **⚠ My first extractor silently swept only half the haystack.** The key pattern was `'([a-z_0-9]+)'`, and Break-Even's keys are camelCase (`ourRev`, `beRoas`, `gmPct`, `actualAcos`) — so **9 of its 18 columns were invisible** and the sweep passed against a short list. Same class as the v10.20 masking bug. Fixed to `[A-Za-z_0-9]`, and the suite now asserts a minimum label count before trusting the result. The two scorecard shapes also differ: Break-Even uses `card('…')`, Sales and Cost to Chewy use the `{ l: '…' }` shorthand — both are extracted.
+- **Labels are normalised before comparison** because index.html stores some glyphs as the literal six characters `\uXXXX` inside JS string literals (`Autoship ↺ $`) and others as the real character (`Δ to target`). A raw source read sees both forms; the JS parser only ever sees one.
+- **The rule is logged in the "Design-pattern consistency (HARD RULE)" section as 3a** — above the changelog, where the next change will read it — and in `[[feedback_design_pattern_consistency]]`.
+- **Verification:** `node --check` clean · **42 suites green** · `test_v1042` went red on the two renamed labels and was **re-pointed, not silenced** — it asserts the overlapping-measure parity its own label claims, now against the ad-scoped names.
+- **Deliberately NOT renamed:** `GM $/u` appears on both Cost to Chewy and Break-Even and is the SAME number (per-unit wholesale GM) — v10.41 unified that name on purpose, and a per-unit figure has no scope to qualify. `Chewy SKU` / `Product` / `Units` likewise read the same on every tab they appear on.
 
 ## v10.52 — Realised ROAS was double-counting the first Autoship order
 
