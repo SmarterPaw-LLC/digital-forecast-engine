@@ -533,6 +533,73 @@ for _name in ['chewyAdSpendData', 'chewyCatalogData', 'chewyCatalogByMaster',
        '  declared: %s' % _name)
 
 
+
+# ═════════ I. v10.37 — the explainer is a tooltip, the empty state names the blocker ═════════
+print('\nI. static — v10.37 no UI text bloat')
+# ⚠ Jason flagged the prose banner for the FIFTH time (v9.67, v9.96, v10.24,
+# v10.28, v10.37): "i've asked so many times to stop the text bloat ... stop
+# editorializing. i JUST need descriptions". Asserted structurally so it cannot
+# creep back: the panel renders ONE short line, everything else is a tooltip,
+# and the tooltip is descriptions only.
+_expl = be_block[be_block.index("getElementById('chpnl-be-explain')"):]
+_expl = _expl[:_expl.index('// ── aggregate')]
+ok("title=" in _expl, 'the explainer renders a tooltip')
+ok('cursor:help' in _expl, '  marked as hoverable')
+# The visible body is the text OUTSIDE the title attribute. Long prose there is
+# the thing being banned.
+_visible = re.sub(r'title="[^"]*"', '', _expl)
+_strings = re.findall(r'`([^`]{120,})`', _visible)
+_prose = [x for x in _strings if x.count(' ') > 18 and '<' not in x]
+ok(not _prose, 'the visible body ships no long prose string (%s)' % (_prose[:1] or 'none'))
+# A tooltip states what a number IS. It does not argue.
+_tip = be_block[be_block.index('const TIP = ['):]
+_tip = _tip[:_tip.index("].join(")]
+for banned in ['which is what', 'deliberately', 'on purpose', 'worth knowing',
+               'the N cancels', 'so the two sides', 'condemns']:
+    ok(banned.lower() not in _tip.lower(), '  tooltip does not editorialize: "%s"' % banned)
+ok('Break-even ROAS =' in _tip and 'Contribution per unit =' in _tip,
+   '  tooltip states the formulas')
+ok('per campaign only' in _tip, '  and that LTV ROAS is campaign-level')
+# ⚠ The ONE thing that stays visible: a silently wrong number is worse than a
+# short chip. With no rate-bearing rebate lines every break-even ROAS is too low.
+ok('BE reads too low' in _expl, 'a missing allowance stack still warns VISIBLY')
+ok(len('BE reads too low') < 40, '  as a chip, not a sentence')
+
+print('\nI2. static — the empty state names the actual blocker')
+# ⚠ Jason: "no data is populating here, what needs to be uploaded?" A missing
+# table and a not-yet-uploaded report rendered the SAME sentence, because the
+# loader swallowed the error with a console.warn. Three distinct states now.
+ok('let chewyAdSpendTableMissing' in js, 'the loader records the missing-table case')
+_load = fn('loadChewyAdSpend')
+ok('chewyAdSpendTableMissing =' in _load, '  set from the caught error')
+ok('schema cache' in _load, '  recognising PostgREST wording as well as Postgres')
+ok('chewyAdSpendTableMissing = false' in _load, '  and cleared on a good load')
+_empty = be_block[be_block.index('const empty ='):]
+_empty = _empty[:_empty.index(';')]
+ok('chewyAdSpendTableMissing' in _empty, 'empty state branches on the missing table')
+ok('supabase_v10_36_chewy_ad_spend.sql' in _empty, '  naming the migration to run')
+ok('Promoted products' in _empty, '  or the report to upload')
+ok('Widen Window' in _empty, '  or that the window is simply too narrow')
+
+
+# ═════════ J. v10.38 — Advertiser was a duplicate of Brand ═════════
+print('\nJ. static — no duplicate dimension')
+# Jason: "what is this 'advertiser' drop down? unnecessary". Chewy's advertiser
+# account IS the brand, and a Brand dropdown sat next to it.
+ok('chpnl-be-adv' not in src, 'the Advertiser dropdown is gone from the markup')
+ok('chpnl-be-adv' not in js, '  and nothing reads it')
+ok("label: 'Advertiser'" not in be_block, '  and the Advertiser column is gone')
+# ⚠ The one thing Advertiser carried that Brand did not: an unmatched Chewy SKU
+# has no product, so no products.brand — but the ad file still names the
+# account. Dropping the control without this would have lost that.
+ok('advToBrand' in be_block, 'brand falls back to the advertiser name')
+for b in ['Meowijuana', 'Doggijuana', 'Kitty Ka-Zoom']:
+    ok(b in be_block[be_block.index('advToBrand'):be_block.index('advToBrand') + 700],
+       '  resolves %s' % b)
+ok('rowBrand !== brand' in be_block, '  and the Brand filter uses the resolved value')
+# Still a column in the CSV: it is raw source data, just not a UI dimension.
+ok('advertiser' in exp, 'advertiser is still exported to CSV')
+
 print('\n' + ('=' * 60))
 if fails:
     print('FAILED (%d): %s' % (len(fails), ', '.join(fails)))

@@ -2,9 +2,29 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.36**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.38**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.37 / v10.38 — Break-Even: tooltip not prose, name the blocker, drop a duplicate control
+- **Jason, on the explainer banner:** *"this should be a tooltip. i've asked so many times to stop the text bloat and you keep doing it over and over again."* Then: *"stop editorializing. i JUST need descriptions."*
+- **FIFTH flagging of this exact rule** (v9.67, v9.96, v10.24, v10.28, now v10.37), each time in a session where I had already read it. The v10.36 panel printed a 3-line prose block above the table. Collapsed to **one 66-character line** — `BE ROAS = list ÷ contribution/unit ⓘ · allowances 24.50% (invoices)` — with the formulas on the tooltip.
+- **⚠ The tooltip is DESCRIPTIONS ONLY.** Six lines: the two formulas, what Realised ROAS is, that `direct_sales` is Chewy RETAIL revenue, where the rates come from, and that LTV ROAS is campaign-level. **No derivation, no justification, no conclusion drawn for the reader.** The retail-vs-wholesale derivation (*"the N cancels"*) was in the banner; it lives here now, which is where reasoning goes. A test greps the tooltip for seven editorialising phrases and fails on any of them.
+- **One thing stays VISIBLE, as a chip not a sentence:** `⚠ no allowance rates — BE reads too low`. With no rate-bearing `chewy_rebates` lines, contribution is computed before allowances and every break-even ROAS on the page is wrong in the optimistic direction. A silently wrong number is worse than a short warning.
+- **Memory updated** ([[feedback_no_ui_text_bloat]]) — rewritten blunt, with the three rules restated, an explicit list of what a tooltip may and may not contain, and the flag count.
+
+### "no data is populating here, what needs to be uploaded?"
+- **The loader swallowed a missing-table error with a `console.warn`**, so *migration not run* and *report not uploaded yet* rendered the **identical** empty state — which guessed "upload the report". Unhelpful in exactly the case where the answer was something else.
+- **`chewyAdSpendTableMissing`** now records which it was (matching PostgREST's *schema cache* wording as well as Postgres's *does not exist* — the v5.55 lesson), cleared on any good load. Three distinct empty states:
+  - table missing → *"Run `supabase_v10_36_chewy_ad_spend.sql` in Supabase, then upload the report."*
+  - table present, zero rows → *"No ad spend uploaded. Drop the Promoted products report…"*
+  - rows present, none in window → *"N ad rows loaded, none in this window. Widen Window or clear the filters."*
+
+### v10.38 — the Advertiser control was a duplicate of Brand
+- **Jason:** *"what is this 'advertiser' drop down? unnecessary."* Correct. Chewy's advertiser account **is** the brand, and a Brand dropdown sat immediately next to it. Two controls, one dimension. Dropdown and column both removed.
+- **⚠ The one thing Advertiser carried that Brand did not:** a Chewy SKU with no product in our system has no `products.brand`, but the ad file still names the account. So instead of keeping a second control, **the row's brand falls back to the advertiser name** — one column, correct for matched and unmatched rows alike, and the Brand filter matches on the resolved value so unmatched rows stay filterable.
+- `advertiser` stays in the DB (it is part of the unique key and the delete scoping) and stays in the CSV as raw source data. It simply stops being a UI dimension.
+- **Verification:** `node --check` clean · **32 suites green** · called-but-undefined + undeclared-identifier sweep clean · new assertions pin the tooltip-not-prose shape, the seven banned editorialising phrases, all three empty states, and that neither the Advertiser dropdown nor column can come back.
 
 ## v10.36 — Chewy Ads ingest + the Chewy Break-Even tab
 - **Jason:** *"i created that report. is there an uploader for it wired? also, i do not see the chewy break even on the chewy p&l"* — no to both. This builds the uploader AND the tab.
