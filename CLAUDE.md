@@ -2,9 +2,19 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.46**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.47**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.47 — Net Units is a scorecard on the Amazon P&L, not a footnote
+
+- **Jason:** *"i can't see total number of units sold here."*
+- **The number was on screen the whole time**, as 10px grey text in the Gross Sales card's sub-line (`89,532 net units`). Every other quantity on that strip gets its own card with a vs-prev delta. **Volume, the denominator under every per-unit figure in the app (ASP, COGS/u, contribution/u, break-even ROAS), was the only one buried in another card's footnote** — and therefore the only one with no period-over-period comparison at all.
+- **New `Net Units` card, first in reading order** (volume before revenue). Value is `view.units`, the same field the product table's Units column sums, so the card and the table can't disagree. Delta is `pnlDeltaChip(view.units, prevView.units, true, …)` against the prior equal-length window over the **same comparison set** (v4.132), so it is apples to apples whether the view is filtered or a selection is active. `goodWhenUp` is true, so growth reads green.
+- **The sub-line is `$11.74 ASP`, not a new word for an old number** ([[feedback_use_existing_vocabulary]]). `net_sales ÷ net_units` is already named ASP by the Growth Model, which has substituted it for MSRP since v9.20. The tooltip names the formula and that provenance.
+- **Gross Sales stops carrying the unit count** and now reads `before returns`, mirroring Net Sales' `after returns` — so the pair explains what distinguishes them and the unit total renders from exactly one site. A test asserts that count is 1.
+- **Grid goes 4 → 5 columns.** Nine cards land 5 + 4 instead of stranding one on a row of its own. The drill banner and the missing-COGS banner already spanned `grid-column:1/-1`, so they are unaffected; a test pins that too.
+- **Verification:** `node --check` clean · **36 suites green** · new `test_v1047` is static only and says why: the strip is an array literal inside a 3,000-line DOM- and Supabase-bound `renderPnl`, so slicing it would mean stubbing most of the P&L. What it pins instead is cheap and load-bearing — the field read, the delta's direction and comparison set, the one-render-site rule, the ASP naming, and the grid.
 
 ## v10.46 — "'jar' is not one of the categories hidden" — closing the CLASS, not another instance
 
