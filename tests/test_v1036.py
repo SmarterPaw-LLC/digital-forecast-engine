@@ -617,6 +617,24 @@ ok('rowBrand !== brand' in be_block, '  and the Brand filter uses the resolved v
 # Still a column in the CSV: it is raw source data, just not a UI dimension.
 ok('advertiser' in exp, 'advertiser is still exported to CSV')
 
+
+# ═════════ K. v10.40 — the ROAS columns say RETAIL ═════════
+print('\nK. static — retail vs wholesale is named on the columns')
+# Jason: "the ROAS figures are based on Chewy POS, right? our price to them is
+# different (recorded in the cost to chewy section). is this being factored in
+# to ROAS?" It is — in the THRESHOLD, not the numerator. The Direct $ tooltip
+# said RETAIL; the two ROAS tooltips did not, which is where the ambiguity was.
+_cols = be_block[be_block.index('const COLS = ['):]
+_cols = _cols[:_cols.index('\n  ];')]
+for _k in ['directRoas', 'realisedRoas', 'listPrice']:
+    _row = [l for l in _cols.split('\n') if "key: '%s'" % _k in l]
+    ok(bool(_row) and 'RETAIL' in _row[0], '%s names its dollars as RETAIL' % _k)
+_be = [l for l in _cols.split('\n') if "key: 'beRoas'" in l]
+ok(bool(_be) and 'wholesale' in _be[0].lower(), 'BE ROAS names the wholesale side')
+ok(bool(_be) and 'comparable' in _be[0].lower(), '  and why the two are comparable')
+_ct = [l for l in _cols.split('\n') if "key: 'contribution'" in l]
+ok(bool(_ct) and 'Cost to Chewy' in _ct[0], 'Contrib/u points at where wholesale comes from')
+
 print('\n' + ('=' * 60))
 if fails:
     print('FAILED (%d): %s' % (len(fails), ', '.join(fails)))

@@ -2,9 +2,21 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.39**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.40**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.40 — the ROAS columns say RETAIL out loud
+- **Jason:** *"the ROAS figures are based on Chewy POS, right? our price to them is different (recorded in the cost to chewy section). is this being factored in to ROAS?"*
+- **Right on both counts, and the answer is yes-but-elsewhere.** Direct ROAS and Realised ROAS are pure Chewy **retail** (POS) numbers — Chewy's own attribution, what Chewy's customers paid Chewy. Our wholesale price is **not** in that numerator and should not be. It sits in the **threshold** those ROAS figures are measured against: wholesale per each → less allowances → less COGS → **contribution per unit** → `Break-even ROAS = list price ÷ contribution`. Expressing break-even in retail terms is what makes a retail-side ROAS and a wholesale-side margin directly comparable (see the v10.36 derivation above).
+- **The ambiguity was in the tooltips, not the math.** The Direct $ tooltip said RETAIL; the two ROAS tooltips did not. Fixed:
+  - **Direct ROAS** — *"Chewy RETAIL sales ÷ spend, as Chewy reports it. Our wholesale price is not in this number; it is in the BE ROAS column this is compared against."*
+  - **Realised ROAS** — *"…Both are Chewy RETAIL dollars. Compared against the BE ROAS column, which is built from our wholesale price."*
+  - **BE ROAS** — names that it is expressed in retail terms but built from wholesale.
+  - **Contrib/u** — points at the **Cost to Chewy** tab as the source of wholesale per each.
+  - **List $** — *"Not our price to Chewy."*
+- **Worth knowing, not modelled:** we are 1P, so ad-driven sell-through reaches our revenue **with a lag** — Chewy sells the unit, then replenishes via a PO. The break-even math is per-unit so the amounts are right; only the timing differs. Nothing on the page claims otherwise.
+- **Verification:** `node --check` clean · **32 suites green** · new assertions pin RETAIL on all three retail-dollar columns and the wholesale provenance on the two that carry it, so a later tooltip trim cannot drop the distinction.
 
 ## v10.39 — Chewy Ads uploader moves to Data → Uploads
 - **Jason:** *"this is a weekly list that i will upload, so it should be on the uploads table."*
