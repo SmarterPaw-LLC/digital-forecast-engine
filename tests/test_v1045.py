@@ -109,16 +109,22 @@ ok(not re.search(r'next_fulfillment_chewy\s*:', js),
    'nothing writes a next_fulfillment_chewy key (no such column)')
 ok('COGS_DERIVED_INPUTS.chewy_cogs' in fn('applyCogsPreview'),
    'the COGS preview re-derives Chewy too')
-ok("'fulfillment_chewy'" in js[js.index('const BLOCK_BOM_FIELDS') if 'const BLOCK_BOM_FIELDS' in js else 0:][:400]
-   or 'BLOCK_BOM_FIELDS = new Set([' in js and 'fulfillment_chewy' in js[js.index('BLOCK_BOM_FIELDS = new Set(['):][:300],
-   'bundles roll it up from the BOM')
+# ⚠ v10.48 REVERSES this one. v10.45 had fulfillment_chewy rolling up per-unit
+# alongside fulfillment_amazon. Both are FLAT per bundle (one shipment, one
+# charge), which is what Jason flagged: "fulfillment amazon and fulfillment
+# chewy are flat rate - they should not update from BOM". The assertion moves
+# to the new guarantee rather than being deleted.
+flat = js[js.index('const COGS_FLAT_PER_BUNDLE'):]
+flat = flat[:flat.index(')')]
+ok('fulfillment_chewy' in flat, 'fulfillment_chewy is FLAT per bundle, never BOM-summed')
+ok('fulfillment_amazon' in flat, '  and so is fulfillment_amazon')
+ok('shipping_cost' in flat, '  alongside shipping_cost (the v6.27 fix it now joins)')
 ok('id="pf-cb-fulfill-chewy"' in src, 'the product card has the input')
 ok("'pf-cb-fulfill-chewy':'fulfillment_chewy'" in js.replace(' ', ''), '  mapped to the column')
 ok('Fulfill Chwy' in src, 'the COGS table has the column')
-# ⚠ shipping_cost is deliberately NOT BOM-summable (flat per bundle, v6.27).
-bom = js[js.index('BLOCK_BOM_FIELDS = new Set(['):]
-bom = bom[:bom.index(']')]
-ok('shipping_cost' not in bom, 'shipping_cost stays flat per bundle (the v6.27 fix)')
+# The summable set is now DERIVED from the flat set, so the two cannot drift.
+ok('new Set(COGS_BUILDING_BLOCKS.filter(f => !COGS_FLAT_PER_BUNDLE.has(f)))' in js,
+   'the BOM-summable blocks are derived from it, not restated')
 
 print('\nA2. static — what Chewy COGS was actually pulling from')
 cpc = fn('chewyPnlCogs')

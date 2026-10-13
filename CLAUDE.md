@@ -2,9 +2,24 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.47**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.48**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
+
+## v10.48 — Amazon + Chewy fulfilment are FLAT per bundle, never BOM-summed
+
+- **Jason:** *"fulfillment amazon and fulfillment chewy are flat rate - they should not update from BOM."* Right, and the half he could see was the smaller half.
+- **A bundle ships as ONE unit.** Amazon charges one FBA fulfilment fee for it, not the sum of its components' fees; Chewy's $0.03 is the same. That makes both exactly what `shipping_cost` already was, and **v6.27 fixed that shape for shipping_cost on dtc_cogs and nowhere else.**
+- **⚠ The silent half: the channel roll-up was charging the fee once per component.** `bundleCogsFromBom('amazon_cogs')` sums each component's stored `amazon_cogs`, and every one of those **already bakes in that component's own `fulfillment_amazon`** (`landed + fulfillment_amazon + production_labor`). So a 3-component bundle carried the FBA fee **three times**; a 6-pack carried it six. Same for `chewy_cogs`. Invisible on screen, and it fed the ✓ Apply / ↺ Sync buttons and the **Sync all bundles to BOM** bar, so one click could write the inflated number into the stored value.
+- **One declaration now drives all three channels.** `COGS_FLAT_PER_BUNDLE` (shipping_cost · fulfillment_amazon · fulfillment_chewy) and `COGS_FLAT_IN_CHANNEL` (`amazon_cogs → fulfillment_amazon`, `chewy_cogs → fulfillment_chewy`, `dtc_cogs → shipping_cost`) sit next to `COGS_DERIVED_INPUTS`. The roll-up strips each component's copy and adds the bundle's own exactly once. v6.27's hand-rolled special case is gone, not duplicated.
+- **Three field lists are now DERIVED, not restated** — `BLOCK_BOM_FIELDS` (which cells offer a BOM line), `hasBundleMismatch` (the red ⚠ flag + the "Bundle COGS mismatches" filter) and `SYNC_FIELDS` (the sync-all bar) are all `COGS_BUILDING_BLOCKS.filter(f => !COGS_FLAT_PER_BUNDLE.has(f))`. A test asserts the old literal list is gone, because a derivation sitting next to a stale copy is decoration.
+- **Asking a flat block for a roll-up returns `null`**, so the cell renders single-line with no mismatch chip. That is the thing Jason was looking at.
+- **`fulfillment_dtc` is deliberately NOT in the flat set.** It is 3PL pick/pack, which may or may not be per-unit depending on how the bundle is assembled, and he named Amazon and Chewy. **If DTC fulfilment is also charged once per bundle, it is a one-line addition to `COGS_FLAT_PER_BUNDLE`** — worth asking him.
+- **⚠ Known limit of the strip-and-re-add approach** (inherited from v6.27, now on three fields): it assumes a component's stored channel total really does include that component's flat block. A **manually typed** `amazon_cogs` that already excluded the FBA fee would be under-counted by the strip. The derive path always includes it, so this only bites hand-entered overrides.
+- **Existing stored bundle values are NOT rewritten.** Any bundle whose Amazon or Chewy COGS was synced from the old roll-up still holds the inflated number and will now show a red ⚠ mismatch against the corrected BOM. Click ↺ on the row, or use **↺ Sync all bundles to BOM**, to write the corrected value.
+- **Verification:** `node --check` clean · **37 suites green** · new `test_v1048` drives the real sliced `bundleCogsFromBom` against a 3-component bundle (FBA fee lands once at $6.45, not $6.75; Chewy at $6.33; DTC unchanged at $9.65 under the v6.27 rule), plus qty scaling not multiplying the flat charge, missing components still reported, flat fields returning null, and a **regression guard that runs the pre-v10.48 roll-up and proves it charged the fee three times**.
+- **One test expectation of mine was wrong and the code was right** — I wrote the DTC case as $8.45 off the Amazon ex-fee base instead of the DTC one. Corrected to $9.65 with the arithmetic shown inline.
+- **`test_v1045` re-pointed, not silenced.** It asserted *"bundles roll it up from the BOM"* for `fulfillment_chewy`; v10.48 reverses that claim, so the assertion now pins the opposite guarantee and the derived-set rule.
 
 ## v10.47 — Net Units is a scorecard on the Amazon P&L, not a footnote
 
