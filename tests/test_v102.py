@@ -46,6 +46,14 @@ const _velMemo = new Map();
 function clearVelMemo(){ _velMemo.clear(); }
 let CHK = {};
 const document = { getElementById: (id) => (id in CHK) ? CHK[id] : null };
+// v10.64 — bundle attribution became ONE shared setting (was two per-page
+// checkboxes read via getElementById(...)?.checked ?? true). Re-pointed, not
+// silenced: identical semantics — read whichever box the harness stubs, and
+// default ON when neither is present, exactly as the old `?? true` did.
+function bundleAttrOn(){
+  const el = document.getElementById('ip-bundle-attr') || document.getElementById('fBundleAttr');
+  return el ? !!el.checked : true;
+}
 const localStorage = { _d:{}, getItem(k){ return this._d[k] ?? null; }, setItem(k,v){ this._d[k]=v; } };
 function ipActiveChannels(){ return null; }
 function getEffectiveCurveForProduct(){ return { curve: {} }; }

@@ -46,6 +46,14 @@ const DOM = {
   'ip-vel-cmp': {value:'30'}, 'fVelocityWindow': {value:'60'}, 'ip-bundle-attr': {checked:true},
 };
 globalThis.document = { getElementById: (id) => DOM[id] || null };
+// v10.64 — bundle attribution became ONE shared setting (was two per-page
+// checkboxes read via getElementById(...)?.checked ?? true). Re-pointed, not
+// silenced: reads the SAME 'ip-bundle-attr' entry in DOM above, so this suite
+// keeps its existing control over the toggle.
+globalThis.bundleAttrOn = function(){
+  const el = DOM['ip-bundle-attr'] || DOM['fBundleAttr'];
+  return el ? !!el.checked : true;
+};
 
 __CHANS__
 __TREND__

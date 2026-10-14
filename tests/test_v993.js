@@ -29,6 +29,14 @@ const DOM = {
   'ip-vel-cmp': {value:'30'}, 'fVelocityWindow': {value:'60'}, 'ip-bundle-attr': {checked:true},
 };
 globalThis.document = { getElementById: (id) => DOM[id] || null };
+// v10.64 — bundle attribution became ONE shared setting (was two per-page
+// checkboxes read via getElementById(...)?.checked ?? true). Re-pointed, not
+// silenced: reads the SAME 'ip-bundle-attr' entry in DOM above, so this suite
+// keeps its existing control over the toggle.
+globalThis.bundleAttrOn = function(){
+  const el = DOM['ip-bundle-attr'] || DOM['fBundleAttr'];
+  return el ? !!el.checked : true;
+};
 
 const IP_CHANNEL_KEYS   = ['amazon', 'shopify', 'chewy', 'walmart'];
 const IP_CHANNEL_LABELS = { amazon: 'Amazon', shopify: 'Shopify', chewy: 'Chewy', walmart: 'Walmart' };
@@ -322,7 +330,7 @@ function ipVelWindowOne(r, windowDays, offsetDays, key) {
   // like blended_daily does — otherwise a component whose demand is mostly
   // bundle-driven would show a flat trend.
   const bundleOn = (typeof document !== 'undefined')
-    && (document.getElementById('ip-bundle-attr')?.checked ?? true);
+    && (bundleAttrOn());
   if (bundleOn) units += ipBundleAttrUnitsWindow(r.master_id, inWin, keys, reg);
   const v = units / windowDays;
   if (salesReady && typeof _velMemo !== 'undefined') _velMemo.set(ck, v);

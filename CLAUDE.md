@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.62**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.64**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,30 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.63 / v10.64 — one bundle-attribution setting, and seasonal days of cover
+
+### v10.63 — "+ bundle components" was TWO checkboxes driving half a number each
+- **Jason:** *"if i uncheck bundle components the bundle still shows in the counts"* — screenshot shows the box unchecked and Meowi-Waui still reading `54.42 +B 1.1`.
+- **⚠ Split brain.** There were two independent checkboxes — `#fBundleAttr` (Demand Forecast) and `#ip-bundle-attr` (Inventory Planning) — and they drove **different halves of the same number**:
+  - `inventoryNeedBreakdown` read **`#ip-bundle-attr`** → Need / Reorder / Gap / Status respected the Inventory box. Correct.
+  - `recomputeRecordVelocity` read **`#fBundleAttr`** → `blended_daily`, `bundle_daily`, `adj_daily` came from the *Forecast* box.
+  Both pages are in the DOM at once, so unchecking it on Inventory dropped the bundle term from the Need columns while **Vel/day kept its `+B` badge** — the page you were *not* looking at silently won half the calculation.
+- **This is the v10.2 velocity-compare-mode bug in a new costume**, and takes the same fix: **ONE persisted setting** (`bundleAttrOn()` / `setBundleAttrOn()`), both checkboxes mirrored off it, a velocity recompute + memo clear on change, restored before the init finalization pass. 11 read sites collapsed onto it; saved-view apply on both pages routes through the setter (setting `.checked` alone would have left `blended_daily` stale).
+- **Verified behaviourally against his exact row:** attribution ON → `53.32 + 1.1 = 54.42` with the badge; OFF → `53.32`, `bundle_daily = 0`, **badge gone**. Both boxes mirror, the choice persists, and restore re-applies it to both.
+- **Three suites went red and were re-pointed, not silenced** — `test_v102` / `test_v990` / `test_v993` stubbed the DOM checkbox. Their `bundleAttrOn()` stub reads the **same** stubbed element, so `test_v990` keeps its existing `BUNDLE_ON` control over the toggle rather than being hard-coded to true.
+
+### v10.64 — "Cover (d)": days of inventory on the SEASONAL velocity
+- **Jason:** *"i also need to see the number of days of inventory based on the seasonal velocity on the inventory planning page."*
+- **The number already existed and was only reachable on hover.** `fbaSeasonalReorderPoint` (v9.95) burns the pool down **through** the product's curve and hands `coverDays` to `amazonStatusOne` as `meta.dos`, which is what the Status tier scores. This surfaces it as a sortable, exportable column.
+- **⚠ Sourced from the SAME functions Status uses, per mode, so the two can never contradict each other on screen** — the thing that would make the column worse than useless:
+  - **Amazon FBA mode** → `amazonStatusRollup().perRegion[].cover`, i.e. a true day-by-day burn-down. **Worst region wins**, matching how the tier rolls up, and the cell names that region.
+  - **Warehouse / In-house / Combined** → `getStatusInputs()`: `stock ÷ (need90 ÷ 90)`. `need90` is already curve-integrated, so the rate is a 90-day **seasonal average** and the divide is flat against it — an honest approximation, and exactly what the Status tier compares.
+- **Coloured on the same slack bands as Status** (`≤0` red · `≤30` orange · `≤60` amber · else green), so colour can't disagree with the Status chip beside it.
+- **The tooltip carries the reasoning:** the pool and its size, the rate, the threshold/reorder-point it's scored against, and **what a FLAT `stock ÷ velocity` would have said** plus the delta — e.g. *"seasonality SHORTENS cover by 45d"*. That contrast is the whole value: on a 2× season, 900 units at 10/day is **45 days of cover, not 90**.
+- **`∞` rendered when demand never exhausts the pool** (not a blank), `—` when the mode has nothing to score (no ASIN, FBM in Amazon mode, non-in-house in In-house mode) — so an empty cell never reads as zero cover.
+- **`default: true` plus a flag-guarded one-time migration** (the v5.48 / v9.86 pattern) inserts it next to Total OH for existing saved column sets; hiding it deliberately afterwards is never undone. Mirrored the existing migration block rather than adding a second mechanism.
+- **Verification:** `node --check` clean · **48 suites green** · `tests/test_v1064.py` pins both halves with 32 assertions, including the flat-vs-2×-curve contrast (90d → 45d), worst-region selection, slack parity with Status, and malformed records degrading quietly.
 
 ## v10.62 — the source chip was hiding the seasonal curve (the MATH was always right)
 

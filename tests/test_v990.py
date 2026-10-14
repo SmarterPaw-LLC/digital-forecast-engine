@@ -37,6 +37,14 @@ const document = { getElementById: (id) => {
   if (m) return { get checked(){return CHAN_STATE[m[1]];}, set checked(v){CHAN_STATE[m[1]]=v;} };
   return null;
 } };
+// v10.64 — bundle attribution became ONE shared setting (was two per-page
+// checkboxes read via getElementById(...)?.checked ?? true). Re-pointed, not
+// silenced: reads the SAME 'ip-bundle-attr' stub above, so this suite keeps
+// its existing BUNDLE_ON control over the toggle.
+function bundleAttrOn(){
+  const el = document.getElementById('ip-bundle-attr') || document.getElementById('fBundleAttr');
+  return el ? !!el.checked : true;
+}
 function renderInventoryTbl() {}
 // v9.90 stubs — seasonal curve lookup used by ipSeaIdxAtOffset.
 const SEED = { curves: { consumables: {} } };
