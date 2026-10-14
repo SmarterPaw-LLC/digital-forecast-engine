@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.55**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.56**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -34,6 +34,20 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.56 — one rule for how tall a main data table may be
+
+- **Jason:** *"the window doesn't display at the bottom despite the vertical height being taller enough."* The Chewy Break-Even table cut off mid-row with a band of dead space underneath on a tall monitor.
+- **The immediate cause** was `max-height:520px` hardcoded on that wrap. **The actual bug is the divergence:** ~20 hardcoded `max-height` values across the file and exactly ONE viewport-relative value (Inventory Planning, v4.158). Every new table picked a fresh magic number, so every new table was wrong on some screen. Same shape as the four scorecard markups v10.49 consolidated — **a pattern existing in several places with different values IS the bug.**
+- **`fitTableWrapsToViewport()`** sizes any wrap marked `data-fit="viewport"` from **its own measured position**: `innerHeight − rect.top − gutter`. That adapts to however much chrome (basis line, COGS banner, data-currency row, filters, explainer, gaps panel, scorecards, row count) happens to sit above it on that particular tab, which is exactly why a per-table constant could never be right for long.
+- **Nine main tables opt in** — Amazon / Shopify / Walmart / Chewy Sales / Chewy Cost / Chewy Break-Even / Chewy Rebates / COGS, plus Inventory Planning's existing `calc()` **folded into the same mechanism** so there is one rule rather than two. Small nested wraps inside modals and side panels are deliberately NOT marked; a short scroll there is intentional.
+- **`TBL_FIT_GUTTER` (24px) and `TBL_FIT_MIN` (280px) are named constants.** The floor matters: on a short window the measured space can go negative, and without it the table collapses to an unusable sliver.
+- **Re-fits on tab switch, at every render tail, and on window resize.** Content above a table lands asynchronously (a banner appears after a load and pushes the table down), so `fitTableWrapsSoon()` runs immediately, on the next frame, and again at 250ms. Thirteen call sites.
+- **Hidden tabs are skipped** (`!el.offsetParent`) — their rect is 0, which would otherwise cap them at the floor and leave the table short the moment the tab is revealed.
+- **⚠ Two findings came from my own new suite, not from reading the diff:**
+  1. **The stale hardcoded caps were still in the markup.** The JS override worked, so it LOOKED fixed — but the dead value sat underneath and would paint a short table for one frame before the script measured. Replaced with a `calc(100vh - 320px)` CSS fallback that is already close, so there is no flash.
+  2. **My first assertion ("nothing calls it before it is declared") was wrong**, not the code. The call sites sit textually above the declaration because `switchPnlView` and friends are defined earlier. That is safe — it is a hoisted function *declaration*. Re-pointed to assert the thing that actually matters: that it stays a declaration and never becomes a `const` arrow, which would put every earlier call site in the temporal dead zone.
+- **Verification:** `node --check` clean · **43 suites green** · driven in the browser at 1600×1100 with 60 rows: cap computed at 630px against the old hardcoded 520, 24px of gutter below, internal scroll engaged. Shrinking the viewport to 700 drops it to the 280px floor and restoring returns it to 630. Screenshot taken at the tall viewport.
 
 ## v10.55 — the Chewy Sales tab leads with the money that reaches us
 
