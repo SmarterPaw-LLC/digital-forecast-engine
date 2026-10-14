@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.59**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.60**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -13,6 +13,7 @@ File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old l
 **1. Find the existing implementation first. Reuse it, do not copy it.**
 Before building a scorecard, tab strip, popup, chip, badge, column picker, empty state, filter control or banner, grep for one that already exists and call ITS renderer. If the pattern exists in two or more places with different markup, **that divergence IS the bug** — consolidate to one helper in the same change, rather than patching the page in front of you and leaving the other copies. Shipping a second copy is how every one of these got out of hand:
 - v10.49 — FOUR scorecard markups across seven P&L strips; one referenced three CSS classes that do not exist, so it rendered as unstyled text. Now one `pnlCard()`.
+- v10.60 — v10.49 consolidated the seven P&L strips and **left FIVE more card renderers standing** (Page Performance, Diagnostics, Chewy Revision Tracker, Growth Model, Digital Sales). So when Jason asked for source chips "on EVERY page", annotating `pnlCard` could only ever reach the strips that CALL `pnlCard` — and I spent v10.57/v10.59 adding chips one page at a time instead of asking why a page could be missed at all. **A consolidation that leaves copies behind is not a consolidation.** `tests/test_v1060.py` now fails on any new bespoke card renderer.
 - v10.17 — SIX sub-tab strips in four different looks. Now one `.subtab` class + `subtabApply()`.
 - v10.7 / v10.9 — one popup per page holding Saved views + Columns, labelled **Customize columns**, living in the global search bar between the search box and the ⚙ gear. Not a third pattern.
 - v10.0 — the Excel export coloured the top trend tier grey because a second copy of the classifier's output was never updated.
@@ -34,6 +35,25 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.60 — ONE scorecard renderer, so a chip reaches every page
+
+- **Jason:** *"i asked for chips on EVERY page. please follow my isntructions"* — with a screenshot of **Amazon P&L → Page Performance**, five scorecards, no chips.
+- **⚠ I was not forgetting a strip. There were FIVE bespoke copies of the card markup**, so annotating `pnlCard` only ever reached the strips that call `pnlCard`. v10.57 chipped the seven P&L strips, v10.59 chipped the banded strips, and both times the other five were untouched and invisible to me:
+  | Surface | Helper | Shape |
+  |---|---|---|
+  | Amazon P&L → **Page Performance** | `tile(label,value,sub,valColor)` | Jason's screenshot |
+  | Amazon P&L → **Diagnostics** | `tile(label,val,sub,color)` | + left accent |
+  | Chewy Forecasts → **Revision Tracker** | `tile(label,val,sub,color)` | + left accent |
+  | **Growth Model** | `sc(label,value,sub,tip,valColor)` | + `ⓘ` label hint |
+  | **Digital Sales** | inline `tileBg`/`cardLabel`/`cardVal` consts | 7 tiles |
+- **The fix is the consolidation, not another round of chips.** All five are now thin wrappers over `pnlCard` (the canonical renderer, v10.49). Because the cards route through one function, `src` reaches every one of them — and the next strip someone adds gets a chip for free instead of being a sixth copy I have to notice.
+- **The two deliberate variations became PARAMETERS rather than reasons for a second renderer:** `accent` (status colour as a left edge — Diagnostics and Revision Tracker encode state that way, and the value text stays neutral there) and `labelHint` (the `ⓘ` affordance the Growth Model has always had on its labels). Everything else those five copies differed on — padding, radius, `--surface` vs `--surface2`, 18px vs 22px values, weight 700/800/900 — was unintentional drift and converges on the canonical look, which is what Jason asked for in v10.49 (*"these scorecard should be formatted like the amazon P&L scorecards"*).
+- **Five source keys were referenced by code but never declared** (`amazon_query_performance_asin`, `amazon_sp_search_term`, `amazon_sp_campaign_snapshot`, `amazon_ads_bulk_snapshot`, `pnl_action_items`) — present since v8.44/v8.96. Any chip naming them would have rendered the raw table name instead of a label. Added to `DATA_SOURCES`, and the suite now fails on an undeclared key.
+- **⚠ `tests/test_v1060.py` asserts the STRUCTURE, not the instances.** It does not check "page X has a chip" — that is the method that kept failing. It asserts: exactly one card renderer, **no bespoke copy anywhere** (five signatures swept), every wrapper that accepts `src` forwards it (the v10.57 bug class), every one of 16 named scorecard builders declares a source, and every table-shaped `src` key resolves in `DATA_SOURCES`. It guards itself — the detector is asserted to fire on a planted bespoke renderer and on a source-less builder.
+- **⚠ Two of my own test assertions were wrong, not the code.** (1) The undeclared-key extractor only understood `src: '…'` and completely missed the trailing-positional form `tile(…, ['products'])` — which is how all five converted strips pass their sources, so the check was blind to exactly the surfaces Jason flagged. Rewritten with a balance-aware last-argument parser (regex cannot do it — the args hold nested parens, arrays and commas inside template literals). (2) I asserted ≥15 keys when the honest count is 11; Digital Sales builds its sources into `dsActualSrc`/`dsFcSrc` variables and spreads them, which a literal extractor cannot see and should not pretend to. Threshold set to the real floor with the reason written at the assertion.
+- **Verification:** `node --check` clean · **45 suites green** · and because v10.59 proved static assertions can pass while chips render nothing, **18 behaviour assertions drive the REAL sliced `pnlCard` / `srcChip` / `DATA_SOURCES` in node**: a single-source card renders one chip, a 2-element array renders two, a `ƒ` marker renders the dashed derived chip, the accent strips keep their left edge AND gain a chip without the accent stealing the value colour, the Growth Model keeps its `ⓘ` only when a tip exists, a card with no `src` renders no chip and still emits valid markup, an unknown key degrades to the raw name rather than throwing, and a tooltip containing a double quote still escapes correctly with the chip intact.
+- **Scoped out, and stated rather than implied:** modal body copy (COGS modeling, merge tool, Catsy importer) and the Growth Model's conditional warning text are still prose — carried over from v10.59, still not done.
 
 ## v10.59 — no page prints a paragraph, and the chips actually render
 
