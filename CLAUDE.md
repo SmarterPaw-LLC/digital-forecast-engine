@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.54**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.55**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -34,6 +34,21 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.55 — the Chewy Sales tab leads with the money that reaches us
+
+- **Jason:** *"i don't care about merch sales other than as a northstar"*, then one message later correcting himself: *"sorry, not northstar"* / *"a vanity"*. That correction is the whole release — a northstar is something you steer by, a vanity metric is something you stop showing.
+- **⚠ The number was in the fifth column and the first scorecard.** On Meowi-Waui, Merch Sales reads **$27,176.77** of Chewy retail against **$13,603.50** that actually reached us. The two columns that are OURS — `Our Rev` and `Vendor Contrib` — were pushed to the far right, past four retail-basis columns.
+- **Worse, the retail-basis `Contrib %` read 90.0% two columns from the real 53.5%.** `(Merch Sales − COGS) ÷ Merch Sales` is arithmetically correct and practically meaningless: the denominator is Chewy's revenue, not ours. It is the easiest number on the page to misread as a margin.
+- **Default Sales view is now six columns, wholesale-first:** Product · Chewy SKU · **Units** · **Autoship %** · **Our Rev** · **Vendor Contrib**. Units and Autoship % are real demand; the two money columns are the two that reach us.
+- **The retail block moves behind a `+ 5 retail columns` toggle** (Merch Sales, Avg Price, COGS, Net Proceeds, Contrib %) — the same one-click pattern v10.54 put on Break-Even, not a second mechanism. Each hidden column now carries a tooltip naming WHY it is hidden; Merch Sales says *"a vanity"* in as many words so the next person does not promote it back.
+- **Scorecards follow the SAME toggle**, so the strip and the columns can never tell different stories about which basis the tab is on. Default four: Our Revenue · Vendor Contrib · Autoship Units · Total COGS. Retail trio appears only with the toggle on.
+- **The weekly chart defaulted to Merch Sales** — the vanity metric was the first thing drawn on the page. Now defaults to **Vendor Contribution**, with the option list reordered wholesale-first and the Merch Sales option relabelled *"Chewy retail, vanity"*. The `|| 'merch_sales'` fallback moved too, or a pre-render call would have silently restored the old default.
+- **The v10.54 basis line was now wrong** and had to move with it: `Is it selling? · RETAIL basis` → **`Is it selling, and what do we keep? · $ shown is WHOLESALE — what Chewy pays us`**, with the tooltip explaining that the retail figures sit behind the toggle.
+- **⚠ Same structural fix as v10.54, second table:** the Sales body row was a hardcoded sequence of eleven `<td>`s in column order with nothing tying them to the registry. Now **keyed** and emitted from the same filtered list as the header. Proven rather than asserted — a script diffed all ten extracted cell templates against `HEAD` and confirmed **10 of 10 byte-identical**, so the reorder moved positions only, never markup or math.
+- **Verification:** `node --check` clean · **42 suites green** · driven in the browser against a stub built from Jason's own Meowi-Waui screenshot: default header 6 / body 6, toggled header 11 / body 11, both in matching order, toggle round-trips and persists, scorecards 4 ↔ 7. The retail block reproduced the screenshot exactly — Merch Sales $27,176.77, Avg Price $8.99, COGS $2,720.70, Net Proceeds $24,456.07, Contrib % 90.0% — which is what proves the keyed rewrite did not disturb the math.
+- **Three suites went red and were re-pointed, not silenced:** `test_v1011` pinned a hardcoded `colspan="11"` (now computed from `cols.length`, the stronger guarantee); `test_v1020` pinned the exact Merch Sales option text (now matches the stable half, since the em-dash is the guarantee, not the wording); `test_v1042`'s header/body count check had already moved in v10.54.
+- **⚠ A process note worth keeping: I built a patch anchor from TRUNCATED terminal output.** The `autoship_pct` tooltip is a very long single line and `cut -c1-175` hid most of it, so the anchor never matched. Switched to line-based patching and carried the file's own long lines over verbatim instead of retyping them. **Never build an anchor from a truncated view.**
 
 ## v10.54 — stop making the operator translate the Chewy page
 

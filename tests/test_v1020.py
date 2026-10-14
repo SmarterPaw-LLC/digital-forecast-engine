@@ -72,7 +72,10 @@ ok(not raw, 'no raw-markup unicode escapes (%d found)%s'
    % (len(raw), ('\n        ' + '\n        '.join(raw[:6])) if raw else ''))
 
 # The two that were broken, now as real characters.
-ok('<option value="merch_sales">Merch Sales \u2014 Chewy retail ($)</option>' in src,
+# v10.55 relabelled this option ("vanity") and moved it below the two wholesale
+# metrics. The guarantee is the em dash, not the wording, so match on the stable
+# half of the label.
+ok('<option value="merch_sales">Merch Sales \u2014 Chewy retail' in src,
    'merch_sales option renders a real em dash')
 ok('<option value="vendor_rev">Our Revenue \u2014 what Chewy pays us ($)</option>' in src,
    'vendor_rev option renders a real em dash')

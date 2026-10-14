@@ -490,8 +490,13 @@ sok("label: 'Vendor Contrib'" in src, 'Sales tab has Vendor Contrib column')
 sales_start = src.index('function renderChewyPnlSales()')
 sales_end = src.index('function downloadChewyPnlCostCSV')
 sok('colspan="9"' not in src[sales_start:sales_end],
-    'no stale colspan=9 left in the Sales renderer (now 11 columns)')
-sok(src[sales_start:sales_end].count('colspan="11"') >= 1, 'Sales renderer uses colspan=11')
+    'no stale colspan=9 left in the Sales renderer (6 default / 11 with retail on)')
+# v10.55 made the Sales column set filterable (6 by default, 11 with the retail
+# detail toggle on), so a hardcoded colspan would under-span the empty state the
+# moment the toggle flips. The guarantee this assertion wants is that the empty
+# state spans the WHOLE table, which is now computed rather than counted.
+sok("colspan=\"' + cols.length + '\"" in src[sales_start:sales_end],
+    'Sales empty state spans the visible column count, not a hardcoded 11')
 cost_fn_start = src.index('function renderChewyPnlCost()')
 cost_fn_end = src.index('function downloadChewyPnlCostCSV')
 sok('colspan="12"' in src[cost_fn_start:cost_fn_end], 'Cost renderer uses colspan=12 (12 columns)')
