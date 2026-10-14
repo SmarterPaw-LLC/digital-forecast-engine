@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.60**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.61**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,20 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.61 — the markup must BALANCE: v10.59 left five orphaned `</div>` closes
+
+- **Jason:** *"something got broken here — the 'select a product…' text only belongs on the seasonal index page"* and *"also the p&L pages no longer load."* **Two symptoms, ONE bug, and it was mine — from v10.59, not v10.60.**
+- **What happened:** v10.59's prose sweep collapsed four multi-line info boxes into single tooltip divs but **left their original `</div>` closes behind** — five orphans in total. `node --check` only parses JavaScript, all 44 suites passed, and browsers silently auto-correct stray closes, so it looked fine.
+- **⚠ The cascade is why one stray tag broke two unrelated pages:**
+  1. The first orphan closed **`#page-seasonality` early**, so `#sea-chart-msg`, `#sea-canvas-box` and `#sea-table-wrap` became children of `#page-forecast` → the *"Select a product…"* line rendered on **every** forecast sub-view.
+  2. The second then closed **`#page-forecast` itself**, so `#page-inventory`, `#page-chewy-forecast` and `#page-fba-shipments` became **siblings at body level**. Those are plain divs driven only by inline `display`, and nothing resets that when you leave the Forecast tab — so **Inventory Planning stayed painted over the P&L page**, which read as "P&L no longer loads."
+  3. Three more orphans in the Uploads cards closed `#page-data` early the same way.
+- **Diagnosis path worth keeping:** symptom said "P&L broken", but the v10.8 discipline — *diff the set of defined functions before vs after* — came back clean (1259 both sides), which ruled out a JS structural break and pointed at markup. Then bisecting `git show <ref>:index.html` for div balance named the exact commit (v10.58 `+0` → v10.59 `−5`) in one pass. **Bisect the artifact, not the symptom.**
+- **The fix restores intent, not just the count.** v10.59 had deleted the `#sea-chart-wrap` opener (the styled chart container) while keeping its close, and deleted `#sea-chart-legend-guide` entirely — **two live JS call sites had been no-oping against a missing element since then**, so the legend line showed permanently instead of only when a product is active. Both restored; the three Uploads orphans were simply stripped.
+- **⚠ `tests/test_v1061.py` is the guard that should have existed since v4.43** (*"the closing `</div>` for each `page-X` is unmarked — verify nesting depth, don't trust comments"* — that lesson was written down and never made runnable). It asserts: whole-document div balance is 0, depth never goes negative, every `.page` opens at depth 0 (body level), every forecast sub-view opens at depth 1 (inside `#page-forecast`), and all five seasonality chart elements fall between `#page-seasonality`'s open and its balance-matched close.
+- **It strips HTML comments AND `<script>` bodies before counting** — both legitimately contain div markup (the app builds HTML in template literals), which is why a naive grep could never have done this. It guards itself on all four: planted stray close, planted unclosed div, comment exclusion, script exclusion.
+- **Verification:** `node --check` clean · **46 suites green** · guard **re-run against history: PASSES v10.58, FAILS v10.59 and v10.60, PASSES the fix** — so it genuinely catches the regression rather than just agreeing with today's file. Driven in the browser: on Inventory the seasonality line is gone and the table renders; navigating to P&L hides Inventory and shows P&L; Seasonality still shows its own empty state with the legend correctly hidden until a product is picked; all 8 `.page` divs confirmed direct children of `<body>`.
 
 ## v10.60 — ONE scorecard renderer, so a chip reaches every page
 
