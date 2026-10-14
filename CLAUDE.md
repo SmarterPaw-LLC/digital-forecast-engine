@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.58**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.59**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -34,6 +34,17 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.59 — no page prints a paragraph, and the chips actually render
+
+- **Jason:** *"is there some reason you are making me point out every instance of text bloat? please clean up all pages. i want the text captured in a tooltip."* He is right that **the problem was my method, not the banners.** v10.57 removed the four he had pointed at instead of sweeping for the SHAPE, so the next screenshot found more.
+- **⚠ And the v10.57 chips were invisible.** Three mappers build `pnlCard`'s arguments field by field (`{ label: c.l, val: c.v, sub: c.s, tip: c.t, delta: c.d }`) and **silently dropped `src`**. I annotated 25 scorecards and shipped a feature that rendered nothing. A declared-but-never-forwarded field fails silently — `node --check` and every suite passed. Now asserted: no `pnlCard` mapper may drop `src`.
+- **The sweep, not another instance:** 49 markup blocks + 9 always-on JS explainers + the Cost-to-Chewy "Vendor economics" block collapsed to **one line + the full text on the tooltip**. Nothing is lost; it just stops being printed.
+- **`tests/test_v1059.py` IS the rule.** It walks every always-visible `<div>` whose own text runs past 160 characters, skipping `<details>` (opt-in) and toolbars (they hold controls), and fails the build. **It guards itself** — it asserts the detector fires on a planted paragraph and ignores a tooltipped one, so it cannot pass against an empty haystack (the v10.20 lesson).
+- **Load-bearing warnings survive as a line, not a paragraph** (v10.37): Shopify and Walmart still say `⚠ Partial P&L — fees … are not subtracted`, because Net Proceeds genuinely reads optimistic there. The explanation moved to the tooltip.
+- **Chips reach every scorecard surface now**, including the banded `.scorecards` strips (Inventory Planning, Units Sold, Chewy Forecasts) that v10.49 had deliberately left on their own renderer.
+- **Verification:** `node --check` clean · **44 suites green** · driven in the browser: Chewy Sales 4/4 cards chipped (`💵 Chewy vendor catalog` + `💸 Chewy rebate invoices` + `💰 COGS page` on Vendor Contrib), Amazon P&L 9 cards / 10 chips, Inventory 18 chips, and 8/8 Break-Even headers carrying `SOURCE: Chewy Ads (chewy_ad_spend)`.
+- **Scoped out, and stated rather than implied:** modal body copy (COGS modeling, merge tool, Catsy importer) and conditional warning text inside the Growth Model. A modal is opt-in like a `<details>`, so it is a lower-grade instance of the same shape — worth doing, not done here.
 
 ## v10.57 / v10.58 — provenance everywhere, a real Chewy column picker, and four prose banners gone
 
