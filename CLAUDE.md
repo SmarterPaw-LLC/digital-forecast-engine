@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.61**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.62**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,22 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.62 — the source chip was hiding the seasonal curve (the MATH was always right)
+
+- **Jason, on the Amazon FBA Reorder tooltip:** *"does our forecasting NOT use seasonality index? i thought we had it set to use the seasonality"* then *"i need to know if the numbers i've been seeing are wrong."*
+- **The numbers are NOT wrong. Seasonality has been applied throughout.** Verified by running the real sliced `forwardSeaDemand` rather than reading the code: identical inputs (10 units/day × 30d) give **300 units on a flat 1.0 curve and 600 on a 2.0 curve**. The curve is live.
+  - **Reorder qty** = `forwardSeaDemand(arrival + reorder_qty_days) − forwardSeaDemand(arrival)` — the curve integrated across that event's own ARRIVAL window, not today's multiplier (v10.36 / v6.29).
+  - **Trigger day** = `fbaSeasonalReorderPoint`, which burns the FBA pool down THROUGH the curve (v9.95), so a product heading into its season triggers earlier.
+  - Every continuous-draw channel (Shopify, Walmart, bundle attribution) is curve-integrated too — 10 `forwardSeaDemand` call sites in `inventoryNeedBreakdown`.
+- **⚠ What was actually wrong was the CHIP, and it was my own v10.57 shortcut.** That release gave each registry a single `_default` source, reasoning that "almost every column in a registry comes from the same upload". True for identity columns; **false for every computed one**. `86 of 109` Inventory columns fell through to `_default: 'velocity_calculated'`, so Need / Reorder / Gap advertised raw velocity as their only input and the curve was invisible. **A chip that under-reports its inputs is worse than no chip — it actively argues the number is something it isn't**, which is exactly the doubt it created.
+- **Fix: a `_patterns` layer on `colSrc`,** checked before `_default`, so computed columns name what they are really derived from — and a NEW Need column inherits the right chip instead of silently getting the velocity-only one. The Amazon reorder chip now reads: `velocity_calculated + products + fba_inventory_snapshots + fba_shipments + inventory + ƒ seasonal curve integrated day-by-day across the horizon`.
+- **Chewy is the one documented exception and the chip now says so.** `chwyReorder = getChewyFcUnits(...)` comes straight from Chewy's monthly PO forecast and is deliberately NOT run through our curve — their forecast already encodes their own seasonality, so applying ours would double-count it. Its chip reads `ƒ prorated from Chewy's monthly PO forecast — their seasonality, not our curve`.
+- **The prose says it too, not just the chip.** The group tooltip previously said *"Each event = forwardSeaDemand from arrival day"* — a function name, not an explanation. It now states in plain language that the curve is integrated across the arrival window, that a peak window orders more, and names the two bypasses.
+- **⚠ Two legitimate bypasses, worth knowing when reading a number:** `New (Amazon)` launch override is flat by declaration (a manual rate with no history to shape), and `seasonal_type = flat` resolves to an all-1.0 curve. Both are deliberate.
+- **⚠ Known inconsistency, NOT changed here:** `inventoryNeedBreakdown` strips `sea_override` (`sea_override: null`) on **every** channel, so a manual Sea Index Override does not move Inventory Planning Need/Reorder — while `rederiveNeeds` passes the record intact, so the **Demand Forecast** page DOES honour it. Defensible (a single current-week multiplier applied flat across a 120-day window would be wrong), but the two pages disagree and the field gives no hint. Flagged for a decision rather than silently "fixed".
+- **⚠ A real process miss, caught by the right guard:** my tooltip edit went in through a bash heredoc, which turned `\n` into LITERAL newlines inside a single-quoted JS string — a syntax error. **All 47 suites passed anyway**, because they are static text checks that never parse the JS. `node --check` is what caught it. CLAUDE.md has warned about heredoc escape-mangling three times; the lesson is not "be careful", it is **use the Write tool for any patch containing escapes**.
+- **Verification:** `node --check` clean · **48 suites green** · `tests/test_v1062.py` pins both halves — the behaviour (flat curve 300u vs 2× curve 600u, launch override flat, the windowed-difference shape, Chewy bypassing our curve) and the chips (resolver run for real: Amazon names the curve, Chewy does not claim it, identity columns untouched, unknown columns still fall back to `_default`).
 
 ## v10.61 — the markup must BALANCE: v10.59 left five orphaned `</div>` closes
 
