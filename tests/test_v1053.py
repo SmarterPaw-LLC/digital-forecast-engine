@@ -101,7 +101,9 @@ ok('tests/test_v1053.py' in RAW,
 # ============ B. the four ad-scope collisions are renamed ============
 print('\nB. static - the four Break-Even labels that meant two things are scoped')
 
-be = fnbody('renderChewyBreakeven')
+# v10.57 hoisted the Chewy registries to module scope so the column picker
+# can read them, so slice the file rather than the render-function body.
+be = RAW[RAW.index('const CHEWY_BE_COLUMNS = ['):]
 for key, want, gone in [
     ('direct_units',  'Ad Units',          'Units'),
     ('cpu',           'Ad $/unit',         'Cost/unit'),
@@ -115,7 +117,7 @@ for key, want, gone in [
 
 # the un-scoped forms must still exist on the Sales tab - that is the whole
 # point: same word, different scope, so only ONE of them may wear the bare name
-sales = fnbody('renderChewyPnlSales')
+sales = RAW[RAW.index('const CHEWY_SALES_COLUMNS = ['):]
 ok(re.search(r"label:\s*'Our Rev'", sales) is not None,
    "Sales keeps the bare 'Our Rev' (all sell-through units)")
 ok(re.search(r"label:\s*'Vendor Contrib'", sales) is not None,
@@ -137,6 +139,14 @@ COL    = re.compile(r"\{[^{}]*?\bk(?:ey)?:\s*'([A-Za-z_0-9]+)'[^{}]*?\blabel:\s*
 CARD   = re.compile(r"card\('([^']*)'")
 CARD_L = re.compile(r"\bl\s*:\s*'([^']*)'")
 
+# Columns now live in module-scope registries (v10.57); scorecards are still
+# built inside the render functions. Sweep both so neither surface can add an
+# undeclared label.
+COL_REGISTRIES = [
+    ('Sales',         'CHEWY_SALES_COLUMNS'),
+    ('Cost to Chewy', 'CHEWY_COST_COLUMNS'),
+    ('Break-Even',    'CHEWY_BE_COLUMNS'),
+]
 TABS = [
     ('Sales',         'renderChewyPnlSales'),
     ('Cost to Chewy', 'renderChewyPnlCost'),
@@ -144,10 +154,13 @@ TABS = [
 ]
 
 found = {}          # label -> [(tab, kind, key)]
+for tab, const in COL_REGISTRIES:
+    i = RAW.index('const %s = [' % const)
+    j = RAW.index('\n];', i)
+    for k, lab in COL.findall(RAW[i:j]):
+        found.setdefault(norm(lab), []).append((tab, 'col', k))
 for tab, fname in TABS:
     b = fnbody(fname)
-    for k, lab in COL.findall(b):
-        found.setdefault(norm(lab), []).append((tab, 'col', k))
     for lab in CARD.findall(b) + CARD_L.findall(b):
         found.setdefault(norm(lab), []).append((tab, 'card', ''))
 

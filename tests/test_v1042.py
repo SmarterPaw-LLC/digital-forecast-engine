@@ -64,7 +64,7 @@ be = be[:be.index('function chewyBeShowGap')]
 # v10.54 renamed the registry to ALL_COLS (COLS is now the filtered subset). The
 # measure-parity assertions are about what the tab CAN show, so they read the
 # full registry.
-cols = be[be.index('const ALL_COLS = ['):]
+cols = js[js.index('const CHEWY_BE_COLUMNS = ['):]
 cols = cols[:cols.index('\n  ];')]
 
 

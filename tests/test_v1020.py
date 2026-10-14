@@ -104,8 +104,13 @@ ok(len(re.findall(r'autoship_units \u00f7 units_sold', js)) == 2,
 # The header had no title attribute at all, so a column `t:` went nowhere.
 ok('chpnl-sales-thead-row' in js, 'the Chewy Sales header is still built here')
 m = re.search(r"if \(thr\) thr\.innerHTML = cols\.map\(c => `<th[^\n]*", js)
-ok(m is not None and 'title="${String(c.t || c.label)' in m.group(0),
+# v10.57 wrapped the title expression so every header also states its source.
+# The guarantee is that a column's `t:` reaches a title attribute at all, which
+# is what was broken before v10.20 — not the exact expression shape.
+ok(m is not None and 'title="${' in m.group(0) and 'c.t || c.label' in m.group(0),
    'the Chewy Sales header renders a title attribute')
+ok(m is not None and "srcTipLine(colSrc('chewy_sales'" in m.group(0),
+   '  and appends where the column data comes from (v10.57)')
 ok(m is not None and "cursor:help" in m.group(0),
    'and a help cursor when a column carries a tooltip')
 
