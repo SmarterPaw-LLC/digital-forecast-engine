@@ -28,8 +28,12 @@ def slab(start, end):
 REAL = slab('const PAGE_COLUMN_BUTTONS = [', 'function pageColsSyncButton') \
      + '\n' + fn('pageColsSyncButton')
 
+# v10.58 — the Chewy tabs gained a real picker, so the uniform-look guard now
+# covers eight buttons. That is exactly what this suite is for: a new picker has
+# to adopt the one look and the one label, not invent a ninth variant.
 BTN_IDS = ['fc-cols-btn', 'ip-view-btn', 'prod-view-btn',
-           'pnl-cols-btn', 'spnl-cols-btn', 'sales-view-btn', 'be-view-btn']
+           'pnl-cols-btn', 'spnl-cols-btn', 'sales-view-btn', 'be-view-btn',
+           'chewy-cols-btn']
 
 bar_a = RAW.index('id="globalSearchBar"')
 bar_b = RAW.index('<!-- SHEETS BAR', bar_a)
@@ -68,8 +72,8 @@ static = [
      '\U0001F4CB Saved reports</button>' in RAW),
     # v10.43 — six now: Break-Even gained a real column picker, so by the
     # v10.7 convention it takes the standard label instead of "Saved views".
-    ('the other six say Customize columns',
-     bar.count('\U0001F4CB Customize columns</button>') == 6),
+    ('the other seven say Customize columns',
+     bar.count('\U0001F4CB Customize columns</button>') == 7),
 ]
 
 HARNESS = r"""
@@ -100,6 +104,10 @@ const CASES = {
   pnl_amazon:           'pnl-cols-btn',
   pnl_amazon_changelog: 'pnl-cols-btn',
   pnl_shopify:          'spnl-cols-btn',
+  // v10.58 - the three Chewy tabs with a table now share one picker.
+  pnl_chewy_sales:      'chewy-cols-btn',
+  pnl_chewy_cost:       'chewy-cols-btn',
+  pnl_chewy_breakeven:  'chewy-cols-btn',
 };
 for (const [navKey, want] of Object.entries(CASES)) {
   reset(); NAV = navKey; pageColsSyncButton();
@@ -108,7 +116,7 @@ for (const [navKey, want] of Object.entries(CASES)) {
 }
 
 console.log('\n== B. Pages with no column picker show none ==');
-for (const navKey of ['forecast_seasonality', 'pnl_walmart', 'pnl_chewy_sales', 'pnl_cogs',
+for (const navKey of ['forecast_seasonality', 'pnl_walmart', 'pnl_cogs',
                       'bundles', 'data', 'settings', 'forecast_chewy', 'pnl_pricing',
                       'forecast_fba-shipments', 'pnl_chewy_rebates']) {
   reset(); NAV = navKey; pageColsSyncButton();

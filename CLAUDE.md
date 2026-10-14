@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.56**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.58**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -34,6 +34,30 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.57 / v10.58 — provenance everywhere, a real Chewy column picker, and four prose banners gone
+
+- **Jason, three asks in a row:** *"on all of the scorecards (across all pages) i want chips showing where the numbers are coming from"* · *"in all tooltips for column headers, i should see a chip telling me where the data comes from - all pages"* · *"i should be able to choose columns/save views on all chewy pages."* Then, mid-build: *"STOP ADDING TEXT LIKE THIS. i'm pulling my hair out here."*
+
+### v10.57 — one provenance registry, two surfaces
+- **The two chip asks are the SAME question asked of two surfaces**, so they share ONE registry. Building them separately is how the Chewy tabs drifted into four labels meaning two things (v10.53).
+- **`DATA_SOURCES`** names all 23 upload / derived sources. **`srcChip()`** renders a real chip on scorecards (clickable, routes to that uploader via v7.97). **`srcTipLine()`** appends a `SOURCE:` line to column tooltips, because a `title` attribute cannot hold markup.
+- **⚠ Annotating ~250 columns by hand was not the move.** Almost every column in a registry comes from the same upload, so **`COLUMN_SOURCES` declares a `_default` per registry and overrides only the exceptions** — nine registries, ~60 declarations instead of 250.
+- **Nine header builders wired:** Amazon P&L, Shopify P&L, Walmart P&L, Amazon Break-Even, Chewy Sales / Cost / Break-Even, Inventory, Forecast, Products. **Walmart P&L and most of Products had NO header tooltip at all** and gained one.
+- **25 scorecards annotated** across all seven P&L strips.
+
+### ⚠ The text-bloat flag — SIXTH time, and this one was also STALE
+- The purple *"Two different revenue lines on this page"* block on Chewy Sales was a two-line paragraph printed above the scorecards. **It also described Merch Sales, which v10.55 had removed from the default view** — so it was explaining a column that was not on screen.
+- **Four prose banners dealt with:** Chewy Sales (removed — the basis line already answers it), Chewy Rebates (removed; also stale, it claimed Chewy sell-through is not in the app when v7.73 added it), Shopify and Walmart "Partial data" (**collapsed to one orange line + tooltip** — the warning is load-bearing because Net Proceeds reads optimistic, the paragraph was not).
+- **The rule, restated:** a visible line states the state; the explanation goes on the tooltip. Never a paragraph.
+
+### v10.58 — Customize columns + saved views on every Chewy tab
+- **This retires my own v10.54/v10.55 "+ N detail columns" toggle**, which was a SECOND copy of a pattern the app already had (v10.7 one popup per page · v10.9 the button lives in the global search bar · v10.43 views carry their column set). **That is hard rule #1, broken by me two commits after writing it down.** The column sets that toggle introduced survive as the registry `defaults`, so the readability fix stays and only the mechanism goes.
+- **⚠ The registries had to be hoisted first.** `CHEWY_SALES_COLUMNS` / `CHEWY_COST_COLUMNS` / `CHEWY_BE_COLUMNS` were declared INSIDE their render functions, which is precisely why Chewy was the only P&L family without a picker — nothing outside could read them.
+- **`null` vs empty Set is load-bearing** (v10.43): `null` means "no explicit choice, use the default"; an empty Set means "hide everything". Collapsing them would make hide-everything silently reset on the next render. The first manual toggle **materialises the current effective view** before editing, so flipping one column cannot reveal the other ten.
+- **Saved views:** apply / ✎ rename / ↻ update / ✕ delete, each showing its column count. **⚠ SQL TO RUN:** `supabase_v10_58_chewy_saved_views.sql` — until then views work per-browser and the console names the file.
+- **Verification:** `node --check` clean · **43 suites green** · driven in the browser: button visible on all three table tabs and correctly hidden on Rebates, popup lists 18 checkboxes with 8 checked, toggling a column moves header AND body in lockstep (9/9), reset returns to 8, save→reset→apply round-trips, choice persists.
+- **Four suites went red and were re-pointed, not silenced** — `test_v1036` / `test_v1042` / `test_v1053` sliced registries out of function bodies that no longer hold them, and **`test_v109` caught the new button twice**: once on the uniform-look count and once asserting Chewy shows no picker. That is the v10.9 guard doing its job.
 
 ## v10.56 — one rule for how tall a main data table may be
 

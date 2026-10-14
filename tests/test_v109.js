@@ -14,6 +14,7 @@ const PAGE_COLUMN_BUTTONS = [
   { id: 'pnl-cols-btn',  navKeys: ['pnl_amazon', 'pnl_amazon_changelog'] },   // NOT breakeven — it has its own (v10.43)
   { id: 'spnl-cols-btn', navKeys: ['pnl_shopify'] },
   { id: 'be-view-btn',   navKeys: ['pnl_amazon_breakeven'] },   // v10.43
+  { id: 'chewy-cols-btn', navKeys: ['pnl_chewy_sales', 'pnl_chewy_cost', 'pnl_chewy_breakeven'] },   // v10.58
 ];
 
 function pageColsSyncButton() {
@@ -29,7 +30,7 @@ function t(name, cond, got) {
   if (cond) { pass++; console.log('  \u2713 ' + name); }
   else { fail++; console.log('  \u2717 ' + name + (got !== undefined ? '  got: ' + JSON.stringify(got) : '')); }
 }
-const IDS = ["fc-cols-btn", "ip-view-btn", "prod-view-btn", "pnl-cols-btn", "spnl-cols-btn", "sales-view-btn", "be-view-btn"];
+const IDS = ["fc-cols-btn", "ip-view-btn", "prod-view-btn", "pnl-cols-btn", "spnl-cols-btn", "sales-view-btn", "be-view-btn", "chewy-cols-btn"];
 const reset = () => { IDS.forEach(id => SHOWN[id] = { display: 'none' }); };
 const visible = () => IDS.filter(id => SHOWN[id].display !== 'none');
 
@@ -47,7 +48,7 @@ t('visibility is driven by the same resolver as the gear', true);
 t('synced on every nav (inside globalSearchSyncFromTarget)', true);
 t('  and once auth resolves', true);
 t('Units Sold keeps its honest label', true);
-t('the other six say Customize columns', true);
+t('the other seven say Customize columns', true);
 console.log('\n== A. Exactly one button per page ==');
 const CASES = {
   forecast_demand:      'fc-cols-btn',
@@ -57,6 +58,10 @@ const CASES = {
   pnl_amazon:           'pnl-cols-btn',
   pnl_amazon_changelog: 'pnl-cols-btn',
   pnl_shopify:          'spnl-cols-btn',
+  // v10.58 - the three Chewy tabs with a table now share one picker.
+  pnl_chewy_sales:      'chewy-cols-btn',
+  pnl_chewy_cost:       'chewy-cols-btn',
+  pnl_chewy_breakeven:  'chewy-cols-btn',
 };
 for (const [navKey, want] of Object.entries(CASES)) {
   reset(); NAV = navKey; pageColsSyncButton();
@@ -65,7 +70,7 @@ for (const [navKey, want] of Object.entries(CASES)) {
 }
 
 console.log('\n== B. Pages with no column picker show none ==');
-for (const navKey of ['forecast_seasonality', 'pnl_walmart', 'pnl_chewy_sales', 'pnl_cogs',
+for (const navKey of ['forecast_seasonality', 'pnl_walmart', 'pnl_cogs',
                       'bundles', 'data', 'settings', 'forecast_chewy', 'pnl_pricing',
                       'forecast_fba-shipments', 'pnl_chewy_rebates']) {
   reset(); NAV = navKey; pageColsSyncButton();
