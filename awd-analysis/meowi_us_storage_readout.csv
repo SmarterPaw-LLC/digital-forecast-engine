@@ -1,0 +1,21 @@
+# Meowijuana US FBA storage readout,2026-10-15
+# Dims: package dims from FBA Fee Preview as of 2026-09-29 (inches)
+"# Capacity limit 800.05 cu ft, 78% utilized, 176.01 cu ft available"
+
+sp_sku,product,cuft_per_unit,caitlyn_qty,caitlyn_cuft,plan_qty,plan_cuft,pct_of_available,weight_lb
+CF312,Catnip Spray 3 oz,0.01038,2100,21.81,3500,36.34,20.6,770.0
+CF007,Meowi-Waui,0.014,2000,27.99,2000,27.99,15.9,360.0
+CB2583,Purr-Effect Trio Pack,0.10497,250,26.24,250,26.24,14.9,105.0
+CF102,Catnip Buds (jar),0.04216,180,7.59,540,22.77,12.9,189.0
+MTCM012,Purrfect Pairings Spray Trio,0.03335,80,2.67,300,10.01,5.7,204.0
+MTCM041,Crunchie Munchies Trio,0.0865,50,4.32,50,4.32,2.5,38.5
+CF226,Jump 'n' Jamb Deep Sea Squid,0.05735,60,3.44,60,3.44,2.0,9.0
+CB2586,Rollies 2-Pack,0.03169,60,1.9,60,1.9,1.1,9.0
+CF128,Catnip Rollies King Size,0.00686,168,1.15,168,1.15,0.7,6.7
+CF104,Silvervine Sticks,0.00783,48,0.38,144,1.13,0.6,10.1
+CF006,Feline Frost,0.0137,24,0.33,24,0.33,0.2,3.1
+CF701,Whack 'n' Roll,0.00211,24,0.05,24,0.05,0.0,7.4
+
+TOTAL,,,5044,97.87,7120,135.68,77.1,1711.9
+AVAILABLE,,,,,,176.01,100.0,
+REMAINING,,,,,,40.33,22.9,
