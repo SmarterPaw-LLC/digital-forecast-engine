@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.64**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.66**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,31 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.66 — Chewy P&L Sales: row checkboxes (+ a shared chart race the browser caught)
+
+- **Jason:** *"on the chewy p&L i should be able to check a box next to product rows to see sales over the period (like on amazon p&l)."*
+- **The chart was already built for a selection that did not exist.** `updateChewyPnlChart` (v10.12) carried the comment *"No row selection exists on this page, so it is always the 'no selection' case"* and hardcoded `selectionActive: false`. The shared `pnlTrendSeries` engine has always accepted a selection; Chewy was the one P&L page with no way to make one.
+- **Reused the Amazon pattern rather than inventing a third.** `chewyPnlSalesToggleProduct` / `ClearSelection` / `ToggleSelectAllVisible` are the same three-function shape as `pnlSelectedMids` (v4.122) and `walmartPnlSelectedMids` (v6.64), so the three P&L pages now behave identically.
+- **⚠ The checkbox column sits OUTSIDE `CHEWY_SALES_COLUMNS`**, hardcoded as a leading `<th>` / `<td>` exactly as Amazon does it. In the registry it would appear in the v10.58 column picker and be hideable — a selectable table whose selector can be switched off. A test asserts it is not a registry entry.
+- **⚠ Row click changed meaning,** which is a behaviour change on a page Jason uses daily: it now TOGGLES SELECTION instead of opening the product modal. That is the Amazon / Walmart convention he asked for, and the card stays one click away via the `↗ card` button (`pnlCardBtn`) added to the title cell — the same resolution v6.22 / v6.64 used on the other two pages.
+- **Selection PERSISTS across brand / category / search changes** (the v4.122 rule), so a report can be built over several searches. Anything selected that the current filter hides is COUNTED in the drill banner (`⚠ N hidden by filter`) rather than silently dropped from the totals — the alternative, pruning on every filter change, is the bug v4.122 fixed on Amazon.
+- **The prev-period comparison set narrows with the selection.** `midsInView` was `Object.keys(agg)` (the whole table); with a selection active that would compare the selection's current window against the entire catalog's prior window. This is the v4.132 apples-to-apples rule, and it is the kind of thing that reads as a plausible number rather than an obvious break.
+- **Missing-COGS is now two counts, deliberately:** `_selMissingCount` for the scorecard (selection scope) and `missingCount` for the row-count line (table scope). One variable serving both would make the row count lie whenever a selection was active.
+- **⚠ A real race, and only the browser found it.** `node --check` was clean and all 48 suites passed, but driving the chart threw **`Canvas is already in use`**. `pnlTrendRender` destroys only `cfg.instance` — the CALLER's snapshot — and `await getChart()` sits before the constructor, so two renders overlapping that await both reach `new Chart(canvas)`. v10.66 made it easy to hit because every checkbox click calls `renderChewyPnlSales()`, which fires an un-awaited `updateChewyPnlChart()`; rapid clicking overlapped them.
+  - **Fixed in the SHARED helper, not the Chewy caller** (hard rule #1): `pnlTrendRender` now also asks `Chart.getChart(canvas)` what actually owns the canvas and destroys that. All four P&L charts get it. A caller-side guard would have left the same race in Amazon / Shopify / Walmart.
+  - **This is the v10.59 / v10.65 lesson a third time:** static assertions and a syntax check both pass while the runtime throws. The browser pass is not optional on anything that renders.
+- **Verification:** `node --check` clean · **49 suites green** · `tests/test_v1066.py` pins both halves (21 static + 12 driving the REAL sliced helpers in node), including a self-referencing-declaration sweep for the v10.65 TDZ class. Then driven in a browser against a stubbed catalog: scorecards read **302 / 156 / 230 / 302** across no-selection → one → two → clear (each hand-checked against the fixture), the chart moves **`Total · 3 products` → one line → two lines → back**, and 8 rapid toggles no longer throw.
+- **Two suites went red and were re-pointed, not silenced:**
+  - `test_v1011` pinned the Sales empty-state `colspan="' + cols.length + '"`; it is now `cols.length + 1` for the checkbox column. The guarantee the assertion exists for — the span is COMPUTED, never hardcoded — is unchanged.
+  - **`test_v1020` was the interesting one.** Its regex `if \(thr\) thr\.innerHTML = cols\.map\(` stopped matching the Sales header once v10.66 wrapped it in a block — and **silently matched the Chewy COST header instead**, so it was asserting `colSrc('chewy_sales')` against the cost table. That is the v10.53 wrong-haystack class. Re-anchored on `chewyPnlSalesSetSort(` and now asserts it found exactly ONE line, so it can never drift onto another table again.
+
+## v10.65 — HOTFIX: a self-referencing const (TDZ) blanked Inventory and every P&L row
+
+- **Jason:** *"whoa. so much is broken right now"* — Inventory Planning rendered an empty table and every Amazon P&L row read `(unmatched <ASIN>)`.
+- **Cause was my own v10.63 blanket replacement.** Collapsing 11 read sites onto the new `bundleAttrOn()` helper rewrote a LOCAL inside `inventoryNeedBreakdown` into `const bundleAttrOn = (typeof document !== 'undefined') && (bundleAttrOn());` — a const whose initialiser calls itself. That is valid syntax, so `node --check` and all 47 suites passed; at runtime it throws `Cannot access 'bundleAttrOn' before initialization`, which aborted `init()` and left `allProducts` / `records` empty.
+- **Fix:** renamed the local to `bundleOn`. Added a sweep for self-referencing declarations (the only remaining match is the comment explaining this bug), now also asserted by `tests/test_v1066.py` over the functions it touches.
+- **⚠ The verification gap worth keeping:** a self-referencing const is syntactically legal, so neither the syntax check nor any static text assertion can see it, and the unauthenticated browser pass never executed the throwing path. Driving the real function is the only thing that catches this class.
 
 ## v10.63 / v10.64 — one bundle-attribution setting, and seasonal days of cover
 

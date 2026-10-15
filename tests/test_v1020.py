@@ -103,7 +103,21 @@ ok(len(re.findall(r'autoship_units \u00f7 units_sold', js)) == 2,
 
 # The header had no title attribute at all, so a column `t:` went nowhere.
 ok('chpnl-sales-thead-row' in js, 'the Chewy Sales header is still built here')
-m = re.search(r"if \(thr\) thr\.innerHTML = cols\.map\(c => `<th[^\n]*", js)
+# v10.66 re-point (NOT silenced). v10.66 wrapped the Sales thead in a block so
+# it could prepend the row-selection checkbox <th>, so the old
+#     "if (thr) thr.innerHTML = cols.map("
+# regex stopped matching here -- and silently matched the Chewy COST header
+# instead, which is the v10.53 wrong-haystack bug. Anchoring on the SALES sort
+# handler means this can only ever read the Sales header line.
+_hdr_lines = [l for l in js.split("\n")
+              if "chewyPnlSalesSetSort(" in l and "<th" in l and "title=" in l]
+ok(len(_hdr_lines) == 1,
+   'the Chewy Sales header line was located, and only it (found %d)' % len(_hdr_lines))
+
+class _M:
+    def __init__(self, t): self._t = t
+    def group(self, _n): return self._t
+m = _M(_hdr_lines[0]) if _hdr_lines else None
 # v10.57 wrapped the title expression so every header also states its source.
 # The guarantee is that a column's `t:` reaches a title attribute at all, which
 # is what was broken before v10.20 — not the exact expression shape.

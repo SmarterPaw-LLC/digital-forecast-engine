@@ -495,8 +495,12 @@ sok('colspan="9"' not in src[sales_start:sales_end],
 # detail toggle on), so a hardcoded colspan would under-span the empty state the
 # moment the toggle flips. The guarantee this assertion wants is that the empty
 # state spans the WHOLE table, which is now computed rather than counted.
-sok("colspan=\"' + cols.length + '\"" in src[sales_start:sales_end],
-    'Sales empty state spans the visible column count, not a hardcoded 11')
+# v10.66 re-point (NOT silenced): the Sales table gained a leading row-selection
+# checkbox column that lives OUTSIDE the column registry, so the empty state now
+# spans cols.length + 1. The guarantee this assertion exists for is unchanged --
+# the span is COMPUTED from the registry, never a hardcoded number.
+sok("colspan=\"' + (cols.length + 1) + '\"" in src[sales_start:sales_end],
+    'Sales empty state spans the computed column count (cols.length + 1 checkbox col)')
 cost_fn_start = src.index('function renderChewyPnlCost()')
 cost_fn_end = src.index('function downloadChewyPnlCostCSV')
 sok('colspan="12"' in src[cost_fn_start:cost_fn_end], 'Cost renderer uses colspan=12 (12 columns)')
