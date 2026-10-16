@@ -63,8 +63,18 @@ m = re.search(r'\n(const PNL_CHART_TOPN = \d+;)', js)
 if not m:
     raise SystemExit('FAIL: cannot find PNL_CHART_TOPN')
 
+# v10.67 - pnlTrendSeries now reads the shared band setting and the two colour
+# helpers. fn() captures function bodies only, so the const list is lifted too.
+m2 = re.search(r'\n(const PNL_CHART_BAND_STEPS = \[[^\]]*\];)', js)
+if not m2:
+    raise SystemExit('FAIL: cannot find PNL_CHART_BAND_STEPS')
+
 SLICES = [
     m.group(1),
+    m2.group(1),
+    fn('pnlChartBands'),
+    fn('pnlBandColor'),
+    fn('pnlBandFill'),
     fn('pnlChartMode'),
     fn('pnlSlotAdd'),
     fn('pnlTrendSeries'),
@@ -231,10 +241,23 @@ try {
   pnlTrendSeries(Object.assign({}, base, { mids: ['A'], metricOf: metricSales, mode: 'stacked', selectionActive: true }));
 } catch (e) { threw = e.message; }
 ok(threw === null, 'I1 degenerate inputs do not throw', threw);
-// I2 — more products than colors must keep cycling, not run off the end.
+// I2 — more products than colors must never run off the end of the palette.
+// v10.67: past the palette we no longer CYCLE (two identical bands in a 25/50
+// band stack are unreadable) — we generate distinct hues. The guarantee this
+// assertion exists for is "every band gets a usable colour", now plus "and
+// they are distinguishable", which is strictly stronger.
 const I2 = pnlTrendSeries({ perProd: many, buckets: [W[0]], mids: manyMids, metricOf: metricSales,
                             colors: ['#a','#b'], labelOf, mode: 'stacked', selectionActive: true });
-ok(I2.datasets.every(d => d.borderColor === '#a' || d.borderColor === '#b'), 'I2 colors cycle');
+ok(I2.datasets.every(d => typeof d.borderColor === 'string' && d.borderColor.length > 0),
+   'I2 every band gets a usable colour (never runs off the palette)');
+ok(I2.datasets[0].borderColor === '#a' && I2.datasets[1].borderColor === '#b',
+   'I2 the supplied palette is still used first');
+const _i2cols = I2.datasets.map(d => d.borderColor);
+ok(new Set(_i2cols).size === _i2cols.length,
+   'I2 bands past the palette are DISTINCT, not repeats (v10.67)');
+ok(I2.datasets.every(d => !String(d.backgroundColor).includes('undefined')
+                       && !/^hsl\(.*\)[0-9a-f]{2}$/i.test(String(d.backgroundColor))),
+   'I2 hsl fills use hsla(), never an appended hex alpha');
 
 console.log('\n  v10.12: ' + pass + ' passed, ' + fail + ' failed');
 if (fail) { failures.forEach(f => console.log('    FAIL ' + f)); process.exit(1); }
