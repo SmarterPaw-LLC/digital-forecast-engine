@@ -46,9 +46,9 @@ with latest as (
   group by asin
 )
 select
-  p.brand,
-  p.sp_sku,
-  coalesce(p.short_name, p.title)                       as product,
+  coalesce(p.brand, pa.brand)                           as brand,
+  coalesce(p.sp_sku, pa.sp_sku)                         as sp_sku,
+  coalesce(p.short_name, p.title, pa.short_name, pa.title) as product,
   q.asin,
   q.reporting_month,
   q.search_query                                        as keyword,
@@ -72,9 +72,13 @@ select
 from amazon_query_performance_asin q
 join latest l
   on l.asin = q.asin and l.reporting_month = q.reporting_month
-left join products p on p.asin = q.asin
+-- v10.71 - join on the master_id FK FIRST, ASIN only as a fallback.
+-- An ASIN-only join silently loses the product name whenever the catalog
+-- ASIN has moved since the SQP row was uploaded (the v4.49 class).
+left join products p  on p.master_id = q.master_id
+left join products pa on q.master_id is null and pa.asin = q.asin
 where q.view_type = 'asin'
-order by p.brand, product, q.search_query_volume desc nulls last;
+order by 1, 3, q.search_query_volume desc nulls last;
 */
 
 
@@ -98,9 +102,9 @@ ranked as (
   where q.view_type = 'asin'
 )
 select
-  p.brand,
-  p.sp_sku,
-  coalesce(p.short_name, p.title)        as product,
+  coalesce(p.brand, pa.brand)            as brand,
+  coalesce(p.sp_sku, pa.sp_sku)          as sp_sku,
+  coalesce(p.short_name, p.title, pa.short_name, pa.title) as product,
   r.asin,
   r.rn                                   as rank,
   r.search_query                         as keyword,
@@ -109,9 +113,10 @@ select
   r.purchases_asin_count                 as our_purchases,
   r.purchases_total_count                as market_purchases
 from ranked r
-left join products p on p.asin = r.asin
+left join products p  on p.master_id = r.master_id
+left join products pa on r.master_id is null and pa.asin = r.asin
 where r.rn <= 25
-order by p.brand, product, r.rn;
+order by 1, 3, r.rn;
 */
 
 
@@ -136,10 +141,15 @@ select
   sum(q.purchases_asin_count)                     as our_purchases,
   max(q.purchases_total_count)                    as market_purchases,
   round(avg(q.impressions_asin_share_pct), 2)     as avg_our_impression_share_pct,
-  string_agg(distinct coalesce(p.sp_sku, q.asin), ', ' order by coalesce(p.sp_sku, q.asin)) as skus
+  string_agg(distinct coalesce(p.sp_sku, pa.sp_sku, q.asin), ', '
+           order by coalesce(p.sp_sku, pa.sp_sku, q.asin))      as skus
 from amazon_query_performance_asin q
 join latest l on l.asin = q.asin and l.reporting_month = q.reporting_month
-left join products p on p.asin = q.asin
+-- v10.71 - join on the master_id FK FIRST, ASIN only as a fallback.
+-- An ASIN-only join silently loses the product name whenever the catalog
+-- ASIN has moved since the SQP row was uploaded (the v4.49 class).
+left join products p  on p.master_id = q.master_id
+left join products pa on q.master_id is null and pa.asin = q.asin
 where q.view_type = 'asin'
 group by q.search_query
 order by max(q.search_query_volume) desc nulls last

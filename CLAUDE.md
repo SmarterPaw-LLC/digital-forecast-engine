@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.70**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.71**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,20 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.71 — saved queries are a SHARED team library
+
+- **Jason:** *"if i save a query does it save it globally for all users?"* → no, they were per-user. Then: *"yes let me save it globally."*
+- **⚠ SQL TO RUN:** `supabase_v10_71_shared_saved_queries.sql` — creates `shared_saved_queries` (name PK · sql · updated_at via trigger · updated_by · updated_by_email). RLS + authenticated-all policy + grants + anon revoke, per the v6.47 hard rule. Until it is run, queries still work and stay per-browser; the console names the migration.
+- **Ported from `pricing_scenarios` (v9.66)** — the only other genuinely shared library in the app. Deliberately NOT the `user_profiles` pattern the saved-VIEW systems use: those are personal preferences, but a saved query is a piece of work you want colleagues to run, so it is one shared row per name.
+- **⚠ The v9.67 lesson is the whole feature, and it is encoded rather than remembered.** v9.66's first shared loader REPLACED the local map with whatever the table returned — and on the **first load after the migration that table is empty**, so it wrote `{}` over everything anyone had saved. This loader **MERGES, never replaces**: a name only disappears locally if we previously SAW it in the table and it has since gone. `_sharedQueryDbSnapshot` is what makes "deleted by someone else" distinguishable from "never seen"; it is **null on the first load of a session**, so a first load structurally cannot delete.
+- **Writes are a per-NAME diff**, not a whole-library replace, so two people saving different queries at the same time cannot clobber each other. The snapshot advances **only after the writes land** — otherwise a failed write would lose the record of what still needs deleting.
+- **Provenance fields are excluded from the compare key.** `updatedAt` / `updatedByEmail` are read-only server decoration; including them would make every row read as changed on the next save and re-upload the entire library (the exact v9.66 bug).
+- **One-time migration of `user_profiles.db_user_queries`** so nobody's existing queries are stranded. The old column is **left in place** — dropping it is a separate decision once every user has loaded the app at least once.
+- **The UI says it is shared**, because a silent shared-edit is a trap: the label reads `💾 Saved: 🌐 shared` with a tooltip warning that saving/renaming/deleting changes it for the whole team, and each chip names who last saved it and when.
+- **⚠ The active-query index is positional, and a shared reload can reorder the library under you.** `_activeSavedQueryName` tracks the name so the editor keeps pointing at the same query after someone else's save lands.
+- **Verification:** `node --check` clean · **53 suites green** · `tests/test_v1071.py` (43 assertions) drives the REAL sliced loader / sync / compare-key against a stubbed Supabase that actually stores rows. The assertion that earns its keep: **an empty shared table deletes nothing and publishes the local set** — the exact shape that destroyed work in v9.66. Plus: shared copy wins a collision, a genuine remote delete propagates on a SECOND load, a never-seen local name survives, only the CHANGED query is upserted, a failed write does not advance the snapshot, and signed-out / missing-table both degrade to local-only without touching anything. Then driven in a browser: chips render with saver attribution, the label shows the shared marker, zero console errors.
+- **Also fixed while in here: `query_keywords_by_product.sql` joined `products` on ASIN only** — the v4.49 class, where a row goes unattributed whenever the catalog ASIN has moved since the SQP row was uploaded. Now joins the `master_id` FK first with an ASIN fallback and coalesces the display fields.
 
 ## v10.70 — the audit button's onclick could silently become a no-op (v7.53 class)
 
