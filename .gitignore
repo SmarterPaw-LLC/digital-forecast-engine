@@ -23,3 +23,7 @@ ehthumbs.db
 
 # stray Windows shortcuts
 *.lnk
+
+# Test-harness data dumps — regenerated on every run, duplicate repo content
+tests/*_cases.json
+tests/*_guard.json

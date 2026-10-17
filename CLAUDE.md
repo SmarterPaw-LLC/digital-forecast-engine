@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.67**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.70**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,44 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.70 — the audit button's onclick could silently become a no-op (v7.53 class)
+
+- **Found by driving the REAL generated markup in a browser**, not by reading the diff. A `chewy_sku` containing a double quote rendered a button whose `onclick` the browser silently auto-corrected into a **no-op**: the attribute was still there, the button still rendered, the click just did nothing.
+- **This is v7.53 exactly** — that release shipped a fee-drill handler broken the same way and nobody noticed, because a dead inline handler throws an *uncaught* SyntaxError at click time rather than propagating to the caller. So a `try/catch` around `.click()` catches nothing and the test reads "no error". The only tell is that the handler never fired.
+- **Fix is the full escape chain, and the ORDER is the fix:**
+  1. `\` → `\\` — survives the JS string literal
+  2. `'` → `\'` — the JS string is single-quoted
+  3. `"` → `&quot;` — the HTML attribute is double-quoted; the parser decodes it back to a literal `"` **inside** the single-quoted JS string, which is valid
+  Do these in any other order and a later replace mangles an earlier one.
+- **Chewy SKUs are numeric today**, so this was defence in depth rather than a live break. Shipped anyway because the failure mode is silent and the fix is one chained replace.
+- **Verified in the browser across six shapes** — `1365718`, `O'Brien-9`, `quote"sku`, `back\slash`, `both"and'q`, `""` — all fire, all round-trip the SKU exactly, zero console errors. Pre-fix, `quote"sku` reported `fired: false`.
+- **⚠ A process note worth keeping: I nearly mis-reported this as fixed-already.** The post-fix console still showed the SyntaxError from the PRE-fix run — the MCP console buffer survived the reload. Re-running the single case with a fresh `window.addEventListener('error', …)` collector is what separated "stale error" from "still broken". **A console error with no timestamp is not evidence about the current build.**
+- The test pins the three replaces AND their relative order, since order is the thing that would silently regress.
+
+## v10.69 — Chewy Break-Even: show the working (tooltips + data-source viewer)
+
+- **Jason told Blake, in writing:** *"I will add in the calculations used as tooltips so that you can check them (as well as a viewer to see the data source)."* This is that.
+- **The gap:** the column headers already stated the FORMULAS (v10.37 / v10.40), but no cell stated ITS OWN NUMBERS — so a reviewer could read the method and still not verify a single SKU.
+- **`chewyPnlCogsSource(mid)`** names WHICH field won the `chewy_cogs → landed_cost → dtc_cogs → amazon_cogs` fallback chain. This is the open accuracy question on this tab: `dtc_cogs` carries DTC shipping + pick/pack + overhead and `amazon_cogs` carries the FBA fulfilment fee — **neither applies to a 1P pallet going to a Chewy DC**, so a SKU on either reads a worse margin (and a higher BE ROAS) than reality. The number alone cannot show that. Only those two are flagged `warn: true`; `landed_cost` is NOT flagged because it merely *understates* (no fulfilment in it), which is a different error with the opposite sign.
+- **Per-row tooltips** on GM $/u and BE ROAS, substituting that row's actual figures into the formula the header states. Wired through the **4th (`tip`) argument of the shared `cell()` helper** — not a bespoke `<td>`, so they cannot drift from how every other cell renders.
+- **`openChewyBeAudit(sku)`** — the viewer. Three blocks: every INPUT with its value and **the table it came from** (`chewy_catalog.cost`, `chewy_rebates`, `product_cogs.*`, `chewy_ad_spend`), the math chain as a monospace waterfall, and the retail-vs-wholesale explanation that answers Blake's actual question.
+- **⚠ The invariant that matters most: the tooltips and the viewer REPORT the row, they never recompute it.** Neither calls `chewyBreakevenEcon`. If they recomputed, they could disagree with the cell they are explaining — which is worse than no explanation at all. Asserted both ways.
+- **The viewer caches ALL rows, not the filtered set** (`chewyBeAuditRows = allRows`), so the audit still resolves a SKU after a quick-filter narrows the table under it. Asserted that it is set before the sort.
+- **⚠ Caught my own called-but-undefined bug before running the patch** — the draft wired a button to `openChewyBeAudit()` without ever defining it. That is the **v10.8 class** (a guessed/missing function name is valid JavaScript, so `node --check` and every static suite pass; it only fails at click time). The suite now asserts each new function is both defined AND called.
+- **⚠ Anchoring, again:** every anchor was ASCII-only (v10.53 — the file mixes real glyphs with literal `\uXXXX` escapes on adjacent lines, so a hand-typed glyph anchor is a coin flip). Before applying, I verified the `cell()` signature actually takes a tooltip arg, that all 22 row fields I reference exist, that the COGS chain order matched, and the exact indentation of every anchor. Two of those checks would have failed the patch.
+- **Verification:** `node --check` clean · **52 suites green** · `tests/test_v1069.py` (78 assertions) drives the REAL sliced `chewyPnlCogsSource` through all six chain positions (including a genuine `0` surviving `??` where `||` would drop it) and the REAL `openChewyBeAudit` against a stubbed DOM. Then driven in a browser: the math chain ties out hand-checked (`$4.0000 × (1 − 26.5%) = $2.9400 − $1.0000 = $1.9400`; `$8.99 ÷ $1.94 = 463.4%`), the wrong-basis warning fires on `amazon_cogs` and correctly does NOT on `chewy_cogs`, the v4.168 drag-out guard holds, and an unloaded SKU alerts instead of throwing.
+
+## v10.68 — Query Database: paste a whole .sql file and have it just work
+
+- **Jason pasted `query_keywords_by_product.sql` whole and got `syntax error at or near ";"`.**
+- **Cause:** `exec_sql` wraps the input as `select … from (USER_QUERY) t`. v4.43 already stripped a *trailing* `;` for exactly that reason — but the `.sql` files in this repo are written as **one live section with the alternates parked in `/* … */` blocks underneath**, so a whole-file paste ENDS IN A COMMENT and the real `;` sits mid-string, landing inside the wrapper.
+- **Fixed the RUNNER, not the files**, so every multi-section `.sql` works — including ones Jason writes later. A trailing-comment strip loop mirrors the existing leading-comment loop (v4.43 handled the leading mirror of this same problem); it must run BEFORE the leading strip, and it re-strips the `;` the comment was hiding.
+- **Plus a named error** replacing Postgres's opaque one: if a `;` still survives, the paste genuinely holds two statements. String literals are blanked first (`'…'` → `QQ`) so a semicolon inside quoted text is not mistaken for a separator.
+- **⚠ The test drives the REAL .sql files on disk**, not a hand-written fixture — the bug is specifically about the shape those files happen to have, so a fixture would not have caught it. The regression guard reproduces the pre-v10.68 pipeline and proves it broke on **3 of the 4** real files (the 4th is single-section, which is why this went unnoticed for so long).
+- **Also asserted: stripping did not become greedy.** An inline `/* … */` inside a query, a `WITH … SELECT`, and a `;` inside a string literal all survive intact; a genuine two-statement paste is still refused rather than silently truncated.
+- **Verification:** `node --check` clean · **52 suites green** · `tests/test_v1068.py` (55 assertions).
+- **⚠ Process note — heredoc escape mangling bit FOUR more times this session.** CLAUDE.md has warned about it since v9.77 and v10.62. Writing a patch or test containing `\n`, `\\` or `\uXXXX` through a bash heredoc silently eats backslashes; the assert then fails against an anchor that *looks* right in the terminal. **Use the Write tool for anything containing escapes — this is not "be careful", it is "do not use the heredoc".** Verified anchors by `repr()`-dumping the real bytes to a file (the console is cp1252 and crashes on the real glyphs).
 
 ## v10.67 — the "Other" band is expandable on every stacked chart
 
