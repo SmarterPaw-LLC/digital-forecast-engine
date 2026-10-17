@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.71**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.72**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,14 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.72 — rename a saved query
+
+- **Jason:** *"i can't rename queries."* Correct. Forecast (`fcRenameView`), Inventory (`ipRenameView`) and P&L (`pnlRenameView`) all gained a rename in v4.129; the Query Database library was missed and only ever had load + delete. Renaming meant save-as under a new name then delete the old one, which on the v10.71 SHARED library is **two team-visible edits for what should be one**.
+- **Follows the `fcRenameView` convention** rather than inventing a third pattern: prompt pre-filled with the current name, no-op on empty / whitespace / unchanged, confirm before overwriting a conflicting name. The pencil sits between the name and the delete, with `stopPropagation` so renaming does not also load the query.
+- **⚠ `name` is the PRIMARY KEY of `shared_saved_queries`, so a rename is a DELETE + INSERT server-side.** The v10.71 diff already does exactly that with no special-casing (old name falls out of the array, lands in `gone`, gets deleted; new name is unseen and is upserted), and that is now asserted. If the sync ever stopped emitting the delete, the old row would linger forever and the shared library would slowly fill with orphans.
+- **⚠ The active-query pointer is POSITIONAL**, and dropping a conflicting entry shifts indices underneath it. Three cases are handled and tested: the clash target sits BEFORE the active query (index decremented), AFTER it (untouched), or **IS** the active query (active cleared to -1 rather than left pointing at a ghost).
+- **Verification:** `node --check` clean · **54 suites green** · `tests/test_v1072.py` (37 assertions) drives the REAL sliced handler against a mirror of the v10.71 sync diff. Then driven in a browser through the actual pencil button: the rename lands, the active pointer follows, the sync emits `delete[alpha]` + `upsert[alpha renamed]`, and all seven edge paths (cancel / unchanged / blank / trim / collision declined / collision accepted / collision-ate-the-active-query) behave, with zero console errors.
 
 ## v10.71 — saved queries are a SHARED team library
 
