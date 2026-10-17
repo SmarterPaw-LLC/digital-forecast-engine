@@ -25,6 +25,13 @@
 --    commonly hit by several campaigns / ad groups / match types.
 -- 5. Only (asin, month) pairs present in BOTH tables can be split. Run
 --    SECTION 0 first; it tells you exactly which products qualify.
+-- 6. SQP ASIN view is CAPPED AT THE TOP 100 QUERIES per ASIN per month. SP
+--    reports every term that triggered an ad (commonly 1.5-4x more terms), so
+--    total SP clicks are NOT comparable to SQP clicks. Section 0 reports
+--    paid_clicks_same_terms (comparable) separately from paid_clicks_all_terms
+--    (not comparable). Section 1 joins per keyword, so it is unaffected.
+-- 7. One row per (product, MONTH) - a product with 7 months of data is 7 rows,
+--    not 7 products.
 --
 -- HOW TO RUN: Data -> Query Database, paste this whole file, Run Query.
 -- (v10.68+ strips the parked sections automatically. To run a different
@@ -46,13 +53,34 @@ with sqp as (
   where view_type = 'asin' and asin is not null
   group by asin, region, reporting_month
 ),
-sp as (
+-- The exact term set SQP reported for each (asin, month). SQP ASIN view is
+-- CAPPED AT THE TOP 100 QUERIES, so this is not the whole long tail.
+sqp_terms as (
   select asin, region, reporting_month,
-         count(distinct lower(btrim(customer_search_term))) as sp_keywords,
-         sum(clicks)                                        as sp_clicks
+         lower(btrim(regexp_replace(search_query, '\s+', ' ', 'g'))) as term
+  from amazon_query_performance_asin
+  where view_type = 'asin' and asin is not null
+),
+sp_raw as (
+  select asin, region, reporting_month,
+         lower(btrim(regexp_replace(customer_search_term, '\s+', ' ', 'g'))) as term,
+         sum(clicks) as clicks
   from amazon_sp_search_term
   where asin is not null
-  group by asin, region, reporting_month
+  group by 1, 2, 3, 4
+),
+sp as (
+  select r.asin, r.region, r.reporting_month,
+         count(*)                                              as sp_keywords,
+         sum(r.clicks)                                         as sp_clicks_all,
+         sum(r.clicks) filter (where t.term is not null)       as sp_clicks_in_sqp
+  from sp_raw r
+  left join sqp_terms t
+    on  t.asin            = r.asin
+    and t.region          = r.region
+    and t.reporting_month = r.reporting_month
+    and t.term            = r.term
+  group by 1, 2, 3
 )
 select
   coalesce(p.brand, '(not in catalog)')                     as brand,
@@ -61,10 +89,25 @@ select
   coalesce(sqp.asin, sp.asin)                               as asin,
   coalesce(sqp.region, sp.region)                           as region,
   coalesce(sqp.reporting_month, sp.reporting_month)         as month,
-  sqp.sqp_keywords,
+
+  sqp.sqp_keywords,          -- always <= 100: Amazon caps SQP ASIN view there
+  sp.sp_keywords,            -- every term that triggered an ad, no cap
+
+  -- COMPARABLE PAIR: both restricted to the terms SQP actually reported.
   sqp.sqp_clicks                                            as total_clicks,
-  sp.sp_keywords,
-  sp.sp_clicks                                              as paid_clicks,
+  sp.sp_clicks_in_sqp                                       as paid_clicks_same_terms,
+  greatest(sqp.sqp_clicks - coalesce(sp.sp_clicks_in_sqp, 0), 0)
+                                                            as organic_clicks_est,
+  case when sqp.sqp_clicks > 0
+       then round(100.0 * greatest(sqp.sqp_clicks - coalesce(sp.sp_clicks_in_sqp, 0), 0)
+                  / sqp.sqp_clicks, 1) end                  as organic_click_share_pct,
+
+  -- NOT comparable to total_clicks: includes paid clicks on terms outside
+  -- SQP's top 100. Shown so the gap between the two is visible.
+  sp.sp_clicks_all                                          as paid_clicks_all_terms,
+  greatest(coalesce(sp.sp_clicks_all, 0) - coalesce(sp.sp_clicks_in_sqp, 0), 0)
+                                                            as paid_clicks_outside_sqp,
+
   case
     when sqp.asin is not null and sp.asin is not null then 'SPLITTABLE'
     when sqp.asin is not null then 'SQP only - no paid data, cannot split'
