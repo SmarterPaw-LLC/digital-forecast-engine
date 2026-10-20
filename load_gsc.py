@@ -45,18 +45,26 @@ added alongside the existing one in the blog repos; that is a separate change.
 CREDENTIALS
 ----------------------------------------------------------------------------
 The gsc_* tables are authenticated-only with anon revoked (the v6.47 house
-rule), so this needs a service_role key. Put it in a .env next to this file
-(already gitignored):
+rule), so this signs in as a real user and uses that token, exactly as the
+dashboard does. Put your dashboard login in a .env next to this file (already
+gitignored):
 
-    SUPABASE_URL=https://yjcnuyoaemlipvuinptp.supabase.co
-    SUPABASE_SERVICE_KEY=<service_role key from Supabase > Settings > API>
+    SUPABASE_EMAIL=jnesbitt@meowijuana.com
+    SUPABASE_PASSWORD=<your dashboard password>
 
-or export the same names as environment variables.
+That is all that is needed. SUPABASE_URL and the anon key default to this
+project's, and the anon key is public by design (it ships inside index.html).
+
+A service_role key ALSO works if SUPABASE_SERVICE_KEY is set, but it is not
+the recommended path here: this project grants new tables to `authenticated`
+only, so service_role has no grants on them without an extra migration, and
+that key bypasses RLS on every table in the database.
 
 ----------------------------------------------------------------------------
 USAGE
 ----------------------------------------------------------------------------
     python load_gsc.py --dry-run                  # parse + report, write nothing
+    python load_gsc.py --check                    # verify credentials, write nothing
     python load_gsc.py --only 2026-10-19          # one snapshot, both properties
     python load_gsc.py --property smarterpaw      # everything for one property
     python load_gsc.py --sample weekly            # thin the backfill to 1/week
@@ -100,19 +108,54 @@ FILES = OrderedDict([
 
 
 # --------------------------------------------------------------------------- env
+# This project's own public anon key, the same one index.html ships. It grants
+# nothing on its own; it only identifies the project so the auth endpoint will
+# answer. Every gsc_* table has anon revoked.
+DEFAULT_URL = 'https://yjcnuyoaemlipvuinptp.supabase.co'
+DEFAULT_ANON = ('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.'
+                'eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlqY251eW9hZW1saXB2dWlucHRwIiwicm9sZSI6'
+                'ImFub24iLCJpYXQiOjE3NzgyNTY4NjcsImV4cCI6MjA5MzgzMjg2N30.'
+                'CACwOGjnC370ZPjKlXG4dDpU9bVwCP4JDBD451WvwaM')
+
+
 def load_env():
     """Read .env next to this file, without clobbering real env vars."""
     path = os.path.join(HERE, '.env')
     if os.path.isfile(path):
-        for line in io.open(path, encoding='utf-8'):
+        # utf-8-sig: Notepad writes a BOM, which would otherwise land inside
+        # the first key's name and make it unreadable.
+        for line in io.open(path, encoding='utf-8-sig'):
             line = line.strip()
             if not line or line.startswith('#') or '=' not in line:
                 continue
             k, v = line.split('=', 1)
             os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
-    url = os.environ.get('SUPABASE_URL', '').rstrip('/')
-    key = os.environ.get('SUPABASE_SERVICE_KEY') or os.environ.get('SUPABASE_KEY', '')
-    return url, key
+    url = (os.environ.get('SUPABASE_URL') or DEFAULT_URL).rstrip('/')
+    anon = os.environ.get('SUPABASE_ANON_KEY') or DEFAULT_ANON
+    svc = os.environ.get('SUPABASE_SERVICE_KEY', '')
+    email = os.environ.get('SUPABASE_EMAIL', '')
+    pw = os.environ.get('SUPABASE_PASSWORD', '')
+    return url, anon, svc, email, pw
+
+
+def sign_in(url, anon, email, pw):
+    """Exchange email+password for an access token with the `authenticated`
+    role, which is what the gsc_* grants are written against."""
+    req = urllib.request.Request(
+        '%s/auth/v1/token?grant_type=password' % url,
+        data=json.dumps({'email': email, 'password': pw}).encode('utf-8'),
+        method='POST')
+    req.add_header('apikey', anon)
+    req.add_header('Content-Type', 'application/json')
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            tok = json.loads(r.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode('utf-8', 'replace')[:300]
+        raise RuntimeError('sign-in failed (HTTP %s): %s' % (e.code, detail))
+    if not tok.get('access_token'):
+        raise RuntimeError('sign-in returned no access_token')
+    return tok['access_token']
 
 
 # ------------------------------------------------------------------------ parsing
@@ -203,8 +246,11 @@ def parse_by_date(path):
 
 # ---------------------------------------------------------------------- transport
 class Supa(object):
-    def __init__(self, url, key, dry=False):
+    def __init__(self, url, key, dry=False, apikey=None):
         self.url, self.key, self.dry = url, key, dry
+        # With a user token the apikey header stays the ANON key while the
+        # bearer carries the user's JWT; with service_role both are the same.
+        self.apikey = apikey or key
         self.writes = 0
 
     def _req(self, method, path, body=None, prefer=None, tries=4):
@@ -213,7 +259,7 @@ class Supa(object):
         last = None
         for attempt in range(tries):
             req = urllib.request.Request(url, data=data, method=method)
-            req.add_header('apikey', self.key)
+            req.add_header('apikey', self.apikey)
             req.add_header('Authorization', 'Bearer %s' % self.key)
             req.add_header('Content-Type', 'application/json')
             if prefer:
@@ -307,17 +353,42 @@ def main():
     ap.add_argument('--batch', type=int, default=1000, help='rows per insert (default 1000)')
     ap.add_argument('--force', action='store_true', help='reload snapshots already present')
     ap.add_argument('--dry-run', action='store_true', help='parse and report, write nothing')
+    ap.add_argument('--check', action='store_true', help='verify credentials and exit')
     a = ap.parse_args()
 
-    url, key = load_env()
-    if not a.dry_run and not (url and key):
-        print('ERROR: SUPABASE_URL / SUPABASE_SERVICE_KEY not set.\n'
-              '       Put them in %s (gitignored) or export them.\n'
-              '       Re-run with --dry-run to validate parsing without credentials.'
-              % os.path.join(HERE, '.env'))
-        return 2
+    url, anon, svc, email, pw = load_env()
+    key, apikey, mode = '', '', ''
+    if not a.dry_run:
+        if email and pw:
+            # Preferred: the same `authenticated` role the dashboard uses, which
+            # is what this project grants new tables to.
+            try:
+                key = sign_in(url, anon, email, pw)
+            except Exception as e:
+                print('ERROR: %s' % e)
+                return 2
+            apikey, mode = anon, 'user (%s)' % email
+        elif svc:
+            key, apikey, mode = svc, svc, 'service_role'
+        else:
+            print('ERROR: no credentials. Add to %s (gitignored):\n'
+                  '         SUPABASE_EMAIL=you@example.com\n'
+                  '         SUPABASE_PASSWORD=your dashboard password\n'
+                  '       Or re-run with --dry-run to validate parsing without credentials.'
+                  % os.path.join(HERE, '.env'))
+            return 2
+        print('auth: %s' % mode)
 
-    sb = Supa(url, key, dry=a.dry_run)
+    sb = Supa(url, key, dry=a.dry_run, apikey=apikey)
+
+    if a.check:
+        try:
+            sb.get('gsc_snapshots?select=property,snapshot_date&limit=1')
+            print('OK: credentials work and gsc_snapshots is readable.')
+            return 0
+        except Exception as e:
+            print('FAILED: %s' % e)
+            return 2
     props = a.property or list(PROPERTIES)
 
     # existing (property, snapshot_date) -> floor, so re-runs are idempotent

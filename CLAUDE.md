@@ -36,6 +36,24 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.74a — loader signs in as a USER, and the blog pulls now load themselves
+
+*(No index.html change, so no version bump. Loader + blog-repo tooling only.)*
+
+- **⚠ My service_role advice was wrong for THIS project, and probing it is what showed that.** `service_role` has grants on `products` (an original table that got Supabase's defaults) but **not** on `sku_economics`, `shopify_sales_daily`, `shared_saved_queries`, or the new `gsc_*` tables. Every table added since the original setup grants to **`authenticated` only** — which is exactly what `supabase_v10_73_gsc_seo.sql` does, correctly. I had assumed the Supabase default where service_role is god-mode. It is not, here.
+- **So `load_gsc.py` now signs in as a user** (`POST /auth/v1/token?grant_type=password` with the public anon key, then the user's JWT as the bearer and anon as `apikey`) rather than the project granting a new role. Two consequences, both good: no new migration, and **no service_role key on disk** — that key bypasses RLS on every table, whereas a user token reaches only what that account reaches.
+  - `.env` is now just `SUPABASE_EMAIL` + `SUPABASE_PASSWORD`. `SUPABASE_URL` and the anon key default to this project's (the anon key is public by design — it ships inside index.html). `SUPABASE_SERVICE_KEY` still works if set, but is documented as not the recommended path here.
+  - `--check` verifies credentials and exits without writing.
+  - `.env` is read as **utf-8-sig**: Notepad writes a BOM, which would otherwise land inside the first key's name and make it unreadable.
+- **Backfill landed and reconciles exactly.** 38 snapshots (21 smarterpaw + 17 kittykazoom), loader reported **759,679** rows. Read back from Supabase: `gsc_query` 272,503 + `gsc_page` 33,793 + `gsc_query_page` 442,692 + `gsc_by_date` 672 + 38 snapshot rows = **749,698**. The 9,981 gap is the `gsc_by_date` upsert doing its job: **10,691 day-rows processed collapsed to 672 distinct (property, day)**, newest pull winning each day. 5,088,040 rows were floored out at the smarterpaw floor of 10.
+- **The blog pulls now load themselves.** Both `smarterpaw-blog/gsc_pull.py` and `kitty-kazoom-blog/gsc_pull.py` call `load_into_forecast_engine(...)` at the end of `main()`, loading **only the snapshot just written** (`--only <date> --property <slug>`), so it is seconds rather than a re-walk of the archive.
+  - **The pull is the expensive, hard-to-redo half, so a load failure is reported and swallowed, never allowed to fail the pull.** The message names the exact retry command and points out the snapshot on disk is fine.
+  - `--no-load` opts out. The loader reads credentials from its **own** folder's `.env` regardless of cwd, so nothing is duplicated into the blog repos.
+  - Verified end to end by calling the chained function directly against an already-loaded snapshot: it ran the loader, which correctly reported `snapshots loaded 0, skipped 1`.
+- **⚠ A patch of mine broke `gsc_pull.py` and the parse check caught it.** I appended a `help=` continuation after the `--days` argument, which already had one, producing an orphaned indented line and an `IndentationError`. Restored from the backup taken first and re-anchored on the real end of that argument. **Take the backup before patching someone else's script**, and `ast.parse` every file touched.
+- **Also fixed in passing:** `gsc_pull.py --help` crashed with `UnicodeEncodeError` on a cp1252 console because the `--days` help text contained a `≈`. Pre-existing, but directly in the way of discovering the new `--no-load` flag, so it is now plain ASCII.
+- **Cadence, for the record:** the backfill is one-time. Re-running is safe and cheap because the loader skips any `(property, snapshot_date)` already present. Weekly is plenty — each pull is a 16-month trailing window, so two snapshots a day apart are ~99% identical.
+
 ## v10.74 — HOTFIX: the SEO tab never loaded, because getSB() is async and I did not await it
 
 - **Jason's screenshot of the live app, signed in as jnesbitt@meowijuana.com**, showed the SEO tab reading *"Could not read the Search Console tables. This usually means the session is not signed in yet"* with `sb.from is not a function` underneath. He was signed in. The message was wrong and so was the code.
