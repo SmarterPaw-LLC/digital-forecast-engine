@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.73**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.74**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,18 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.74 — HOTFIX: the SEO tab never loaded, because getSB() is async and I did not await it
+
+- **Jason's screenshot of the live app, signed in as jnesbitt@meowijuana.com**, showed the SEO tab reading *"Could not read the Search Console tables. This usually means the session is not signed in yet"* with `sb.from is not a function` underneath. He was signed in. The message was wrong and so was the code.
+- **The bug is one missing keyword, twice.** `getSB()` is `async`. All **162** other call sites in the file do `const sb = await getSB();`. I wrote `const sb = getSB();` in `seoFetchAll` and `loadSeoTab`, so `sb` was a **Promise**, and `Promise.from` is undefined. Nothing to do with auth, RLS, or the migration.
+- **⚠ The misleading message was the worse half.** My "are we signed out?" heuristic matched the bare substring `not a function`, so a plain programming error was reported to the user as an auth problem — sending Jason to look at his session while the real fault was a missing `await`. **A guessed cause stated confidently is worse than no cause at all.** The heuristic is now narrow (`JWT`, `not authenticated`, `no session`, `permission denied`, `row-level security`); anything else falls through to the neutral "the query failed, so it is not known whether the tables are empty or missing".
+- **Fixing it proved two things at once.** The error changed from `sb.from is not a function` to `permission denied for table gsc_snapshots` — a real PostgREST response, which confirms the client works AND that **`supabase_v10_73_gsc_seo.sql` has been run** (a missing table returns "does not exist" / "schema cache", not a permission error). Anon being denied is the RLS design working.
+- **Two more real defects in the same screenshot:**
+  - **A stray "Labels" button** sat next to the panel title. That is v8.42's `injectChartLabelsToggles()`, which appends a chart-labels control to **every `.ds-hdr` in the document** — and this panel has no chart, so the control was dead. **CLAUDE.md records this exact trap at v10.6** (*"a `.ds-hdr` here would grow a chart control that has nothing to do with this panel"*) and I walked into it anyway. The panel header is now plain markup.
+  - **`class="scorecards"` was the wrong container.** That is the v4.188 **banded** strip (`gap:1px`, `background:var(--border)`, `border-bottom`) built for `.sc` children. These are `pnlCard` children and belong in the plain grid Amazon P&L uses for `#pnl-scorecards`; the banded background was bleeding through underneath.
+- **⚠ The left-edge clipping in the screenshot is NOT from this tab, and is pre-existing.** Measured: the document overflows the viewport by 93px and **no element inside `#page-seo` is an offender**. The overflow is entirely the app header (`.header-right` — the Live clock / CSV / sign-out cluster), which is 1112px wide at a 1019px viewport. It is **worse on Products (1196px)** than on SEO. Every page is affected, horizontal scroll clips the left edge of all of them. Flagged rather than silently folded into this fix, since it is a separate piece of work.
+- **Verification:** `node --check` clean · **55 suites green** · zero un-awaited `getSB()` left in the file · confirmed in a browser in light theme (Jason's setting) that the panel grew no Labels button, no live `.ds-hdr` / `.ds` / `class="scorecards"` survives inside `page-seo`, and the load now returns a genuine Supabase response instead of a type error.
 
 ## v10.73 — SEO tab (unified keyword tracker), phase 1: Google Search Console
 
