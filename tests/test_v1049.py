@@ -53,7 +53,12 @@ ok(js.count('function pnlCardStrip(') == 1, 'pnlCardStrip is declared exactly on
 
 # Seven strips: Amazon, Shopify, Walmart, Chewy Sales, Chewy Cost,
 # Chewy Break-Even, Chewy Rebates.
-ok(code.count('pnlCardStrip(') - 1 == 3, 'three strips render a whole array through pnlCardStrip',
+# v10.73 - was a hardcoded `== 3`. The guarantee this assertion exists for is
+# that whole-array strips go through the ONE canonical renderer, not that there
+# happen to be exactly three of them; v10.73's SEO strip is a fourth correct
+# user. Pinning the census made a conforming addition fail, which is the
+# brittle-count trap already recorded for test_v1011 / test_v1020.
+ok(code.count('pnlCardStrip(') - 1 >= 3, 'whole-array strips route through pnlCardStrip (count grows with new strips)',
    code.count('pnlCardStrip(') - 1)
 direct = len(re.findall(r'(?<!function )\bpnlCard\(', code)) - 0
 ok(direct >= 4, 'four more map their own rows through pnlCard', direct)

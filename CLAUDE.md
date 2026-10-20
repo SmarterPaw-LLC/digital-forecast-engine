@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.72**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.73**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,41 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.73 — SEO tab (unified keyword tracker), phase 1: Google Search Console
+
+- **Jason:** *"refer to the latest chat from the smarterpaw blog project setup project. we will build an seo tab in the digital forecast engine as a unified keyword tracker tool."*
+- **The insight this is built on:** the daily GSC pulls archived in `smarterpaw-blog/gsc-data/` and `kitty-kazoom-blog/gsc-data/` since May are **already** a longitudinal position-and-impressions record for every query either site surfaces on. That is a rank tracker built from Google's own numbers rather than a vendor's estimates. It had just never been queryable.
+- **⚠ SQL TO RUN:** `supabase_v10_73_gsc_seo.sql` — creates `gsc_snapshots` / `gsc_query` / `gsc_page` / `gsc_query_page` / `gsc_by_date`. RLS + authenticated-all policy + grants + anon revoke per the v6.47 hard rule.
+  - **Supabase's SQL Editor will warn "creates tables without enabling RLS". It is a false positive** — RLS IS enabled, inside a `do $$ ... execute format(...) $$` loop that the editor's static scanner cannot trace. The "destructive operations" warning is the single `drop policy if exists` that the next line recreates. Verified: no `drop table` / `truncate` / `delete` / `drop column` anywhere in the file. "Run and enable RLS" is safe and idempotent with the loop. **Worth making the five enables literal so the linter can see them** — same end state, no dialog, and RLS slipping through unnoticed is exactly what bit `shopify_sales_daily` in v6.47.
+- **The pull scripts STAY in the blog repos.** `load_gsc.py` in this project reads their `gsc-data/<date>/` folders by path. No OAuth moved, no change to the daily pull.
+
+### The floor, and why there is one
+Each pull is a **486-day (16 month) trailing window**, not a delta, so consecutive snapshots overlap almost entirely. 88% of the latest smarterpaw snapshot's 112,657 queries have fewer than 10 impressions **across that whole window**. Measured across all 109 archived snapshots, not extrapolated:
+
+| floor | `gsc_query` | `gsc_query_page` | total |
+|---|---|---|---|
+| none | 6,323,402 | 9,844,871 | **16.26 M** |
+| ≥ 3 | 1,691,358 | 2,746,454 | **4.53 M** |
+| ≥ 10 | 734,270 | 1,194,433 | **2.02 M** |
+
+Defaults: **10 for smarterpaw, 0 for kittykazoom** (whose entire latest snapshot is 1,019 queries and would be gutted by any floor). The floor is a loader argument **recorded on every `gsc_snapshots` row**, so a row's provenance is never ambiguous and reloading at a different floor is the documented way to change it. `--sample weekly` thins the backfill to 38 snapshots / 760k rows, `monthly` to 11 / 218k.
+
+### ⚠ The limitation to know before trusting `avg_position`
+Because every pull is a 16 month aggregate, **`avg_position` is a 16 month MEAN**. Two snapshots three months apart still overlap by ~13 months, so a real ranking move is damped roughly **5:1** in the comparison. Fine for long-run trend, the complete query universe, and cannibalisation mapping. **NOT sharp enough to call a week-over-week move.** The fix is a short-window (e.g. 28 day) pull added alongside the existing one in the blog repos — a separate change, deliberately not bundled here. The column is named `avg_position` rather than `position` partly to stop the name hiding this, and partly because `position` is a Postgres keyword. `gsc_by_date.day` likewise matches the existing `shopify_sales_daily.day` convention.
+
+### Two bugs the browser caught that every static test passed
+- **The tab claimed a fact it had never observed.** Signed out, `getSB()` has no `.from`, the read throws, and the empty state rendered *"The tables exist but are empty."* We had never successfully queried. **This is the v10.37 bug verbatim** — a swallowed error collapsing "migration not run" and "nothing uploaded yet" into one message, and guessing the wrong one. Now four distinct states: tables missing (names the SQL) · read failed (names the error, and says it is **not known** whether the tables are empty or missing) · signed out (names the likely cause) · loaded-and-empty (names the loader). A test asserts only the genuinely-empty branch claims the tables exist.
+- **`seo-search` rendered 0×0.** That is `hideLocalSearchDuplicates` (v8.43) correctly hiding it because the global bar drives it — but it hides the **input only**, and I had wrapped mine in a labelled `flex:1` container. The label survived as an orphaned "Search" caption pointing at nothing, and the empty flex child pushed the Refresh button onto its own row. Every other page (`prodSrch`, `pnl-search`) uses a **bare input with no label** for exactly this reason. Matched that rather than inventing a third arrangement.
+
+### Notes
+- **Glyph: 📶.** The key glyph was the obvious pick for "keywords" but already means **Change password** in Settings, and hard rule #2 is one glyph one concept. Verified unused before picking.
+- **⚠ The nav button uses an HTML entity (`&#128246;`), not `\uXXXX`.** Inside `<script>` the escape is correct and the APP_TABS label uses it; **in raw markup nothing interprets it and it renders as six literal characters** (the v10.20 bug). Both forms are now asserted in the right place.
+- **No sub-tab strip yet.** A second view (Amazon SQP organic vs SP paid) is phase 2; a dead second tab is worse than none.
+- **Scorecards route through `pnlCardStrip`** (hard rule #1) rather than becoming a sixth bespoke card renderer. Every read paginates per Architecture Rule #4 — one snapshot is ~13k queries.
+- **Two suites went red and were re-pointed, not silenced.** `test_v103` caught `seo-search` as an unmapped search input — exactly what it exists for, and the fix was real (map it, so the global bar drives the tab). **`test_v1049` hardcoded `== 3` whole-array strips**; a 4th strip that correctly uses the canonical renderer *strengthens* the guarantee but failed the census. Re-pointed to `>= 3`, the brittle-count trap already recorded for `test_v1011` / `test_v1020`.
+- **Verification:** `node --check` clean · **55 suites green** · `tests/test_v1073.py` (45 assertions) drives the REAL sliced `seoVisibleRows`. The assertion that earns its keep is **the position-delta sign**: position improves when the number goes DOWN, so the delta is `(previous - current)` and positive means "moved up the page". A flipped sign would make every rising keyword read as falling while looking entirely plausible, so both directions are pinned. Then driven in a browser: the tab renders at body level, scorecards hand-check (25,808 impressions · 1,984 clicks · 7.69% CTR · 6.9 impression-weighted position · 2 striking-distance queries at 6,000 impressions), every quick filter isolates the right rows, and zero uncaught errors.
+- **`load_gsc.py` is validated end to end via `--dry-run`** (no credentials needed): parses all 109 snapshots in 49 s and totals **2,104,126 rows**, which reconciles **exactly** with an independent awk tally of the same archive. Still needs a `service_role` key in `.env` to write, because the tables are authenticated-only with anon revoked.
 
 ## v10.72 — rename a saved query
 

@@ -26,6 +26,7 @@ mk('pricing-search', 'Search title / SP SKU / ASIN…');
 mk('prodSrch', 'Search product, SP SKU, ASIN, Shopify SKU, Chewy SKU, Walmart ID, UPC…');
 mk('salesSrch', 'Search product, SKU…');
 mk('sea-search', 'Search product, master_id, ASIN…');
+mk('seo-search', 'Search keyword...');
 mk('spnl-search', 'Search product…');
 mk('srchInput', 'Search product or ASIN…');
 mk('wmpnl-search', 'Search product…');
@@ -49,6 +50,9 @@ const GLOBAL_SEARCH_MAP = {
   forecast_seasonality:   { id: 'sea-search' },
   forecast_chewy:         { id: 'chwy-search' },
   'forecast_fba-shipments': { id: 'fba-ship-srch' },
+  // v10.73 - SEO tab. globalSearchCurrentKey() falls through to
+  // currentPage for simple pages, so the key is just 'seo'.
+  seo:           { id: 'seo-search' },
   // P&L sub-views (pnlView drives the pick; Chewy has an extra tab)
   pnl_amazon:      { id: 'pnl-search' },
   pnl_shopify:     { id: 'spnl-search' },
@@ -260,7 +264,7 @@ console.log('\n== F. Nothing in the markup is left unmapped by accident ==');
 // one per component row).
 const EXCLUDE = new Set(['globalSearch', 'pricing-search', 'catsy-search-input',
                          'merge-src', 'merge-tgt', 'bom-search-${i}']);
-const unmapped = ["be-search", "bom-search-${i}", "bundleSrch", "catsy-search-input", "chpnl-be-search", "chpnl-cost-search", "chpnl-sales-search", "chpnl-search", "chwy-search", "cl-search", "cogs-search", "fba-ship-srch", "ip-srch", "ipr-srch", "pnl-search", "pricing-search", "prodSrch", "salesSrch", "sea-search", "spnl-search", "srchInput", "wmpnl-search"].filter(id => !EXCLUDE.has(id) && !mapped.includes(id));
+const unmapped = ["be-search", "bom-search-${i}", "bundleSrch", "catsy-search-input", "chpnl-be-search", "chpnl-cost-search", "chpnl-sales-search", "chpnl-search", "chwy-search", "cl-search", "cogs-search", "fba-ship-srch", "ip-srch", "ipr-srch", "pnl-search", "pricing-search", "prodSrch", "salesSrch", "sea-search", "seo-search", "spnl-search", "srchInput", "wmpnl-search"].filter(id => !EXCLUDE.has(id) && !mapped.includes(id));
 t('no unmapped page-search inputs remain', unmapped.length === 0, unmapped);
 
 console.log('\n' + (fail ? '\u2717 ' + fail + ' FAILED, ' : '\u2713 ') + pass + ' passed');
