@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.74**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.75**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,32 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.75 — Units Sold saved reports were never reaching the backend, and the loader was primed to eat the local copy
+
+- **Jason:** *"reports that i have saved on the units sold page do not appear. is this not saved to the backend?"* Correct — not to the backend. Two faults, and the second is the dangerous one.
+- **⚠ SQL TO RUN:** `supabase_v10_75_missing_columns.sql` — **deploy index.html v10.75 FIRST, then run it.** See the ordering warning below.
+- **Fault 1: `user_profiles.sales_saved_views` does not exist.** The v7.54 migration was never run. `salesPersistSavedViews` writes localStorage FIRST and Supabase second, so every save landed locally and the DB write warned to console. Per-browser only — another machine, or cleared site data, and they are gone. `salesSnapshotState()` is fully optional-chained and cannot throw, so the saves genuinely did happen; that browser's localStorage simply no longer has them.
+- **⚠ Fault 2 — running the SQL alone would have DESTROYED the surviving copies.** `salesLoadSavedViewsFromDb` did a blind replace:
+  ```js
+  salesSavedViews = data.sales_saved_views;
+  localStorage.setItem('salesSavedViews', JSON.stringify(salesSavedViews));
+  ```
+  The column defaults to `'{}'::jsonb`. **An empty object is TRUTHY and passes `typeof === 'object'`**, so on the first load after the migration the branch fires and overwrites the in-memory map AND the on-disk cache with `{}`. **This is the v9.66 bug verbatim** — *"on the FIRST load after the migration that table is empty, so it wrote `{}` over everything anyone had saved."* v9.67 fixed it for the shared query library. The saved-view loaders never got the same treatment.
+- **All FIVE loaders carried it** — Forecast, Inventory Planning, Products, Units Sold, Growth Model. Five near-identical ~20-line copies differing only in column name, variable, and popup ids. **That divergence IS the bug (hard rule #1)**, so this consolidates rather than patching the one in front of me: `SAVED_VIEW_STORES` (a 5-entry registry of `{col, ls, read, write, persist, repaint}`) + one `loadSavedViewStore(col)`. The five original function names survive as thin wrappers so every call site and anyone grepping still finds them.
+- **The new rule, from v9.67:** a name only leaves the local set when the USER deletes it — never because the server has not heard of it yet. The loader MERGES (remote wins a name collision, since it is the cross-device canonical copy), keeps local-only names, and **publishes them** so they sync from that point on. The error path (column missing / RLS denied) returns early and touches nothing — while the column is missing the local cache is the only copy that exists.
+- **⚠ Known trade-off, stated rather than hidden:** this loader runs once per session with no prior DB snapshot, so it cannot distinguish "deleted on another device" from "never synced". It therefore **never deletes**, which means a view deleted on device A can be resurrected from device B's stale cache on B's next load. That is visible and one click to fix; silent permanent data loss is not. Same precedence v9.67 set. The honest fix is a per-store DB snapshot, which only pays off once the loader can run more than once per session.
+- **Repaint is now conditional** on the merged set actually differing from the pre-merge local, so a no-op load does not tear down and rebuild an open popup under the user's cursor.
+- **Full migration audit while in here.** Parsed all 33 `create table if not exists` and all 80 `add column if not exists` targets out of `supabase_*.sql` and probed every one against the live DB. **Every table exists.** Six columns did not:
+  | Column | Verdict |
+  |---|---|
+  | `user_profiles.sales_saved_views` | real gap — v7.54 never run |
+  | `user_profiles.chewy_saved_views` | real gap — v10.58 never run |
+  | `product_cogs.amazon_dismissed` / `dtc_dismissed` / `chewy_dismissed` | real gap — v4.74 appended these to `supabase_product_cogs_setup.sql` AFTER that file had already been run. The ✕ dismiss button on the COGS page fails on write. **The tell:** `amazon_eu_dismissed` IS present, because it came from `supabase_add_sku_economics_eu.sql`, which was run later. |
+  | `inventory.fulfillment_amazon` | **absent BY DESIGN** — v4.196 moved it to `products.fulfillment_amazon` and the migration drops the inventory copy. Verified `products.fulfillment_amazon` is present. Nothing to do. |
+  All five real gaps are collected into one file so there is one thing to run, not three.
+- **⚠ Chewy saved views are WRITE-ONLY.** `chewyPersistSavedViews` writes `user_profiles.chewy_saved_views`, but there is **no `chewyLoadSavedViewsFromDb`** — nothing ever reads it back, so localStorage is the only read path and cross-device sync does not actually work even once the column exists. Creating the column stops the console warning and starts capturing the data; **wiring a loader is a separate piece of work.** Flagged rather than silently folded in. (It is also why Chewy was NOT at risk from the blind-replace bug — no loader, no replace.)
+- **Verification:** `node --check` clean · **56 suites green** · `tests/test_v1075.py` (46 assertions) drives the REAL sliced `loadSavedViewStore` in node against a stubbed Supabase. The assertion that earns its keep is the **regression guard**: it runs the pre-v10.75 blind replace and proves it really does return `{}` over two saved reports, and separately pins the mechanism (`!!{} === true`) rather than the symptom — so "we fixed the wipe" is a checkable claim, not a memory. Plus: both merge directions, the error path writing nothing, signed-out writing nothing, no spurious publish when there is nothing local, and a sweep asserting no blind replace survives for any of the five stores and that every `persist:` target in the registry is a function that actually exists (the v10.8 called-but-undefined class).
 
 ## v10.74a — loader signs in as a USER, and the blog pulls now load themselves
 
