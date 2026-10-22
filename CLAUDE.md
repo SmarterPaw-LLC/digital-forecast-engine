@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.75**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.76**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,38 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.76 — Unit sales goals by channel: monthly entry, weekly prorated line, on/off toggle
+
+- **Jason:** *"on the units sold page, allow me to set goals by channel for unit sales. i should be able to set these on a monthly basis and have the goal trend appear as a weekly line. i should be able to toggle this on and off."*
+- **NO SQL TO RUN.** Goals live on `app_settings` under the key `sales_unit_goals`. That is the generic shared key/value table from v9.85, and v10.26 already put a second key on it (`view_defaults`) — so this is a third key, not a migration. It is also the RIGHT table: a goal is a team fact (Scott and Brennan should see the same number), not a personal preference, which is why it does NOT go in `user_profiles` alongside the saved-view stores.
+- **Scope decision, stated rather than assumed: these are CHANNEL-LEVEL and BUSINESS-WIDE, not per-product.** The Units Sold page's channel controls are channel-only (five checkboxes, no per-product-per-channel axis), and a per-product grid would be ~500 SKUs × 5 channels × 12 months of inputs — an entry surface nobody fills in. One number per `(channel, month)`.
+  - **⚠ The consequence is surfaced, not hidden.** When the view is narrowed (a product selection, or a brand / category / search / hide-bundles / top-product filter) the actuals on screen are a SUBSET while the goal line is still the whole business. `salesGoalScopeNote()` appends `⚠ goal is business-wide — brand filter narrows the actuals, not the goal` to the subtitle, naming **every** active narrowing rather than just the first. Drawing it with a warning beats silently comparing two different populations, and beats hiding a control the operator just switched on (the v10.19 "a live-looking control that does nothing" lesson, inverted).
+
+### The weekly conversion, which is the part worth getting right
+```
+weekly goal = Σ over the week's 7 days of ( that day's month goal ÷ days in that month )
+```
+- **Per-day, not per-month-boundary.** 3,100 in a 31-day January and 2,800 in a 28-day February are the SAME daily rate, so the weekly line must be **flat at 700** across the boundary. A `month ÷ 4.33` shortcut would step by 10% at every month change and the operator would read that as a goal revision. The straddling week blends: 6 January days + 1 February day = `6×100 + 1×200 = 800` when February runs hotter.
+- **⚠ A week renders a number only when EVERY one of its seven days falls in a covered month.** Otherwise it is `null` — a gap. Without that rule the week straddling the END of the goal range shows ~6/7 of a full week and draws as a goal **CRASH** rather than as "the goals stop here". That is the regression guard in `tests/test_v1076.py`: it runs the naive sum-what-is-covered version and proves it really does report 600 where the shipped code reports a gap.
+- **Blank means NO GOAL, never zero.** `salesGoalsDraftSet` DELETES the month on a blank / 0 / junk entry and `writeSalesGoals` prunes non-positive months, because the whole gap rule depends on being able to tell "no target" from "a target of zero".
+- **Strict vs loose coverage, and why both exist.** A single-channel line uses **strict** (every requested channel must have that month) so it does not draw a confident **0** for a month that channel has no goal for. The business total uses **loose** (any channel having a goal is enough) so setting goals for Amazon only still draws a line instead of rendering nothing. The editor's **Monthly total** row is exactly what the Total tab integrates to, so a month where one channel is blank reads lower *in the editor* before it reads lower on the chart.
+
+### Rendering
+- **Total tab** — one dashed amber line = the sum across every channel with goals. Total mode sums every channel regardless of the By Channel checkboxes, so the goal does the same.
+- **By Channel tab** — one dashed line per active channel that has goals, in that channel's own colour so it pairs with its actuals. The legend (normally off on that tab) turns on so the dashed series are identified.
+- **⚠ `stack: '_goal'` is the assertion that earns its keep.** Without its own stack group, a stacked bar / stacked-area chart folds the TARGET into the stack and the top of the chart reads **actual + goal**. Visually plausible, completely wrong. Verified in a browser on `area-stacked`: the real bands keep their `origin` → `-1` fill chain and the goal sits outside it with `fill: false`.
+- **⚠ The target is never counted as units.** Both chart paths push the goal onto `datasets` only AFTER the chart's unit total is summed, and LAST so the stacked-area fill chain (whose `fill: '-1'` is index-relative) is untouched. `salesCovFooter`'s stacked `Combined:` tooltip line skips `_isGoal` for the same reason — all three are off-by-one-dataset bugs that inflate a headline while every individual series still reads correctly.
+- Subtitle gains `🎯 goal 5,440 (92% of goal)` so pace-to-goal is readable without hovering.
+
+### UI
+- **Toggle + editor** sit in the chart header as one segmented pair (`🎯 Goals` / `✎`), matching the Total | By Channel strip below rather than inventing a third control shape (hard rule #1). The toggle fills green and counts the channels with goals. **Turning it on with no goals set opens the editor instead of being a dead click.**
+- **Editor** is a channel × month grid for one year at a time, with a year picker, per-channel `→ fill` (copy the first value typed across the blank months — the common case is a flat monthly target and typing it twelve times is what makes an operator stop setting goals), per-channel clear, a year-total column, and the Monthly total row. Totals patch **in place** on every keystroke rather than re-rendering, so typing does not steal focus out of the input mid-number. Draft-copy semantics: Cancel discards. Backdrop click uses the v4.168 drag-out guard so selecting text inside the grid and releasing outside it cannot throw away a half-typed year.
+- **Saved reports carry the TOGGLE, deliberately not the numbers.** `goalsOn` is snapshotted and restored (guarded on `!== undefined` so a pre-v10.76 report leaves the current state alone). The goal numbers are shared org-wide — a report that froze a stale target would quietly disagree with the editor.
+- The on/off state itself is per-browser (`localStorage.salesGoalsOn`); **it defaults OFF, so nothing changes for anyone until goals are actually set.**
+- `loadSalesGoals` **fails open** to no goals — a settings read that cannot complete must never change what anyone sees (the v9.82 / v9.85 precedence).
+- **Verification:** `node --check` clean · **57 suites green** · `tests/test_v1076.py` (60 assertions) drives the REAL sliced `salesGoalWeeklyFor` / `salesGoalDatasets` / `salesGoalSubNote` / `salesGoalScopeNote` / `loadSalesGoals` / `writeSalesGoals` in node. Then driven in a browser against a two-product stub with hand-checkable goals (3,100 Jan + 2,800 Feb Amazon = 100/day; 620 Jan Shopify = 20/day): the weekly line reads **840 · 840 · 840 · 820 · 700 · 700 · 700 · gap · gap** — flat inside each month, a genuine per-day blend at the Jan/Feb straddle, Shopify correctly dropping out in February, and the line ending at the last fully-covered week rather than dipping. Actuals stayed at 5,000 units with the 5,440 goal beside them (never summed in), the scope warning appeared on a selection and on a brand filter and vanished on a clean view, the toggle removed the overlay entirely, and the editor round-tripped type → totals → fill → year-switch → cancel with zero console errors.
+- **Three of my own test expectations were wrong, not the code.** I asserted a single-week window of gaps returns `[null]`; the shipped code returns `null` (no series at all), which is the better contract — a fully-blank dataset in the legend is worse than no dataset. Re-pointed at the real guarantee, and B5/B11 now use a MIXED window so the gap is asserted *in situ* beside a real week rather than collapsing to the empty case.
 
 ## v10.75 — Units Sold saved reports were never reaching the backend, and the loader was primed to eat the local copy
 
