@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.82**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.83**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,15 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.83 - ONE export dialog, not two that merely share a fieldset
+
+- **Jason, on the Inventory Planning dialog:** *"WHY did you not match the dialog to the existing pattern???"*
+- **v10.81 shared the Columns fieldset and hand-rolled everything around it.** The P&L dialog got a bare uppercase ROWS header outside any box, a solid-green-filled primary button with white text, the count on a sub-line, and a borderless Cancel. The canonical dialog uses boxed sections, **no row header at all** (the row choice IS the action buttons), OUTLINED actions with the count inline in a muted span, and an outlined Cancel. **Sharing one fieldset while hand-rolling the shell is exactly the divergence hard rule #1 exists to stop.**
+- **The SHELL is shared now:** exportDlgShellHtml / exportDlgSectionHtml / exportDlgActionHtml / EXPORT_DLG_OVERLAY_CSS. Both showExportDialog and pnlExportScopeDialog render through them; colScopeFieldsetHtml renders through the shared section. Subtitles use the canonical Tab: X shape; Sales reuses the canonical "Selected only" wording.
+- **WARN test_v1036 caught a real bug:** I wrote uppercase-U astral escapes into the new subtitles. **JS has no uppercase U escape** - it evaluates to literal text, so three dialog titles would have rendered as garbage. The v10.36 trap, third sighting. Fixed to the lowercase-u-with-braces form.
+- **Format (CSV / Excel) stays Inventory-only** - the only tab with an xlsx writer; offering it elsewhere would be a live-looking control that does nothing (v10.19).
+- **Verification:** node --check clean, **59 suites green**. New A18-A23 assert one shell with both dialogs through it, and that the bare Rows header + solid-filled button cannot come back; N8a-N8d pin the canonical shape. Two harnesses needed the shell lifted - lift_const had to be made string-aware after it cut at a semicolon inside the overlay CSS, then the param-aware slicer used for the two destructured helpers (v10.12 trap again). Driven in a browser: both dialogs computed-identical (panel 420px / 24px 28px / 12px radius; actions same bg, border, colour, padding, font).
 
 ## v10.82 — Chewy Sales + Cost to Chewy: one registry each, and the CSV follows the picker
 
