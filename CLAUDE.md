@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.80**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.81**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,20 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.81 — the export dialog picks COLUMNS, not just rows
+
+- **Jason, a third time:** *"the csv export still exports EVERYTHING, not the selected columns. this is why the dialog box should be there. why do i have to keep asking for tihs?"*
+- **He asked three times and got three partial answers.** v10.77 I argued for "export everything, just label it" on audit-trail grounds and he accepted MY framing rather than asked for it. v10.79 shipped the dialog, but it chose **ROWS only**. v10.80 made all 39 columns selectable and then exported all 39 regardless. The note reading `↓ CSV = every column` was describing a default nobody wanted.
+- **Inventory Planning has had this exact control since v4.200.** The fix is to SHARE that fieldset, not write a second one — a pattern living in two places with different markup IS the bug (hard rule #1). `colScopeFieldsetHtml(visible, total)` + `readColScope(root)` are now the single renderer/reader; `showExportDialog` renders the shared one instead of its own inline copy, and `pnlExportScopeDialog` gained the same block. A test asserts neither dialog hand-rolls `name="exp-cols"` again.
+- **The default is the columns ON SCREEN.** `_writeChewyBreakevenCSV(rows, colScope)` filters to `chewyVisibleCols('breakeven')` unless the operator picks All columns. Identity-based (`new Set(chewyVisibleCols(...))`) rather than key-based, so it needs no key convention to stay correct. `csv.order` still preserves the file's column order.
+- **⚠ The skip-path had to learn the second axis.** v10.79 skipped the dialog whenever `filtered.length === everything.length`. With columns in play that is exactly the case that was silently exporting all 39 — same rows, different columns. The guard is now `sameRows && !hasCols`.
+- **The dialog adapts rather than showing a dead control.** Identical row sets render ONE button (`Export · 53 rows`) with no Rows header; differing sets render the labelled two-option Rows section. So a page with nothing filtered never shows a row choice that does nothing (the v10.19 lesson).
+- **⚠ The scope is read BEFORE `ov.remove()`.** Reading it after the node is destroyed makes `readColScope` fall through to its `|| 'visible'` default on every click — the choice would look wired and silently never apply. `test_v1077` N10 pins the ordering.
+- **The retired note is the honest part.** `CHEWY_CSV_SCOPE_NOTE` is deleted, not reworded — it warned that the CSV was NOT the picker's set, which was true from v10.77 to v10.80 and is now false. A note restating the default is UI text that earns nothing. The context line inside the file records the real scope (`· 8 of 39 columns`), which is where provenance belongs.
+- **Verification:** `node --check` clean · **59 suites green** · `test_v1077` section A re-pointed, not silenced — it asserted the note EXISTED; it now asserts the note is GONE, the fieldset is shared, and **N8/N9 drive the real dialog in node and prove the chosen scope reaches `onPick`**. A17 is the regression guard: the unconditional all-columns map is asserted absent.
+- **Driven in a browser at `v10.81 · 2026-10-25`:** default export = **8 columns matching the picker exactly** (`chewy_sku, product, spend, direct_units, direct_sales_retail, realised_roas_pct, break_even_roas_pct, headroom_pts`), All columns = 39, and the two track the picker 1:1 in both directions — adding Impressions + Clicks took the picker to 10 and the CSV to 10; narrowing to 3 took the CSV to 3; `all` stayed at 39 throughout. Zero console errors.
+- **⚠ Still outstanding:** Chewy Sales (picker 11 / csv 18) and Cost to Chewy (picker 12 / csv 25) have the same two gaps — CSV-only columns that are not pickable, and an export that ignores the picker. `test_v1077` B7 prints those counts on every run so they cannot pass as fine.
 
 ## v10.80 — ONE column registry for Chewy Break-Even
 

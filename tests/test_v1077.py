@@ -4,15 +4,20 @@
 All three are the same shape: the MATH was right, the affordance was not, so
 the operator read the screen and concluded the feature was broken.
 
-  * A/B  CHEWY CSV SCOPE. Jason, with 8 columns on screen and 39 in the file:
-    "would you look at the columns builder/view vs what exports on the csv?"
-    The export deliberately ignores the picker (it carries the cost stack and
-    the autoship split, which are the AUDIT TRAIL for BE ROAS - a picker-scoped
-    export would strip exactly the inputs that let someone re-derive the
-    number). Amazon Break-Even says so on its button; these three tabs said
-    nothing. The assertion that earns its keep is B3: the CSV header really IS
-    a hardcoded superset of the picker. Wire the CSV to the picker later and
-    the note becomes a lie - this test goes red instead.
+  * A  CHEWY CSV SCOPE. Jason, three times: "would you look at the columns
+    builder/view vs what exports on the csv?" -> "if the columns are in the
+    data, they should be pickable" -> "the csv export still exports
+    EVERYTHING, not the selected columns. this is why the dialog box should be
+    there. why do i have to keep asking for tihs?"
+    v10.77 put a LABEL on the mismatch, on audit-trail grounds that were MY
+    framing rather than his ask. v10.79 added the dialog but it chose ROWS
+    only. v10.80 made all 39 columns selectable and still exported all 39.
+    v10.81 is the actual answer: the export defaults to the columns on screen
+    and the dialog carries an all-columns opt-in, sharing the fieldset
+    Inventory Planning has had since v4.200. Section A asserted the note
+    EXISTED; it now asserts the note is GONE and the scope reaches the writer.
+    N8/N9 are the ones that earn their keep - they drive the real dialog and
+    prove the chosen scope lands in onPick.
 
   * C  PERCENTAGE METRIC. Jason: "if i change the metric to contribution %,
     the stacked chart doesn't render." It renders - as a LINE, because
@@ -56,6 +61,31 @@ def fn(name, kw='function'):
             if d == 0: return js[i:k+1]
         k += 1
 
+def fn_param(name, kw='function'):
+    """Slice a function whose FIRST param is a destructuring pattern.
+
+    ⚠ pnlExportScopeDialog takes `({ title, filtered, ... })`, so the first
+    `{` after the name is the PATTERN, not the body - a naive slice truncates
+    the function and the harness will not parse. Balance the parameter list
+    first. Exactly the trap recorded at v10.12 and hit again at v10.79.
+    """
+    i = js.index('%s %s(' % (kw, name))
+    p = js.index('(', i); d = 0; k = p
+    while True:
+        if js[k] == '(': d += 1
+        elif js[k] == ')':
+            d -= 1
+            if d == 0: break
+        k += 1
+    j = js.index('{', k); d = 0; k2 = j
+    while True:
+        if js[k2] == '{': d += 1
+        elif js[k2] == '}':
+            d -= 1
+            if d == 0: return js[i:k2+1]
+        k2 += 1
+
+
 def const_line(name):
     # Whole line, not `...;` - these consts carry a trailing // comment.
     m = re.search(r'^const\s+%s\s*=.*$' % re.escape(name), js, re.M)
@@ -76,61 +106,207 @@ def hdr_keys(func_src):
 
 
 # ===========================================================================
-# A. Static - the Chewy CSV scope note is wired on ALL THREE tabs
+# A. The export dialog picks COLUMNS, not just rows (v10.81)
 # ===========================================================================
-print('\nA. Chewy CSV scope note - wiring')
+print('\nA. the export dialog picks COLUMNS, not just rows')
 
-ok(js.count('const CHEWY_CSV_SCOPE_NOTE =') == 1,
-   'A1  exactly one definition (one note, one const - hard rule #1)',
-   js.count('const CHEWY_CSV_SCOPE_NOTE ='))
+# v10.81 - Jason, for the third time: "the csv export still exports
+# EVERYTHING, not the selected columns. this is why the dialog box should be
+# there. why do i have to keep asking for tihs?"
+#
+# v10.77 put a LABEL on the mismatch (my call, on audit-trail grounds, which
+# he accepted as my framing rather than asked for). v10.79 added the dialog
+# but it chose ROWS only. v10.80 made all 39 columns selectable and still
+# exported all 39. So the note that said "CSV = every column" described a
+# default nobody wanted, and A1 now asserts it is GONE.
+ok('CHEWY_CSV_SCOPE_NOTE' not in js,
+   'A1  the "CSV = every column" note is gone - the export matches the screen now')
 
-# 3 call sites + 1 declaration.
-ok(js.count('CHEWY_CSV_SCOPE_NOTE') == 4,
-   'A2  all three Chewy row-count lines carry the note',
-   js.count('CHEWY_CSV_SCOPE_NOTE'))
+# Inventory Planning has had this control since v4.200. The fix is to SHARE
+# that fieldset, not write a second one - a pattern living in two places with
+# different markup IS the bug (hard rule #1).
+ok(js.count('function colScopeFieldsetHtml(') == 1,
+   'A2  exactly one Columns fieldset renderer, shared by every export dialog',
+   js.count('function colScopeFieldsetHtml('))
+ok(js.count('function readColScope(') == 1,
+   'A3  exactly one reader for the chosen column scope',
+   js.count('function readColScope('))
 
-# The Cost line was textContent, which cannot carry a tooltip span.
+# Both dialogs must RENDER the shared one and READ through the shared helper.
+# An inline copy in either is how the P&L dialog shipped without it twice.
+_sed = fn('showExportDialog')
+_pes = fn_param('pnlExportScopeDialog')
+ok('colScopeFieldsetHtml(' in _sed,
+   'A4  showExportDialog renders the shared fieldset')
+ok('colScopeFieldsetHtml(' in _pes,
+   'A5  pnlExportScopeDialog renders the shared fieldset')
+ok('readColScope(' in _sed and 'readColScope(' in _pes,
+   'A6  both dialogs read the scope through the shared helper')
+ok('name="exp-cols"' not in _sed and 'name="exp-cols"' not in _pes,
+   'A7  neither dialog hand-rolls the radios (no second copy of the markup)')
+
+# The Cost line was textContent, which cannot carry a tooltip span (v10.77).
 ok('rc.innerHTML = `${rows.length} Chewy SKUs`' in js,
-   'A3  Cost row-count switched to innerHTML so the note can be a tooltip')
+   'A8  Cost row-count is still innerHTML')
 ok('rc.textContent = `${rows.length} Chewy SKUs`' not in js,
-   'A4  no textContent assignment survives on the Cost row-count line')
+   'A9  no textContent assignment survives on the Cost row-count line')
 
-# The two tooltips read "Sales of these columns are hidden" / "Break-Even of
-# these columns are hidden" - a page name templated into the middle of a
-# sentence. Not a behaviour bug, but it is the text sitting next to the fix.
+# v10.77 also fixed two tooltips that templated a page name into the middle
+# of a sentence ("Break-Even of these columns are hidden").
 ok('of these columns are hidden' not in js,
-   'A5  the mis-templated "<page> of these columns are hidden" tooltip is gone')
+   'A10 the mis-templated "<page> of these columns are hidden" tooltip is gone')
 ok(js.count('These columns are hidden on screen.') == 2,
-   'A6  both hidden-column tooltips read as English',
+   'A11 both hidden-column tooltips read as English',
    js.count('These columns are hidden on screen.'))
 
-# v10.78 - THE NO-PROSE RULE, MADE RUNNABLE.
-#
-# Jason: "why did you add all of this text in? just say 'not available'". Both
-# tooltips v10.77 shipped were paragraphs - state + justification + conclusion
-# + instruction - and the v10.77 chart subtitle ALREADY carried the reasoning
-# one line below the button. Same flag as v10.37 and v10.59. A rule nobody can
-# run is a rule that drifts, so it is a hard character cap here rather than a
-# habit. The reasoning belongs in CLAUDE.md, not on a hover.
-csv_tip = re.search(r'const CHEWY_CSV_SCOPE_NOTE =.*?title="(.*?)"', js, re.S).group(1)
+# v10.78 - THE NO-PROSE RULE, MADE RUNNABLE. A rule nobody can run is a rule
+# that drifts, so it is a hard character cap rather than a habit. The CSV-note
+# half of this check retired with the note itself; the disabled-Stacked
+# tooltip is still live and still capped.
 off_tip = re.search(r"const offTip = '(.*?)';", js, re.S).group(1)
-
-ok(len(csv_tip) <= 60,
-   'A7  the CSV-scope tooltip is a description, not a paragraph (<=60 chars)',
-   (len(csv_tip), csv_tip))
 ok(len(off_tip) <= 20,
-   'A8  the disabled-Stacked tooltip is a state, not an explanation (<=20 chars)',
+   'A12 the disabled-Stacked tooltip is a state, not an explanation (<=20 chars)',
    (len(off_tip), off_tip))
-
-# The visible chip has to still SAY it - the short tooltip leans on that.
-ok('CSV = every column' in js,
-   'A9  the visible chip still states the export scope')
-
-# v10.37 class: no justifying / concluding / instructing on a hover.
 BANNED = ['would draw', 'Pick a', 'so that', 'because', 'in order to', 'which means']
-leak = [b for t in (csv_tip, off_tip) for b in BANNED if b.lower() in t.lower()]
-ok(not leak, 'A10 neither tooltip editorialises (descriptions only)', leak)
+leak = [b for b in BANNED if b.lower() in off_tip.lower()]
+ok(not leak, 'A13 it does not editorialise (descriptions only)', leak)
 
+# THE BEHAVIOUR. Default is the columns ON SCREEN; 'all' is the opt-in.
+_wr = fn('_writeChewyBreakevenCSV')
+ok('colScope' in re.findall(r'function _writeChewyBreakevenCSV\(([^)]*)\)', _wr)[0],
+   'A14 the writer takes a column scope')
+ok("colScope === 'all'" in _wr,
+   'A15 all-columns is the OPT-IN branch, so the default is the visible set')
+ok("chewyVisibleCols('breakeven')" in _wr,
+   'A16 the default set comes from the picker, not a second list')
+
+# REGRESSION GUARD - run the pre-v10.81 line and prove it really did ignore
+# the picker. Without this, "we fixed the export" is a memory, not a check.
+_old = "CHEWY_BE_COLUMNS.filter(c => c.csv).slice().sort((a, b) => a.csv.order - b.csv.order)"
+ok(_old not in _wr,
+   'A17 regression guard: the unconditional all-columns map is gone')
+
+
+# ---------------------------------------------------------------------------
+# A-node. Drive the REAL dialog so the column scope is a checked claim.
+# ---------------------------------------------------------------------------
+hA = r'''
+'use strict';
+const out = [];
+const t = (name, got, want) => out.push({ name, pass: JSON.stringify(got) === JSON.stringify(want), got, want });
+
+// STATE.pick simulates which radio the operator left selected. null exercises
+// the `|| 'visible'` fallback (no radios rendered at all).
+const STATE = { pick: null, html: '', removed: 0 };
+
+function mkOv() {
+  return {
+    id: '', style: {}, dataset: {},
+    set innerHTML(v) { STATE.html = v; },
+    get innerHTML() { return STATE.html; },
+    addEventListener(_, h) { this._h = h; },
+    remove() { STATE.removed++; },
+    querySelector(sel) {
+      if (sel.includes('exp-cols') && STATE.pick) return { value: STATE.pick };
+      return null;
+    },
+  };
+}
+let LAST = null;
+const document = {
+  getElementById: () => null,
+  body: { appendChild(){} },
+  createElement: () => (LAST = mkOv()),
+};
+
+__FIELDSET__
+__READER__
+__DIALOG__
+
+const three = [1,2,3];
+const call = (opts) => {
+  STATE.html = ''; STATE.removed = 0; LAST = null;
+  let got = null;
+  pnlExportScopeDialog(Object.assign({
+    title: 'x', filtered: three, everything: three, everythingLabel: 'All',
+    onPick: (rows, scope) => { got = { n: rows.length, scope }; },
+  }, opts));
+  return got;
+};
+
+// N1 - neither axis has a choice, so it must not ask. This is the only path
+// that can legitimately skip the dialog.
+t('N1  no column choice + same rows -> exports immediately as visible',
+  call({ cols: { visible: 39, all: 39 } }), { n: 3, scope: 'visible' });
+
+// N2 - the rows are identical but the COLUMNS are not. Pre-v10.81 this
+// skipped the dialog and exported all 39. It must ask now.
+let got = call({ cols: { visible: 8, all: 39 } });
+t('N2  column choice + same rows -> asks instead of guessing', [got, STATE.html.length > 0], [null, true]);
+t('N3  the Columns fieldset is rendered', STATE.html.includes('exp-cols'), true);
+t('N4  visible is pre-checked, so the default honours the screen',
+  /value="visible" checked/.test(STATE.html), true);
+t('N5  both counts are shown so the choice is legible',
+  [STATE.html.includes('8'), STATE.html.includes('39')], [true, true]);
+
+// N6 - identical row sets must not render a 2-option Rows section.
+t('N6  same rows -> one row button, no Rows header',
+  [(STATE.html.match(/data-pick="/g) || []).length, STATE.html.includes('>Rows<')],
+  [2, false]);   // filtered + cancel
+
+// N7 - differing rows DO get the labelled two-option Rows section.
+call({ filtered: [1], cols: { visible: 8, all: 39 } });
+t('N7  differing rows -> two row buttons + a Rows header',
+  [(STATE.html.match(/data-pick="/g) || []).length, STATE.html.includes('>Rows<')],
+  [3, true]);   // filtered + everything + cancel
+
+// N8/N9 - the chosen scope must actually reach onPick. This is the assertion
+// the whole version exists for.
+const click = (pick) => {
+  const h = LAST._h;
+  h({ target: { closest: () => ({ dataset: { pick } }) } });
+};
+STATE.pick = 'visible';
+let seen = null;
+STATE.html = ''; LAST = null;
+pnlExportScopeDialog({ title:'x', filtered:[1], everything:three, everythingLabel:'All',
+  cols: { visible: 8, all: 39 }, onPick: (r, sc) => { seen = { n: r.length, scope: sc }; } });
+click('filtered');
+t('N8  picking the visible radio returns scope=visible', seen, { n: 1, scope: 'visible' });
+
+STATE.pick = 'all';
+seen = null; STATE.html = ''; LAST = null;
+pnlExportScopeDialog({ title:'x', filtered:[1], everything:three, everythingLabel:'All',
+  cols: { visible: 8, all: 39 }, onPick: (r, sc) => { seen = { n: r.length, scope: sc }; } });
+click('everything');
+t('N9  picking all columns + all rows returns both choices',
+  seen, { n: 3, scope: 'all' });
+
+// N10 - the scope is read BEFORE ov.remove(), or it would always fall back.
+STATE.pick = 'all';
+seen = null; STATE.html = ''; LAST = null;
+pnlExportScopeDialog({ title:'x', filtered:[1], everything:three, everythingLabel:'All',
+  cols: { visible: 8, all: 39 }, onPick: (r, sc) => { seen = { n: r.length, scope: sc }; } });
+click('filtered');
+t('N10 scope survives the node teardown (read before remove)',
+  seen && seen.scope, 'all');
+
+console.log(JSON.stringify(out));
+'''
+hA = (hA.replace('__FIELDSET__', fn('colScopeFieldsetHtml'))
+        .replace('__READER__',   fn('readColScope'))
+        .replace('__DIALOG__',   fn_param('pnlExportScopeDialog')))
+hAp = os.path.join(SP, 'test_v1077_colscope.js')
+io.open(hAp, 'w', encoding='utf-8', newline='').write(hA)
+rA = subprocess.run(['node', hAp], capture_output=True, text=True)
+if rA.returncode != 0:
+    print('  FAIL  colscope harness did not run:\n' + (rA.stderr or '')[:2500]); failed += 1
+else:
+    try: rowsA = json.loads(rA.stdout.strip().splitlines()[-1])
+    except Exception as e:
+        print('  FAIL  colscope harness unparseable: %s' % e); failed += 1; rowsA = []
+    for row in rowsA:
+        ok(row['pass'], row['name'], None if row['pass'] else (row['got'], 'want', row['want']))
 
 # ===========================================================================
 # B. The claim the note makes is TRUE: CSV is a hardcoded superset
