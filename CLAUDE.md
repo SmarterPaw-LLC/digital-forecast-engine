@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.79**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.80**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,33 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.80 — ONE column registry for Chewy Break-Even
+
+- **Jason:** *"the csv export has columns that DO NOT EXIST on the view. please diagnose — is the csv export wired to pull from the correct page? if columns like (impressions, clicks) should be on this page, they should be selectable columns."*
+- **Diagnosis: the wiring was right, the architecture was not.** The exporter reads `chewyBreakevenVisibleRows`, built by `renderChewyBreakeven` — the rows matched the screen SKU-for-SKU. The fault was that **TWO lists described one page**: `CHEWY_BE_COLUMNS` (18) drove the screen and the picker, a hardcoded `hdr` array (39) drove the CSV. **That divergence IS the bug (hard rule #1), and v10.77 put a LABEL on it instead of removing it.** Jason is right; v10.77 was the wrong fix.
+
+### One registry, two orderings
+- The 21 CSV-only columns are now real registry entries, so **nothing can reach the file without being selectable on screen.** Registry 39 → CSV 39, 1:1.
+- Each column carries `csv: { name, order, val }`. **`name` NOT `key`** — this registry's extractors grep `key:`, and a nested one made `test_v1042` count 78 columns instead of 39 before the rename.
+- **`csv.order` preserves the file's existing column order**, which is NOT the screen's (`cost_per_unit` is 22nd in the file, 5th on screen). Two orderings declared in one place, rather than bending either to the other.
+- **⚠ The file is byte-identical.** Header AND a full row were diffed against the v10.79 output in node — same names, same order, same f2 / f4 precision. Any downstream reader of this CSV is unaffected.
+- The 21 append rather than insert, so the 8-column default and its order (Jason's, from v10.54) do not move.
+
+### ⚠ The migration that had to exist
+- **"Not hidden" means visible.** Anyone who had already customised their columns has `chewyHiddenCols.breakeven` as a **Set**, not null — so all 21 new columns would have appeared at once. Verified in a browser: a user with 3 columns hidden would have jumped from 15 visible to 36.
+- Flag-guarded one-time migration adds the new keys to any existing Set (the v5.48 / v9.86 / v10.64 shape). A deliberate un-hide afterwards is never undone.
+
+### ⚠ test_v1053 caught a real gap — I coined names the app already had
+- Four of my new labels duplicated measures **Cost to Chewy already names**. Renamed to reuse the existing vocabulary verbatim ([[feedback_use_existing_vocabulary]], the v10.22 rule): `Catalog cost` → **`Cost`** · `Case qty` → **`Case`** · `Wholesale/ea` → **`Price/ea`** · `COGS/u` kept as-is.
+- The 17 genuinely-new measures are declared in `CHEWY_MEASURE_VOCAB`. `Allowance %` and the existing `Allowance floor` scorecard are the SAME measure, so they are declared an abbreviation pair in `CHEWY_MEASURE_ALIASES` rather than left as a silent clash.
+- **The v10.53 suite did exactly what it was built for.** A rule nobody can run is a rule that drifts; this one ran.
+
+### Verification
+- `node --check` clean · **59 suites green** · equivalence proof in node: header + row byte-identical to v10.79.
+- **Five suites went red and were re-pointed, not silenced** — `test_v1036` / `test_v1042` / `test_v1052` greped the EXPORTER for column names, which now live in the registry (same guarantee, new home); `test_v1053` was the real catch above; `test_v1077`'s "strict SUPERSET" assertion is now false BY DESIGN and flips to **1:1**.
+- **`test_v1077` B7 records what is still outstanding** rather than letting it pass as fine: **Chewy Sales (picker 11 / csv 18) and Cost to Chewy (picker 12 / csv 25) were NOT consolidated.** Same gap, same fix shape, separate piece of work.
+- **Driven in a browser at `v10.80 · 2026-10-25`:** 39 registry columns all carrying csv descriptors, the default view still the same 8 keys in the same order, unique labels / csv names / contiguous 1..39 orders, Impressions and Clicks selectable, and the migration leaving a customised user at 15 visible instead of 36. Zero console errors.
 
 ## v10.79 — Chewy Break-Even: a custom date range, and an export that says what it is
 

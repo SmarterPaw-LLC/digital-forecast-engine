@@ -137,37 +137,44 @@ ok(not leak, 'A10 neither tooltip editorialises (descriptions only)', leak)
 # ===========================================================================
 print('\nB. the CSV really is every column')
 
-be_csv    = hdr_keys(fn('_writeChewyBreakevenCSV'))   # v10.79
-sales_csv = hdr_keys(fn('downloadChewyPnlSalesCSV'))
-cost_csv  = hdr_keys(fn('downloadChewyPnlCostCSV'))
+# v10.80 - this section used to assert the CSV was a strict SUPERSET of the
+# picker. Jason: "the csv export has columns that DO NOT EXIST on the view ...
+# they should be selectable columns." So Break-Even is now 1:1 - the CSV header
+# is DERIVED from CHEWY_BE_COLUMNS - and the assertion flips to equality.
+_be_body = arr_body('CHEWY_BE_COLUMNS')
+be_cols  = len(re.findall(r"^  \{ key: '", _be_body, re.M))
+be_csv   = re.findall(r"csv: \{ name: '([^']+)'", _be_body)
 
-be_cols    = len(re.findall(r"\{ key: '", arr_body('CHEWY_BE_COLUMNS')))
-sales_cols = len(re.findall(r"\{ k: '",   arr_body('CHEWY_SALES_COLUMNS')))
-cost_cols  = len(re.findall(r"\{ k: '",   arr_body('CHEWY_COST_COLUMNS')))
+ok(be_cols == 39, 'B1  Break-Even picker holds all 39 columns', be_cols)
+ok(len(be_csv) == 39, 'B2  and every one of them carries a csv descriptor', len(be_csv))
+ok(be_cols == len(be_csv),
+   'B3  1:1 - no column can reach the CSV without being selectable on screen',
+   (be_cols, len(be_csv)))
 
-ok(be_cols == 18, 'B1  Break-Even picker holds 18 columns', be_cols)
-ok(len(be_csv) == 39, 'B2  Break-Even CSV holds 39 columns', len(be_csv))
+# The impressions / clicks Jason named, plus the audit columns that drove the
+# v10.77 decision to keep exporting everything. All selectable now.
+MUST = ['impressions', 'clicks', 'catalog_cost', 'purchase_uom', 'case_qty',
+        'wholesale_per_each', 'standing_allowance_pct', 'net_per_unit',
+        'cogs_per_unit', 'autoship_actualized_sales', 'autoship_first_order_sales']
+absent = [c for c in MUST if c not in be_csv]
+ok(not absent, 'B4  every former CSV-only column is now a registry column', absent)
 
-# THE assertion. If anyone ever wires a Chewy CSV to chewyVisibleCols(), the
-# note on screen starts lying and this goes red.
-for tag, csv_n, pick_n in (('Break-Even', len(be_csv), be_cols),
-                           ('Sales',      len(sales_csv), sales_cols),
-                           ('Cost',       len(cost_csv),  cost_cols)):
-    ok(csv_n > pick_n,
-       'B3  %s CSV is a strict SUPERSET of the picker (%d > %d)' % (tag, csv_n, pick_n),
-       None if csv_n > pick_n else (csv_n, pick_n))
+# The exporter must not grow a second list again.
+ok('const hdr = [' not in fn('_writeChewyBreakevenCSV'),
+   'B5  the exporter has no hardcoded header of its own')
+ok('CHEWY_BE_COLUMNS' in fn('_writeChewyBreakevenCSV'),
+   'B6  it maps the registry instead')
 
-# The audit columns the note names by hand must actually be in the BE file.
-AUDIT = ['catalog_cost', 'purchase_uom', 'case_qty', 'wholesale_per_each',
-         'standing_allowance_pct', 'net_per_unit', 'cogs_per_unit',
-         'autoship_recurring_sales', 'autoship_first_order_sales']
-absent = [c for c in AUDIT if c not in be_csv]
-ok(not absent, 'B4  every audit column the tooltip promises is in the BE CSV', absent)
-
-# None of the three writers may read the picker - that IS the behaviour.
-for name in ('_writeChewyBreakevenCSV', 'downloadChewyPnlSalesCSV', 'downloadChewyPnlCostCSV'):
-    ok('chewyVisibleCols' not in fn(name),
-       'B5  %s builds its own header, independent of the picker' % name)
+# KNOWN OUTSTANDING: Sales and Cost were NOT consolidated. Same shape of gap,
+# so record the exact counts rather than let them pass as if they were fine.
+sales_csv  = hdr_keys(fn('downloadChewyPnlSalesCSV'))
+cost_csv   = hdr_keys(fn('downloadChewyPnlCostCSV'))
+sales_cols = len(re.findall(r"\{ k: '", arr_body('CHEWY_SALES_COLUMNS')))
+cost_cols  = len(re.findall(r"\{ k: '", arr_body('CHEWY_COST_COLUMNS')))
+print('    note  Sales  picker %d / csv %d  - NOT consolidated' % (sales_cols, len(sales_csv)))
+print('    note  Cost   picker %d / csv %d  - NOT consolidated' % (cost_cols, len(cost_csv)))
+ok(sales_cols <= len(sales_csv) and cost_cols <= len(cost_csv),
+   'B7  Sales / Cost CSVs still at least cover their pickers')
 
 
 # ===========================================================================

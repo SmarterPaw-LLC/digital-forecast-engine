@@ -144,6 +144,11 @@ ok("return downloadChewyBreakevenCSV()" in fn('exportCSV'),
    'top-bar CSV routes to the break-even exporter')
 # feedback_always_csv_export — every data-bearing sub-view is exportable.
 exp = fn('_writeChewyBreakevenCSV')   # v10.79 - writer split from the scope dialog
+# v10.80 - the CSV header + body are derived from CHEWY_BE_COLUMNS now, so the
+# column names live in the registry, not in the exporter. Search both. Sliced
+# by index rather than regex so no escape can be mangled.
+_i = js.index('const CHEWY_BE_COLUMNS = [')
+exp = exp + js[_i: js.index(chr(10) + '];', _i)]
 for col in ['break_even_roas_pct', 'contribution_per_unit', 'realised_roas_pct',
             'autoship_actualized_sales', 'wholesale_per_each', 'data_gap']:
     ok(col in exp, '  CSV exports %s' % col)

@@ -81,7 +81,11 @@ ok("'Realised ROAS = (Direct sales + Autoship actualised) / spend.'," not in js,
 ok('Chewy counts the first autoship order in BOTH' in js,
    'the explainer states WHY only part is added')
 ok('first orders excluded' in js, 'the scorecard names the excluded dollars')
-ok("'autoship_recurring_sales','autoship_first_order_sales','autoship_actualized_orders'" in js,
+# v10.80 - the CSV header comes from CHEWY_BE_COLUMNS now, so these are csv
+# names in the registry rather than a contiguous slice of a hardcoded array.
+# Same guarantee: all three halves of the split reach the file.
+ok(all(("name: '%s'" % k) in js for k in
+       ('autoship_recurring_sales', 'autoship_first_order_sales', 'autoship_actualized_orders')),
    'the CSV carries both halves plus the order count, so the split is auditable')
 
 

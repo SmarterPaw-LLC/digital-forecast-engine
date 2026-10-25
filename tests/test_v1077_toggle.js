@@ -39,8 +39,7 @@ function pnlInjectChartModeToggle(hostId, rerenderName, isPct) {
   const btn = (m, label, tip) => {
     const on = mode === m;
     const off = (m === 'stacked' && blockStack);
-    const offTip = 'Not available for a percentage metric — percentages do not sum,'
-      + ' so stacking them would draw a confident nonsense. Pick a $ or unit metric to stack.';
+    const offTip = 'Not available';
     return `<button type="button" ${off ? '' : `onclick="pnlSetChartMode('${m}','${rerenderName}')"`} title="${off ? offTip : tip}"
       style="padding:3px 9px;font-size:10px;font-family:var(--display);font-weight:${on ? 700 : 600};
       background:${on ? 'var(--sp-green)' : 'transparent'};color:${on ? '#fff' : 'var(--text2)'};

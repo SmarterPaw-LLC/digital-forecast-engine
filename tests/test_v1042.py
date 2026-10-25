@@ -222,14 +222,24 @@ ok('COLS.map(c => CELLS[c.key]' in body,
    '  and the row is emitted from the same filtered list the header reads')
 # feedback_always_csv_export — the new measures reach the file too.
 exp = fn('_writeChewyBreakevenCSV')   # v10.79 - writer split from the scope dialog
+# v10.80 - the CSV header + body are derived from CHEWY_BE_COLUMNS now, so the
+# column names live in the registry, not in the exporter. Search both. Sliced
+# by index rather than regex so no escape can be mangled.
+_i = js.index('const CHEWY_BE_COLUMNS = [')
+exp = exp + js[_i: js.index(chr(10) + '];', _i)]
 for c in ['our_revenue_wholesale', 'vendor_contribution', 'gm_per_unit', 'gm_pct',
           'break_even_acos_pct', 'actual_acos_pct']:
     ok(c in exp, 'CSV exports %s' % c)
-hdr = re.search(r"const hdr = \[(.*?)\];", exp, re.S).group(1)
-nhdr = len(re.findall(r"'", hdr)) // 2
-bodyrows = re.search(r"const body = rows\.map\(r => \[(.*?)\]\.map\(esc\)", exp, re.S).group(1)
-nbody = len([x for x in re.split(r',(?![^(]*\))', bodyrows) if x.strip()])
-ok(nhdr == nbody, 'CSV header (%d) == CSV row (%d)' % (nhdr, nbody))
+# v10.80 - header and body are both mapped from CHEWY_BE_COLUMNS now, so they
+# cannot differ in length by construction. The stronger guarantee that replaces
+# the count-vs-count check: every csv descriptor declares a UNIQUE position, so
+# no column can silently overwrite another's slot in the file.
+_names  = re.findall(r"csv: \{ name: '([^']+)', order: (\d+)", js)
+_orders = sorted(int(o) for _, o in _names)
+ok(len(_names) > 0 and _orders == list(range(1, len(_names) + 1)),
+   'CSV column positions are unique and contiguous (%d columns)' % len(_names))
+ok(len(set(n for n, _ in _names)) == len(_names),
+   'every CSV column name is unique')
 
 
 # ═════════ F. v10.42 — COGS on the product card ═════════
