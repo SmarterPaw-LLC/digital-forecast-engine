@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.76**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.77**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,46 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.77 — three controls that lied about what they were doing
+
+All three are the same shape, and it is the shape Jason keeps catching: the MATH
+was right, the AFFORDANCE was not, so the screen said one thing and the code did
+another. **No SQL to run.**
+
+### 1. The Chewy CSVs never exported the picker's column set
+- **Jason**, with 8 columns on screen and 39 in the file: *"on chewy p&l break-even tab, would you look at the columns builder/view vs what exports on the csv?"*
+- **Not 1:1, and never was.** `downloadChewyBreakevenCSV` builds a **hardcoded 39-column** header and never calls `chewyVisibleCols('breakeven')`. The picker holds 18. Same on the other two tabs: Sales 11 picker / 18 CSV, Cost 12 picker / 25 CSV.
+- **⚠ The export behaviour is RIGHT and was deliberately left alone.** The 21 CSV-only Break-Even columns are the **audit trail for BE ROAS** — identity, the full cost stack (`catalog_cost`, `purchase_uom`, `case_qty`, `wholesale_per_each`, `standing_allowance_pct`, `net_per_unit`, `cogs_per_unit`) and the autoship split (`autoship_actualized_sales` / `_first_order_sales` / `_actualized_orders` / `_signups`). A picker-scoped export would strip **exactly the inputs that let someone re-derive the number**. This is the same call Amazon Break-Even made in v10.43.
+- **So the defect was the label, not the export.** Amazon Break-Even's button reads `↓ CSV (every column)` with a tooltip naming Blake's sheet; the three Chewy tabs said nothing at all, and they export through the plain top-bar `↓ CSV` where there is no button to label.
+- **Fix: one helper, all three tabs** (hard rule #1 — fixing only the tab Jason named would have created the divergence the rule exists to stop). `chewyCsvScopeNote(pageKey)` appends `↓ CSV = every column` to the row-count line, which is already where the table's scope is stated. The printed count comes from `cfg.cols().length`, so it tracks the registry instead of drifting.
+- **Cost's row-count line moved `textContent` → `innerHTML`** — it could not carry a tooltip otherwise.
+- **Also fixed in passing:** both hidden-column tooltips read `"Sales of these columns are hidden"` / `"Break-Even of these columns are hidden"` — a page name templated into the middle of a sentence. Now `"These columns are hidden on screen."`
+
+### 2. A percentage metric left TWO live-looking controls doing nothing
+- **Jason:** *"on amazon p&L, if i change the metric to contribution %, the stacked chart doesn't render. this may be true for other metrics."*
+- **It renders — as a LINE.** `pnlTrendSeries` has forced line mode for a percentage metric since v10.12 (three products at 40% do not make 120%), and the subtitle says so: `stacking is off for a percentage metric — percentages do not sum`.
+- **⚠ But `pnlInjectChartModeToggle` painted the STORED mode, not the EFFECTIVE one.** So Stacked stayed filled green while a line drew underneath it, AND the BANDS stepper (8 / 25 / 50 / All) kept rendering even though it only means anything for a stack. Two dead controls. **This is the v10.19 lesson that the BANDS stepper's own comment records** — *"in line mode … a band count would be a live-looking control that does nothing"* — and the toggle broke it one function above that comment.
+- **Fix in the SHARED injector, not the four callers.** `pnlInjectChartModeToggle(hostId, rerenderName, isPct)` now resolves `mode = (isPct && stored === 'stacked') ? 'line' : stored`, renders Stacked dimmed (`opacity:.4`, `cursor:not-allowed`, **no `onclick`**) with a tooltip naming why, and drops the BANDS stepper. `pnlTrendSeries` still OWNS the fallback; the toggle only reports it, so the buttons and the subtitle cannot disagree.
+- **⚠ The STORED preference is deliberately untouched** — switch back to a $ metric and stacked returns. Silently demoting the user to line would be a second surprise.
+- **Scope of "other metrics", audited rather than assumed:** Amazon has TWO (`contribution_pct`, `margin_pct`) · Shopify and Walmart one each (`margin_pct`) · Chewy none. Every page's `isPct` was already correct, so the math was never wrong anywhere — only the control.
+- **The injection moved BELOW the metric resolution** on all three affected pages, since `isPct` is not known at the top of the function. Amazon reads `m.isPct` straight off `metricLabels` so there is no second copy of which metrics are percentages. Safe because every `*-chart-mode-host` lives INSIDE its `*-chart-panel`, which is hidden on the no-rows early return.
+
+### 3. Tables measured below the fold were pinned at the 280px floor
+- **Jason:** *"and the window is broken on this page too — the list does not fill the entire window."* 272 products, **5 visible rows**, dead space underneath.
+- **⚠ v10.56 sizes each table from `getBoundingClientRect().top`, which is VIEWPORT-relative.** Amazon P&L stacks 9 scorecards + a 123-week chart + the report bar above its table, so at render time the table sits below the fold: `innerHeight - top - 24` goes **negative**, `Math.max` pins it at `TBL_FIT_MIN` (280px ≈ 5 rows), and **nothing re-fits on scroll** — so it stays there permanently.
+- **Fix:** when the natural calculation would land under the floor, the element cannot be measured usefully, so fall back to the space it WILL have once scrolled to — `innerHeight - TBL_FIT_STICKY(100) - TBL_FIT_GUTTER(24)`. New const `TBL_FIT_STICKY` = app header (54px) + the sticky global search bar.
+- **⚠ The assertion that earns its keep is the EQUIVALENCE PROOF** (`test_v1077.py` D6): wherever v10.56 already cleared the floor, the new formula is asserted **byte-identical** across a sweep of viewport heights × element tops. This fix must not have moved a single table that was already fine. Confirmed in a real browser too: in view at top=250 both read **626px**; below the fold at top=1600, old **280px** → new **776px**.
+- **A scroll listener was considered and rejected:** re-fitting on scroll changes the wrap height, which changes document height, which changes scroll position — a feedback loop, and a table that grows and shrinks as you scroll. One honest measurement beats a jittery one.
+
+### Verification
+- `node --check` clean · **58 suites green** · `tests/test_v1077.py` (42 assertions) drives the REAL sliced `chewyCsvScopeNote` / `pnlInjectChartModeToggle` / `fitTableWrapsToViewport` in node.
+- **Two regression guards**, both reproducing the pre-fix behaviour rather than describing it: C5 runs the old toggle and proves it really did paint Stacked active + render BANDS on a percentage metric; D3 runs the old fit formula and proves it really did pin the below-fold table at 280px.
+- **B3 is the guard that keeps the new label honest:** it asserts each Chewy CSV header is a strict SUPERSET of its picker. Wire a Chewy CSV to `chewyVisibleCols` later and the on-screen note becomes a lie — this goes red instead.
+- **Then driven in a real browser at 1400×900** (chip confirmed `v10.77 · 2026-10-25` first, per the v10.67 stale-cache lesson): $ metric renders 6 buttons with Stacked green and BANDS present; % metric renders 2 buttons with Line green, Stacked at `opacity 0.4` / `cursor: not-allowed` / no onclick, BANDS gone, and `localStorage.pnlChartMode` still `stacked`. All three CSV notes render with the right per-tab counts (18 / 12 / 11). Zero console errors.
+
+### ⚠ Process note — the mixed-escape trap cost a patch run
+`index.html` carries REAL glyphs and literal `\uXXXX` escape text **on adjacent lines** (the v10.53 trap). Line 37194 has a real `·`; line 37200, four lines below it, has the six characters `\u00b7`. Three anchors were retyped with the wrong form and the patch aborted on the first mismatch — harmlessly, because the temp-file + `os.replace` pattern means nothing is written until every edit lands. **Dump `repr()` of the real bytes to a FILE before building any anchor** (the console is cp1252 and dies on the real glyphs).
 
 ## v10.76 — Unit sales goals by channel: monthly entry, weekly prorated line, on/off toggle
 
