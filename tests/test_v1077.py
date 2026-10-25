@@ -80,13 +80,14 @@ def hdr_keys(func_src):
 # ===========================================================================
 print('\nA. Chewy CSV scope note - wiring')
 
-ok(js.count('function chewyCsvScopeNote(') == 1,
-   'A1  exactly one definition (one note, one helper - hard rule #1)',
-   js.count('function chewyCsvScopeNote('))
+ok(js.count('const CHEWY_CSV_SCOPE_NOTE =') == 1,
+   'A1  exactly one definition (one note, one const - hard rule #1)',
+   js.count('const CHEWY_CSV_SCOPE_NOTE ='))
 
-for page in ('sales', 'cost', 'breakeven'):
-    ok(("chewyCsvScopeNote('%s')" % page) in js,
-       "A2  the %s row-count line carries the note" % page)
+# 3 call sites + 1 declaration.
+ok(js.count('CHEWY_CSV_SCOPE_NOTE') == 4,
+   'A2  all three Chewy row-count lines carry the note',
+   js.count('CHEWY_CSV_SCOPE_NOTE'))
 
 # The Cost line was textContent, which cannot carry a tooltip span.
 ok('rc.innerHTML = `${rows.length} Chewy SKUs`' in js,
@@ -103,11 +104,32 @@ ok(js.count('These columns are hidden on screen.') == 2,
    'A6  both hidden-column tooltips read as English',
    js.count('These columns are hidden on screen.'))
 
-# The note must COUNT from the registry, not from a hardcoded number, or it
-# drifts the moment a column is added to the picker.
-note = fn('chewyCsvScopeNote')
-ok('cfg.cols().length' in note,
-   'A7  the printed column count is derived from the registry, never hardcoded')
+# v10.78 - THE NO-PROSE RULE, MADE RUNNABLE.
+#
+# Jason: "why did you add all of this text in? just say 'not available'". Both
+# tooltips v10.77 shipped were paragraphs - state + justification + conclusion
+# + instruction - and the v10.77 chart subtitle ALREADY carried the reasoning
+# one line below the button. Same flag as v10.37 and v10.59. A rule nobody can
+# run is a rule that drifts, so it is a hard character cap here rather than a
+# habit. The reasoning belongs in CLAUDE.md, not on a hover.
+csv_tip = re.search(r'const CHEWY_CSV_SCOPE_NOTE =.*?title="(.*?)"', js, re.S).group(1)
+off_tip = re.search(r"const offTip = '(.*?)';", js, re.S).group(1)
+
+ok(len(csv_tip) <= 60,
+   'A7  the CSV-scope tooltip is a description, not a paragraph (<=60 chars)',
+   (len(csv_tip), csv_tip))
+ok(len(off_tip) <= 20,
+   'A8  the disabled-Stacked tooltip is a state, not an explanation (<=20 chars)',
+   (len(off_tip), off_tip))
+
+# The visible chip has to still SAY it - the short tooltip leans on that.
+ok('CSV = every column' in js,
+   'A9  the visible chip still states the export scope')
+
+# v10.37 class: no justifying / concluding / instructing on a hover.
+BANNED = ['would draw', 'Pick a', 'so that', 'because', 'in order to', 'which means']
+leak = [b for t in (csv_tip, off_tip) for b in BANNED if b.lower() in t.lower()]
+ok(not leak, 'A10 neither tooltip editorialises (descriptions only)', leak)
 
 
 # ===========================================================================

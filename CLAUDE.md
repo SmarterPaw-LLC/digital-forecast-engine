@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.77**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.78**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,16 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.78 — the two tooltips v10.77 shipped were paragraphs
+
+- **Jason, on the disabled Stacked button:** *"why did you add all of this text in? just say 'not available'."* He is right, and the worse part is that the v10.77 chart subtitle ALREADY read `stacking is off for a percentage metric — percentages do not sum` one line below the button. The hover was repeating the page.
+- **Both v10.77 tooltips cut**, not just the one he hovered. The CSV-scope note shipped in the same version with the same shape, and making him find it would be the v10.59 complaint again (*"is there some reason you are making me point out every instance of text bloat?"*).
+  - Stacked (disabled): 143 chars of state + justification + conclusion + instruction → **`Not available`** (13).
+  - Chewy CSV scope: 340 chars naming every audit column → **`Every column, including the ones hidden on screen.`** (50). Same register as Amazon Break-Even's own button.
+- **Dropping the per-tab column count removed the only reason the helper took an argument**, so `chewyCsvScopeNote(pageKey)` collapses to a `CHEWY_CSV_SCOPE_NOTE` const. The visible chip still says `↓ CSV = every column`, which is what carries the meaning; the count was decoration.
+- **⚠ A rule nobody can run is a rule that drifts, so this one is now runnable.** `test_v1077.py` A7/A8 cap the two tooltips at 60 and 20 characters, A9 asserts the visible chip still states the scope (the short tooltip leans on it), and A10 greps both for justifying / concluding / instructing phrases. Fifth flagging of this rule (v9.67, v9.96, v10.24, v10.37, v10.59) and the first time it is enforced at the exact two strings that broke it.
+- **Verification:** `node --check` clean · **58 suites green** · `test_v1077.py` 43/43. Driven in a browser at `v10.78 · 2026-10-25`: Stacked reads `Not available` at opacity 0.4, the CSV note reads 50 characters, zero console errors.
 
 ## v10.77 — three controls that lied about what they were doing
 
