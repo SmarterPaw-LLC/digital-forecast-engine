@@ -105,6 +105,48 @@ def hdr_keys(func_src):
     return re.findall(r"'([a-z0-9_]+)'", func_src[i:j])
 
 
+def lift_const(name):
+    """Lift a top-level `const NAME = ...;` by brace/bracket balance.
+
+    ⚠ A naive `^const NAME = .*?;$` stops at the first line ending in `;`,
+    which inside an object literal is one of its own entries - the v10.28
+    depth-aware-slice lesson. Scan forward and stop at the first `;` at
+    depth 0.
+    """
+    i = js.index('const %s =' % name)
+    d = 0; q = None; k = i
+    QUOTES = chr(39) + chr(34) + chr(96)
+    while k < len(js):
+        c = js[k]
+        if q:
+            # inside a string/template: only its own unescaped quote ends it
+            if c == chr(92): k += 2; continue
+            if c == q: q = None
+        elif c in QUOTES: q = c
+        elif c in '([{': d += 1
+        elif c in ')]}': d -= 1
+        elif c == ';' and d == 0: return js[i:k + 1]
+        k += 1
+    raise AssertionError('unterminated const %s' % name)
+
+
+def export_dlg_shell():
+    """Everything pnlExportScopeDialog now closes over, in dependency order.
+
+    ⚠ exportDlgActionHtml and exportDlgShellHtml take DESTRUCTURED params, so
+    they need the param-aware slicer or the body is truncated at the pattern's
+    closing brace (the v10.12 trap). Use fn_param where this file has one.
+    """
+    _fnp = fn_param if 'fn_param' in globals() else fn
+    return chr(10).join([
+        lift_const('EXPORT_DLG_OVERLAY_CSS'),
+        lift_const('EXPORT_DLG_TONES'),
+        _fnp('exportDlgActionHtml'),
+        fn('exportDlgSectionHtml'),
+        _fnp('exportDlgShellHtml'),
+    ])
+
+
 # ===========================================================================
 # A. The export dialog picks COLUMNS, not just rows (v10.81)
 # ===========================================================================
@@ -187,6 +229,25 @@ ok(_old not in _wr,
    'A17 regression guard: the unconditional all-columns map is gone')
 
 
+# v10.83 - ONE dialog, not two that merely share a fieldset. Sharing the
+# fieldset while hand-rolling the shell around it is the divergence hard
+# rule #1 exists to stop, so the shell is asserted shared too.
+for _h in ['exportDlgShellHtml', 'exportDlgActionHtml', 'exportDlgSectionHtml']:
+    ok(js.count('function %s(' % _h) == 1,
+       'A18 exactly one %s (one shell, every export dialog)' % _h,
+       js.count('function %s(' % _h))
+_sed2 = fn('showExportDialog')
+_pes2 = fn_param('pnlExportScopeDialog')
+for _nm, _src in [('showExportDialog', _sed2), ('pnlExportScopeDialog', _pes2)]:
+    ok('exportDlgShellHtml(' in _src, 'A19 %s renders through the shared shell' % _nm)
+    ok('exportDlgActionHtml(' in _src, 'A20 %s renders shared action buttons' % _nm)
+    ok('EXPORT_DLG_OVERLAY_CSS' in _src, 'A21 %s uses the shared overlay' % _nm)
+# The hand-rolled markup v10.81 shipped must not come back.
+ok('secHdr' not in js, 'A22 the bare "Rows" section header is gone')
+ok("'var(--sp-green)' : 'var(--surface2)'" not in _pes2,
+   'A23 the solid-filled primary button is gone from the P&L dialog')
+
+
 # ---------------------------------------------------------------------------
 # A-node. Drive the REAL dialog so the column scope is a checked claim.
 # ---------------------------------------------------------------------------
@@ -219,6 +280,7 @@ const document = {
   createElement: () => (LAST = mkOv()),
 };
 
+__SHELL__
 __FIELDSET__
 __READER__
 __DIALOG__
@@ -249,16 +311,30 @@ t('N4  visible is pre-checked, so the default honours the screen',
 t('N5  both counts are shown so the choice is legible',
   [STATE.html.includes('8'), STATE.html.includes('39')], [true, true]);
 
-// N6 - identical row sets must not render a 2-option Rows section.
-t('N6  same rows -> one row button, no Rows header',
-  [(STATE.html.match(/data-pick="/g) || []).length, STATE.html.includes('>Rows<')],
-  [2, false]);   // filtered + cancel
+// N6 - identical row sets must not render a second row option.
+t('N6  same rows -> one row button + cancel',
+  (STATE.html.match(/data-pick="/g) || []).length, 2);
 
-// N7 - differing rows DO get the labelled two-option Rows section.
+// N7 - differing rows DO get both options.
 call({ filtered: [1], cols: { visible: 8, all: 39 } });
-t('N7  differing rows -> two row buttons + a Rows header',
-  [(STATE.html.match(/data-pick="/g) || []).length, STATE.html.includes('>Rows<')],
-  [3, true]);   // filtered + everything + cancel
+t('N7  differing rows -> two row buttons + cancel',
+  (STATE.html.match(/data-pick="/g) || []).length, 3);
+
+// v10.83 - THE CANONICAL SHAPE. Jason, on the Inventory dialog: "WHY did you
+// not match the dialog to the existing pattern???" v10.81 shared the Columns
+// fieldset and then hand-rolled the rest in a different visual language. The
+// row choice IS the action buttons, so there is no "Rows" header; the primary
+// action is OUTLINED green, not solid-filled white-on-green; and the count
+// rides inline in a muted span rather than on a sub-line.
+t('N8a no Rows section header (the canonical dialog has none)',
+  />Rows</.test(STATE.html), false);
+t('N8b the primary action is outlined green, not a solid fill',
+  [STATE.html.includes('rgba(74,158,56,.12)'), /background:var\(--sp-green\)/.test(STATE.html)],
+  [true, false]);
+t('N8c the row count rides inline in a muted span',
+  /\(1 rows\)<\/span>/.test(STATE.html.replace(/\s+/g, ' ')), true);
+t('N8d Cancel is an outlined action, not borderless',
+  /data-pick="cancel"[^>]*border:1px solid var\(--border2\)/.test(STATE.html), true);
 
 // N8/N9 - the chosen scope must actually reach onPick. This is the assertion
 // the whole version exists for.
@@ -293,7 +369,8 @@ t('N10 scope survives the node teardown (read before remove)',
 
 console.log(JSON.stringify(out));
 '''
-hA = (hA.replace('__FIELDSET__', fn('colScopeFieldsetHtml'))
+hA = (hA.replace('__SHELL__', export_dlg_shell())
+        .replace('__FIELDSET__', fn('colScopeFieldsetHtml'))
         .replace('__READER__',   fn('readColScope'))
         .replace('__DIALOG__',   fn_param('pnlExportScopeDialog')))
 hAp = os.path.join(SP, 'test_v1077_colscope.js')

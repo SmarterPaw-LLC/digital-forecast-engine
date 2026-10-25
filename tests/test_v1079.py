@@ -165,6 +165,48 @@ else:
         ok(row['pass'], row['name'], None if row['pass'] else (row['got'], 'want', row['want']))
 
 
+def lift_const(name):
+    """Lift a top-level `const NAME = ...;` by brace/bracket balance.
+
+    ⚠ A naive `^const NAME = .*?;$` stops at the first line ending in `;`,
+    which inside an object literal is one of its own entries - the v10.28
+    depth-aware-slice lesson. Scan forward and stop at the first `;` at
+    depth 0.
+    """
+    i = js.index('const %s =' % name)
+    d = 0; q = None; k = i
+    QUOTES = chr(39) + chr(34) + chr(96)
+    while k < len(js):
+        c = js[k]
+        if q:
+            # inside a string/template: only its own unescaped quote ends it
+            if c == chr(92): k += 2; continue
+            if c == q: q = None
+        elif c in QUOTES: q = c
+        elif c in '([{': d += 1
+        elif c in ')]}': d -= 1
+        elif c == ';' and d == 0: return js[i:k + 1]
+        k += 1
+    raise AssertionError('unterminated const %s' % name)
+
+
+def export_dlg_shell():
+    """Everything pnlExportScopeDialog now closes over, in dependency order.
+
+    ⚠ exportDlgActionHtml and exportDlgShellHtml take DESTRUCTURED params, so
+    they need the param-aware slicer or the body is truncated at the pattern's
+    closing brace (the v10.12 trap). Use fn_param where this file has one.
+    """
+    _fnp = fn_param if 'fn_param' in globals() else fn
+    return chr(10).join([
+        lift_const('EXPORT_DLG_OVERLAY_CSS'),
+        lift_const('EXPORT_DLG_TONES'),
+        _fnp('exportDlgActionHtml'),
+        fn('exportDlgSectionHtml'),
+        _fnp('exportDlgShellHtml'),
+    ])
+
+
 # ===========================================================================
 # C. The export-scope chooser
 # ===========================================================================
@@ -180,6 +222,8 @@ const t = (name, got, want) => out.push({ name, pass: JSON.stringify(got) === JS
 const document = { getElementById: () => null, body: { appendChild(){} },
                    createElement: () => ({ style:{}, set innerHTML(v){}, addEventListener(){} }) };
 
+__SHELL__
+__FIELDSET__
 __DIALOG__
 
 // C1 - nothing is narrowing the view, so there is no question to ask.
@@ -199,7 +243,9 @@ t('C2  differing counts -> asks, exports nothing yet', [picked, opened > 0], [nu
 
 console.log(JSON.stringify(out));
 '''
-h2 = h2.replace('__DIALOG__', fn('pnlExportScopeDialog'))
+h2 = (h2.replace('__SHELL__', export_dlg_shell())
+        .replace('__FIELDSET__', fn('colScopeFieldsetHtml') + chr(10) + fn('readColScope'))
+        .replace('__DIALOG__', fn('pnlExportScopeDialog')))
 h2p = os.path.join(SP, 'test_v1079_scope.js')
 io.open(h2p, 'w', encoding='utf-8', newline='').write(h2)
 r2 = subprocess.run(['node', h2p], capture_output=True, text=True)
