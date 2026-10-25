@@ -221,7 +221,7 @@ ok(len(col_keys) >= 18 and not missing,
 ok('COLS.map(c => CELLS[c.key]' in body,
    '  and the row is emitted from the same filtered list the header reads')
 # feedback_always_csv_export — the new measures reach the file too.
-exp = fn('downloadChewyBreakevenCSV')
+exp = fn('_writeChewyBreakevenCSV')   # v10.79 - writer split from the scope dialog
 for c in ['our_revenue_wholesale', 'vendor_contribution', 'gm_per_unit', 'gm_pct',
           'break_even_acos_pct', 'actual_acos_pct']:
     ok(c in exp, 'CSV exports %s' % c)

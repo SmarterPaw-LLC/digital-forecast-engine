@@ -137,7 +137,7 @@ ok(not leak, 'A10 neither tooltip editorialises (descriptions only)', leak)
 # ===========================================================================
 print('\nB. the CSV really is every column')
 
-be_csv    = hdr_keys(fn('downloadChewyBreakevenCSV'))
+be_csv    = hdr_keys(fn('_writeChewyBreakevenCSV'))   # v10.79
 sales_csv = hdr_keys(fn('downloadChewyPnlSalesCSV'))
 cost_csv  = hdr_keys(fn('downloadChewyPnlCostCSV'))
 
@@ -165,7 +165,7 @@ absent = [c for c in AUDIT if c not in be_csv]
 ok(not absent, 'B4  every audit column the tooltip promises is in the BE CSV', absent)
 
 # None of the three writers may read the picker - that IS the behaviour.
-for name in ('downloadChewyBreakevenCSV', 'downloadChewyPnlSalesCSV', 'downloadChewyPnlCostCSV'):
+for name in ('_writeChewyBreakevenCSV', 'downloadChewyPnlSalesCSV', 'downloadChewyPnlCostCSV'):
     ok('chewyVisibleCols' not in fn(name),
        'B5  %s builds its own header, independent of the picker' % name)
 

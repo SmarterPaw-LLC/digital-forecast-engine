@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.78**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.79**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,39 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.79 — Chewy Break-Even: a custom date range, and an export that says what it is
+
+- **Jason:** *"on chewy breakeven i can't set a custom time. the csv export is not giving me the option to export like on other pages — it doesn't ask to export using the filters."* Two gaps, both **divergences rather than missing features**.
+
+### Custom range — the same control behaved three ways one click apart
+- **Chewy Sales has had a custom range since v10.13.** Break-Even and Cost never got one. Same family, same control, three behaviours.
+- Fixed on **both** missing tabs, reusing Sales' exact markup + handler shape (`onChewyBreakevenPeriodChange` / `onChewyPnlCostPeriodChange` toggle the wrap; the resolver gains one `custom` branch). **⚠ The handler deliberately does NOT re-render on the custom pick itself** — the from/to inputs fire that, or the table would repaint against a half-entered range.
+
+### The export never asked, and could not have
+- **The file DID honour the filters** — it writes `chewyBreakevenVisibleRows`, the post-filter set. There was just no way to know that, and no way to ask for anything else. Forecast / Inventory / Products / Bundles / Units Sold all open `showExportDialog`; **every P&L page writes straight to disk.**
+- **⚠ `showExportDialog` is deliberately NOT reused.** It re-implements each tab's filter chain inline — the copy-paste smell flagged at v7.46 — so adding Break-Even would mean a SECOND copy of a filter chain the renderer already runs. The new `pnlExportScopeDialog` takes the two row sets the renderer already built instead.
+- **Built as a shared helper, not a Chewy dialog.** The other four P&L exports are one call each whenever they want it (hard rule #1). **Still open:** Amazon / Shopify / Walmart / Chewy Sales / Chewy Cost all export with no chooser.
+- **It skips itself when nothing is narrowing the view** (`filtered.length === everything.length`). Otherwise every export on a clean page becomes a pointless two-click chore, which is how a helpful dialog becomes the thing you get asked to remove.
+
+### ⚠ "Everything" had to be BUILT — it did not exist
+- Brand / category / search used to `continue` **before the row object was constructed**, so a filtered-out SKU was never built and there was no in-window-but-filtered-out set to export. They are now a `passesFilters` flag, and `windowRows` collects every SKU in the window. ~50-100 SKUs per window, so building them all is free.
+- **`catVisPass` stays a HARD skip**, above the flag. It is a saved preference (*"never show me this category"*), not a transient filter — "everything" must not resurrect a category the operator switched off. One flipped line would do it, so `test_v1079.py` D2/D3 pin both the skip and its position.
+- **D1 is the assertion that earns its keep — the PARTITION PROPERTY.** `windowRows` must be pushed BEFORE every filter branch, then `allRows`, then `rows`. Move that push one line later and "All SKUs in this window" silently becomes a second copy of the filtered set: an export that lies while looking completely normal.
+- **The window is the data scope, not a filter** — the ad report only covers those days — so the second option keeps it and ignores Brand / Category / Search / Show. The option's own sub-line says so.
+
+### The file now names its own scope
+- The `#` context line gained brand, category, search, show, min-units and the exported row count. A 39-column CSV with no stated scope is unreadable three weeks later.
+
+### ⚠ I shipped prose in a UI again, in the same session it was flagged
+- The first cut of the dialog carried a **three-line note** under the buttons explaining the window-vs-filter distinction — exactly what v10.78 had just cut, two hours earlier. Caught on the screenshot before commit, not by Jason.
+- Replaced with an inline sub-line on the option it describes: `79 rows · ignores Brand, Category, Search, Show`. `note` is gone from the signature entirely so it cannot come back, and C6/C7 cap it the way v10.78's A7/A8 cap the tooltips.
+
+### Verification
+- `node --check` clean · **59 suites green** · `tests/test_v1079.py` (41 assertions) drives the REAL sliced `getChewyBreakevenDateRange` / `getChewyPnlCostDateRange` / `pnlExportScopeDialog` in node.
+- **Three suites went red and were re-pointed, not silenced** — `test_v1036` / `test_v1042` / `test_v1077` slice `downloadChewyBreakevenCSV` for the `hdr` array, which now lives in `_writeChewyBreakevenCSV` (the entry point became the scope dialog). Every assertion is about the FILE's contents, which are unchanged.
+- **⚠ The v10.12 destructured-parameter trap bit again.** `pnlExportScopeDialog` takes a destructured arg, so `fn()`'s naive slice balanced the DESTRUCTURING PATTERN instead of the body and the harness would not parse. `test_v1079.py`'s `fn()` now balances the parameter list first. The note existed since v10.12; the helper did not.
+- **Driven in a browser at `v10.79 · 2026-10-25`:** the custom option + wrap toggle on all three Chewy tabs, Break-Even resolving `2026-03-01 → 2026-03-31` from the inputs, and the dialog rendering both options, returning the right set on click, and closing. Screenshotted. Only the expected unauthenticated 401s in console.
 
 ## v10.78 — the two tooltips v10.77 shipped were paragraphs
 
