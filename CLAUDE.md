@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.83**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.84**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,16 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.84 - Amazon / Shopify / Walmart P&L get the same export dialog
+
+- **Jason:** *"the amazon P&L pages also do not have the same csv export dialog based on page filters."* Correct, and Amazon was the worst of the three.
+- **WARN Amazon P&L had a HARDCODED 26-column CSV header that ignored PNL_COLUMNS entirely** - even though every column in that registry has carried a csv() since v4.125. The same bug he had just flagged on Chewy, sitting on the page he uses most. It also silently chose selection-vs-visible without asking.
+- **All three now route through pnlExportScopeDialog.** Amazon + Shopify get a Columns axis (both have pickers); **Walmart deliberately does not** - it has no column picker, so a Columns section would be a live-looking control that does nothing (v10.19). With one row set and no column choice the dialog skips itself, so nothing gained a pointless click.
+- **Going registry-driven must not DROP anything**, so the two columns the hardcoded header had and the registry lacked became real (default-off) columns: **brand** and **total_amazon_fees**. The fee total now has ONE definition (pnlTotalAmazonFees) shared by the column and the CSV, so they cannot drift.
+- Amazon + Shopify writers split into _writePnlAmazonCSV / _writePnlShopifyCSV behind the dialog and honour colScope; Amazon gained the context line the other exports already carried (region, window, brand, quick filter, selection flag, row + column counts).
+- **Verification:** node --check clean, **59 suites green**. Driven in a browser at v10.84: Amazon CSV now emits **10 columns matching the picker** (was a fixed 26 regardless) and 34 on All columns, with brand + total_amazon_fees both present; all three exporters confirmed wired to the shared dialog.
+- **WARN Process note:** the brand-column anchor was byte-identical in PNL_COLUMNS and SHOPIFY_PNL_COLUMNS. Added a rep_first() that asserts how many copies exist and edits only the first - the v10.53 wrong-haystack class, caught before it wrote this time.
 
 ## v10.83 - ONE export dialog, not two that merely share a fieldset
 
