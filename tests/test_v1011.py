@@ -503,7 +503,14 @@ sok("colspan=\"' + (cols.length + 1) + '\"" in src[sales_start:sales_end],
     'Sales empty state spans the computed column count (cols.length + 1 checkbox col)')
 cost_fn_start = src.index('function renderChewyPnlCost()')
 cost_fn_end = src.index('function downloadChewyPnlCostCSV')
-sok('colspan="12"' in src[cost_fn_start:cost_fn_end], 'Cost renderer uses colspan=12 (12 columns)')
+# v10.82 - the Cost body became KEYED (the v10.54 / v10.55 fix, third table),
+# so the empty-state span is COMPUTED from the visible column count instead of
+# a hardcoded 12. Same guarantee this assertion has always existed for - the
+# span cannot drift from the column set - just stated more strongly.
+sok('colspan="${cols.length}"' in src[cost_fn_start:cost_fn_end],
+    'Cost renderer computes colspan from the visible column count')
+sok('colspan="12"' not in src[cost_fn_start:cost_fn_end],
+    'Cost renderer no longer hardcodes a column count')
 
 # One allowance resolver, two surfaces — no second copy of the stack math.
 sok(src.count('function chewyAllowanceStack()') == 1, 'one chewyAllowanceStack definition')

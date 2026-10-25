@@ -234,12 +234,24 @@ for c in ['our_revenue_wholesale', 'vendor_contribution', 'gm_per_unit', 'gm_pct
 # cannot differ in length by construction. The stronger guarantee that replaces
 # the count-vs-count check: every csv descriptor declares a UNIQUE position, so
 # no column can silently overwrite another's slot in the file.
-_names  = re.findall(r"csv: \{ name: '([^']+)', order: (\d+)", js)
-_orders = sorted(int(o) for _, o in _names)
-ok(len(_names) > 0 and _orders == list(range(1, len(_names) + 1)),
-   'CSV column positions are unique and contiguous (%d columns)' % len(_names))
-ok(len(set(n for n, _ in _names)) == len(_names),
-   'every CSV column name is unique')
+# v10.82 - scoped PER REGISTRY. Grepping the whole file worked while
+# Break-Even was the only consolidated table; the moment Cost to Chewy got its
+# own csv descriptors the two order sequences (1..39 and 1..25) were pooled and
+# read as 64 duplicated positions. The guarantee was always per-registry: in
+# ONE registry, no column may silently overwrite another's slot in the file.
+def _csv_descriptors(reg):
+    i = js.index('const %s = [' % reg)
+    seg = js[i: js.index(chr(10) + '];', i)]
+    return re.findall(r"csv: \{ name: '([^']+)', order: (\d+)", seg)
+
+for _reg, _want in [('CHEWY_BE_COLUMNS', 39), ('CHEWY_COST_COLUMNS', 25)]:
+    _d = _csv_descriptors(_reg)
+    _orders = sorted(int(o) for _, o in _d)
+    ok(len(_d) == _want, '%s declares %d csv descriptors (got %d)' % (_reg, _want, len(_d)))
+    ok(_d and _orders == list(range(1, len(_d) + 1)),
+       '%s: CSV positions are unique and contiguous' % _reg)
+    ok(len(set(n for n, _ in _d)) == len(_d),
+       '%s: every CSV column name is unique' % _reg)
 
 
 # ═════════ F. v10.42 — COGS on the product card ═════════

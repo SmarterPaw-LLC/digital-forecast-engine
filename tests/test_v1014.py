@@ -216,7 +216,11 @@ def sok(cond, label):
 
 cost = fn('renderChewyPnlCost')
 sok('const caseCell = (r) =>' in cost, 'the Case column has its own cell renderer')
-sok(cost.count('${caseCell(r)}') == 1, 'the Case cell uses it')
+# v10.82 - the Cost body is keyed now, so the Case cell is `case: caseCell(r)`
+# in the CELLS map rather than an inlined ${caseCell(r)} in a run of <td>s.
+# The guarantee is unchanged: exactly one site renders the Case cell.
+sok(cost.count('caseCell(r)') == 1, 'the Case cell uses it (once, via the keyed CELLS map)')
+sok('case: caseCell(r),' in cost, 'the Case cell is keyed to its column')
 # The handler is built ONCE into `open` and interpolated into each branch, so
 # count the interpolation — counting the call would read 1 and miss the point.
 sok(cost.count('${open}') == 4, 'all four Case cell states are clickable')

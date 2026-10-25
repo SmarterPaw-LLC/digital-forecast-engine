@@ -343,14 +343,49 @@ ok('CHEWY_BE_COLUMNS' in fn('_writeChewyBreakevenCSV'),
 
 # KNOWN OUTSTANDING: Sales and Cost were NOT consolidated. Same shape of gap,
 # so record the exact counts rather than let them pass as if they were fine.
-sales_csv  = hdr_keys(fn('downloadChewyPnlSalesCSV'))
-cost_csv   = hdr_keys(fn('downloadChewyPnlCostCSV'))
-sales_cols = len(re.findall(r"\{ k: '", arr_body('CHEWY_SALES_COLUMNS')))
-cost_cols  = len(re.findall(r"\{ k: '", arr_body('CHEWY_COST_COLUMNS')))
-print('    note  Sales  picker %d / csv %d  - NOT consolidated' % (sales_cols, len(sales_csv)))
-print('    note  Cost   picker %d / csv %d  - NOT consolidated' % (cost_cols, len(cost_csv)))
-ok(sales_cols <= len(sales_csv) and cost_cols <= len(cost_csv),
-   'B7  Sales / Cost CSVs still at least cover their pickers')
+# v10.82 - Cost to Chewy is consolidated now: 25 registry columns, 25 csv
+# descriptors, and the body is keyed so the header and the cells cannot
+# disagree. Its hardcoded `hdr` array is gone, so B7 asserts the 1:1 rather
+# than reading a list that no longer exists.
+_cost_body = arr_body('CHEWY_COST_COLUMNS')
+cost_cols  = len(re.findall(r"\{ k: '", _cost_body))
+cost_csv   = re.findall(r"csv: \{ name: '([^']+)'", _cost_body)
+ok(cost_cols == 25, 'B7  Cost picker holds all 25 columns', cost_cols)
+ok(len(cost_csv) == 25, 'B8  and every one of them carries a csv descriptor', len(cost_csv))
+ok('const hdr = [' not in fn('_writeChewyPnlCostCSV'),
+   'B9  the Cost exporter has no hardcoded header of its own')
+ok('CHEWY_COST_COLUMNS' in fn('_writeChewyPnlCostCSV'),
+   'B10 it maps the registry instead')
+# The 13 that were reachable only through the file.
+for c in ['purchase_uom', 'standing_allowance_pct', 'net_per_unit', 'break_even_price',
+          'chewy_msrp', 'chewy_map', 'pct_of_msrp', 'chewy_avg_retail', 'moq', 'data_gap']:
+    ok(c in cost_csv, 'B11 former CSV-only Cost column is now pickable: %s' % c)
+
+# v10.82 - Chewy Sales was the last of the three with the gap. All three are
+# consolidated now, so this stops recording an outstanding count and asserts
+# the 1:1 instead. hdr_keys() is no longer used on any Chewy exporter.
+_sales_body = arr_body('CHEWY_SALES_COLUMNS')
+sales_cols  = len(re.findall(r"\{ k: '", _sales_body))
+sales_csv   = re.findall(r"csv: \{ name: '([^']+)'", _sales_body)
+ok(sales_cols == 18, 'B12 Sales picker holds all 18 columns', sales_cols)
+ok(len(sales_csv) == 18, 'B13 and every one of them carries a csv descriptor', len(sales_csv))
+ok('const hdr = [' not in fn('_writeChewyPnlSalesCSV'),
+   'B14 the Sales exporter has no hardcoded header of its own')
+ok('CHEWY_SALES_COLUMNS' in fn('_writeChewyPnlSalesCSV'),
+   'B15 it maps the registry instead')
+for c in ['master_id', 'brand', 'autoship_units', 'cogs_per_unit',
+          'vendor_price_per_each', 'vendor_allowances', 'vendor_contribution_pct']:
+    ok(c in sales_csv, 'B16 former CSV-only Sales column is now pickable: %s' % c)
+
+# THE GUARANTEE THAT REPLACES THE OUTSTANDING NOTE. All three Chewy tabs are
+# now one registry each, and every export defaults to the picker's set. If a
+# future tab grows a hardcoded header again, this goes red.
+for _w in ['_writeChewyBreakevenCSV', '_writeChewyPnlCostCSV', '_writeChewyPnlSalesCSV']:
+    _src = fn(_w)
+    ok("colScope === 'all'" in _src,
+       'B17 %s defaults to the visible set (all-columns is the opt-in)' % _w)
+    ok('chewyVisibleCols(' in _src,
+       'B18 %s reads the picker, not a second list' % _w)
 
 
 # ===========================================================================

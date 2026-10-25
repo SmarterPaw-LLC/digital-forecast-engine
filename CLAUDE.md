@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.81**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.82**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -35,6 +35,42 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v10.82 — Chewy Sales + Cost to Chewy: one registry each, and the CSV follows the picker
+
+- **Jason:** *"if the columns are in the data, they should be pickable as columns on the page."* v10.80 did that for Break-Even; v10.81 made Break-Even's export follow the picker. These were the other two tabs, and they had **both** gaps plus a third nobody had named.
+- **Cost to Chewy: picker 12 / CSV 25.** Sales: picker 11 / CSV 18. Thirteen and seven columns respectively were reachable only by opening the file.
+
+### ⚠ The structural bug under the Cost tab
+- **Its header has been driven by `chewyVisibleCols` since v10.58 while the BODY stayed a hand-ordered run of 12 `<td>`s.** Add one column and the header grows while the body does not, so every value slides under the wrong heading — silently, with no error. This is the shape v10.54 fixed for Break-Even and v10.55 for Sales; Cost was the third table and never got it.
+- **Fixed before anything was added**, because adding 13 columns to that shape would have shipped a scrambled table. Body is now a keyed `CELLS` map emitted from the same filtered list the header reads, and the empty-state `colspan` is computed instead of hardcoded at 12.
+- **Driven in a browser:** header and body stay aligned at **12 → 16 → 3** as columns are toggled. Under the old shape the 16-column case would have put `Price/ea` values under the `UOM` heading.
+
+### One registry per tab
+- Cost **12 → 25**, Sales **11 → 18**, each entry carrying `csv: { name, order, val }`. **Registry = CSV, 1:1, on all three Chewy tabs now.**
+- **⚠ The all-columns header is byte-identical to the pre-v10.82 hardcoded arrays** on both tabs — asserted in the browser against the literal old lists. Any downstream reader of these CSVs is unaffected.
+- **Labels reuse the app's existing vocabulary** rather than coining new words (the v10.22 rule): `Master ID` / `Brand` / `UOM` / `Net/u` / `Allowance %` / `Data gap` / `COGS/u` come from Break-Even, `Price/ea` from Cost, `Avg Price` from Sales (Cost's `r.retail` IS Chewy's average retail selling price). Only **eight** measures were genuinely new and they are declared in `CHEWY_MEASURE_VOCAB`.
+- **⚠ One label was NOT reused, deliberately.** Sales' `vendorAllow` is a **TOTAL** (`vendorRev × allowance %`); Cost's `Allow/u` is **per unit**. Same arithmetic, different scope, so it gets its own name (`Vendor Allow`) rather than meaning two things one tab apart — rule 3a.
+
+### Exports follow the picker
+- Both writers split into `_writeChewyPnlCostCSV(rows, colScope)` / `_writeChewyPnlSalesCSV(rows, colScope)` behind `pnlExportScopeDialog`, defaulting to the visible set with all-columns one radio away.
+- **Cost renders the Columns axis only** — it has no window-vs-filter row split, so a second row option would be a live-looking control that does nothing (the v10.19 lesson). **Sales renders both**, because selection-vs-all-visible is a real row choice there.
+- Verified: Cost exports **12 of 25** by default and 25 on opt-in; Sales **6 of 18** and 18. Each file's context line records the scope.
+
+### ⚠ The migrations that had to exist
+- **Cost's `defaults` was `null`, which means EVERY column.** Left alone, all 13 new columns would have appeared at once for anyone who had never touched the picker — the common state. Today's 12 are now pinned explicitly.
+- **Flag-guarded one-time migrations** for both tabs (the v5.48 / v9.86 / v10.64 / v10.80 shape) add the new keys to any existing hidden `Set`, since "not hidden" means VISIBLE. **Proven necessary in a browser:** without it a Cost user who had narrowed to 5 columns jumps to **18**, and a Sales user at 3 jumps to **10**.
+
+### ⚠ Process note — a patch wrote to the wrong registry
+- The first pass inserted csv descriptors with a whole-file `s.index("{ k: 'title',")`. Three of them landed in the **Walmart P&L's inline `cols` array**, which sits earlier in the file and happens to share the `{ k: '...' }` shape and the keys `title` / `units` / `cogs`. Inert at runtime (Walmart never reads `.csv`) but three Cost columns silently lacked descriptors.
+- **Caught by `test_v1042`**, which counted 22 where 25 were expected. The strays were backed out and the insert re-scoped to the registry's own slice. **This is the v10.53 wrong-haystack class** — a file-wide anchor matching a structure that repeats.
+
+### Verification
+- `node --check` clean · **59 suites green** · all three registries assert cols == csv descriptors, contiguous 1..N orders, unique names.
+- **Four suites went red and were re-pointed, not silenced.** `test_v1011` pinned `colspan="12"` (now COMPUTED — the stronger guarantee); `test_v1014` pinned the inlined `${caseCell(r)}` (now keyed); `test_v1042`'s CSV-order check greped the whole file and pooled two registries' 1..N sequences into 64 duplicated positions — **now scoped per registry, which is what the guarantee always was**; `test_v1077` B7/B12 read hardcoded `hdr` arrays that no longer exist.
+- **`test_v1053` caught a real gap** — six Cost labels undeclared. Declared, and the two new Sales measures with them. The suite did exactly what it was built for.
+- **B17/B18 are the assertions that replace the outstanding note:** every Chewy writer defaults to the visible set and reads `chewyVisibleCols`. A future tab that grows a hardcoded header goes red.
+- **Driven in a browser at `v10.82 · 2026-10-25`:** defaults unmoved (Cost 12 in the original order, Sales the v10.55 six), every registry column has a keyed body cell, header/body aligned across three column sets, both exports scope correctly, both migrations proven necessary, byte-identical all-columns headers. Only the expected unauthenticated 401s in console.
 
 ## v10.81 — the export dialog picks COLUMNS, not just rows
 
