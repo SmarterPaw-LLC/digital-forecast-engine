@@ -368,9 +368,21 @@ if r2.returncode != 0:
 
 # ═════════ E. wiring ═════════
 print('\nE. wiring')
-ok(re.search(r'Promise\.all\(\[loadMyProfile\(\), loadGlobalTabDefaults\(\), loadGlobalViewDefaults\(\)\]\)', js) is not None,
+# v10.97 re-pointed: this pinned the EXACT contents of the init Promise.all,
+# so adding a fourth org-wide setting (sub-tab visibility) broke it. The
+# guarantee this assertion exists for is that the view defaults load in
+# PARALLEL with the profile at init, not that the list never grows.
+_init = re.search(r'await Promise\.all\(\[loadMyProfile\(\)[^\]]*\]\)', js)
+ok(bool(_init), 'the init Promise.all is still there')
+ok(bool(_init) and 'loadGlobalViewDefaults()' in _init.group(0),
    'loaded alongside the profile + tab defaults')
-after = re.sub(r'//[^\n]*', '', js[js.index('loadGlobalViewDefaults()]'):])
+ok(bool(_init) and 'loadGlobalTabDefaults()' in _init.group(0),
+   'tab defaults still load there too')
+# v10.97 re-pointed: this anchored on 'loadGlobalViewDefaults()]' — the ']'
+# assumed it was the LAST entry in the init Promise.all. A fourth org-wide
+# setting moved it. Anchor on the end of the Promise.all instead; the
+# guarantee (defaults applied before init paints) is unchanged.
+after = re.sub(r'//[^\n]*', '', js[_init.end():])
 ok(after.index('applyGlobalViewDefaults()') < after.index('init()'),
    'applied BEFORE init() paints')
 loader = fn('loadGlobalViewDefaults')

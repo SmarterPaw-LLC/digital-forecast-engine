@@ -242,6 +242,21 @@ const PAGE_SETTINGS_PANELS = [
     render:  (host, which, onAfterChange) => freezeRenderControls(host, which, onAfterChange),
   },
   {
+    // v10.95 — which SUB-TABS this page shows. Jason: "make a per page tab
+    // visibility setting, set globally, like the other settings." Sits in the
+    // gear for the same reason the v10.28 panel does: this is already the
+    // per-page settings surface and resolves the current page through the same
+    // nav key, so "per page" comes for free.
+    id: 'subtabvis',
+    icon: '\u{1F5C2}',
+    label: 'Sub-tabs on this page',
+    hint: 'Which sub-tabs appear on this page, for everyone. Admin-only to change. Nothing is deleted — a hidden sub-tab comes back the moment you tick it again, and at least one always stays visible.',
+    pageKeyFor: (navKey) => subtabVisStripFor(navKey),
+    isSet:   (stripKey) => subtabVisHiddenCount(stripKey) > 0,
+    summary: (stripKey) => subtabVisSummary(stripKey),
+    render:  (host, stripKey, onAfterChange) => subtabVisRenderControls(host, stripKey, onAfterChange),
+  },
+  {
     // v10.28 — the org-wide default for THIS page. Lives here rather than on
     // the Settings page because this is already the per-page settings surface:
     // it resolves the current page through the same nav key the gear and the

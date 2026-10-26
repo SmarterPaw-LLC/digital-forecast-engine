@@ -164,8 +164,20 @@ const t = (label, got, want) => {
   else { F++; console.log('  FAIL ' + label + ' — got ' + g + ', want ' + w); }
 };
 const EL = {};
-const mk = id => (EL[id] = { className: 'whatever' });
+// v10.97 — subtabApply now also sets style.display and reads textContent for
+// the sub-tab visibility panel, so the stub element grew to match. The
+// assertions below are unchanged: they are about className.
+const mk = id => (EL[id] = { id, className: 'whatever', style: {}, textContent: id, click() {} });
 const document = { getElementById: id => EL[id] || null };
+function pageSettingsCurrentNavKey() { return 'test'; }
+
+// v10.97 — module-scope state subtabApply depends on. Lifted so the REAL
+// function runs intact rather than being reimplemented here (the v10.43 /
+// v10.45 / v10.46 pattern: fn() captures function bodies only).
+let _globalSubtabVis = null;
+const _subtabRegistry = {};
+let _subtabHealing = false;
+DEPS
 
 HANDLER
 
@@ -207,6 +219,7 @@ t('empty pair list does not throw', threw, false);
 console.log('\n  ' + P + ' passed, ' + F + ' failed');
 if (F) process.exit(1);
 """
+h = h.replace('DEPS', fn('subtabStripKey') + chr(10) + fn('subtabIsHidden'))
 h = h.replace('HANDLER', fn('subtabApply'))
 tmp = os.path.join(tempfile.gettempdir(), 'test_v1017_subtab.js')
 io.open(tmp, 'w', encoding='utf-8', newline='').write(h)
