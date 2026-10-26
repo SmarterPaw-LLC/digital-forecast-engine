@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.95**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.96**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,28 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.96 - the FBA EU card was written on upload and never again
+
+- **Jason:** *"yes"* - to the follow-up v10.95 turned up.
+- The FBA Inventory group has had **two dropzones since v5.14** (the NA/APAC gateway and the EU/UK one) and two `dz-last` cards to match. `refreshUploadDataRanges` wrote only the first. `last-fba-inv-eu` was set by `handleFbaInventoryUpload` alone, so it showed its line until the next page load and then **went blank** - the one card in that group that could not answer *"is this stale?"*, which is the entire job of the strip.
+- **v10.95 made it worse before this fixed it.** That release made `last-fba-inv` list EVERY region in the table, so an EU/UK snapshot was reported on the NA card while the EU card beside it sat empty. A card describing another card's dropzone.
+
+### One walk, one formatter, two claims
+- Both cards render from the SAME `latestByRegion` walk through the SAME `fiLine` formatter and differ **only in which regions each claims**. Two hand-written `${reg}: ${d}` joins would be a second copy of the pattern (hard rule #1); the suite asserts the markup appears **once** and that both cards call the formatter.
+- **The split reuses `EU_REGIONS`** rather than writing a second EU country list, plus the EU dropzone's own `'EU/UK'` bucket code (one UK-gateway report covers GB + DE/FR/IT/ES/NL/...). Asserted that no second `['GB','DE',...]` literal appeared.
+- **An unrecognised region stays on the NA/APAC card**, which is the dropzone with the region picker and therefore where a stray code came from. **Never drop one** - a region with no card is a region with no freshness, which is the bug being fixed. The suite asserts every region in the table prints on one card or the other.
+- **The group rollup stays whole-table.** "When did ANY FBA snapshot last land?" is a question neither card alone can answer, so it still reads the newest across both.
+- **The EU card gets its own empty state** (`No EU FBA snapshot loaded yet`), distinguishable from the NA one. Blank was the old bug; a line that says which pool is empty is the fix.
+
+### Verification
+- `node --check` clean - **70 suites green** - new `tests/test_v1096.py` (37 assertions).
+- **Driven in a browser against the shipped build** (chip confirmed `v10.96` first), only `getSB` stubbed so `EU_REGIONS` / `AMAZON_BR_REGIONS` / `FBA_REGION_OPTIONS` are the page's real ones. Four pools, read back off the real elements:
+  - both gateways: `📅 US: 2026-05-16 · CA: 2026-05-16` / `📅 EU/UK: 2026-05-09`, rollup `2026-05-16 (5mo ago)`
+  - EU only: NA card correctly on `📅 No FBA snapshot loaded yet`, rollup follows the EU date
+  - NA only: `📅 No EU FBA snapshot loaded yet`
+  - a stray `ZZ` region: stays on the NA card, `GB` routes to the EU card, neither is lost
+  - nothing reached the outer `catch`, **zero console errors**
+- **Not verified here:** how the cards look. The login gate is a full-screen overlay, so the Uploads page does not render without signing in - the v10.87 limitation. The card TEXT is read back from the real elements, so the format is pinned; only the pixels are not.
 ## v10.95 - the Uploads freshness probes read ROW windows and called them date windows
 
 - **v10.92 found three of these and deliberately left them alone** - a different symptom from the rail bug it was fixing (a narrower audit window / a possibly-missed region, not a wrong number on the rail), so they got their own change rather than riding along. This is that change. **There were four.**
