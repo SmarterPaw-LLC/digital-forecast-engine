@@ -27,3 +27,11 @@ ehthumbs.db
 # Test-harness data dumps — regenerated on every run, duplicate repo content
 tests/*_cases.json
 tests/*_guard.json
+
+# One-off patch / fix scripts run against index.html. Scratch by nature, and
+# two Claude sessions working this repo at once were sweeping each other's
+# in-progress scripts into commits via `git add -A`. Keep them on disk,
+# out of git. (tests/ is deliberately NOT ignored - those are the suites.)
+/patch_*.py
+/fix_*.py
+/doc_v*.py
