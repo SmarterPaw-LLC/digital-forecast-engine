@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.93**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.94**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,30 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.94 - the Growth Model panel was describing the PREVIOUS product
+
+- **Jason:** *"why is it giving me this error at the bottom"* - the panel read **"1 ASIN-view month loaded · 2026-08"** while the model directly underneath said **"No SQP ASIN view data found for B07KPRTSMT"**.
+- **Two numbers on one screen that could not both be true.** Both read the same cache with the same filter (`view_type === 'asin' && r.asin === asin`), so they cannot legitimately disagree - which is what made it diagnosable: the panel had to be describing a different product.
+
+### ⚠ Switching product never re-rendered the panel
+`pnlGrowthOnAsinChange` set `pnlGrowthState.asin`, cleared `lastResult` and emptied the result div - **but never called `pnlGrowthRender()`**. So the `<select>` showed the new product while everything beneath it still belonged to the old one: months loaded, the SQP Brand-view warning, the confidence badge, the uplift *"This ASIN: 1 SQP mo · 8 SP mo"* hints, the recommendation bar.
+
+**The model was the honest one.** It ran on the real selection, found nothing, and said so - against a panel quietly claiming otherwise. The instinct is to distrust the component throwing the error; here it was the only one telling the truth.
+
+- **⚠ Re-rendering is only safe because every settings input persists to `pnlGrowthState` as you change it** (`oninput` / `onchange` write straight to state), so the rebuild reads your edits back instead of resetting them. Checked before shipping, and now asserted: an input added later that is only read at Run time would silently lose work on every product switch.
+- The manual result-clear is gone - `pnlGrowthRender` emits a fresh empty result div, so it is covered.
+- **The guard that earns its keep is the regression test**: it reproduces the pre-v10.94 handler verbatim and proves it really did leave the panel un-rendered (0 renders), while the new one renders exactly once AND renders the NEW product - order matters, since rendering before the state update would just repaint the old one.
+
+### ⎘ Copy the ASIN - which is what was actually asked for
+- **Jason:** *"i just need to be able to copy the asin here"*. v10.93 read *"copy what is showing here so i can plug it into amazon"* as the coverage block and built a month-gap report. He wanted the ASIN.
+- The ASIN now renders **on the product line** in a mono chip with its own ⎘ button, and the text is `user-select:all` so a click selects the whole thing for anyone who drags rather than clicks. Routed through `pnlCopyAsin` → the v10.93 shared writer; no fourth copy affordance (hard rule #1).
+- **The v10.93 button is relabelled `⎘ months`.** Two buttons an inch apart both reading "copy" is the confusion hard rule #2 exists to stop. Its tooltip now names where to get just the ASIN, so neither is a dead end. Asserted that no button carries the ambiguous bare "copy" label any more.
+- The coverage block itself is unchanged and still useful for "which months do I still need to pull" - **say so if it is just noise and it comes out in one line.**
+
+### Verification
+- `node --check` clean - **68 suites green** - new `tests/test_v1094.py` (31 assertions).
+- **Driven in a browser against the shipped build** (chip confirmed `v10.94` first): `pnlCopyAsin('B07KPRTSMT', btn)` writes exactly that string, flashes `✓` green, and restores. Only the clipboard primitive was stubbed - the sandbox denies the real write without a user gesture, and that would otherwise be mistaken for the wiring failing. Zero console errors.
+- **Not verified end to end:** the re-rendered panel itself. `amazonSqpAsinCache` / `pnlGrowthState` are module-scope `let`, which (unlike function declarations) do not land on `window`, so an injected scope cannot stub them and the panel stays on its empty-state behind the login gate. The handler is pinned by the node regression guard instead, which is the stronger check anyway - it compares old against new behaviour rather than eyeballing one render.
 ## v10.93 - copy the SQP coverage, and ONE clipboard writer for the app
 
 - **Jason:** *"allow me to copy what is showing here so i can plug it into amazon"* (Growth Model coverage panel).
