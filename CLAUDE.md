@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.87**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.88**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,35 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.88 - the three OCCASIONAL Amazon Ads uploaders move next to what reads them
+
+- **Jason:** *"these are the two amazon ads reports i upload weekly. the other uploads should be moved to the respective P&L pages."*
+- **This is the v10.39 rule running in the other direction.** That release moved Chewy Ads ONTO the Uploads page because it is a scheduled weekly report, and recorded the principle: **cadence is the distinction, not which page consumes the numbers.** Same rule, opposite outcome, for three occasional reports.
+
+| Report | Cadence | Lands on |
+|---|---|---|
+| Amazon Ads - Unified (SB/SD/DSP/TV) | weekly | **stays** on Data -> Uploads |
+| Amazon Ads - SP Search Term | weekly | **stays** on Data -> Uploads |
+| Amazon Ads - Bulk Sheet | occasional | Amazon P&L -> **Ad Activity** (what `renderPnlAdActivity` diffs) |
+| Brand Analytics - SQP | monthly | Amazon P&L -> **Growth Model** (what the model runs on) |
+| Amazon Ads - SP Campaign Snapshot | monthly | Amazon P&L -> **Growth Model** (feeds PPC Diagnostics) |
+
+- Destinations were read off the **consumers**, not guessed: each table has exactly one reader, and that reader names the sub-view.
+
+### WARN Relocating an upload card is not just moving markup
+Four things are wired to the Uploads page **by assumption**, and each fails SILENTLY if left behind. All four are the v10.16 lesson, learned the last time a card moved:
+- **Drag-and-drop** - `initUploadDropTargets` only walked `#data-view-uploads .dz`. Now sweeps every `.dz` wherever it lives (still idempotent via `dataset.ddWired`, so repeat calls are free).
+- **Data-currency chips** - `openUploadGroupForTable` navigates to Uploads and expands a group id; pointing at a relocated group would navigate and **expand nothing**. New `PNL_HOSTED_UPLOAD_GROUPS` routes those three to the hosting P&L sub-view instead. Asserted: every target is a real sub-view in `switchPnlAmazonView`'s whitelist AND the group really is inside that wrapper.
+- **The v10.85 recent-uploads rail** and **`refreshUploadDataRanges`** both fired from `switchDataView('uploads')`. The two host sub-views now run the same three calls on entry.
+- **WARN The markup was cut by TAG BALANCE, not by eye.** v10.59 collapsed blocks by eyeballing and left five orphaned `</div>` closes that silently relocated whole pages (v10.61). The patch refused to write unless whole-document div balance was 0.
+
+### A latent bug the move surfaced
+- `openUploadGroupForTable` did its expand + scroll + flash inside **two nested `requestAnimationFrame`s only**. Driving it here, **rAF never fired** (`visibilityState: "visible"`, but the pane was not compositing) - so the chip navigated and then silently never expanded, on the Uploads path too. Added an idempotent `setTimeout` fallback, the v10.85 pattern. **Pre-existing since v7.97**; the move is just what exposed it.
+
+### Verification
+- `node --check` clean - **62 suites green** - new `tests/test_v1088.py` (58 assertions) - `test_v1061` (div balance) re-run explicitly.
+- **Driven in a browser:** all three groups resolve inside the right `pnl-amzn-*-wrap` and are **gone from the Uploads page**; both weekly cards stayed; every moved dropzone kept its file input, `onchange` and status line; drag-and-drop is wired on the P&L hosts; the rail renders there; and **all four chip routes now navigate AND expand** (moved -> growth, bulk -> adactivity, and the two that stayed -> Uploads). Uploads is left with 15 groups and **no empty sections**.
+- **Two of my own test bugs, caught and fixed rather than worked around:** the empty-section sweep sliced by searching for the section's opening tag - **byte-identical on every section**, so it re-measured the first one three times (**the v10.53 wrong-haystack class, in a test**); and writing that fix through a bash heredoc turned `\b` into a literal **backspace byte (0x08)**, so the brace-matcher matched nothing. CLAUDE.md has warned about heredoc escape mangling since v9.77 - **use the Write tool for anything containing escapes.**
 ## v10.87 - v10.59's prose sweep had swallowed two Seller Central links
 
 - **Jason, on both FBA Shipments cards:** *"the link to these reports was removed"*. It was - eight months ago, by me.
