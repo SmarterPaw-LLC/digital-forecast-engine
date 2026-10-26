@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.90**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.91**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,28 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.91 - MAP (Minimum Advertised Price) on products
+
+- **Jason:** *"i need a new dim on the product table for MAP"*
+- **WARN SQL TO RUN:** `supabase_v10_91_product_map_price.sql` - adds `products.map_price numeric(12,2)` + a partial index. Idempotent. Run BEFORE deploying or every save throws `column products.map_price does not exist`.
+
+### Two naming / semantics decisions worth keeping
+- **`map_price`, not `map`.** `chewy_catalog` already took that decision in v10.11 ("MAP is reserved-ish"), so reusing the name means a future join reads cleanly: `products.map_price` (ours) vs `chewy_catalog.map_price` (what Chewy records). One name, one concept - the v10.22 vocabulary rule.
+- **Nullable with NO default.** MAP is a policy some products have and some do not. **Blank is NULL, never 0** - a MAP of $0.00 is a real (and nonsensical) advertised-price floor. The save path uses an explicit coercion rather than `parseFloat(x) || null`, because that idiom also turns a legitimate `0` into null. Asserted both ways.
+
+### Surfaces
+- **Products table column** - `MAP`, in the COMMERCE group between MSRP and Wholesale so the ladder reads list → MAP → wholesale. `default:false`, so nobody's saved column set shifts; opt in from the View popup. Sortable + CSV-exportable.
+- **MAP at or above MSRP is flagged, not rendered quietly.** A MAP above list price cannot be enforced as written, so the cell goes orange with a tooltip naming both figures, and the product modal shows the same warning live as you type rather than after you save.
+- **Product modal** - input between MSRP and Wholesale, loaded and saved.
+- **Bulk edit** - offered under Pricing, sharing the currency coercion branch with msrp / wholesale (falling through to the string branch would have written "5.99" as text).
+- **Architecture Rule #8** - added to `runMerge`'s `SIMPLE_BACKFILL_FIELDS`. Without it a duplicate's MAP is silently dropped when the survivor has none - the v5.45 class that cost `image_url` and eight other fields.
+
+### Verification
+- `node --check` clean - **65 suites green** - new `tests/test_v1091.py` (49 assertions).
+- **Driven in a browser:** column renders blank as an em dash, `$5.99` normally, and `$7.99 WARN` in orange when it sits at or above a $6.99 MSRP; sort and CSV both handle null; the modal's three pricing inputs resolve in MSRP → MAP → Wholesale order; the inline note appears at MAP $7.99 / MSRP $6.99 and clears at $5.99; and `openProductModal` is still an AsyncFunction.
+- **WARN The v10.85 orphaned-async trap bit again.** The `pfCheckMap` insert anchored on `function openProductModal(` - which matched INSIDE `async function openProductModal(`, splitting it and leaving a bare `async` above a comment. Valid-looking markup, but every `await` in that function then failed; `node --check` caught it. **An anchor on `function X(` must include the `async ` when the real declaration has one.** The suite now pins that openProductModal is async and that no orphaned `async //` exists anywhere.
+- **Also caught pre-deploy:** a duplicate `oninput` attribute on the new input (the handler was added twice - once in the markup, once by a redundant edit step). Browsers honour the first and ignore the rest, so it would have worked while being wrong; the suite asserts exactly one.
+- **One of my own assertions was wrong, not the code:** I checked the migration contained no `default` anywhere, but its header comment legitimately explains *why there isn't one*. Re-pointed at the parsed `add column` statement.
 ## v10.90 - the rail was sorted by a field it never showed
 
 - **Jason:** *"i don't understand what the upload history is telling me"* - looking at `2026-02 / 2026-04 / 2026-01 → 2026-03`, which reads as unsorted.
