@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.85**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.86**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -36,6 +36,30 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.86 - the rail reached 12 of 19 uploaders; three registries had drifted
+
+- **Jason, on the Sales & Traffic card:** *"no recent uploads showing here"*. One symptom of a **three-way drift** - eight dropzones had shipped since each registry was last touched:
+  1. **`DZ_RECENT_SOURCES`** - no rail (the visible symptom)
+  2. **`UH_SOURCES`** - no Upload History row either, so there was **no way to inspect a past upload or retroactively fix a bad region/brand on it** for seven tables that a live uploader was writing to
+  3. **`refreshUploadDataRanges`** - `last-sales-traffic-grp` and `last-fba-fee-preview-grp` existed in the markup but were never written, so those cards read `LATEST DATA -` forever
+- **This is Architecture Rule #8's shape** ("a new table means auditing every site that enumerates tables") applied to the Uploads page rather than to the FK-migration paths. Added there so the next table gets checked against all three.
+- **Eight dropzones wired:** Sales & Traffic, Chewy Sales Actuals, FBA Shipment Detail, Amazon Ads Bulk Sheet, SQP ASIN/Brand view, SP Search Term, SP Campaign Snapshot. **`dz-shopify` is an explicit exclusion** - the legacy warehouse tile writes `inventory.warehouse`, a current-state table with no `uploaded_at`, so there are no upload sessions to list. Named in `DZ_RECENT_NO_RAIL` so the sweep knows it is deliberate.
+- **WARN Sales & Traffic writes to TWO tables** depending on the range picked at upload (Sun-Sat week -> `amazon_sales_traffic`, anything else -> `amazon_sales_traffic_snapshot`). A dropzone now maps to one table **or an array**; `dzLoadRecentForDz` merges and re-sorts newest-first across them, so neither half of the history is invisible. Each session carries its own `table` so a merged rail still formats each row in that table's own date vocabulary.
+- **`rowCountField`** - `amazon_ads_bulk_upload` stores one row PER UPLOAD with the real count in a column, so counting its rows would have reported "1 rows" for every session.
+
+### Walmart rail shows a date, not its internal week code
+- **Jason:** *"on the walmart upload can we please convert these into the same date format?"* then *"just for the display here"*. The rail read `2025 wk 46 -> 2026 wk 37` while the freshness line **directly beneath it on the same card** read `Data thru Sat 2026-10-17`. Two date vocabularies, one card.
+- `_dzFmtRange` now routes Walmart's YYYYWW through the existing **`walmartWeekToDate`** + `fmtLocalYMD`, so the rail reads `2025-12-13 -> 2026-10-17` and its max **ties out exactly** to the card's own freshness line. **DISPLAY ONLY** - the stored `walmart_calendar_week` is untouched (asserted: the rail contains no `.update(` / `.upsert(`), and the **raw codes stay on the row tooltip** so the source week is still traceable.
+- Falls back to Walmart's own vocabulary if the converter is ever unavailable rather than inventing a date.
+
+### WARN The bug that nearly shipped
+- I wrote `esc(_tip)` to escape the new tooltip. **`esc` is a LOCAL const inside 18 separate functions and is never a global** - the call is valid JavaScript, `node --check` passes, every static assertion passes, and it throws `ReferenceError` only when a rail actually renders. **The v10.8 called-but-undefined class.** Caught by checking the definition before trusting the name; replaced with the inline escape the rail already uses one line below.
+
+### Verification
+- `node --check` clean - **60 suites green** - new `tests/test_v1086.py` (59 assertions).
+- **Every sweep guards itself** (the v10.20 masking lesson): each is first run against a deliberately broken copy and must fail there, so it cannot pass against an empty haystack. Covered: every dropzone is registered or explicitly excluded - every rail table resolves in `UH_SOURCES` - every `-grp` freshness slot is actually written - every `UH_SOURCES` entry declares a `dateField` and `label` - and a **called-but-undefined sweep over the rail** so the `esc` trap cannot come back.
+- **The undefined-call sweep cried wolf on its first run** (`if`, `for`, `catch`, `isNaN` all look like calls to a naive regex) and was **narrowed, not shipped noisy** - the v10.8 rule that a check nobody trusts is a check nobody reads.
+- **Driven in a browser at 1800x900** with all groups expanded: **19 of 19 dropzones now carry a rail, none grew** (199 -> 199, 183 -> 183, 144 -> 144, ...), Sales & Traffic shows **28 merged sessions** from its two tables, and the Walmart rail renders `2025-12-13 → 2026-10-17 · 865 rows · 1w ago` with `walmart_calendar_week: 202546 → 202637` on the tooltip - matching Jason's screenshot figures exactly.
 ## v10.85 - a recent-uploads rail in each dropzone's dead space
 
 - **Jason:** *"in the empty space in these report upload container (on the right side) i want a running list of reports uploaded with the date range covered. the first n uploads should show with the most recent date range first. n = the number that can display without increasing the height of the window."* Plus: *"should also be a link to all upload history"*.
@@ -7687,6 +7711,7 @@ Two ports between the Forecast and P&L tabs:
    - **New value-bearing column on `products`** → add to `runMerge`'s `SIMPLE_BACKFILL_FIELDS` array (or `BOOL_FLAG_FIELDS` for booleans) so a survivor with an empty value inherits from the duplicate (v5.45 caught image_url + 8 more; v5.77 caught per-region matrix).
    - **New in-memory cache written on save** → mirror to `allProducts` / `records[]` / `cogsByMaster` etc. so UI stays consistent without reload (v7.34 pattern).
    - **Current master_id-bearing tables:** sales_weekly, sku_economics, sku_economics_eu, chewy_forecasts, inventory, bom (BOTH bundle_master_id + component_master_id), product_cogs, chewy_sales_weekly, fba_inventory_snapshots, fba_shipments, walmart_sales_weekly, shopify_sales_daily, amazon_ad_spend, channel_listings. Any new table joined by master_id must be added.
+   - **New append-only table with an uploader** (v10.86) -> also register it in **`UH_SOURCES`** (Upload History + the rail's config), **`DZ_RECENT_SOURCES`** (the dropzone's recent-uploads rail), and add a probe in **`refreshUploadDataRanges`** for its `last-*-grp` slot. Missing any one fails SILENTLY: no rail, no way to inspect or fix a past upload, or a card stuck reading `LATEST DATA -`. `tests/test_v1086.py` sweeps all three.
    - **Grep-based verification:** search index.html for `reassignMasterId(` in `runMerge` and `.update({ master_id })` / `.eq('master_id', oldMasterId)` in `saveProduct`'s SP-TEMP promotion. If your new table isn't in that list, add it.
    - **Silent data loss has bitten this 6+ times (v4.145, v5.44, v5.45, v5.76, v6.98, v7.00, v7.34).** Merges that "worked" but dropped data are the worst class of bug in this codebase — deletes cascade before the operator can notice. Belt-and-suspenders: re-audit even when the diff looks small.
 
