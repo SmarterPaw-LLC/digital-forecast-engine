@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.91**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.92**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,40 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.92 - the rail read a ROW window and called it a session list
+
+- **Jason:** *"i know i uploaded more months than this"* - the SQP Brand-view rail showed **1 UPLOADS / 2026-01 / 1,000 rows** while the freshness line on the SAME card correctly read **2026-08**.
+- **His data was never at risk.** Checked first: the SQP parser's DELETE is scoped to `reporting_month`, so uploading one month cannot touch another. All seven months were in the table the whole time.
+
+### ⚠ The number on screen WAS the cap, printed as data
+`dzLoadRecentUploads` asked for `.limit(4000)`. **PostgREST caps a response at `db-max-rows` (1000 by default) and does not error** - it just returns 1000 rows. A Brand-view CSV is ~1000 rows, so the rail received exactly ONE session's worth and faithfully reported what it could see. The "1,000 rows" was the cap itself.
+
+That is **Architecture Rule #4** ("Supabase default row limit = 1000 - all large queries must use `.range()` pagination"), which my own v10.85 rail broke. It affected **every rail on a high-row table** - SKU Economics, Shopify daily, chewy_ad_spend - not just this card.
+
+**Why the rail said 2026-01 while freshness said 2026-08:** rows come back newest-UPLOAD-first. The 2026-01 backfill was uploaded last, so the cap caught its rows; the freshness probe orders by `reporting_month` and still saw 2026-08. Two surfaces on one card, disagreeing, both reporting honestly from different windows.
+
+### Paginate by SESSION, not by row
+- `.range(from, to)` in a loop, `PAGE = 1000` (anything higher is silently capped again - the whole bug). The query is **rebuilt inside the loop** and the `view_type` filter re-applied per page; a Supabase builder is single-use, and hoisting it out would make pagination look right while serving the same page twice. Asserted.
+- Rows are ordered newest-upload-first, so every session except possibly the oldest in hand is complete. The walk stops once enough CLOSED sessions exist (`WANT_SESSIONS = 14`), bounded by `MAX_PAGES = 15`.
+- **⚠ A session the page cap may have cut is DROPPED, not printed.** If the loop stopped on the cap rather than running out of rows, the oldest session in hand could be sliced mid-way - its range AND row count would both be wrong. A short list is honest; a wrong range is not. Guarded both ways: dropping when we DID exhaust the rows would lose a real session.
+- **The comment naming the old `.limit(4000)` stays in place** so nobody "optimises" the pagination back into one capped request. That cost me an assertion: my first guard greped the whole function for `.limit(4000)` and matched its own explanatory comment, so it could never go green. Now the sweep strips comments and asserts on live code, while a second assertion requires the warning comment to survive - the v10.90 prose-in-source class.
+
+### Verification
+- `node --check` clean - **66 suites green** - new `tests/test_v1092.py` (50 assertions).
+- **Driven in a browser against Jason's exact shape** (7 monthly Brand-view uploads of 1000 rows, the 2026-01 backfill uploaded last): the real loader returns **all 7 sessions** newest-data-period-first, 8 pages fetched, the `view_type=brand` filter present on every page, pages strictly advancing. The pre-v10.92 path reproduced from the same fixture returns **1 session / 2026-01 / 1,000 rows** - byte-for-byte Jason's screenshot. Rendered through `renderDzRecentUploads` the card height is **237 → 237** (the v10.85 constraint holds) and zero console errors.
+- **A 2,500-row single upload now reports 2,500 rows**, not the 1,000 cap - the quieter half of the same bug, on every rail.
+- **Not verified here:** the row-trim and the `N of M uploads` count label. The login gate is a full-screen overlay, so the absolutely-positioned rail resolves to 0 height and `items_measurable` correctly declines to trim - the v10.85 guard doing its job, the v10.87 limitation. v10.92 does not touch the render or fit path at all.
+
+### ⚠ Three more truncating probes found, deliberately NOT fixed here
+The sweep turned up the same shape in `refreshUploadDataRanges`. All three are real, all three are a **different symptom** from what Jason reported (a narrower audit window / a possibly-missed region, not a wrong number on the rail), so they get their own change rather than riding along on a bug fix. `test_v1092.py` section F **prints them on every run and asserts the known set**, so a fourth cannot blend in:
+- **`findWeeklyGaps` `.limit(500)`** - on a table with hundreds of rows per week, 500 newest rows cover only a few weeks, so the advertised "last 26 weeks" gap audit silently inspects a shorter window. Under-reports gaps; does not invent them.
+- **`sku_economics` / `_eu` `.limit(200)`** ("latest week per region") - 200 newest rows can all be ONE week, so a region that skipped the newest week can read as having no data at all.
+- **`fba_inventory_snapshots` `.limit(10)`** ("latest per region") - same shape and the **most fragile of the three**; 10 rows can all belong to one region.
+- The right pattern is already in the codebase: the v10.89 per-view probe (`.eq()` + `.limit(1)` **per region**).
+
+### Process notes
+- **⚠ Heredoc escape mangling bit again, twice.** A bash heredoc carrying `re.sub(r'//[^\\n]*', ...)` ate the backslash and left a literal newline inside the regex, producing an unterminated string literal. CLAUDE.md has warned since v9.77 and again at v10.68/v10.88: **use the Write tool for anything containing escapes - this is not "be careful", it is "do not use the heredoc"**. The temp-file + `os.replace` pattern meant the second failure wrote nothing.
+- **Two of my own assertions were wrong, not the code.** (1) The 16-session fixture generated `T100:00:00` and `2026--1` past 12 sessions, so "the oldest session was dropped" compared garbage timestamps - the code was picking correctly. (2) I asserted the known truncating-probe set was `[200, 500]` from a context dump that had been truncated; there is a third, `.limit(10)`. Both re-pointed at the real guarantee rather than silenced.
 ## v10.91 - MAP (Minimum Advertised Price) on products
 
 - **Jason:** *"i need a new dim on the product table for MAP"*
