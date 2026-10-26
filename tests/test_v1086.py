@@ -267,7 +267,37 @@ LOCALS = {'f', 'g', 'r', 'v', 'd', 'n', 'c', 'e', 'it', 'cfg', 'sb', 'main', 'li
           'ts', 'rcField', 'label', 'String', 'Number', 'Array', 'Promise', 'Map',
           'Set', 'Math', 'Date', 'Object', 'JSON', 'console', 'document', 'setTimeout',
           'requestAnimationFrame', 'ResizeObserver', 'getComputedStyle'} | KEYWORDS | BUILTINS
-called = set(re.findall(r'(?<![\w.$])([a-zA-Z_$][\w$]*)\s*\(', strip_comments(rail)))
+# v10.90 - the rail builds its UI out of prose inside template literals, so
+# "...that session covered (not when you uploaded it)" and "upload
+# session(s) on record" both look like calls to a naive regex. Blank the
+# PROSE of every template literal while preserving the ${...} expressions,
+# which is where the real calls live. A check that cries wolf is a check
+# that gets ignored (the v10.8 rule).
+def strip_tpl_prose(js):
+    out, i, n = [], 0, len(js)
+    while i < n:
+        if js[i] != '`':
+            out.append(js[i]); i += 1; continue
+        out.append('`'); j = i + 1
+        while j < n and js[j] != '`':
+            if js[j] == '\\':
+                out.append('  '); j += 2; continue
+            if js[j] == '$' and j + 1 < n and js[j + 1] == '{':
+                depth, k = 0, j + 1
+                while k < n:
+                    if js[k] == '{': depth += 1
+                    elif js[k] == '}':
+                        depth -= 1
+                        if depth == 0: k += 1; break
+                    k += 1
+                out.append(js[j:k]); j = k; continue   # keep the expression
+            out.append(' '); j += 1                     # blank the prose
+        out.append('`'); i = j + 1
+    return ''.join(out)
+
+_scan = strip_tpl_prose(strip_comments(rail))
+_scan = re.sub(r'title="[^"]*"', 'title=""', _scan)
+called = set(re.findall(r'(?<![\w.$])([a-zA-Z_$][\w$]*)\s*\(', _scan))
 defined = set(re.findall(r'(?m)^(?:async\s+)?function\s+([\w$]+)\s*\(', JS))
 defined |= set(re.findall(r'(?m)^(?:const|let|var)\s+([\w$]+)\s*=', JS))
 # names declared locally inside the rail itself
@@ -278,6 +308,17 @@ ok(not undefined, 'every function the rail calls is defined somewhere', undefine
 ok(sorted((called | {'totallyMadeUpFn'}) - defined - LOCALS - {c for c in called if c.startswith('_')})
    == ['totallyMadeUpFn'],
    'GUARD called-but-undefined sweep has teeth')
+
+# The prose-stripper must not blank the ${...} expressions too - that would
+# empty the haystack and let the sweep pass vacuously (the v10.20 class).
+ok('_dzFmtRange' in called, 'GUARD stripper preserves calls inside ${...}')
+ok('_dzRawRange' in called, 'GUARD stripper preserves a second ${...} call')
+# Method calls are excluded BY DESIGN - the lookbehind drops anything after
+# a dot, because `x.foo()` resolves on the object, not on a global name.
+ok('toLocaleString' not in called, 'method calls are deliberately out of scope')
+ok(len(called) >= 10, 'GUARD the sweep still has a real haystack', len(called))
+ok('session' not in called and 'covered' not in called,
+   'GUARD prose words are no longer read as calls')
 
 
 print('\n' + '=' * 62)

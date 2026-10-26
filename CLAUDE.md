@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.89**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.90**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,28 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.90 - the rail was sorted by a field it never showed
+
+- **Jason:** *"i don't understand what the upload history is telling me"* - looking at `2026-02 / 2026-04 / 2026-01 → 2026-03`, which reads as unsorted.
+- **WARN The first fault is mine against his ORIGINAL v10.85 spec.** He asked for *"the most recent DATE RANGE first"*. I sorted by `uploaded_at`. Dropping several monthly CSVs in one sitting gives them all the same upload time, so the prominent line - the data period - came out in an order driven by **a value that was never displayed**. **Never sort a list by a field the list does not show.**
+- **The second fault: neither date was named.** `2026-02` could be the upload date or the month covered; `1mo ago` could be either. Two dates of different kinds, printed without saying which is which.
+
+### What changed
+- **Sorted by data period descending** (upload time only breaks ties), on both the single-table and the merged multi-table paths. A regression guard asserts no upload-time-only sort survives in the rail.
+- **Both lines named.** The relative time now reads `uploaded 1mo ago`, and a session spanning several periods says so: `2026-01 → 2026-03 · 3 months`. The unit is derived from the table's own `dateField`, so a weekly source reads `weeks` and a daily one `days`. Sessions carry a `periods` Set for this - `200 rows` never conveyed that it was three monthly CSVs.
+- **The header explains the list** (`ⓘ` on hover): what a row is, which line is the data period vs the upload, and the sort order.
+- **The count names its unit** - `3 of 8` became `3 of 8 uploads`, with its own tooltip explaining that the rest are hidden to keep the card from growing (the v10.85 constraint) and that All upload history has them.
+
+### Also: a dead Campaign Manager link
+- **Jason:** *"also this link doesn't work"* (SP Campaign Snapshot). It pointed at `advertising.amazon.com/cm/sp/campaigns`; the known-good Ads console URL Jason himself surfaced in v8.98 is `/cm/history`, so the shape is `/cm/<section>` and the `sp/` segment was invented. Corrected to **`/cm/campaigns`**, with the Sponsored Products entity filter named in the tooltip instead of faked into the path.
+- **Two of the four occurrences were VISIBLE LABEL text**, not hrefs - so after fixing the links the anchor still *read* `/cm/sp/campaigns` while opening `/cm/campaigns`. A link whose text names a different path than it opens is worse than either being wrong alone. All four aligned.
+- **WARN Not verified end to end** - advertising.amazon.com is behind Jason's account, so I cannot load it from here. This is the v4.74 situation again (I guessed the Fee Preview URL and Jason supplied the real one). If `/cm/campaigns` still misses, paste the working URL and it is a one-line fix.
+
+### Verification
+- `node --check` clean - **64 suites green** - new `tests/test_v1090.py` (33 assertions).
+- **Driven in a browser against Jason's exact screenshot data** (8 sessions, three uploaded minutes apart, months deliberately out of order). Before: `2026-02 / 2026-04 / 2026-01-03`. After: **`2026-04` → `2026-01 → 2026-03 · 3 months` → `2026-02`**, each with `N rows · uploaded 1mo ago`, header `Recent uploads ⓘ  3 of 8 uploads`. Measured the header at 12px with no wrap and no overflow, confirming the longer count text did not cost a row - it still shows 3.
+- **`test_v1086`'s called-but-undefined sweep went red on `covered` and `session`** - prose inside the new tooltips (`...that session covered (not when...`, `upload session(s) on record`) looked like calls to a naive regex. **Narrowed, not silenced:** the sweep now blanks template-literal PROSE while preserving the `${...}` expressions where real calls live. Guarded both ways - it must still find `_dzFmtRange` / `_dzRawRange` inside `${...}` and must keep a haystack of 10+ names, so it cannot pass vacuously (the v10.20 masking class).
+- **One of my own new assertions was wrong, not the code:** I asserted the stripper preserves `toLocaleString`. It does not, and should not - the sweep's lookbehind drops anything after a dot because `x.foo()` resolves on the object, not on a global name. Re-pointed to assert method calls are out of scope BY DESIGN.
 ## v10.89 - SQP splits into ASIN view and Brand view (one table, two uploaders)
 
 - **Jason:** *"shouldn't asin and brand be separated? i have to pull them separately, and it's hard to tell which reports are current"*
