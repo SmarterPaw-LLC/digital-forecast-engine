@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.84**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.85**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -36,6 +36,18 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.85 - a recent-uploads rail in each dropzone's dead space
+
+- **Jason:** *"in the empty space in these report upload container (on the right side) i want a running list of reports uploaded with the date range covered. the first n uploads should show with the most recent date range first. n = the number that can display without increasing the height of the window."* Plus: *"should also be a link to all upload history"*.
+- **Twelve upload cards gained a right-hand rail** listing that source's past upload sessions, newest first: the date range the upload covered, its row count, and how long ago it landed. Sessions are grouped by `uploaded_at` truncated to the second (one upload writes every row inside the same second, the v6.88 convention) and the range is the min/max of that table's own date field, so a YYYYWW table renders `2026 wk 19` rather than a fake date.
+- **Each rail ends in `All upload history ->`**, which opens Data -> Upload History pre-filtered to that source (v6.88's view) so the full log, the retroactive region/brand edits and delete are one click away.
+- **WARN The height constraint is enforced in CSS, not JS.** The rail is **absolutely positioned**, inset to the card's padding box. In flow it would be a flex item, so a long log makes the rail tall and the card grows with it - exactly what Jason ruled out. Out of flow, the card's height is driven only by the left column and the rail can only clip.
+  - **Two earlier attempts proved the point.** A flex rail with `overflow:hidden` on the list still grew the card (nothing bounded the rail). Pinning `rail.style.height` from JS worked only once laid out - on a collapsed group every measurement is 0, so the trim silently no-oped and the card grew the moment the group opened. **A layout guarantee that depends on a measurement is not a guarantee.**
+- **The JS trim is now cosmetic only** - it hides the row that would be sliced in half at the clip edge. Budget is `list.clientHeight` (the list is `flex:1` + `overflow:hidden` inside the bounded rail, so its own box IS the space available). It re-shows every row before measuring, since a row hidden by the previous pass reports 0 height and would read as free space.
+- **A ResizeObserver on the left column re-fits** when the group is expanded or the window resized - both happen long after the initial render, and rAF alone does not fire while the tab is backgrounded.
+- **Reading the log never opens the file picker.** The hidden `<input type=file>` is absolutely positioned across the whole card (the v4.152 lesson), so the rail sits at `z-index:2` and stops click / dragover / drop.
+- **Hidden under 1100px** - below that the card has no dead space to fill, and the left column's `margin-right` is reset with it.
+- **Verification:** `node --check` clean, **59 suites green**. Driven in a browser at 1800x900 with all twelve groups expanded and a 14-session stub: **every card's height is byte-identical before and after the rail renders** (213 -> 213, 207 -> 207, 158 -> 158, ...), and n scales with the card - 4 rows on the tall SKU Economics cards, 2 on the short Chewy Ads card. Count label reads `2 of 14`, rows are newest-first with ranges and relative upload times, and the history link resolves.
 ## v10.84 - Amazon / Shopify / Walmart P&L get the same export dialog
 
 - **Jason:** *"the amazon P&L pages also do not have the same csv export dialog based on page filters."* Correct, and Amazon was the worst of the three.
