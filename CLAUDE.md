@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.96**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.98**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,53 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.98 - the share ramp started at 0% while the keyword table showed share
+
+- **Jason:** *"on the growth model for pawty mix - there is not a scorecard for existing impression share, the ramp shows 0% starting. this can't be right as there are keywords with share in the table"*
+- The panel read **`SHARE RAMP 0.0% → 25.0%`** and **`YOUR $ TODAY · 0.0% impression share · 3.8% of market $`**. Those two cannot both be true, and the keyword table directly underneath showed 2.8% / 2.3% / 2.2% CUR SHARE on its biggest queries. **Three numbers on one screen, one of them lying** - the same shape as v10.94.
+
+### ⚠ A keyword-less month was being read for share
+`historyByMonth` is built from SQP months, each carrying a real `total_impressions_share`. The **v8.53b sku_economics enrichment then APPENDS** any month that has sku_economics but no SQP rows - with `total_impressions_share: 0, keywords: 0` - and re-sorts by month.
+
+**sku_economics uploads weekly; SQP lands monthly in arrears.** So that zero-share month is routinely the NEWEST one, and `currentShareOverall` read `historyByMonth[last]` blindly and got the 0. Pawty Mix had SQP through 2026-08 and sku_economics through 2026-09.
+
+- **Volume reading the last month is CORRECT and is untouched** - sku_economics being the better volume source is the entire point of v8.53b. Only SHARE had to move.
+- Share now comes from the latest month that actually has keywords - **the same month the keyword table is built from, so the two agree by construction rather than by luck.**
+- **The ramp gain was inflated by the bug.** `shareEnd - shareStart` is what the model spreads across the horizon, so a false 0% start had it buying ~2.4pp MORE impressions than it should. Asserted.
+- **The number now says where it came from** - `base 2026-08` on the sub-line, and a tooltip naming the month. A share figure with no stated month is exactly what let a silent 0 sit unchallenged next to a table that disagreed with it. When there is genuinely no SQP month, it says so instead of showing a bare 0%.
+
+### Verification
+- `node --check` clean - **72 suites green** - new `tests/test_v1098.py` (26 assertions).
+- **The guard that earns its keep reproduces the bug**: it runs the old selection against Jason's exact shape (SQP to 2026-08, sku_economics to 2026-09) and proves it really did return 0, while the new one returns 2.4% and names 2026-08. Plus: the history array is not mutated by the reverse, volume still reads the sku_economics month, several trailing keyword-less months are skipped, a REAL 0% on a month that HAS keywords is preserved rather than treated as missing, and an empty history does not throw.
+
+### ⚠ Known, deliberately not changed here
+`total_impressions_share` is the **plain mean** of each keyword's share. The true aggregate impression share is impressions-WEIGHTED (`sum(your impressions) / sum(total impressions)`); a mean across 100 keywords is pulled around by long-tail queries carrying almost no volume. That is a modelling change that moves the number for **every** product, so it does not ride along on a bug fix. `test_v1098.py` section D prints it on every run so it cannot pass as settled.
+
+## v10.97 - per-page SUB-TAB visibility, set org-wide
+
+- **Jason:** *"make a per page tab visibility setting, set globally, like the other settings. i want to hide this by default"* (pointing at Ad Activity on the Amazon P&L strip).
+- *"like the other settings"* has a specific meaning here, recorded at v10.28: *"i do NOT want the global settings on the setting pages - it is supposed to be a global settings per page for all users default - we already have the module."* The module is **`PAGE_SETTINGS_PANELS`**, the ⚙ gear beside the global search bar. So this is a panel there, stored on `app_settings` exactly like `view_defaults` (v10.26) and `default_visible_tabs` (v9.85). **No migration** - `app_settings` is the generic key/value table v9.85 created for this.
+
+### It all hangs off subtabApply
+v10.17 made that the single place every sub-tab strip's state runs through. **Six strips, one chokepoint** - so hiding works everywhere without touching six switch functions.
+- **A strip's identity is the shared prefix of its button ids** (`pnl-amzn-tab-*`, `chpnl-tab-*`, `dst-*`, `ipv-*`, `ds-view-*`, `pricing-mode-*`), which every strip already has. Deriving it beat adding an id to six markup blocks, and it is the same grouping rule v10.50 uses to police one-glyph-per-strip. Asserted against the app's REAL strips - all six yield unique, non-empty keys.
+- **Strips register themselves** on render, so the settings panel never needs a hand-kept list that can drift from the real strips.
+
+### Two guards, independent on purpose
+- **⚠ A strip can never be left with ZERO visible tabs.** That is a page with no way back into itself and nothing on screen would explain it. Guarded at RENDER (an all-hidden strip is ignored entirely) and again at WRITE (the last tick cannot be removed), so neither alone can strand a page.
+- **⚠ Hiding the tab you are ON moves you to the first visible one** rather than stranding you on a panel with no lit tab. It clicks the button, so the strip's own switch function does the routing and nothing is duplicated; a flag stops the re-entrant `subtabApply` from looping. Both asserted, including that it heals to the first VISIBLE tab rather than merely the first.
+- **Only HIDDEN tabs are stored.** Absent means visible, so a sub-tab added in a later version shows up by default instead of inheriting someone's old hide-list - the same reasoning v9.85 used for nav tabs. Showing a tab DELETES the entry rather than writing `true`.
+- Admin-only to change, read-only for everyone else, and **fails open**: an unreadable setting must never remove a tab from someone's screen (v9.82 / v9.85 / v10.26 precedence).
+
+### Verification
+- `node --check` clean - **71 suites green** - new `tests/test_v1097.py` (43 assertions).
+- **Driven on the real Amazon P&L strip in a browser:** it registers as `pnl-amzn-tab` under nav key `pnl_amazon`, captures all eight real labels (`🛠 Ad Activity` included), hiding `adactivity` takes the strip from 8 visible to 7 with that one button at `display:none`, the gear resolves the strip and reads *"hiding Ad Activity"*, the panel renders 8 checkboxes with 1 unticked and struck through, landing on the hidden tab bounces to `summary`, and an all-hidden config leaves all 8 visible. Zero console errors.
+- **Two suites went red and were RE-POINTED, not silenced** - both harness drift of the documented v10.43 / v10.45 kind:
+  - `test_v1017` slices `subtabApply` and runs it in node; the function gained module-level deps (`subtabStripKey`, `subtabIsHidden`, `_subtabRegistry`) and its stub element needed `style` + `textContent`. Deps lifted from source so the REAL function still runs; **all 7 of its original assertions pass unchanged**.
+  - `test_v1029` pinned the EXACT contents of the init `Promise.all`, and anchored on `loadGlobalViewDefaults()]` - the `]` assuming it was the last entry. A fourth org-wide setting moved it. Re-pointed at the guarantee it exists for (loaded in parallel at init, applied before `init()` paints) rather than the literal list.
+
+### ⚠ Two sessions, one working copy
+The background task fixing the `refreshUploadDataRanges` probes was running in **this same directory**, and `git add -A` swept its in-progress `patch_v1094.py` into a commit. Untracked it (the file stayed on disk, so that session kept working) and added `/patch_*.py`, `/fix_*.py`, `/doc_v*.py` to `.gitignore`. It also shipped v10.95 + v10.96 mid-build, so this work rebased from v10.94 onto v10.97. **`git add -A` is not safe in this repo while another session is live** - and the version chip is the collision point to check first.
 ## v10.96 - the FBA EU card was written on upload and never again
 
 - **Jason:** *"yes"* - to the follow-up v10.95 turned up.
