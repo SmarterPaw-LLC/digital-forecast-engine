@@ -669,15 +669,35 @@ async function refreshUploadDataRanges() {
     //   trivially all belong to one region, so a region whose last snapshot
     //   is a single day older read as having no snapshot at all. The most
     //   fragile of the four windows this release removed.
+    // ⚠ v10.96 - there are TWO dropzones here (v5.14: the NA/APAC gateway
+    //   and the EU/UK one) and only the first card was ever refreshed. The
+    //   EU card was written solely by handleFbaInventoryUpload, so it showed
+    //   its snapshot until the next page load and then went blank - the one
+    //   card on the page that could not answer "is this stale?". Both cards
+    //   now render from the SAME walk, through the SAME formatter, and
+    //   differ only in which regions each one claims.
     try {
       const fiPairs = await latestByRegion('fba_inventory_snapshots', 'snapshot_date');
+      // The EU dropzone always files its upload under 'EU/UK' (one report
+      // covers GB + DE/FR/IT/ES/NL/...), but accept the per-country codes
+      // too so a row written any other way still lands on the right card.
+      // Reuses EU_REGIONS rather than writing a second EU list.
+      const fiIsEu = (reg) => reg === 'EU/UK' || (typeof EU_REGIONS !== 'undefined' && EU_REGIONS.has(reg));
+      const fiLine = (pairs) => `📅 ${pairs.map(([reg, d]) => `${reg}: ${d}`).join(' · ')}`;
+      // An unrecognised region stays on the NA/APAC card - that is the
+      // dropzone with the region picker, so it is where a stray code came
+      // from. Never drop one: a region with no card is a region with no
+      // freshness, which is the bug this release is fixing.
+      const fiEu = fiPairs.filter(([reg]) => fiIsEu(reg));
+      const fiNa = fiPairs.filter(([reg]) => !fiIsEu(reg));
+      setLast('last-fba-inv',    fiNa.length ? fiLine(fiNa) : '📅 No FBA snapshot loaded yet');
+      setLast('last-fba-inv-eu', fiEu.length ? fiLine(fiEu) : '📅 No EU FBA snapshot loaded yet');
+      // The group rollup stays whole-table: it answers "when did ANY FBA
+      // snapshot last land?", which neither card alone can.
       if (fiPairs.length) {
-        const parts = fiPairs.map(([reg, d]) => `${reg}: ${d}`);
-        setLast('last-fba-inv', `📅 ${parts.join(' · ')}`);
         const fiNewest = fiPairs.map(([, d]) => d).sort().reverse()[0];
         setLast('last-fba-inv-grp', `${fiNewest} (${relDays(fiNewest)})`);
       } else {
-        setLast('last-fba-inv', '📅 No FBA snapshot loaded yet');
         setLast('last-fba-inv-grp', '— Never');
       }
     } catch (_) { /* table may not exist */ }
