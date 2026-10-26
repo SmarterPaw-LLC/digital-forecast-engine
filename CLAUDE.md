@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.98**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.99**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,43 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.99 - an open planning horizon, and a TACOS ceiling that says whether it binds
+
+Two asks, one settings panel.
+
+### Planning horizon is an open field
+- **Jason:** *"planning horizon should be input, not a drop down. i should be able to model on any number of months"*
+- Same ask and same fix as **v10.16**, which did this to Target supply on Inventory Planning. `<select>` with 3/6/9/12 → `<input type="number">`.
+- **The cap (60) is a typo guard, not an opinion.** The real limit is that the baseline trend COMPOUNDS monthly, so a long horizon extrapolates hard - which the hint SAYS rather than the field forbidding. Past 24 months it reads *"the baseline trend compounds every month, so projections this far out swing hard on a small trend error. Treat the later months as a direction, not a forecast."*
+- **⚠ The field is not rewritten while you type.** Clamping on every keystroke means clearing the box to retype "12" snaps it to 1 under the cursor. State is capped on input; the visible field is normalised on commit (blur / Enter). Asserted both ways.
+- **Two things had to move with it**, or "any number of months" is only half true: the M1..MN pickers were a non-wrapping flex row (36 months ran off the edge - now `flex-wrap`), and `execPlanMonth` had to stay clamped against a SHRINKING horizon (it already was, at two sites; both now asserted so a later edit cannot strand it past the end of the array).
+
+### ⚠ "i don't think monthly taco % is being honored in the table" - it was
+- The trajectory table's `tacos_pct` **IS** the `plan.tacosPct` the ceiling gate compares. One value, read twice - they cannot disagree. Asserted that **exactly one site** assigns `tacos_pct`, so the table can never drift from the gate.
+- His months ran **13.8% → 17.9% against a 20% ceiling**, so the gate never fired. **A ceiling is a cap, not a target.** The model was behaving correctly.
+- **The defect was that none of this was readable from the control.** The input said `20` and nothing said whether 20 was doing anything, so *"not binding"* and *"silently ignored"* looked identical. The footer explained it in a paragraph, which is not where someone looks when they distrust a number.
+- **Fix: a state readout next to the number that sets it**, not more prose. Four states, each naming the figure that proves it:
+  - Not binding → *"peak month is 17.9%, under 20%, so nothing was capped. A ceiling caps; it does not hold TACOS at a value. Set it below 17.9% to make it bite."*
+  - Binding → *"N of H months capped at X%, so achieved share falls short of target."*
+  - Not enforced + months over → red, names the count and the fix (tick the box).
+  - Not enforced + nothing over → says so plainly and **does not cry wolf**.
+- **The actionable half is the peak.** Telling someone "not binding" without telling them what WOULD bind leaves them guessing; the readout names the number.
+- Refreshed after every run, because the binding state is only knowable once the months exist.
+
+### The lesson, which is a variant of v10.94 / v10.98
+Those two were *"two numbers on one screen that cannot both be true"*. This one is quieter: **a control whose effect is invisible reads as ignored.** The math was right, the table was right, and the bug report was still reasonable - because nothing on screen distinguished "this setting did nothing because it did not need to" from "this setting was dropped." **A setting that can be inert needs to say which it is.**
+
+### Verification
+- `node --check` clean - **73 suites green** - new `tests/test_v1099.py` (59 assertions).
+- **The assertion that earns its keep** is the single-assignment check on `tacos_pct`: it is what makes "the table cannot disagree with the gate" a checkable claim rather than something I verified once by reading.
+- The readout is driven against **Jason's exact shape** (12 months, 13.8-17.9%, ceiling 20) and proves it reads *not binding* and names 17.9% / 20% / the set-it-below figure. Then the same months with the ceiling dropped to 15 prove it flips to *binding* with the right count, plus both not-enforced branches, and three degenerate shapes (no result / empty months / a month with no `tacos_pct`) that must not throw or leak `NaN`.
+- Horizon handlers driven across 14 cases: a transient empty box or `0` mid-edit leaves the state alone, typing past the cap clamps, commit floors at 1 / caps at 60 / truncates a decimal / falls back on junk, and **36 months is allowed** (the ask).
+- **Driven in a browser against the shipped build** (chip confirmed `v10.99` first, per the v10.67 stale-cache lesson). These are page-global function declarations, so the run used the REAL functions, not slices: commit normalised `500`→`60`, `0`→`1`, `36`→`36`, `7.9`→`7`; typing left the field untouched; the hint flipped at 24 months with no leaked `undefined`; the ceiling readout gave the honest *"Run the model"* prompt against the real empty state; the refresher no-oped cleanly with its element absent. **Zero console errors.**
+- **Not verified here:** how the two readouts LOOK. The login gate is a full-screen overlay, so the Growth Model panel does not render without signing in - the v10.87 limitation. The TEXT is pinned by driving the real functions; only the pixels are not.
+
+### ⚠ One suite went red and was RE-POINTED, not silenced
+`test_v1094` asserts that every settings input persists to `pnlGrowthState`, so re-rendering the form on a product switch cannot lose edits. It required the assignment to appear **inline in the attribute** - pinning the mechanism rather than the guarantee. v10.99's horizon input delegates to named handlers that assign in their bodies: same guarantee, one indirection away. The check now follows the call.
+- **⚠ My first re-point was wrong and its own self-guard caught it.** Matching the bare substring `pnlGrowthState.` inside the called function waved through `pnlGrowthReRunIfDirty`, which READS state to decide whether to re-run and records nothing - exactly the failure the assertion exists to catch. Narrowed to an ASSIGNMENT (`pnlGrowthState.X =`, not `==`). The guard-the-guard line is what surfaced it; without it the re-point would have shipped looking green.
 ## v10.98 - the share ramp started at 0% while the keyword table showed share
 
 - **Jason:** *"on the growth model for pawty mix - there is not a scorecard for existing impression share, the ramp shows 0% starting. this can't be right as there are keywords with share in the table"*

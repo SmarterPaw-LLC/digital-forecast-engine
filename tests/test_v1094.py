@@ -106,13 +106,41 @@ print()
 ctrl = re.findall(r'(?:onchange|oninput)="([^"]*)"', RENDER)
 settings = [h for h in ctrl if 'pnlGrowthOnAsinChange' not in h]
 ok(len(settings) >= 9, 'found the settings inputs to check', len(settings))
-bad = [h[:70] for h in settings if 'pnlGrowthState.' not in h]
+
+
+def persists(handler):
+    """Does this handler write the control's value to pnlGrowthState?
+
+    v10.99 re-point: the original check required the assignment to appear
+    INLINE in the attribute, which pinned the mechanism rather than the
+    guarantee. v10.99's horizon input delegates to named handlers that
+    assign to pnlGrowthState in their bodies - same guarantee, one
+    indirection away. Follow the call instead of demanding it be inlined.
+
+    Note it must be an ASSIGNMENT, not any mention. pnlGrowthReRunIfDirty
+    READS pnlGrowthState to decide whether to re-run, so a bare substring
+    test would wave through a handler that records nothing - which is the
+    exact failure this assertion exists to catch.
+    """
+    WRITE = r'pnlGrowthState\.\w+\s*=(?!=)'
+    if re.search(WRITE, handler):
+        return True
+    for called in re.findall(r'\b(pnlGrowth[A-Za-z0-9_]*)\s*\(', handler):
+        if re.search(WRITE, fn(called)):
+            return True
+    return False
+
+
+bad = [h[:70] for h in settings if not persists(h)]
 ok(not bad,
    'EVERY settings input persists to pnlGrowthState, so the re-render cannot lose edits',
    bad)
-# Guard the guard: it must be able to spot one that does not persist.
-ok([h for h in ['pnlGrowthReRunIfDirty()'] if 'pnlGrowthState.' not in h] != [],
+# Guard the guard: it must still spot a handler that only re-runs the model
+# without recording the new value anywhere.
+ok(not persists('pnlGrowthReRunIfDirty()'),
    'the check can detect a handler that does not persist')
+ok(persists('pnlGrowthOnHorizonInput(this.value)'),
+   '...and follows a named handler through to its state write')
 
 
 # -- B. Regression guard: drive both versions -----------------------------
