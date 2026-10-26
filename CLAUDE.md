@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.94**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.95**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,45 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.95 - the Uploads freshness probes read ROW windows and called them date windows
+
+- **v10.92 found three of these and deliberately left them alone** - a different symptom from the rail bug it was fixing (a narrower audit window / a possibly-missed region, not a wrong number on the rail), so they got their own change rather than riding along. This is that change. **There were four.**
+
+### The four windows, and what each one actually reported
+- **`findWeeklyGaps` `.limit(500)`** - `sku_economics` carries ~500 ASINs per week, so 500 newest rows cover ONE week. The advertised "last 26 weeks" gap audit inspected a **one-week** window. It under-reports gaps rather than inventing them, which is why nobody ever saw it.
+- **`sku_economics` / `_eu` `.limit(200)`** ("latest week per region") - 200 newest rows can all belong to a single week, so **a region that skipped the newest week read as having NO DATA AT ALL** - on a card whose entire job is to say whether a region is up to date. Reproduced against Jason's shape (US + CA loaded, CA one week behind): the old path reported **US only**. EU is worse, because six countries share one table: **1 of 6**.
+- **`fba_inventory_snapshots` `.limit(10)`** - one row per ASIN per snapshot, so ten rows are one region's worth. **1 of 2 regions.** The most fragile of the four.
+- **⚠ `walmart_sales_weekly` `.order(ASC).limit(500)` - a FOURTH, and the v10.92 guard had already hidden it.** That guard asserted the KNOWN SET of limit values (`[10, 200, 500]`) *"so a fourth cannot blend in"* - but this probe also used 500, so the set collapsed it into `findWeeklyGaps`' entry and the guard reported three probes when there were four. It is also the sneakiest of them: **ASCENDING**, so it read the 500 OLDEST rows in the 26-week window and a missing RECENT week could never be flagged. **Count OCCURRENCES, never distinct values - a de-duplicating sweep can hide a whole site.** `test_v1092.py` section F now counts occurrences and asserts zero.
+
+### ⚠ And none of the gap audit had ever run, in any table
+`findWeeklyGaps` referenced `sb`, which was declared `const sb = await getSB()` **inside the try block** - a nested block scope that the helper, defined out at function scope, cannot see. Every call threw `ReferenceError` straight into its own `catch (_)`, so **the v8.72 gap audit has reported "no gaps" for every table since the day it shipped.** The v10.8 called-but-undefined class: valid JavaScript, clean `node --check`, every static assertion green, dead at runtime. `sb` is now a function-scope `let`, and both the hoist and the absence of a block-scoped re-declaration are asserted.
+
+**A second dead path in the same audit:** the Amazon US/CA chip was appended to `last-amz-sales-grp` **before** the Amazon group rollup wrote that element's `textContent` - which removes its children. Even a working audit could never have shown on that card. The append now happens after the rollup, and the harness reproduces the wipe for real (its DOM stub's `textContent` setter clears children) rather than trusting source order.
+
+### The replacement shapes
+- **Latest per region: one `.eq('region', r)` + `.limit(1)` probe per region** - the v10.89 per-view shape. The SERVER picks the max, so there is no row window left to truncate.
+- **Region SETS come from the data**, never from a literal: `distinctColumnValues` keyset-walks `.gt(col, last)` + `.limit(1)`, one round trip per distinct value. A region nobody has uploaded before appears on its card with no code change. Asserted, including that no `['US','CA']` literal came back.
+- **Region ORDER reuses `AMAZON_BR_REGIONS` + `FBA_REGION_OPTIONS`** instead of a third hand-written region list (hard rule #1). An unrecognised region sorts after the known marketplaces, never dropped. **This is the one visible change:** the SKU Economics cards now read `US: ... CA: ...` and `GB · DE · FR · IT` rather than alphabetically, so the EU card's `+2 more` keeps the big marketplaces instead of whichever countries sort first. The FBA card's order was previously whatever the 10-row window happened to return - non-deterministic between loads.
+- **Both gap audits route through ONE walk** (`distinctValuesInWindow`) rather than each keeping its own row sample. It pages by DATE, not by row offset: each round trip takes the newest <=1000 rows below the cursor, records every date in them, then drops the cursor BELOW the oldest date it saw - so the remaining rows carrying that date are never fetched. Round trips scale with WEEKS, never rows. A walk that stops early `console.warn`s instead of passing for a full 26-week audit.
+
+### Verification
+- `node --check` clean - **69 suites green** - new `tests/test_v1095.py` (84 assertions).
+- **Driven in a browser against the shipped build** (chip confirmed `v10.95` first, per the v10.67 stale-cache lesson), with **only `getSB` stubbed** - `AMAZON_BR_REGIONS`, `FBA_REGION_OPTIONS` and `walmartWeekToDate` are module-scope, so the run used the page's REAL ones. Against 25,000 rows in Jason's shape (26 weeks x 500 ASINs, CA one week behind, one planted interior US gap, six EU countries, two FBA regions, a planted RECENT Walmart gap):
+  - `📅 Data US: thru Sat 2026-10-31 · CA: thru Sat 2026-10-24 · uploaded 7h ago` - **both regions, each with its own latest week**
+  - EU: all six found, `GB · DE · FR · IT +2 more`
+  - FBA: `📅 US: 2026-05-16 · CA: 2026-05-09`, group label showing the newest of the two
+  - the Amazon chip reads `⚠ 1 gap` naming exactly the planted week **and survives the rollup**; the Walmart chip finds the planted recent week
+  - **89 queries / 45 pages / 70 ms** across 25,000 rows - the walk is not expensive
+  - nothing reached the outer `catch`, no truncation warnings, **zero console errors**
+- **The pre-v10.95 paths reproduced live from the same fixture**: 1 of 2 regions, 1 of 6 countries, 1 of 2 FBA regions, a one-week "26-week" audit that found nothing at all, and a Walmart window that read oldest-first and could not reach the gap.
+- **Not verified here:** how the cards LOOK. The login gate is a full-screen overlay, so the Uploads page does not render without signing in - the v10.87 limitation. The card TEXT is read back from the real elements, so the format is pinned; only the pixels are not.
+
+### Two of my own assertions were wrong, not the code
+- I asserted the audit would flag CA's missing newest week as a gap. It must not: `findWeeklyGaps` reports weeks missing BETWEEN a region's own first and latest (the v8.72 semantic), so a region whose data simply ENDS earlier is *behind*, not holed - and saying so is the card line's job, not the chip's. Re-pointed at the real guarantee: **no edge artefacts**.
+- I asserted the old EU walk saw 2 of 6 countries. At 200 rows per country the 200-row window is filled by the FIRST country alone, so it saw **1 of 6** - worse than I had claimed.
+
+### Process note - a shared checkout moved under me
+The version chip read **v10.93** when I started and **v10.94** by the time I went to bump it: a second session shipped v10.94 into this same checkout mid-task. Caught because the patch script asserts every anchor matches exactly once and `sys.exit`s **before** the write, so it refused the stale chip instead of silently rewriting someone else's release. **In a shared checkout, re-read the chip immediately before bumping, and keep the write atomic (temp file + `os.replace`) so a refused patch leaves nothing behind.** The patch script itself lived in the scratchpad, not the repo root, so it could not ride along in the other session's commit.
 ## v10.94 - the Growth Model panel was describing the PREVIOUS product
 
 - **Jason:** *"why is it giving me this error at the bottom"* - the panel read **"1 ASIN-view month loaded · 2026-08"** while the model directly underneath said **"No SQP ASIN view data found for B07KPRTSMT"**.

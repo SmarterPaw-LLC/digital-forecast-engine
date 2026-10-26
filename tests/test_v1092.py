@@ -345,34 +345,58 @@ ok('.range(' in strip_comments(fn('dzLoadRecentUploads')),
    'the sweep ran against real code, not a blanked body')
 
 
-# -- F. Known outstanding, recorded so it cannot pass as fine --------------
-# refreshUploadDataRanges carries the SAME truncation shape in two places.
-# Both are real. Both are a DIFFERENT symptom from what Jason reported - a
-# narrower audit window / a possibly-missed region, not a wrong number
-# printed on the rail - so v10.92 deliberately does not touch them. They
-# print on every run rather than passing silently (the v10.81 B7 pattern).
-print('\nF. known outstanding - freshness probes that still truncate')
+# -- F. The probes v10.92 triaged, FIXED in v10.95 ------------------------
+# refreshUploadDataRanges carried the same truncation shape in several more
+# places. All were real, all were a DIFFERENT symptom from what Jason
+# reported (a narrower audit window / a possibly-missed region, not a wrong
+# number on the rail), so v10.92 deliberately did not touch them and instead
+# asserted the KNOWN SET of limit values here, "so a fourth cannot blend in".
+#
+# ⚠ It already had. The Walmart gap audit ALSO used .limit(500), so the set
+# collapsed it into findWeeklyGaps' entry and this guard reported THREE
+# probes when there were four - and the fourth ordered ASCENDING, so it read
+# the OLDEST rows in its window and a missing recent week could never be
+# flagged. v10.95 removed all four.
+#
+# The lesson is pinned below rather than written down: count OCCURRENCES,
+# never distinct values. A de-duplicating sweep can hide a whole site.
+print('\nF. the truncating freshness probes are gone (fixed in v10.95)')
 
 RUDR = strip_comments(fn('refreshUploadDataRanges'))
-rudr_limits = sorted({int(x) for x in re.findall(r'\.limit\(\s*(\d+)\s*\)', RUDR) if int(x) > 1})
-print('     refreshUploadDataRanges multi-row limits: %s' % (rudr_limits or 'none'))
-print('     - findWeeklyGaps .limit(500): on a table with hundreds of rows per')
-print('       week, 500 newest rows cover only a few weeks, so the advertised')
-print('       "last 26 weeks" gap audit silently inspects a shorter window.')
-print('       Under-reports gaps; it does not invent them.')
-print('     - sku_economics / _eu .limit(200) "latest week per region": 200')
-print('       newest rows can all be ONE week, so a region that skipped the')
-print('       newest week can read as having no data at all. The v10.89')
-print('       per-view probe (.eq + .limit(1) per region) is the right shape.')
-print('     - fba_inventory_snapshots .limit(10) "latest per region": same')
-print('       shape, and the MOST fragile of the three - 10 newest rows can')
-print('       all belong to one region, so a region that has not uploaded')
-print('       recently reads as having no snapshot at all.')
-# Asserted as a KNOWN set, so a NEW truncating probe added later goes red
-# here instead of blending in with the two already triaged.
-ok(rudr_limits == [10, 200, 500],
-   'no NEW truncating probe appeared in refreshUploadDataRanges (known: 10, 200, 500)',
+rudr_limits = [int(x) for x in re.findall(r'\.limit\(\s*(\d+)\s*\)', RUDR) if int(x) > 1]
+ok(rudr_limits == [],
+   'no multi-row row window survives in refreshUploadDataRanges (was 10, 200, 500, 500)',
    rudr_limits)
+ok(not re.findall(r'\.limit\(\s*([A-Za-z_][^)]*)\)', RUDR),
+   'and none with a computed size either',
+   re.findall(r'\.limit\(\s*([A-Za-z_][^)]*)\)', RUDR))
+for _ident in ['seRows', 'euRows', 'fiRows', 'allWm']:
+    ok(_ident not in RUDR,
+       'the old row-sample variable %s is gone, so a renamed probe cannot hide' % _ident)
+
+# The replacement shape is the one v10.89 already used per SQP view: one
+# .eq() + .limit(1) probe per region, so the SERVER picks the max and there
+# is no row window to truncate.
+ok(".eq('region', region)" in RUDR, 'the per-region probe filters with .eq(region)')
+_probe = RUDR[RUDR.index('latestDateForRegion = async'):] if 'latestDateForRegion = async' in RUDR else ''
+_probe = _probe[:_probe.index('latestUploadedAt')] if 'latestUploadedAt' in _probe else _probe
+ok('.limit(1)' in _probe, '...and takes exactly ONE row per region')
+ok('{ ascending: false }' in _probe, '...newest-first, so that one row IS the max')
+ok('.range(' in RUDR, 'the 26-week gap audit pages with .range() (Architecture Rule #4)')
+ok('distinctColumnValues' in RUDR,
+   'the region list is read from the data, not hardcoded')
+
+# Vacuity guards. A sweep that cannot SEE a limit passes for the wrong
+# reason (the v10.20 masking class), and one run against a blanked body
+# passes for no reason at all.
+ok([int(x) for x in re.findall(r'\.limit\(\s*(\d+)\s*\)', 'x.limit(500)') if int(x) > 1] == [500],
+   'the sweep can still detect a planted .limit(500)')
+ok(len([x for x in re.findall(r'\.limit\(\s*(\d+)\s*\)', 'a.limit(500) b.limit(500)') if int(x) > 1]) == 2,
+   'and detects BOTH probes when two share one limit value - the blind spot above')
+ok([x for x in re.findall(r'\.limit\(\s*(\d+)\s*\)', 'x.limit(1)') if int(x) > 1] == [],
+   'the sweep allows a .limit(1) newest-row probe (deliberate, not a sample)')
+ok('.limit(1)' in RUDR and 'latestByRegion' in RUDR and len(RUDR) > 10000,
+   'the sweep ran against real code, not a blanked body', len(RUDR))
 
 print('\n' + '=' * 62)
 print('  v10.92  PASS %d   FAIL %d' % (P, F))
