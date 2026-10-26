@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.92**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.93**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,46 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.93 - copy the SQP coverage, and ONE clipboard writer for the app
+
+- **Jason:** *"allow me to copy what is showing here so i can plug it into amazon"* (Growth Model coverage panel).
+- The panel already listed the SQP ASIN-view months that ARE loaded. What he needs in Seller Central is the **inverse** - the months still to pull - so the copied block **leads with the gaps**, then the loaded months, the SP coverage, and the download path. Self-contained enough to paste into a note and work from.
+
+### ⎘ copy, next to "grab more months"
+- **The window ends at LAST COMPLETE month, not this one.** Amazon publishes SQP in arrears, so listing the current month as "missing" would send him after a file that does not exist yet. If something newer somehow exists the window extends to it rather than calling a real upload "extra".
+- **Months older than the 12-month window are reported separately**, not as gaps - they are bonus coverage, not a problem.
+- `pnlGrowthMonthWindow` is **pure YYYY-MM index arithmetic**; the single `new Date()` is for "today" and never parses a month string. That is the v9.71 timezone class, designed out rather than tested around.
+- **⚠ The copied text reads a SNAPSHOT, never a recompute.** `pnlGrowthRender` stashes what it is about to display (`_pnlGrowthCoverage`) and `pnlGrowthCoverageText` reads only that - the v8.00 `pnlExportRows` rule. A recompute from the caches could silently disagree with the panel it claims to be copying. Asserted both ways: the text function must reference the snapshot and must NOT reference `amazonSqpAsinCache` / `amazonSpSearchTermCache`.
+
+### ⚠ THREE hand-rolled clipboard writers, now one
+Adding a fourth would be exactly the divergence hard rule #1 exists to stop, so this consolidates first. Consolidating was also a real bug fix - **each of the three had a different failure**:
+- **`pnlCopyAsin`** - the only decent one (full fallback + button flash). Kept as a thin named wrapper so existing call sites and anyone grepping still land.
+- **`copyQueryResults`** - a bare `writeText` with **no fallback and no catch**. On an `http://` origin `navigator.clipboard` is null, so it threw and its status line never moved. A dead button.
+- **The Product modal's master_id ⎘ button** - the worst: inline `onclick="navigator.clipboard.writeText('${mid}')"` with no fallback, no catch, and **no feedback at all even on success**, so the operator could not tell whether the click landed.
+
+`copyTextToClipboard(text, {btn, okHtml, onOk, onFail})` is now the single writer. Modern API → hidden-textarea + `execCommand` fallback → explicit failure report.
+
+- **⚠ It reports the FAILURE case too, and that came out of driving it.** All four branches behaved, including the honest one: when the modern API rejects AND `execCommand` returns false it correctly did not claim success. But it also said **nothing** - so the click looks dead, which is indistinguishable from the broken button this release set out to remove. The whole premise of consolidating was "clipboard writes are invisible, so every path has to report", and that has to include the path where the copy did not happen. Now flashes a red `✗ copy blocked` and calls `onFail`.
+
+### ⚠ The third writer was found by the sweep, after grep hid it
+`grep -n writeText index.html` printed two hits and then `Binary file index.html matches` - the file carries base64 PNG data URIs, so **grep switches to binary mode and truncates**. The inline master_id writer was past the cutoff and invisible. The consolidation sweep in `tests/test_v1093.py` is what surfaced it. **Use `grep -a` on this file**; a clean-looking grep result here is not evidence of absence.
+
+### Verification
+- `node --check` clean - **67 suites green** - new `tests/test_v1093.py` (79 assertions).
+- **Driven in a browser against the shipped build** (chip confirmed `v10.93` first, per the v10.67 stale-cache lesson). All four writer branches, each with the primitives stubbed so the sandbox's clipboard policy could not be mistaken for my own wiring:
+  - modern API resolves → exact text passed through, flashes `✓ copied` green, `onOk` fires, restores original HTML + colour
+  - modern API rejects → falls through to `execCommand('copy')`, flashes, `onOk` fires **(the branch `copyQueryResults` never had)**
+  - `navigator.clipboard` absent → straight to the fallback **(the branch all three never had)**
+  - both fail → `✗ copy blocked` in red, `onFail` fires, and it does **not** falsely flash or falsely call `onOk`
+  - a throwing `execCommand` reports rather than swallowing; **no hidden textarea is ever left in the DOM** on any path
+- **The real unstubbed write failed with `NotAllowedError`** (no user gesture in the pane) and the helper correctly stayed silent about success - which is the behaviour I wanted to confirm, not a defect.
+- `pnlGrowthMonthWindow` driven in the live page: today `2026-10` → window `2025-10 → 2026-09`, the current month never listed as missing, gaps ordered oldest-first so the list reads as a pull order.
+- The empty-coverage guard exercised for real (the snapshot is genuinely `null` behind the login gate): alerts *"No SQP coverage to copy yet"* instead of copying an empty string. Zero console errors.
+- **Not verified end to end:** the full `pnlGrowthRender` → snapshot → copied-text chain. `amazonSqpAsinCache` / `_pnlGrowthCoverage` are module-scope `let`, which (unlike function declarations) do **not** land on `window`, so an injected scope cannot stub them. That chain is pinned statically instead - the snapshot is asserted to be built from the panel's own locals (`monthsLoadedList` / `spMonthsAvail` / `confidenceLabel`), so it cannot drift from what renders.
+
+### Two of my own assertions were wrong, not the code
+- I pinned the literal `try { legacy(); } catch {}`; v10.93c changed it to `catch { failed(); }`, which is **strictly better**. Re-pointed at the guarantee (a throwing API still attempts the fallback, and a throwing fallback reports) rather than the mechanism - pinning the mechanism is what would have blocked the improvement.
+- My first writer sweep flagged a hit it should not have: it compared against the whole script including comments, and the fixes *name* the old broken calls in their explanatory comments. Strips comments now, while a second assertion **requires those warning comments to survive** so nobody "optimises" the fallbacks back out.
 ## v10.92 - the rail read a ROW window and called it a session list
 
 - **Jason:** *"i know i uploaded more months than this"* - the SQP Brand-view rail showed **1 UPLOADS / 2026-01 / 1,000 rows** while the freshness line on the SAME card correctly read **2026-08**.
