@@ -121,7 +121,13 @@ uh_tables = set(re.findall(r'(?m)^\s*([a-z_0-9]+)\s*:\s*\{', uh_block))
 uh_tables |= set(re.findall(r'(?m)^\s*([a-z_0-9]+)\s*:\s*$', uh_block))  # wrapped entries
 ok(len(uh_tables) >= 18, 'UH_SOURCES entries parsed', len(uh_tables))
 
-rail_tables = set(re.findall(r"'([a-z_0-9]+)'", re.sub(r"'dz-[a-z0-9-]+'", '', dz_block)))
+# v10.89 - a source is now a bare table name OR { table, filter }. Strip the
+# dz keys AND any filter block first, or the filter's VALUES ('asin',
+# 'brand') get read as table names and the sweep fails on a phantom.
+_body = re.sub(r"'dz-[a-z0-9-]+'\s*:", '', dz_block)
+_body = re.sub(r"filter:\s*\{[^}]*\}", '', _body)
+rail_tables = set(re.findall(r"table:\s*'([a-z_0-9]+)'", _body))
+rail_tables |= set(re.findall(r"(?<![\w:])'([a-z_0-9]+)'", _body))
 unresolved = sorted(t for t in rail_tables if t not in uh_tables)
 ok(not unresolved, 'every rail table has a UH_SOURCES config', unresolved)
 
@@ -162,6 +168,10 @@ m = re.search(r'async function refreshUploadDataRanges\b', JS)
 ok(bool(m), 'refreshUploadDataRanges located')
 probe = JS[m.start():m.start() + 60000] if m else ''
 written = set(re.findall(r"setLast\('(last-[a-z0-9-]+-grp)'", probe))
+# v10.89 - the SQP probe loops over a literal [view, cardId, grpId] table and
+# calls setLast(grpId, ...) with a VARIABLE, so match any slot id named
+# anywhere in the probe body, not only ones passed as a literal argument.
+written |= set(re.findall(r"'(last-[a-z0-9-]+-grp)'", probe))
 
 never = [g for g in grp_ids if g not in written]
 ok(not never, 'no freshness slot is left permanently blank', never)

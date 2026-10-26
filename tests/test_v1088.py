@@ -74,6 +74,9 @@ def slice_div(html, anchor):
 MOVED = {
     'grp-amazon-ads-bulk': 'pnl-amzn-adactivity-wrap',
     'grp-amz-sqp-asin':    'pnl-amzn-growth-wrap',
+    # v10.89 - SQP split into one card per view (ASIN / Brand), both hosted
+    # on the Growth Model. The guard flagged the new card correctly.
+    'grp-amz-sqp-brand':   'pnl-amzn-growth-wrap',
     'grp-amz-sp-campaign': 'pnl-amzn-growth-wrap',
 }
 STAYED = ['grp-amazon-ads', 'grp-amz-sp-search-term']

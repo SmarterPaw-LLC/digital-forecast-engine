@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.88**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.89**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,25 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.89 - SQP splits into ASIN view and Brand view (one table, two uploaders)
+
+- **Jason:** *"shouldn't asin and brand be separated? i have to pull them separately, and it's hard to tell which reports are current"*
+- Search Query Performance has two views pulled separately from Seller Central - **ASIN view** (one CSV per listing) and **Brand view** (one CSV per brand) - but both land in ONE table, `amazon_query_performance_asin`, behind a `view_type` discriminator (v8.45).
+- **WARN The single card was not just ambiguous, it was actively misleading.** Its freshness line took the newest `reporting_month` across **BOTH** views, and the v10.85 rail merged both views' sessions into one undifferentiated list. **The Growth Model reads `view_type === 'asin'` in eight places** - so a fresh Brand pull MASKED a stale ASIN pull, and the model silently ran on old inputs while the card read current. That is a correctness-of-signal bug, not a layout preference.
+
+### Split into two cards
+- **ASIN view** (magnifier) and **Brand view** (globe), each with its own title, its own Seller Central link wording ("switch to ASIN view" / "switch to Brand view (Comprehensive)"), its own status + freshness line, and its own rail.
+- **Freshness is probed per view** - one query per card, each `.eq('view_type', vt)`. A regression guard asserts the old unfiltered newest-month probe cannot come back.
+- **The rail learned to filter.** A `DZ_RECENT_SOURCES` entry is now a bare table name OR `{ table, filter }`. `dzSourceKey` hashes the filter into the cache key so the two views cannot collide, and `dzRecentInvalidate(table)` clears **every** filtered variant of that table - otherwise uploading one view would leave the other's rail stale.
+- **One handler, two cards.** The parser already auto-detects the view from Row 1, so a file dropped on the wrong card still **stores correctly under the right `view_type`** - it is flagged (`dz-warn`, naming which card actually moved), never lost or mis-filed. Refusing the file would have been worse: the data is right, only the operator's expectation is off.
+- Both cards are hosted on the Growth Model (v10.88) and both are reachable from a data-currency chip.
+
+### Verification
+- `node --check` clean - **63 suites green** - new `tests/test_v1089.py` (45 assertions).
+- **Driven in a browser:** both cards render with the right handler argument (`'asin'` / `'brand'`), the two freshness slots populate **independently**, and - spying on the Supabase query builder - the two rails issue genuinely different queries (`view_type=asin` vs `view_type=brand`) landing in **separate cache keys** (`...|view_type=asin` / `...|view_type=brand`). That is the behaviour the static assertions can only approximate.
+- **Two suites went red and were RE-POINTED, not silenced** - and one of them was my own extractor, not the code:
+  - `test_v1086` read every quoted token in `DZ_RECENT_SOURCES` as a table name, so the new filter VALUES (`'asin'`, `'brand'`) surfaced as phantom tables. Now strips the `filter: {...}` block before extracting. Its freshness sweep also only matched `setLast('literal')`, while the new per-view probe loops over a literal array and calls `setLast(grpId, ...)` with a variable - widened to match any slot id named in the probe body.
+  - `test_v1088` correctly flagged `grp-amz-sqp-brand` as an unregistered new card. **That is the guard doing its job**; the map gained the card.
 ## v10.88 - the three OCCASIONAL Amazon Ads uploaders move next to what reads them
 
 - **Jason:** *"these are the two amazon ads reports i upload weekly. the other uploads should be moved to the respective P&L pages."*
@@ -7757,7 +7776,7 @@ Two ports between the Forecast and P&L tabs:
    - **New value-bearing column on `products`** → add to `runMerge`'s `SIMPLE_BACKFILL_FIELDS` array (or `BOOL_FLAG_FIELDS` for booleans) so a survivor with an empty value inherits from the duplicate (v5.45 caught image_url + 8 more; v5.77 caught per-region matrix).
    - **New in-memory cache written on save** → mirror to `allProducts` / `records[]` / `cogsByMaster` etc. so UI stays consistent without reload (v7.34 pattern).
    - **Current master_id-bearing tables:** sales_weekly, sku_economics, sku_economics_eu, chewy_forecasts, inventory, bom (BOTH bundle_master_id + component_master_id), product_cogs, chewy_sales_weekly, fba_inventory_snapshots, fba_shipments, walmart_sales_weekly, shopify_sales_daily, amazon_ad_spend, channel_listings. Any new table joined by master_id must be added.
-   - **New append-only table with an uploader** (v10.86) -> also register it in **`UH_SOURCES`** (Upload History + the rail's config), **`DZ_RECENT_SOURCES`** (the dropzone's recent-uploads rail), and add a probe in **`refreshUploadDataRanges`** for its `last-*-grp` slot. Missing any one fails SILENTLY: no rail, no way to inspect or fix a past upload, or a card stuck reading `LATEST DATA -`. `tests/test_v1086.py` sweeps all three.
+   - **New append-only table with an uploader** (v10.86) -> also register it in **`UH_SOURCES`** (Upload History + the rail's config), **`DZ_RECENT_SOURCES`** (the dropzone's recent-uploads rail), and add a probe in **`refreshUploadDataRanges`** for its `last-*-grp` slot. Missing any one fails SILENTLY: no rail, no way to inspect or fix a past upload, or a card stuck reading `LATEST DATA -`. `tests/test_v1086.py` sweeps all three. **If two uploaders SHARE a table** (v10.89: SQP's ASIN and Brand views behind `view_type`), every surface that reports freshness or history must scope to the discriminator - otherwise one upload masks the other's staleness, and whichever consumer filters on it silently runs on stale inputs.
    - **Grep-based verification:** search index.html for `reassignMasterId(` in `runMerge` and `.update({ master_id })` / `.eq('master_id', oldMasterId)` in `saveProduct`'s SP-TEMP promotion. If your new table isn't in that list, add it.
    - **Silent data loss has bitten this 6+ times (v4.145, v5.44, v5.45, v5.76, v6.98, v7.00, v7.34).** Merges that "worked" but dropped data are the worst class of bug in this codebase — deletes cascade before the operator can notice. Belt-and-suspenders: re-audit even when the diff looks small.
 
