@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.86**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.87**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -17,6 +17,8 @@ Before building a scorecard, tab strip, popup, chip, badge, column picker, empty
 - v10.17 — SIX sub-tab strips in four different looks. Now one `.subtab` class + `subtabApply()`.
 - v10.7 / v10.9 — one popup per page holding Saved views + Columns, labelled **Customize columns**, living in the global search bar between the search box and the ⚙ gear. Not a third pattern.
 - v10.0 — the Excel export coloured the top trend tier grey because a second copy of the classifier's output was never updated.
+
+**1a. Collapse PROSE into a tooltip, never an AFFORDANCE.** v10.59's sweep replaced each upload card's info-box with a one-line tooltip and took the `<a>` inside it along, leaving the link's label as dead text in a `title=` attribute (v10.87, eight months before anyone noticed). When collapsing a block, list what was INTERACTIVE in it - links, buttons, inputs - and re-attach each one beside the tooltip. `tests/test_v1087.py` fails on any link label found inside a `title=`.
 
 **2. One concept, one glyph. One glyph, one concept.**
 A label must never carry two different icons on two pages (v10.50: Break-Even was `💰` on Amazon and `🎯` on Chewy), and a glyph must never appear twice inside one strip. Before assigning an icon, grep for it: if it already means something else, pick another. **`tests/test_v1050.py` enforces this across every sub-tab in the app** — a new tab with a borrowed icon fails the build.
@@ -36,6 +38,21 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v10.87 - v10.59's prose sweep had swallowed two Seller Central links
+
+- **Jason, on both FBA Shipments cards:** *"the link to these reports was removed"*. It was - eight months ago, by me.
+- **v4.202** put a clickable deep link on every upload card. **v10.59** swept the page's prose paragraphs into tooltips and collapsed each card's info-box `<div>` - **and the `<a>` inside that box went with it.** Its label survived only as TEXT inside the resulting `title`:
+  `title="... click Download shipment contents ... ↗ Open Manage FBA Shipments queue"`
+  which nobody can click. **A tooltip is not an affordance.**
+- **Only these two cards were hit**, and only because their link happened to sit INSIDE the collapsed block; every other card's link sat outside it and survived. Confirmed by sweeping the whole page for the fingerprint (link label stranded in a `title=`): exactly 2 hits, both here, now 0.
+- **This is the SECOND casualty of the v10.59 sweep.** v10.61 caught the first (five orphaned `</div>` closes) and made div balance runnable. Nothing checked whether the sweep had deleted FUNCTIONALITY along with the prose - which is the gap v10.87 closes.
+- **Restored as real `<a>` elements**, styled to match the surviving links, inline to the right of the one-line tooltip so the group header does not grow. **The prose stays collapsed** - re-adding the link must not drag the paragraph back (asserted: the visible text above each dropzone is capped at 120 characters and the old info-box background cannot return).
+- The links sit OUTSIDE the `.dz`, so the invisible full-card `<input type=file>` (the v4.152 / v7.97 hazard) does not overlay them. `z-index:2` + `event.stopPropagation()` are carried anyway so a later layout change cannot quietly turn them into file-picker triggers.
+
+### Verification
+- `node --check` clean - **61 suites green** - new `tests/test_v1087.py` (28 assertions).
+- **The guard is the flattened-link sweep**, and it guards itself: a planted `title="... ↗ Open Report"` must be detected and an ordinary tooltip must not. Plus: both links are real anchors with `target=_blank` / `rel=noopener` / `stopPropagation` / `z-index:2`, the prose stayed collapsed, and **all seven documented reports are still reachable by link** (SKU Economics, FBA Inventory, FBA Fee Preview, Sales & Traffic, SQP, FBA Shipments queue, Ads bulk sheet) so the next sweep cannot quietly orphan a different one.
+- **Driven in a browser:** both links render at full size with the right labels and a dispatched click reaches the anchor. **WARN Hit-testing could NOT be verified in the sandbox** - the login gate is a full-screen overlay that locks scrolling, so `elementFromPoint` returns null for anything off-screen. What rules out the v7.97 overlay bug is structural, not visual: the links are outside the `.dz`, so there is no file input above them.
 ## v10.86 - the rail reached 12 of 19 uploaders; three registries had drifted
 
 - **Jason, on the Sales & Traffic card:** *"no recent uploads showing here"*. One symptom of a **three-way drift** - eight dropzones had shipped since each registry was last touched:
