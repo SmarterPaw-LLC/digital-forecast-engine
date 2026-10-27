@@ -149,12 +149,17 @@ def options_of(select_id):
 
 
 # THE ask: every date-window picker offers an all-time choice.
+# v11.02 re-point: the Chewy P&L had FOUR period pickers and now has ONE
+# (chpnl-period). The guarantee this block asserts is unchanged - every
+# date-window picker in the app offers all-time - so it simply follows the
+# control. RETIRED_PICKERS below is the regression guard that keeps the
+# consolidation from drifting back into per-tab copies.
 PICKERS = {
     'pnl-period': 'all', 'spnl-period': 'all', 'wmpnl-period': 'all',
-    'chpnl-sales-period': 'all', 'chpnl-cost-period': 'all',
-    'chpnl-period': 'all',          # pre-existing
+    'chpnl-period': 'all',          # v11.02: the ONE Chewy picker
     'fPeriod': '0', 'salesPeriod': '0', 'fba-ship-window': '0',   # pre-existing
 }
+RETIRED_PICKERS = ('chpnl-sales-period', 'chpnl-cost-period', 'chpnl-be-period')
 for sid, val in PICKERS.items():
     opts = options_of(sid)
     sok(opts is not None, 'picker %s exists' % sid)
@@ -162,21 +167,65 @@ for sid, val in PICKERS.items():
 
 # All-time must be LAST among the window choices on the five new ones, i.e.
 # after the rolling / named windows, so it does not interrupt the common path.
-for sid in ('pnl-period', 'spnl-period', 'wmpnl-period', 'chpnl-sales-period'):
+# v11.02 - chpnl-period JOINS this check. Before the consolidation the
+# Rebates picker had no custom-range option at all, so it could not be held
+# to the ordering rule; the shared control carries the full option list, so
+# the re-point TIGHTENS rather than loosens.
+for sid in ('pnl-period', 'spnl-period', 'wmpnl-period', 'chpnl-period'):
     opts = options_of(sid)
-    sok(opts.index('all') == len(opts) - 2 and opts[-1] == 'custom',
+    sok(opts is not None and opts.index('all') == len(opts) - 2 and opts[-1] == 'custom',
         '%s puts All time just before Custom range' % sid)
+
+# Regression guard: the three retired per-tab pickers must stay gone, or the
+# page is back to four controls that can drift apart (it already had done -
+# Sales carried this-month/last-month that Cost and Break-Even lacked).
+for sid in RETIRED_PICKERS:
+    sok(options_of(sid) is None,
+        'retired per-tab picker %s is gone (one shared control)' % sid)
+sok(len(re.findall(r'<select[^>]*id="chpnl-period"', src)) == 1,
+    'exactly one Chewy period <select> in the markup')
 
 # Each resolver has an all-time branch that reads the real earliest date.
 for fname, data in (('getPnlDateRange', 'src.rows'),
                     ('getShopifyPnlDateRange', 'shopifyPnlData'),
-                    ('getWalmartPnlDateRange', 'walmartPnlData'),
-                    ('getChewyPnlSalesDateRange', 'chewyPnlSalesData'),
-                    ('getChewyPnlCostDateRange', 'chewyPnlSalesData')):
+                    ('getWalmartPnlDateRange', 'walmartPnlData')):
     body = fn(fname)
     sok('pnlAllTimeFrom(' in body, '%s derives all-time from real data' % fname)
     sok(data in body, '%s reads %s' % (fname, data))
     sok('allTime: true' in body, '%s flags the range as all-time' % fname)
+
+# v11.02 re-point - the Chewy resolvers are thin wrappers now, so the check
+# FOLLOWS THE CALL rather than being dropped. Same guarantee in three hops:
+# wrapper -> getChewyPnlDateRange -> computePnlDateRange's allRows branch.
+for fname, key in (('getChewyPnlSalesDateRange', 'sales'),
+                   ('getChewyPnlCostDateRange', 'cost'),
+                   ('getChewyBreakevenDateRange', 'breakeven'),
+                   ('getChewyProgramDateRange', 'program'),
+                   ('getChewyRebatesDateRange', 'rebates')):
+    body = fn(fname)
+    sok("getChewyPnlDateRange('%s')" % key in body,
+        '%s delegates to the shared resolver as %r' % (fname, key))
+_shared = fn('getChewyPnlDateRange')
+sok('CHEWY_PERIOD_SOURCES[sourceKey]' in _shared,
+    'getChewyPnlDateRange picks the all-time feed from the registry')
+sok('allRows:' in _shared and 'allField:' in _shared,
+    'getChewyPnlDateRange hands computePnlDateRange its own all-time source')
+_cpdr = fn('computePnlDateRange')
+sok('Array.isArray(opts.allRows)' in _cpdr and 'pnlAllTimeFrom(opts.allRows' in _cpdr,
+    'computePnlDateRange derives all-time from the caller-supplied rows')
+sok('allTime: true' in _cpdr, 'computePnlDateRange flags the range as all-time')
+
+# The registry must name the REAL caches, or 'All time' silently floors at
+# 1970 - and Break-Even must keep reading the AD feed rather than the
+# sell-through one, which starts on a different day.
+_reg = js[js.index('const CHEWY_PERIOD_SOURCES'):]
+_reg = _reg[:_reg.index('};') + 2]
+for key, cache in (('sales', 'chewyPnlSalesData'), ('cost', 'chewyPnlSalesData'),
+                   ('breakeven', 'chewyAdSpendData'), ('program', 'chewyPnlSalesData'),
+                   ('rebates', 'chewyPnlData')):
+    line = [l for l in _reg.split(chr(10)) if l.strip().startswith(key + ':')]
+    sok(len(line) == 1 and cache in line[0],
+        'CHEWY_PERIOD_SOURCES.%s measures all-time over %s' % (key, cache))
 
 # The pure PDF resolver must NOT set the global flag (it loops arbitrary keys).
 # Look for an ASSIGNMENT, not a mention — the function's comment names the

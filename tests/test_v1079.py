@@ -72,31 +72,50 @@ def fn(name, kw='function'):
 
 
 # ===========================================================================
-# A. Custom range - the same control on all three Chewy tabs
+# A. Custom range - ONE control for every Chewy tab (v11.02 re-point)
+#
+# v10.79 asserted parity by checking three per-tab copies matched. v11.02
+# consolidated them into a single page-level control, so parity now holds BY
+# CONSTRUCTION and the check follows it. A6 is the regression guard that
+# keeps the copies from coming back - which is what let them drift in the
+# first place (Sales carried this-month/last-month; the other two did not).
 # ===========================================================================
-print('\nA. custom range parity across the Chewy tabs')
+print('\nA. the ONE Chewy period control')
 
-for tab, pre in (('Sales', 'chpnl-sales'), ('Cost', 'chpnl-cost'), ('Break-Even', 'chpnl-be')):
-    ok('id="%s-custom-wrap"' % pre in s, 'A1  %s has the custom-range wrap' % tab)
-    ok('id="%s-from"' % pre in s and 'id="%s-to"' % pre in s,
-       'A2  %s has both date inputs' % tab)
+ok('id="chpnl-custom-wrap"' in s, 'A1  the shared custom-range wrap exists')
+ok('id="chpnl-from"' in s and 'id="chpnl-to"' in s,
+   'A2  the shared control has both date inputs')
 
-# One shape, not three. Each period select routes through its own handler so
-# the wrap can be toggled; none may still call the renderer directly.
-for tab, sel, handler in (('Sales', 'chpnl-sales-period', 'onChewyPnlSalesPeriodChange'),
-                          ('Cost',  'chpnl-cost-period',  'onChewyPnlCostPeriodChange'),
-                          ('Break-Even', 'chpnl-be-period', 'onChewyBreakevenPeriodChange')):
-    m = re.search(r'<select id="%s" onchange="([^"]+)"' % sel, s)
-    ok(m and m.group(1).startswith(handler),
-       'A3  %s period select routes through %s()' % (tab, handler),
-       m.group(1) if m else None)
-    ok(('function %s(' % handler) in js, 'A4  %s is defined' % handler)
+m = re.search(r'<select id="chpnl-period"[^>]*onchange="([^"]+)"', s)
+ok(m and m.group(1).startswith('onChewyPeriodChange'),
+   'A3  the Chewy period select routes through onChewyPeriodChange()',
+   m.group(1) if m else None)
+ok('function onChewyPeriodChange(' in js, 'A4  onChewyPeriodChange is defined')
 
 # The handler must NOT re-render while the user is mid-way through picking two
 # dates - the from/to inputs fire the render themselves.
-for handler in ('onChewyPnlSalesPeriodChange', 'onChewyPnlCostPeriodChange', 'onChewyBreakevenPeriodChange'):
-    ok("if (v !== 'custom')" in fn(handler),
-       'A5  %s does not render on the custom pick itself' % handler)
+ok("if (v !== 'custom')" in fn('onChewyPeriodChange'),
+   'A5  onChewyPeriodChange does not render on the custom pick itself')
+
+# A6 - the three per-tab copies must stay gone. Markup, date inputs AND
+# handlers: leaving any one of them standing is how a consolidation drifts
+# back (hard rule #1 - a consolidation that leaves copies behind is not one).
+for pre, handler in (('chpnl-sales', 'onChewyPnlSalesPeriodChange'),
+                     ('chpnl-cost',  'onChewyPnlCostPeriodChange'),
+                     ('chpnl-be',    'onChewyBreakevenPeriodChange')):
+    ok('id="%s-period"' % pre not in s, 'A6  %s-period select is gone' % pre)
+    ok('id="%s-custom-wrap"' % pre not in s, 'A6  %s-custom-wrap is gone' % pre)
+    ok('id="%s-from"' % pre not in s and 'id="%s-to"' % pre not in s,
+       'A6  %s date inputs are gone' % pre)
+    ok(('function %s(' % handler) not in js, 'A6  %s is gone' % handler)
+
+# A7 - and the fifth mechanism with them. chewyPnlDateFilter understood only
+# all / ytd / N-days and RETURNED TRUE for everything else, so against this
+# 16-option control the Rebates tab would have sat silently unfiltered on
+# nine of them.
+ok('function chewyPnlDateFilter(' not in js, 'A7  chewyPnlDateFilter is gone')
+ok(js.count('const CHEWY_PERIOD_SOURCES') == 1,
+   'A7  exactly one all-time source registry')
 
 
 # ===========================================================================
@@ -111,46 +130,116 @@ const t = (name, got, want) => out.push({ name, pass: JSON.stringify(got) === JS
 
 let VALS = {};
 const document = { getElementById: id => (id in VALS ? { value: VALS[id] } : null) };
+// Three feeds with three different first days - that is the whole reason the
+// shared resolver takes an all-time SOURCE rather than one global floor.
 const chewyAdSpendData = [{ date: '2025-01-15' }, { date: '2026-03-01' }];
 const chewyPnlSalesData = [{ week_start: '2025-02-03' }];
-function pnlAllTimeFrom(rows, field) {
-  return rows.map(r => r[field]).sort()[0];
-}
+const chewyPnlData = [{ invoice_date: '2024-11-20' }];
+const pnlData = [];
 let _pnlSuppressDeltas = false;
 
+__ALLTIMEFROM__
+__CPDR__
+__SOURCES__
+__VALUE__
+__SHARED__
+__SALES__
 __BE__
 __COST__
+__PROGRAM__
+__REBATES__
 
-// B1 - custom range is read straight off the two inputs.
-VALS = { 'chpnl-be-period': 'custom', 'chpnl-be-from': '2026-02-01', 'chpnl-be-to': '2026-02-28' };
-t('B1  Break-Even custom range uses the from/to inputs',
+const CUSTOM = { 'chpnl-period': 'custom', 'chpnl-from': '2026-02-01', 'chpnl-to': '2026-02-28' };
+
+// B1 - custom range is read straight off the two shared inputs.
+VALS = CUSTOM;
+t('B1  custom range uses the shared from/to inputs',
   getChewyBreakevenDateRange(), { from: '2026-02-01', to: '2026-02-28' });
 
-VALS = { 'chpnl-cost-period': 'custom', 'chpnl-cost-from': '2026-04-01', 'chpnl-cost-to': '2026-04-30' };
-t('B2  Cost custom range uses the from/to inputs',
-  getChewyPnlCostDateRange(), { from: '2026-04-01', to: '2026-04-30' });
+// B2 - THE ask: one control, so every tab resolves the SAME window. This is
+// the guarantee v10.79's three-matching-copies check could only approximate.
+VALS = CUSTOM;
+t('B2  every Chewy tab resolves the same window from the one control',
+  [getChewyPnlSalesDateRange(), getChewyPnlCostDateRange(), getChewyBreakevenDateRange(),
+   getChewyProgramDateRange(), getChewyRebatesDateRange()]
+    .map(r => r.from + '|' + r.to),
+  ['2026-02-01|2026-02-28', '2026-02-01|2026-02-28', '2026-02-01|2026-02-28',
+   '2026-02-01|2026-02-28', '2026-02-01|2026-02-28']);
 
 // B3 - a blank "to" falls forward to today rather than emptying the window.
 const today = new Date().toISOString().split('T')[0];
-VALS = { 'chpnl-be-period': 'custom', 'chpnl-be-from': '2026-02-01', 'chpnl-be-to': '' };
+VALS = { 'chpnl-period': 'custom', 'chpnl-from': '2026-02-01', 'chpnl-to': '' };
 t('B3  a blank end date falls forward to today', getChewyBreakevenDateRange().to, today);
 
-// B4 - every other option is untouched by the new branch.
-VALS = { 'chpnl-be-period': 'all' };
-t('B4  all-time still reads the earliest ad day', getChewyBreakevenDateRange().from, '2025-01-15');
-VALS = { 'chpnl-be-period': 'ytd' };
+// B4 - ⚠ all-time is the ONE period that is NOT shared: each tab floors at its
+// own feed's first day. One global floor would silently widen or narrow a tab's
+// window, which is exactly the kind of quiet disagreement the consolidation
+// exists to prevent.
+VALS = { 'chpnl-period': 'all' };
+t('B4  all-time floors per feed, not globally',
+  [getChewyBreakevenDateRange().from, getChewyPnlSalesDateRange().from,
+   getChewyPnlCostDateRange().from, getChewyRebatesDateRange().from],
+  ['2025-01-15', '2025-02-03', '2025-02-03', '2024-11-20']);
+t('B4b all-time is flagged', getChewyBreakevenDateRange().allTime, true);
+// and the delta chips go with it - previously only the Sales tab suppressed.
+_pnlSuppressDeltas = false; getChewyPnlCostDateRange();
+t('B4c all-time suppresses deltas on every tab, not just Sales', _pnlSuppressDeltas, true);
+VALS = { 'chpnl-period': '90' }; _pnlSuppressDeltas = true; getChewyPnlCostDateRange();
+t('B4d a bounded window does not suppress', _pnlSuppressDeltas, false);
+
+VALS = { 'chpnl-period': 'ytd' };
 t('B5  ytd still starts on Jan 1', getChewyBreakevenDateRange().from,
   new Date().getFullYear() + '-01-01');
-VALS = { 'chpnl-be-period': '90' };
+VALS = { 'chpnl-period': '90' };
 const d90 = new Date(); d90.setDate(d90.getDate() - 90);
 t('B6  a trailing window still counts back from today',
   getChewyBreakevenDateRange().from, d90.toISOString().split('T')[0]);
 
+// B7 - the Amazon-only keys the Chewy tabs inherited by sharing the resolver.
+// Without the consolidation these nine options would have had no Chewy
+// implementation at all.
+VALS = { 'chpnl-period': 'last-month' };
+const lmNow = new Date();
+const lmFirst = new Date(lmNow.getFullYear(), lmNow.getMonth() - 1, 1);
+const lmLast  = new Date(lmNow.getFullYear(), lmNow.getMonth(), 0);
+const lmFmt = d => d.toISOString().split('T')[0];
+t('B7  last-month resolves to the previous full calendar month',
+  getChewyPnlSalesDateRange(), { from: lmFmt(lmFirst), to: lmFmt(lmLast) });
+
+// B8 - no control in the DOM at all (the panel has not rendered yet) must
+// fall back to the default rather than throw or resolve an empty window.
+VALS = {};
+t('B8  a missing control falls back to the 365-day default',
+  getChewyPnlSalesDateRange().from,
+  (() => { const d = new Date(); d.setDate(d.getDate() - 365); return d.toISOString().split('T')[0]; })());
+
 console.log(JSON.stringify(out));
 '''
-harness = (harness
-    .replace('__BE__',   fn('getChewyBreakevenDateRange'))
-    .replace('__COST__', fn('getChewyPnlCostDateRange')))
+# ⚠ lift_const is defined further down this file, so the registry is sliced
+# here with its own two-line lifter rather than by reordering the module.
+def _obj_const(name):
+    i = js.index('const %s = {' % name)
+    return js[i:js.index('};', i) + 2]
+
+def _lit_const(name):
+    i = js.index('const %s = ' % name)
+    return js[i:js.index(';', i) + 1]
+
+# ⚠ Bracketed tokens, substituted in a fixed order. The v11.00 lesson: a bare
+# placeholder can be matched INSIDE text a previous substitution just inserted.
+for _tok, _src in (('__ALLTIMEFROM__', fn('pnlAllTimeFrom')),
+                   ('__CPDR__',        fn('computePnlDateRange')),
+                   ('__SOURCES__',     _obj_const('CHEWY_PERIOD_SOURCES')
+                                       + chr(10) + _lit_const('CHEWY_PERIOD_DEFAULT')),
+                   ('__VALUE__',       fn('chewyPeriodValue')),
+                   ('__SHARED__',      fn('getChewyPnlDateRange')),
+                   ('__SALES__',       fn('getChewyPnlSalesDateRange')),
+                   ('__BE__',          fn('getChewyBreakevenDateRange')),
+                   ('__COST__',        fn('getChewyPnlCostDateRange')),
+                   ('__PROGRAM__',     fn('getChewyProgramDateRange')),
+                   ('__REBATES__',     fn('getChewyRebatesDateRange'))):
+    assert harness.count(_tok) == 1, 'token %s not unique in the harness' % _tok
+    harness = harness.replace(_tok, _src)
 
 hp = os.path.join(SP, 'test_v1079_dates.js')
 io.open(hp, 'w', encoding='utf-8', newline='').write(harness)

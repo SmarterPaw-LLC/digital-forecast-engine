@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.01**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.02**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,76 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.02 - ONE Chewy period control, and the Program tab learns a window
+
+- **Jason:** *"give me a period picker like on amazon p&L, which should persist across all chewy tabs."*
+- There were **FOUR** period `<select>`s on the Chewy P&L, and a **FIFTH** date mechanism under the Rebates tab. They had already drifted - the exact condition hard rule #1 exists to stop:
+
+| tab | control | what it understood |
+|---|---|---|
+| Sales | `chpnl-sales-period` | + `this-month` / `last-month`, and suppressed delta chips on all-time |
+| Cost to Chewy | `chpnl-cost-period` | neither |
+| Break-Even | `chpnl-be-period` | neither, and floored all-time on a different feed |
+| Rebates | `chpnl-period` | no custom range at all |
+| Rebates (filter) | `chewyPnlDateFilter` | **a boolean predicate: all / ytd / N-days, `return true` for anything else** |
+
+- **⚠ That fifth one is why this could not be a markup-only consolidation.** Against a 16-option control, `chewyPnlDateFilter` would have left the Rebates tab **silently unfiltered on nine of them** - a live-looking control doing nothing, the v10.19 lesson. It is deleted, and the tab now filters on the shared range with the same inline string comparison its three sibling tabs already use.
+- **The option list and the date math are Amazon's `computePnlDateRange`** - the page Jason named as the reference (rule #4) - so the two P&L pages cannot resolve "Last quarter" differently. The Chewy tabs inherit nine period keys they never had (`last-week` / `wtd` / `mtd` / `qtd` / `last-quarter` / `last-year` / `7` · and a real `custom` on Rebates), at the cost of zero new date arithmetic. Asserted byte-for-byte against the Amazon `<select>`.
+
+### ⚠ All-time is the one period that is NOT shared
+`chewy_sales_weekly`, `chewy_ad_spend` and `chewy_rebates` start on different days, so a single all-time floor would silently widen or narrow a tab's window. `computePnlDateRange` gained an **opt-in** `allRows` / `allField` override (checked before the Amazon default, so it actually wins; absent, the Amazon path is byte-identical), and `CHEWY_PERIOD_SOURCES` names each tab's feed. Driven: all-time floors at `2025-01-15` on Break-Even, `2025-02-03` on Sales/Cost/Program and `2024-11-20` on Rebates, from one control.
+
+### The default moved 90 → 365, deliberately
+One control means one default. 365 because a year is the only window that supports the month-over-month read the Program tab is built for, because Rebates was already 365, and because **Break-Even's own tooltip says a short window UNDERSTATES realised ROAS** (Chewy backfills autoship attribution for weeks after the click). It persists per browser (`chewyPnlPeriod`), so the default applies once and then it is Jason's.
+- A stored key the control no longer offers falls back to the default rather than leaving the `<select>` on its first option while the resolver reads something else. Asserted with `this-month`, the key v11.02 retired.
+
+### ⚠ The assertion that earns its keep: the Program tab's YoY had to survive the window
+The year-over-year panel compares the **same calendar months one year apart**. The prior year sits **outside any window shorter than two years**, so the obvious implementation - window the rows, then pair what is left - makes that panel permanently empty on every period Jason would actually pick.
+- **The window scopes what is SHOWN, never what is aggregated.** `allMonths` stays over the full comparable set and the YoY index is built from it; only `months` and `totals` are windowed.
+- `tests/test_v1102.py` **reproduces the naive implementation and proves it really does find nothing**, where the shipped one returns the real pairs.
+- Driven against the account's real 17-month shape: at all-time the read is May-Sep 2026 vs May-Sep 2025 (the v11.01 figures), and **a 365-day window returns a byte-identical `yoy` object** while showing 12 months instead of 17.
+
+### ⚠ A part-month is shown and NAMED, never silently dropped or silently paired
+A 90-day window ends mid-month. Three options, and only one is honest:
+- *Drop the partial month* - loses the current month-to-date, the month a month-over-month tracker most needs.
+- *Round the window out to whole months* - the control would say "Last 90 days" while the tab showed 120.
+- **Show it, flag it, and hold it out of the pairing.** The row is dimmed with a ` ~` marker and a tooltip, the coverage line names it (`part-month at the window edge: 2026-10`), and `pairs` excludes it - comparing a part-month against a full one is precisely the distortion the YoY read exists to remove. A partial **prior-year** month disqualifies its pair too.
+- Same philosophy as v11.01's lagging tail: the artefact is named rather than hidden.
+- Month-end arithmetic asserted across a leap February (2024-02 is full through the 29th, partial through the 28th) and a non-leap one.
+
+### ⚠ "No months" had to say WHICH no-months it is
+With a window in play `res.months` can be empty while comparable months exist. Falling into the existing *"no month has BOTH feeds"* branch would send Jason to the Uploads page over a problem he fixes with one click on the Period control. Separate branch, separate message, naming the comparable range on record.
+
+### Design notes
+- **The readout names the DATE COLUMN, not just the range.** The five tabs filter `week_start` / `date` / `invoice_date`, and that is exactly how two of them come to disagree about "the same" window. `2025-10-28 → 2026-10-27 · week_start`, refreshed when the tab changes. A control one scroll away from the table it scopes reads as ignored unless something says what it resolved to - the v10.99 lesson.
+- **The per-tab scope nuances survive as tooltips rather than being lost**: Cost's "this only scopes the Units column and the unit-weighting", Break-Even's backfill caveat, Program's "the YoY reaches a year back regardless of this window".
+- **Delta chips are now suppressed on all-time for every Chewy tab**, not just Sales. "Up 100% vs no prior period" is uniformly useless, and four tabs were showing it.
+- **Only two sites touch the control**: `chewyPeriodValue` reads its value, `chewyPeriodRestore` needs the element. **No renderer reads it directly** - a tab reading the raw control could interpret the period differently from the shared resolver, which is what the four old controls did. Asserted for all five renderers.
+- The five old resolver names survive as **thin wrappers**, so every call site and anyone grepping still lands.
+- Restore is wired into `switchChewyPnlView`, the one place every Chewy tab goes through, guarded by a flag so it runs once and never re-restores over a live pick.
+
+### Verification
+- `node --check` clean · **76 suites green** · new `tests/test_v1102.py` (32 aggregator + 19 control + 60 static assertions) · `test_v1061` div balance re-run.
+- The aggregator is driven as a **pure function** against a hand-checkable fixture: windowing, one-sided windows, partial flagging at both edges, the YoY hold-out proven **beside a live read** rather than collapsing into the empty case, leap-February month ends, an empty window yielding zeroes and `null`s rather than `NaN` / `Infinity`, and the brand filter still narrowing both feeds under a window.
+- **Driven in a browser against the shipped build** (chip confirmed `v11.02` first, per the v10.67 stale-cache lesson). The REAL handlers against the REAL DOM: restore → 365 from an empty store, a bounded pick persisting and repainting the **active** tab, `custom` opening the date inputs **without** repainting (the v10.79 rule) and the inputs themselves firing the repaint, all five tabs resolving the identical window from one control, the readout changing its date column with the tab, all-time flipping `_pnlSuppressDeltas` and a bounded window clearing it, and `last-quarter` / `mtd` resolving correctly on a Chewy tab for the first time. **Zero console errors.**
+- Structure confirmed in the live DOM: strip → basis → period bar → panels, **one** `Period` label on the page, no orphaned `Period` / `Window` / `Context period` label left in any tab's own control row, and exactly two `<input type=date>` in the whole Chewy view.
+- Restore-once confirmed on `switchChewyPnlView`: the stored period is applied on the first entry into any Chewy sub-tab, and a second switch does **not** re-restore over a live pick.
+- All five renderers run through the shared control against the live (empty, unauthenticated) state without throwing, reaching their honest empty states - 5 scorecards, 12 Program columns, no leaked `undefined` / `NaN` / `[object` / `Infinity`. Only the expected unauthenticated 401s in console.
+- **Not verified here:** how the bar LOOKS. The login gate leaves the whole app container hidden, so `documentElement.clientWidth` reads 0 and every box measures 0 - the v10.87 limitation, worse than usual because this element sits on a page-level wrapper. Its TEXT, its structural position and its handlers are pinned; only the pixels are not. The *"no comparable month falls inside this period"* branch is likewise pinned in node rather than on screen, because `chewyPnlSalesData` is a module-scope `let` an injected scope cannot stub (the v10.93 limitation).
+
+### ⚠ Two suites went red; both were re-pointed, neither silenced
+Both pinned the MECHANISM (three per-tab pickers) while their own labels claimed a GUARANTEE that now holds at one control.
+- **`test_v1013`** - *"every date-window picker offers an all-time choice"*. Follows the control, and its resolver check **follows the wrapper chain** rather than being dropped: wrapper → `getChewyPnlDateRange` → `computePnlDateRange`'s `allRows` branch, plus a sweep asserting `CHEWY_PERIOD_SOURCES` names the real caches. The ordering rule (**All time just before Custom range**) now covers `chpnl-period`, which could not previously be held to it because the Rebates picker had no custom option - so the re-point **tightens**.
+- **`test_v1079`** - *"the same control on all three Chewy tabs"*, asserted by checking three copies matched. Parity is now true **by construction**, and section B went from driving a Chewy-local copy of the date math to driving the **real shared chain**, gaining the per-feed all-time assertion and the delta-suppression check.
+- **Both gained the regression guard the three-matching-copies check could not give**: the retired selects, wraps, date inputs and handlers must stay gone, and `chewyPnlDateFilter` with them. A consolidation that leaves copies behind is not a consolidation.
+
+### Three of my own expectations were wrong, not the code
+- I asserted a window leaving one full month still produces a YoY read. It must not - v11.01 requires **2+ pairs**, because a single-month year-over-year is noise, and the suite's own next line already asserted exactly that. Re-pointed at a window leaving TWO full months, so the part-month hold-out is proven **in situ beside a live read** rather than collapsing into the empty case.
+- I asserted exactly one site reads the period control. There are two, and the second is legitimate: `chewyPeriodRestore` needs the **element** (to set it, and to check the stored key is still offered), not the value. Re-pointed at the real guarantee - no RENDERER reads it directly - which is the thing that would actually cause a tab to disagree.
+- My node harness stubbed `console` to swallow an expected warn and shadowed `console.log` with it, so the harness could not report at all.
+
+### ⚠ The heredoc ate an em-dash, and the anchor check caught it
+A re-point written through a bash heredoc had `A5 - a part-month` where the file reads `A5 — a part-month`. The script asserts every anchor matches exactly once and `sys.exit`s **before** the write, so it refused and nothing was touched. CLAUDE.md has warned since v9.77: **use the Write tool for anything with escapes or non-ASCII** - and dump `ascii()` of the real bytes to a FILE first, because the console is cp1252 and dies on the glyphs (the v10.77 note).
 ## v11.01 - account-level Chewy program efficiency (⚖ Program tab)
 
 - **Jason:** *"i also want to not only consider this as performance ads - there are new customers coming into and providing organic lift. we need to look at program efficiency at the account level."*
