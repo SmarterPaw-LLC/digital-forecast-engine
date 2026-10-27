@@ -1,0 +1,145 @@
+﻿brand,title,master_id,chewy_sku,uom,case_qty,catalog_cost,wholesale_each,blocked_reason,standing_pct,net_to_us,cogs,cogs_source,cogs_basis_ok,contribution,gm_pct_on_wholesale,list_price,be_roas_pct,cogs_if_1p_basis,be_roas_if_1p_basis,spend_90d,direct_units_90d
+Doggijuana,Doggijuana Juananip™ Refill Bottle | Hand Harvested ,SP-0134,856278,CS,12,54.72,4.56,,26.5,3.3516,1.23,chewy_cogs,,2.1216,46.5,10.35,488.0,,,72.66,33.0
+Doggijuana,Get the Munchies Pup Cup Refillable Dog Toy,SP-0146,1104990,CS,24,129.36,5.39,,26.5,3.9617,2.08,chewy_cogs,,1.8817,34.9,,,,,,
+Doggijuana,Get the Munchies Taco Refillable Dog Toy,SP-0642,1104798,,,,,no-catalog,26.5,,,,,,,,,,,,
+Doggijuana,Get the Pawty Started Barkling Whine Champagne Refil,SP-0321,1104910,,,,,no-catalog,26.5,,1.62,chewy_cogs,,,,,,,,,
+Doggijuana,Get the Pawty Started Cake Slice Refillable Dog Toy,SP-0320,1104862,,,,,no-catalog,26.5,,,,,,,,,,,,
+Doggijuana,Get the Pawty Started Hairy Ale Refillable Dog Toy,SP-0139,1104894,,,,,no-catalog,26.5,,1.59,chewy_cogs,,,,,,,,,
+Doggijuana,Get the Pawty Started Llama Piñata Refillable Dog To,SP-0322,1104878,,,,,no-catalog,26.5,,2.06,chewy_cogs,,,,,,,,,
+Doggijuana,Juananip Bites - Chicken Flavor Dog Treats,SP-0354,3506990,CS,12,59.88,4.99,,26.5,3.6677,1.92,chewy_cogs,,1.7477,35.0,9.99,572.0,,,145.7,26.0
+Doggijuana,Juananip Bites - Peanut Butter Flavor Dog Treats,SP-0355,3507054,CS,12,59.88,4.99,,26.5,3.6677,1.92,chewy_cogs,,1.7477,35.0,9.99,572.0,,,940.45,102.0
+Doggijuana,Juananip Refill Tub,SP-0135,856294,CS,4,40.96,10.24,,26.5,7.5264,1.62,chewy_cogs,,5.9064,57.7,24.99,423.0,,,50.45,7.0
+Doggijuana,Juananip with Chamomile & Passion Flower Refill Tub,SP-0137,856310,CS,4,40.96,10.24,,26.5,7.5264,1.74,chewy_cogs,,5.7864,56.5,22.99,397.0,,,24.75,8.0
+Doggijuana,Tuffer Chewer Avocado Toast Refillable Dog Toy,SP-0149,1702958,CS,24,162.96,6.79,,26.5,4.9906,2.6,chewy_cogs,,2.3906,35.2,,,,,,
+Doggijuana,Tuffer Chewer Beer Mug Refillable Dog Toy,SP-0148,1294262,,,,,no-catalog,26.5,,2.52,chewy_cogs,,,,,,,,,
+Doggijuana,Tuffer Chewer Candy Cane Refillable Dog Toy,SP-0328,3501022,EA,,8.49,8.49,,26.5,6.2401,2.13,chewy_cogs,,4.1101,48.4,,,,,,
+Doggijuana,Tuffer Chewer Dill Pickle Refillable Dog Toy,SP-0145,1105006,CS,24,184.8,7.7,,26.5,5.6595,2.14,chewy_cogs,,3.5195,45.7,,,,,,
+Doggijuana,Tuffer Chewer Eggs and Bacon Refillable Dog Toy,SP-0142,1105022,,,,,no-catalog,26.5,,2.81,chewy_cogs,,,,,,,,,
+Doggijuana,Tuffer Chewer Grilled Cheese Refillable Dog Toy,SP-0143,1105062,CS,24,184.8,7.7,,26.5,5.6595,2.7,chewy_cogs,,2.9595,38.4,,,,,,
+Doggijuana,Tuffer Chewer Mini Chicken Wing Refillable Dog Toy,SP-0152,1702830,CS,24,124.56,5.19,,26.5,3.8147,1.74,chewy_cogs,,2.0747,40.0,,,,,,
+Doggijuana,Tuffer Chewer Mini Corn Dog Refillable Dog Toy,SP-0153,1702878,CS,24,124.56,5.19,,26.5,3.8147,1.83,chewy_cogs,,1.9847,38.2,,,,,,
+Doggijuana,Tuffer Chewer Mini Everything Bagel Refillable Dog T,SP-0154,1702894,,,,,no-catalog,26.5,,1.74,chewy_cogs,,,,,,,,,
+Doggijuana,Tuffer Chewer Mini Pepperoni Pizza Refillable Dog To,SP-0156,1702918,,,,,no-catalog,26.5,,1.76,chewy_cogs,,,,,,,,,
+Doggijuana,Tuffer Chewer Mini Pupcorn Refillable Dog Toy,SP-0157,1702926,CS,24,124.56,5.19,,26.5,3.8147,1.94,chewy_cogs,,1.8747,36.1,,,,,,
+Doggijuana,Tuffer Chewer Mini Stocking Plush Dog Toy,SP-0229,3500966,EA,,6.49,6.49,,26.5,4.7702,2.11,chewy_cogs,,2.6602,41.0,,,,,,
+Doggijuana,Tuffer Chewer Mini Watermelon Slice Refillable Dog T,SP-0151,1702862,CS,24,124.56,5.19,,26.5,3.8147,1.6,chewy_cogs,,2.2147,42.7,,,,,,
+Doggijuana,Tuffer Chewer Pink Donut Refillable Dog Toy,SP-0141,1105038,CS,24,184.8,7.7,,26.5,5.6595,2.55,chewy_cogs,,3.1095,40.4,,,,,,
+Doggijuana,Tuffer Chewer Snack Slinger Breakfast Toast,SP-0575,4566918,EA,,7.36,7.36,,26.5,5.4096,,,,,,,,,,,
+Doggijuana,Tuffer Chewer Supreme Pizza Refillable Dog Toy,SP-0144,1104974,,,,,no-catalog,26.5,,2.59,chewy_cogs,,,,,,,,,
+Doggijuana,Tuffer Chewer Tomahawk Steak Refillable Dog Toy,SP-0147,1294230,,,,,no-catalog,26.5,,2.24,chewy_cogs,,,,,,,,,
+Doggijuana,Tuffer Chewer Twisted Pretzel Refillable Dog Toy,SP-0140,1105070,,,,,no-catalog,26.5,,2.91,chewy_cogs,,,,,,,,,
+Kitty Ka-Zoom,Kitty Ka-Zoom Bubbles with Built-In Wand Catnip Liqu,SP-0202,1365710,CS,24,69.36,2.89,,26.5,2.1242,1.51,chewy_cogs,,0.6142,21.3,5.99,975.0,,,343.87,206.0
+Kitty Ka-Zoom,"Kitty Ka-Zoom Craze Catnip, 2-oz bag",SP-0195,1365614,CS,8,19.44,2.43,,26.5,1.7861,0.98,chewy_cogs,,0.8061,33.2,4.99,619.0,,,77.54,40.0
+Kitty Ka-Zoom,KITTY KA-ZOOM Crunchy Natural Seafood with Catnip Tr,SP-0522,1365718,CS,8,19.12,2.39,,26.5,1.7567,0.85,chewy_cogs,,0.9067,37.9,4.9,540.0,,,17.34,5.0
+Kitty Ka-Zoom,Kitty Ka-Zoom Grain-Free Chicken with Catnip Crunchy,SP-0201,1365694,CS,8,19.12,2.39,,26.5,1.7567,0.85,chewy_cogs,,0.9067,37.9,4.89,539.0,,,11.8,4.0
+Kitty Ka-Zoom,"Kitty Ka-Zoom Liquid Catnip Spray, 1-fl oz bottle",SP-0199,1365654,CS,24,58.32,2.43,,26.5,1.7861,1.0,chewy_cogs,,0.7861,32.3,,,,,,
+Kitty Ka-Zoom,"Kitty Ka-Zoom Liquid Catnip Spray, 4-fl oz bottle",SP-0200,1365670,CS,24,77.28,3.22,,26.5,2.3667,1.23,chewy_cogs,,1.1367,35.3,6.99,615.0,,,100.12,69.0
+Kitty Ka-Zoom,Kitty Ka-Zoom Silvervine Fruit Covered Sticks Cat Na,SP-0197,1365630,CS,12,38.64,3.22,,26.5,2.3667,1.06,chewy_cogs,,1.3067,40.6,6.97,533.0,,,481.62,198.0
+Kitty Ka-Zoom,"Kitty Ka-Zoom Silvervine Surge Catnip, 2-oz bag",SP-0194,1365590,CS,8,19.44,2.43,,26.5,1.7861,0.98,chewy_cogs,,0.8061,33.2,6.24,774.0,,,307.2,193.0
+Kitty Ka-Zoom,"Kitty Ka-Zoom Super Zoomies Mix Catnip, 3.67-oz jar",SP-0196,1365622,CS,4,23.16,5.79,,26.5,4.2557,1.39,chewy_cogs,,2.8657,49.5,9.59,335.0,,,2382.0,1218.0
+Kitty Ka-Zoom,"Kitty Ka-Zoom Valerian Root Roar Catnip, 2-oz bag",SP-0198,1365638,CS,8,19.44,2.43,,26.5,1.7861,0.98,chewy_cogs,,0.8061,33.2,6.24,774.0,,,23.32,6.0
+Kitty Ka-Zoom,Kitty Ka-Zoom Zoomie Crab Refillable Catnip Cat Toy ,SP-0208,3271702,EA,,3.22,3.22,,26.5,2.3667,1.19,chewy_cogs,,1.1767,36.5,6.99,594.0,,,77.75,25.0
+Kitty Ka-Zoom,Kitty Ka-Zoom Zoomie Jelly Fish Refillable Catnip Ca,SP-0209,3271710,EA,,3.22,3.22,,26.5,2.3667,1.15,chewy_cogs,,1.2167,37.8,6.99,575.0,,,18.01,13.0
+Kitty Ka-Zoom,Kitty Ka-Zoom Zoomie Sea Turtle Cat Treat Dispensing,SP-0205,1702974,CS,24,93.84,3.91,,26.5,2.8739,1.3,chewy_cogs,,1.5738,40.3,7.99,508.0,,,423.67,104.0
+Kitty Ka-Zoom,Kitty Ka-Zoom Zoomie Shark Refillable Catnip Cat Toy,SP-0207,3271686,EA,,3.22,3.22,,26.5,2.3667,1.15,chewy_cogs,,1.2167,37.8,7.01,576.0,,,199.74,125.0
+Kitty Ka-Zoom,Kitty Ka-Zoom Zoomie Snake Kicker Refillable Catnip ,SP-0206,3271654,EA,,3.22,3.22,,26.5,2.3667,1.49,chewy_cogs,,0.8767,27.2,6.99,797.0,,,31.61,4.0
+Kitty Ka-Zoom,Kitty Ka-Zoom Zoomie Spider Cat Teaser Toy,SP-0204,1702950,CS,24,93.84,3.91,,26.5,2.8739,1.23,chewy_cogs,,1.6439,42.0,6.81,414.0,,,68.49,9.0
+Meowijuana,Birthjays™ Party Size Catnip Joints,SP-0061,346164,CS,12,83.4,6.95,,26.5,5.1082,1.4,chewy_cogs,,3.7083,53.4,13.99,377.0,,,1004.72,359.0
+Meowijuana,Catnibas® King Size Rollies,SP-0053,125633,CS,12,72.0,6.0,,26.5,4.41,1.32,chewy_cogs,,3.09,51.5,13.99,453.0,,,1363.63,468.0
+Meowijuana,Catnip & Honeysuckle Bubbles,SP-0124,346166,CS,24,82.8,3.45,,26.5,2.5357,1.51,chewy_cogs,,1.0257,29.7,6.939230769230769,677.0,,,6.0,2.0
+Meowijuana,Catnip & Honeysuckle Spray - 3 oz.,SP-0122,235816,CS,24,105.36,4.39,,26.5,3.2266,1.36,chewy_cogs,,1.8666,42.5,12.49,669.0,,,8.21,3.0
+Meowijuana,Catnip Cigar - Catnip & Valerian Root Filled Cat Toy,SP-0069,156572,,,,,no-catalog,26.5,,1.17,chewy_cogs,,,,,,,,,
+Meowijuana,Catnip Spray - 1 oz.,SP-0120,125636,CS,24,93.36,3.89,,26.5,2.8592,0.99,chewy_cogs,,1.8692,48.1,9.99,534.0,,,45.54,9.0
+Meowijuana,Catnip Spray - 3 oz.,SP-0121,156570,CS,24,120.0,5.0,,26.5,3.675,1.14,chewy_cogs,,2.535,50.7,9.99,394.0,,,823.6,444.0
+Meowijuana,Cloud 9 Catnip Blend,SP-0047,1271742,CS,12,54.0,4.5,,26.5,3.3075,0.9,chewy_cogs,,2.4075,53.5,,,,,,
+Meowijuana,Crunchie Munchies® Chicken and Catnip Flavor Cat Tre,SP-0125,1271758,CS,8,15.6,1.95,,26.5,1.4332,0.89,chewy_cogs,,0.5432,27.9,4.59,845.0,,,97.81,63.0
+Meowijuana,Crunchie Munchies® Salmon and Catnip Flavor Cat Trea,SP-0126,3506998,CS,8,18.72,2.34,,26.5,1.7199,0.89,chewy_cogs,,0.8299,35.5,3.89,469.0,,,29.82,18.0
+Meowijuana,Crunchie Munchies® Seafood and Catnip Flavor Cat Tre,SP-0127,1271734,CS,8,15.6,1.95,,26.5,1.4332,0.89,chewy_cogs,,0.5432,27.9,4.59,845.0,,,11.34,1.0
+Meowijuana,Feline Frost,SP-0038,235814,CS,12,54.0,4.5,,26.5,3.3075,1.23,chewy_cogs,,2.0775,46.2,,,,,,
+Meowijuana,Garden Pawty Catnip Blend,SP-0043,346158,CS,12,54.0,4.5,,26.5,3.3075,1.23,chewy_cogs,,2.0775,46.2,8.99,433.0,,,3.0,7.0
+Meowijuana,Get a Ride Magic Carpet Refillable Cat Toy,SP-0085,696678,CS,24,102.24,4.26,,26.5,3.1311,1.36,chewy_cogs,,1.7711,41.6,,,,,,
+Meowijuana,Get a Rise Balloon Refillable Cat Toy,SP-0077,363610,,,,,no-catalog,26.5,,1.02,chewy_cogs,,,,,,,,,
+Meowijuana,Get Baked Cookie Refillable Cat Toy,SP-0072,181284,CS,24,92.16,3.84,,26.5,2.8224,0.91,chewy_cogs,,1.9124,49.8,,,,,,
+Meowijuana,Get Blitzed Reindeer Catnip Toy,SP-0073,363602,CS,24,102.0,4.25,,26.5,3.1237,1.0309,chewy_cogs,,2.0928,49.2,,,,,,
+Meowijuana,Get Bubbly Tropical Fish Catnip Toy 2-Pack,SP-0103,1294166,,,,,no-catalog,26.5,,1.31,chewy_cogs,,,,,,,,,
+Meowijuana,Get Buzzed Bee Refillable Wand Cat Toy,SP-0070,181292,CS,24,92.16,3.84,,26.5,2.8224,1.27,chewy_cogs,,1.5524,40.4,,,,,,
+Meowijuana,Get Celebrated Cake and Hat Catnip Toy 2-Pack,SP-0110,3271646,CS,24,129.36,5.39,,26.5,3.9617,1.31,chewy_cogs,,2.6517,49.2,,,,,,
+Meowijuana,Get Cheezy Cheese & Mouse Refillable Cat Toy,SP-0078,363612,CS,24,102.0,4.25,,26.5,3.1237,1.16,chewy_cogs,,1.9637,46.2,,,,,,
+Meowijuana,Get Chilled Snow Cone Refillable Cat Toy,SP-0080,363614,,,,,no-catalog,26.5,,1.11,chewy_cogs,,,,,,,,,
+Meowijuana,Get Dunk'd Coffee & Donut 2-fer,SP-0553,4566966,CS,24,129.36,5.39,,26.5,3.9617,,,,,,,,,,,
+Meowijuana,Get Flyin'! Eel Good Vibes Refillable Toy & Lure Exp,SP-0564,4529630,CS,24,88.32,3.68,,26.5,2.7048,,,,,,,,,,,
+Meowijuana,Get Flyin'! Wiggly Worm Cat Teaser Set,SP-0569,4529622,CS,24,154.56,6.44,,26.5,4.7334,,,,,,,,,,,
+Meowijuana,Get Frosted Sugar Cookie Refillable Multipack Cat To,SP-0366,3500982,EA,,5.99,5.99,,26.5,4.4027,,,,,,,,,,,
+Meowijuana,Get Higher than a Kite Refillable Wand Cat Toy,SP-0075,363604,CS,24,119.28,4.97,,26.5,3.6529,1.05,chewy_cogs,,2.6029,52.4,,,,,,
+Meowijuana,Get Hooked Big Kahuna Tuna Refillable Cat Toy,SP-0081,363616,CS,24,91.92,3.83,,26.5,2.815,1.15,chewy_cogs,,1.665,43.5,,,,,,
+Meowijuana,Get Hung Moon and Stars Refillable Cat Toy,SP-0311,696614,,,,,no-catalog,26.5,,1.19,chewy_cogs,,,,,,,,,
+Meowijuana,Get Kickin' Gummy Worm Refillable Kicker Cat Toy,SP-0102,1294182,CS,24,95.76,3.99,,26.5,2.9327,1.48,chewy_cogs,,1.4527,36.4,,,,,,
+Meowijuana,Get Kickin' Spicy Pickle Refillable Kicker Cat Toy,SP-0096,1105246,CS,24,117.12,4.88,,26.5,3.5868,1.64,chewy_cogs,,1.9468,39.9,10.99,565.0,,,195.65,91.0
+Meowijuana,Get Lit Birthday Cake Refillable Cat Toy,SP-0074,696630,CS,24,92.16,3.84,,26.5,2.8224,0.94,chewy_cogs,,1.8824,49.0,,,,,,
+Meowijuana,Get Nogged Winter Eggnog Refillable Cat Toy,SP-0115,3501014,EA,,4.99,4.99,,26.5,3.6677,1.24,chewy_cogs,,2.4276,48.7,,,,,,
+Meowijuana,Get Noodly Noodles and Sriracha Catnip Toy 2-Pack,SP-0111,3271606,EA,,5.39,5.39,,26.5,3.9616,1.31,chewy_cogs,,2.6516,49.2,,,,,,
+Meowijuana,Get Rocked String of Stones Cat Toy,SP-0076,363608,,,,,no-catalog,26.5,,1.04,chewy_cogs,,,,,,,,,
+Meowijuana,Get Salty Sea Turtle,SP-0559,4567238,CS,24,110.4,4.6,,26.5,3.381,,,,,,,,,,,
+Meowijuana,Get Salty Stingray,SP-0570,4567230,CS,24,110.4,4.6,,26.5,3.381,,,,,,,,,,,
+Meowijuana,Get Silly Blue Blob Refillable Cat Toy,SP-0088,1105214,CS,24,106.24,4.4267,,26.5,3.2536,1.27,chewy_cogs,,1.9836,44.8,,,,,,
+Meowijuana,Get Silly Furry Fiend Refillable Cat Toy,SP-0108,1294294,CS,24,85.44,3.56,,26.5,2.6166,1.49,chewy_cogs,,1.1266,31.6,10.68,948.0,,,7.11,1.0
+Meowijuana,Get Silly Ruby Rascal Refillable Cat Toy,SP-0089,1105198,CS,24,106.24,4.4267,,26.5,3.2536,1.23,chewy_cogs,,2.0236,45.7,,,,,,
+Meowijuana,Get Smashed Llama Piñata Refillable Wand Cat Toy,SP-0079,696646,CS,24,122.4,5.1,,26.5,3.7485,1.2,chewy_cogs,,2.5485,50.0,,,,,,
+Meowijuana,Get Smoked Rainbow Trout Refillable Cat Toy,SP-0071,181282,CS,24,85.44,3.56,,26.5,2.6166,1.07,chewy_cogs,,1.5466,43.4,,,,,,
+Meowijuana,Get Spacey Planet and Meteor Catnip Toy 2-Pack,SP-0104,1294286,,,,,no-catalog,26.5,,1.29,chewy_cogs,,,,,,,,,
+Meowijuana,Get Spicy Taco & Margarita Catnip Toy 2-Pack,SP-0067,3271662,CS,24,129.36,5.39,,26.5,3.9617,1.31,chewy_cogs,,2.6517,49.2,10.99,414.0,,,58.46,43.0
+Meowijuana,Get Spooked Pumpkin Refillable Cat Toy,SP-0267,1105134,CS,24,106.24,4.4267,,26.5,3.2536,1.18,chewy_cogs,,2.0736,46.8,,,,,,
+Meowijuana,Get Spooked Scarecrow Refillable Cat Toy,SP-0087,1105102,EA,,3.99,3.99,,26.5,2.9327,1.3,chewy_cogs,,1.6327,40.9,,,,,,
+Meowijuana,Get Spooked Werewolf Refillable Cat Toy,SP-0068,4235478,EA,,3.99,3.99,,26.5,2.9327,1.3,chewy_cogs,,1.6327,40.9,,,,,,
+Meowijuana,Get Sporty Soccer 2PK Catnip Toy,SP-0557,4566958,CS,24,129.36,5.39,,26.5,3.9617,,,,,,,,,,,
+Meowijuana,Get Sprung Caterpillar Refillable Cat Toy,SP-0101,1702806,CS,24,95.76,3.99,,26.5,2.9327,1.16,chewy_cogs,,1.7727,44.4,,,,,,
+Meowijuana,Get Sprung Duckling Refillable Cat Toy,SP-0314,1105230,CS,24,106.24,4.4267,,26.5,3.2536,,,,,,,,,,,
+Meowijuana,Get Sprung Frog Refillable Cat Toy,SP-0107,1702766,CS,24,95.76,3.99,,26.5,2.9327,1.42,chewy_cogs,,1.5127,37.9,,,,,,
+Meowijuana,Get Sprung Lady Bug Refillable Cat Toy,SP-0095,1105126,CS,24,106.24,4.4267,,26.5,3.2536,1.11,chewy_cogs,,2.1436,48.4,,,,,,
+Meowijuana,Get Sprung Lamb Refillable Cat Toy,SP-0093,1105174,,,,,no-catalog,26.5,,1.6,chewy_cogs,,,,,,,,,
+Meowijuana,Get Sprung Mushroom Refillable Cat Toy,SP-0100,1702750,CS,24,95.76,3.99,,26.5,2.9327,1.06,chewy_cogs,,1.8727,46.9,,,,,,
+Meowijuana,Get Sprung Strawberry Refillable Cat Toy,SP-0094,1105150,CS,24,106.24,4.4267,,26.5,3.2536,1.16,chewy_cogs,,2.0936,47.3,,,,,,
+Meowijuana,Get Stuffed Stocking Refillable Cat Toy,SP-0312,696710,CS,24,102.24,4.26,,26.5,3.1311,,,,,,,,,,,
+Meowijuana,Get Twisted Candy Cane Refillable Cat Toy,SP-0313,696694,CS,24,102.24,4.26,,26.5,3.1311,,,,,,,,,,,
+Meowijuana,Get Waddled Cozy Penguin Refillable Cat Toy,SP-0317,3500974,EA,,4.99,4.99,,26.5,3.6677,,,,,,,,,,,
+Meowijuana,Get Wrapped Shrimp Sushi Roll Refillable Cat Toy,SP-0082,696662,CS,24,102.24,4.26,,26.5,3.1311,1.46,chewy_cogs,,1.6711,39.2,,,,,,
+Meowijuana,Happy Grass,SP-0040,346154,,12,,,no-catalog,26.5,,1.23,chewy_cogs,,,,,,,,,
+Meowijuana,Harvest Moon,SP-0048,964614,,12,,,no-catalog,26.5,,1.23,chewy_cogs,,,,,,,,,
+Meowijuana,Honeysuckle Haze,SP-0041,346162,CS,12,54.0,4.5,,26.5,3.3075,1.23,chewy_cogs,,2.0775,46.2,,,,,,
+Meowijuana,Jar Catnibas® Catnip Buds,SP-0054,125628,CS,4,39.96,9.99,,26.5,7.3426,4.03,chewy_cogs,,3.3126,33.2,19.99,603.0,,,125.34,42.0
+Meowijuana,Jar of Catnibas® Catnip Lemongrass Pawty Mix,SP-0057,984614,CS,4,32.0,8.0,,26.5,5.88,2.78,chewy_cogs,,3.1,38.8,,,,,,
+Meowijuana,Jar of Catnibas® Catnip Pawty Mix,SP-0055,161576,CS,4,32.0,8.0,,26.5,5.88,2.76,chewy_cogs,,3.12,39.0,15.99,512.0,,,221.86,79.0
+Meowijuana,Jump 'n' Jamb Deep Sea Squid Refillable Interactive ,SP-0083,696598,CS,24,122.4,5.1,,26.5,3.7485,1.49,chewy_cogs,,2.2585,44.3,9.49,420.0,,,9.08,1.0
+Meowijuana,Jump 'n' Jamb Dragonfly Catnip Teaser Toy,SP-0116,1702814,CS,24,114.96,4.79,,26.5,3.5206,1.53,amazon_cogs,WRONG-BASIS,1.9906,41.6,,,1.38,,,
+Meowijuana,Jump 'n' Jamb Funky Monkey Refillable Interactive Ca,SP-0084,696582,CS,24,122.4,5.1,,26.5,3.7485,1.5,chewy_cogs,,2.2485,44.1,9.49,422.0,,,24.73,6.0
+Meowijuana,Kalico Kush,SP-0033,156565,CS,12,54.0,4.5,,26.5,3.3075,1.23,chewy_cogs,,2.0775,46.2,8.99,433.0,,,128.28,70.0
+Meowijuana,Kalico Kush Compressed Catnip Ball Refill - 2 pack,SP-0131,1993166,CS,12,48.4,4.0333,,26.5,2.9645,1.04,chewy_cogs,,1.9245,47.7,6.99,363.0,,,32.99,9.0
+Meowijuana,Kalico Kush Stick 'n' Lick Compressed Catnip - 2 Pac,SP-0133,1993126,CS,12,42.0,3.5,,26.5,2.5725,1.2,chewy_cogs,,1.3725,39.2,3.49,254.0,,,50.25,26.0
+Meowijuana,Knock 'n' Nibble Avocado Refillable Treat Dispensing,SP-0113,1294198,CS,24,91.44,3.81,,26.5,2.8003,1.42,chewy_cogs,,1.3803,36.2,,,,,,
+Meowijuana,Knock 'n' Nibble Starfish Refillable Treat Dispensin,SP-0114,1294214,CS,24,91.44,3.81,,26.5,2.8003,1.44,chewy_cogs,,1.3603,35.7,,,,,,
+Meowijuana,Knock 'n' Nibble Strawberry Refillable Treat Dispens,SP-0119,1702790,CS,24,105.6,4.4,,26.5,3.234,1.46,chewy_cogs,,1.774,40.3,10.99,620.0,,,34.2,8.0
+Meowijuana,Knock 'n' Nibble Winter Buddy Refillable Treat Dispe,SP-0315,3500990,EA,,5.99,5.99,,26.5,4.4027,1.42,chewy_cogs,,2.9827,49.8,,,,,,
+Meowijuana,Lollies - Silvervine Sticks With Catnip,SP-0065,1993206,CS,12,65.6,5.4667,,26.5,4.018,1.31,chewy_cogs,,2.708,49.5,8.99,332.0,,,44.97,15.0
+Meowijuana,Meowi-Waui,SP-0039,125631,CS,12,54.0,4.5,,26.5,3.3075,0.9,chewy_cogs,,2.4075,53.5,8.99,373.0,,,4132.85,1998.0
+Meowijuana,Meowijuana | 3oz. Catnip and Silvervine Spray | Orga,SP-0123,930406,CS,24,126.0,5.25,,26.5,3.8588,1.2,chewy_cogs,,2.6588,50.6,9.99,376.0,,,121.01,65.0
+Meowijuana,Meowijuana Get Flyin' High Tides Jellyfish Refillabl,SP-TEMP-CHW-4529662,4529662,CS,24,88.32,3.68,,26.5,2.7048,,,,,,,,,,,
+Meowijuana,Meowijuana Get Flyin'! Jiggly Jellyfish Teaser Set C,SP-TEMP-CHW-4529638,4529638,CS,24,154.56,6.44,,26.5,4.7334,,,,,,,,,,,
+Meowijuana,Meowijuana Get Flyin'! Squiggly Snake Teaser Set Cat,SP-TEMP-CHW-4529654,4529654,CS,24,154.56,6.44,,26.5,4.7334,,,,,,,,,,,
+Meowijuana,Meowijuana Jump 'n' Jamb Door Hanging Cat Toy | Slot,SP-0256,1105182,CS,24,113.76,4.74,,26.5,3.4839,4.52,dtc_cogs,WRONG-BASIS,-1.0361,-21.9,,,1.62,,,
+Meowijuana,Meowijuana Silvervine Sticks | 4” Chew Sticks for Ca,SP-0056,181290,CS,12,49.8,4.15,,26.5,3.0502,0.59,chewy_cogs,,2.4602,59.3,8.99,365.0,,,1179.37,589.0
+Meowijuana,Mice Dreams,SP-0035,156569,CS,12,54.0,4.5,,26.5,3.3075,1.23,chewy_cogs,,2.0775,46.2,9.99,481.0,,,127.73,49.0
+Meowijuana,Paw Natural OG,SP-0036,181286,,12,,,no-catalog,26.5,,1.23,chewy_cogs,,,,,,,,,
+Meowijuana,Purrple Passion,SP-0034,156567,CS,12,54.0,4.5,,26.5,3.3075,1.23,chewy_cogs,,2.0775,46.2,9.765292994183524,470.0,,,1493.85,865.0
+Meowijuana,Purrple Passion Compressed Catnip Ball Refill - 2 pa,SP-0130,1993142,CS,12,48.4,4.0333,,26.5,2.9645,1.04,chewy_cogs,,1.9245,47.7,6.99,363.0,,,81.92,41.0
+Meowijuana,Purrple Passion Stick 'n' Lick Compressed Catnip - 2,SP-0132,1993190,CS,12,42.0,3.5,,26.5,2.5725,1.2,chewy_cogs,,1.3725,39.2,6.99,509.0,,,62.68,20.0
+Meowijuana,Rocky Mountain Mellow,SP-0045,692502,,12,,,no-catalog,26.5,,1.23,chewy_cogs,,,,,,,,,
+Meowijuana,Santa's Secret Stash,SP-0063,1271726,CS,12,54.99,4.5825,,26.5,3.3681,1.53,amazon_cogs,WRONG-BASIS,1.8381,40.1,,,1.38,,,
+Meowijuana,Sierra Sunshine,SP-0046,692518,CS,12,54.0,4.5,,26.5,3.3075,1.23,chewy_cogs,,2.0775,46.2,8.99,433.0,,,10.39,4.0
+Meowijuana,Silvervine Fruit Sticks,SP-0064,1702846,CS,12,52.68,4.39,,26.5,3.2266,1.06,chewy_cogs,,2.1666,49.4,9.99,461.0,,,847.4,401.0
+Meowijuana,Skull Cap,SP-0044,346156,CS,12,54.0,4.5,,26.5,3.3075,1.23,chewy_cogs,,2.0775,46.2,,,,,,
+Meowijuana,Sprinkle 'n' Scratch - Rainbow Trout Hanging Cardboa,SP-0128,1294246,,,,,no-catalog,26.5,,3.02,amazon_cogs,WRONG-BASIS,,,,,2.87,,,
+Meowijuana,Sprinkle ‘n’ Scratch Taco Hanging Cardboard Scratche,SP-0562,3271638,EA,,6.53,6.53,,26.5,4.7995,,,,,,,,,,,
+Meowijuana,Thyme Out,SP-0042,346160,CS,12,54.0,4.5,,26.5,3.3075,1.23,chewy_cogs,,2.0775,46.2,8.99,433.0,,,0.0,0.0
+Meowijuana,Whack 'n' Roll Purrple Passion Compressed Catnip Bal,SP-0129,1993182,CS,12,54.0,4.5,,26.5,3.3075,1.09,chewy_cogs,,2.2175,49.3,,,,,,
+Meowijuana,Whisker Tickler,SP-0037,181288,CS,12,54.0,4.5,,26.5,3.3075,1.23,chewy_cogs,,2.0775,46.2,8.99,433.0,,,0.0,0.0
+Meowijuana,Winter Lift Catnip Blend,SP-0049,964630,,12,,,no-catalog,26.5,,1.23,chewy_cogs,,,,,,,,,

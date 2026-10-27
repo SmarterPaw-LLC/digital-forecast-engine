@@ -239,15 +239,34 @@ for c in ['our_revenue_wholesale', 'vendor_contribution', 'gm_per_unit', 'gm_pct
 # own csv descriptors the two order sequences (1..39 and 1..25) were pooled and
 # read as 64 duplicated positions. The guarantee was always per-registry: in
 # ONE registry, no column may silently overwrite another's slot in the file.
-def _csv_descriptors(reg):
+def _reg_segment(reg):
     i = js.index('const %s = [' % reg)
-    seg = js[i: js.index(chr(10) + '];', i)]
-    return re.findall(r"csv: \{ name: '([^']+)', order: (\d+)", seg)
+    return js[i: js.index(chr(10) + '];', i)]
 
-for _reg, _want in [('CHEWY_BE_COLUMNS', 39), ('CHEWY_COST_COLUMNS', 25)]:
+
+def _csv_descriptors(reg):
+    return re.findall(r"csv: \{ name: '([^']+)', order: (\d+)", _reg_segment(reg))
+
+
+# v11.00 - the expected count was a LITERAL (39 / 25) and five legitimately
+# added LTV columns turned this red. The guarantee the label claims is that
+# EVERY registry column carries a csv descriptor, so the expected number is
+# the registry's own length. Re-pointed at that; the floor keeps it from
+# passing vacuously against an empty match.
+def _reg_column_count(reg):
+    # CHEWY_BE_COLUMNS keys its entries `key:`, CHEWY_COST_COLUMNS uses `k:`
+    # (CHEWY_COL_CFG declares keyOf per registry). Count either.
+    return len(re.findall(r"^  \{ k(?:ey)?: '", _reg_segment(reg), re.M))
+
+
+for _reg, _floor in [('CHEWY_BE_COLUMNS', 39), ('CHEWY_COST_COLUMNS', 25)]:
     _d = _csv_descriptors(_reg)
     _orders = sorted(int(o) for _, o in _d)
-    ok(len(_d) == _want, '%s declares %d csv descriptors (got %d)' % (_reg, _want, len(_d)))
+    _cols = _reg_column_count(_reg)
+    ok(_cols >= _floor, '%s still has at least %d columns (got %d)' % (_reg, _floor, _cols))
+    ok(len(_d) == _cols,
+       '%s: every one of its %d columns carries a csv descriptor (got %d)'
+       % (_reg, _cols, len(_d)))
     ok(_d and _orders == list(range(1, len(_d) + 1)),
        '%s: CSV positions are unique and contiguous' % _reg)
     ok(len(set(n for n, _ in _d)) == len(_d),

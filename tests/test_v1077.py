@@ -398,11 +398,24 @@ _be_body = arr_body('CHEWY_BE_COLUMNS')
 be_cols  = len(re.findall(r"^  \{ key: '", _be_body, re.M))
 be_csv   = re.findall(r"csv: \{ name: '([^']+)'", _be_body)
 
-ok(be_cols == 39, 'B1  Break-Even picker holds all 39 columns', be_cols)
-ok(len(be_csv) == 39, 'B2  and every one of them carries a csv descriptor', len(be_csv))
+# v11.00 - B1/B2 pinned the literal 39 while B3 right below them asserts the
+# actual guarantee (picker == csv, 1:1). Five LTV columns were a legitimate
+# addition, so the counts become a FLOOR - they cannot go vacuous, and B3 still
+# pins the relationship. The named LTV check below tightens the re-point.
+ok(be_cols >= 39, 'B1  Break-Even picker holds at least the 39 v10.80 columns', be_cols)
+ok(len(be_csv) >= 39, 'B2  and every one of them carries a csv descriptor', len(be_csv))
 ok(be_cols == len(be_csv),
    'B3  1:1 - no column can reach the CSV without being selectable on screen',
    (be_cols, len(be_csv)))
+
+# v11.00 - the lifetime-value lens is selectable AND exportable, same rule.
+for _k, _csvname in [('attachPct', 'autoship_attach_pct'),
+                     ('ltvMult', 'ltv_multiplier'),
+                     ('ltvContribution', 'ltv_contribution_per_unit'),
+                     ('beRoasLtv', 'break_even_roas_ltv_pct'),
+                     ('headroomLtv', 'headroom_ltv_pts')]:
+    ok("{ key: '%s'" % _k in _be_body, 'B3-ltv  %s is a registry column' % _k)
+    ok(_csvname in be_csv, 'B3-ltv  %s exports as %s' % (_k, _csvname))
 
 # The impressions / clicks Jason named, plus the audit columns that drove the
 # v10.77 decision to keep exporting everything. All selectable now.

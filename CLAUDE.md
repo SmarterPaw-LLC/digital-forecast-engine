@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v10.99**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.00**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,68 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.00 - autoship LTV in the Chewy break-even model (and the answer is no)
+
+- **Jason:** *"can we build in the ltv in our model?"*
+- Built. **It does not rescue a single SKU**, and proving that is the deliverable.
+
+### The model
+- The existing figures price the FIRST order plus whatever recurring autoship already landed INSIDE the window. They do not price FUTURE reorders, so a SKU sitting just under break-even can still pay over a subscriber's life.
+- `attach = autoship sign-ups / ad-driven units` → `multiplier = 1 + attach × (ltvOrders - 1) × unitsPerOrder` → `BE ROAS (LTV) = list / (contribution × multiplier)`.
+- **⚠ The multiplier moves the BAR, never the realised side.** Realised ROAS stays the retail dollars Chewy actually attributed. Lifetime value LOWERS THE BAR; it does not manufacture revenue that has not happened. A model that multiplied both sides would look entirely plausible and silently flatter every SKU. Asserted directly.
+- **⚠ A SKU's own attach rate is only trusted at or above the Min units threshold.** 2 sign-ups on 4 units reads as a 50% attach rate and would halve that SKU's break-even off pure noise, so the fleet rate is used instead and the cell is marked `fleet`. One control (Min units) now governs both *dim this row* and *trust this row's own attach rate* - two reads of the same confidence question.
+- **The fleet rate is summed over THIS window's aggregate**, not a hardcoded constant, so narrowing the window moves it with the data.
+
+### Where the default assumptions come from
+Fitted against the account's own monthly autoship series, not guessed. `chewy_ltv_account.py` reproduces it:
+- `recurring orders in month M = autoship_actualized_orders - autoship_signups`
+- Geometric retention `survival(k) = rho^k` least-squares fitted over 2025-05 → 2026-10: **rho = 0.145** (R2 0.30, 17 months), so `1 + rho/(1-rho)` = **1.17 lifetime orders per sign-up**
+- Units per order = autoship AOV / spend-weighted list price = `$11.34 / $9.97` = **1.14**
+- Fleet attach = 2,432 sign-ups / 20,570 ad-driven units = **11.8%**
+- **⚠ 1.17 is a FLOOR, not a point estimate.** Chewy reports `autoship_actualized_orders` against the click's attribution window, so recent cohorts are right-censored - recurring-per-signup reads 0.22 at a 6-month-old cohort and 0.05 at a 1-month-old one. A cohort-maturity read of the same data plateaus nearer **1.2-1.4**. That is exactly why these are INPUTS rather than constants.
+
+### ⚠ The verdict: 0 SKUs flip, at any defensible assumption
+Driven in a browser against the real `chewyBreakevenEcon` with Jason's actual wholesale / COGS / list / attach per SKU:
+
+| SKU | attach | realised | BE 1st | BE @1.17 | BE @3.00 | orders/signup needed to flip |
+|---|---|---|---|---|---|---|
+| Super Zoomies 3.67oz | 14.6% | 491% | 335% | 325% | 251% | already clears |
+| Liquid Catnip Spray 4oz | 7.7% | 465% | 615% | 606% | 523% | **4.67** |
+| Craze Catnip 2oz | 13.1% | 382% | 619% | 604% | 476% | **5.15** |
+| Silvervine Fruit Sticks | 13.8% | 316% | 533% | 520% | 406% | **5.39** |
+| Zoomie Shark | 0.0% | 381% | 576% | 576% | 576% | **never** (zero sign-ups on 231 units) |
+
+- At the fitted 1.17 the bar moves **9-15 points**. The near-misses need **150-240**.
+- **Even at an unreasonable 3.00 orders per sign-up, zero SKUs flip.** To flip, a subscriber would have to reorder ~5 times; measured retention says 1.17-1.4.
+- So the honest framing: *lifetime value is now in the model, and the model says it does not change the answer.* The `⤴ Flips to clear on LTV` filter exists to list the flips and currently lists none - which is the finding, not an empty feature.
+
+### Surfaces
+- **Five new columns**, each with a csv descriptor (the v10.80 registry = CSV 1:1 rule) and declared in `CHEWY_MEASURE_VOCAB` (the v10.53 one-label-one-measure rule): `Autoship Attach %` · `LTV mult` · `LTV GM $/u` · `BE ROAS (LTV)` · `LTV Headroom`.
+  - `BE ROAS (LTV)` + `LTV Headroom` join the DEFAULT set - the whole point is reading them next to the first-purchase figure. The other three are the working-out and are hidden by a flag-guarded migration (the v10.80 / v10.82 shape), because *not hidden* means VISIBLE for anyone carrying a hidden Set.
+- **Two assumption inputs** beside Min units, per-browser like `chewyBeShowAllCols` next door, with a ↺ reset. **⚠ The field is not rewritten while you type** (the v10.99 lesson): state is clamped on input, the visible field is normalised on commit (blur / Enter). Asserted both ways.
+- **A state readout**, because a control whose effect is invisible reads as ignored. Its actionable half is the COUNT OF SKUS WHOSE ANSWER CHANGES, not the average multiplier: `⚠ 0 of 11 SKUs past break-even flip to clear on lifetime value · attach 11.8% fleet · ×1.023 on GM $/u · break-even 11 pts better (spend-weighted)`. Spend-weighted so one tiny SKU cannot swing the headline, and it says *lifetime lens OFF* plainly at 1.00 rather than crying wolf.
+- The assumptions ride along in the CSV context line so an archived export can be re-derived.
+
+### Verification
+- `node --check` clean · **74 suites green** · new `tests/test_v1100.py` (89 assertions).
+- **The assertion that earns its keep is the REGRESSION GUARD.** v11.00 is purely additive, and the only way to make that a checkable claim rather than something I verified by reading the diff is to run four scenarios through the real function with the LTV inputs PRESENT and ABSENT and diff all 15 first-purchase fields (`net` / `contribution` / `beRoas` / `beAcos` / `actualAcos` / `directRoas` / `realisedRoas` / `realisedSales` / `gmPct` / `ourRev` / `vendorContrib` / `headroom` / `verdict` / `listPrice` / `a`). Byte-identical.
+- Plus: the collapse cases prove the lens is OFF by identity rather than by luck (`ltvOrders = 1` → multiplier exactly 1 and `BE(LTV) === BE`; zero sign-ups → same), monotonicity in both assumptions, the attach-confidence threshold in both directions, `flipsOnLtv` across all three bands (clears both / between the bars / clears neither), and nine degenerate shapes checked for a throw or a leaked `NaN` / `Infinity`.
+- **Driven in a browser against the shipped build** (chip confirmed `v11.00` first, per the v10.67 stale-cache lesson). These are page-global declarations, so the run used the REAL functions: the five near-miss SKUs above, the attach rates reproducing the per-SKU CSV exactly (14.6 / 7.7 / 0.0 / 13.8 / 13.1%), and the real inputs through the real handlers - typing `500` left the field untouched while state read 10, commit normalised `500`→`10.00`, `0.2`→`1.00`, junk→default, a legitimate `1.40` preserved, reset→`1.17`/`1.14`, and restore-from-storage round-tripped. **Zero console errors.**
+- **Not verified here:** how the readout and the new cells LOOK. The login gate is a full-screen overlay, so the Chewy P&L panel does not render without signing in - the v10.87 limitation. The math and the text are pinned by driving the real functions; only the pixels are not.
+
+### ⚠ Two suites went red and were RE-POINTED, not silenced
+Both pinned a LITERAL column count while their own label claimed a structural guarantee - the brittle-count trap already recorded for `test_v1011` / `test_v1020` / `test_v1049`.
+- `test_v1042` asserted *"CHEWY_BE_COLUMNS declares 39 csv descriptors"*. The guarantee is that EVERY registry column carries one, so the expected number is the registry's own length. Re-pointed at that, with a floor so it cannot pass vacuously. (Its column counter also had to learn that `CHEWY_COST_COLUMNS` keys entries `k:` while Break-Even uses `key:`.)
+- `test_v1077` B1/B2 pinned `== 39` while B3 directly below them already asserted the real guarantee (picker == csv, 1:1). Counts became floors, and named checks for the five LTV columns were added so the re-point TIGHTENS rather than loosens.
+
+### ⚠ Three of my own mistakes, each caught by an existing guard
+- **`test_v1042` caught a real bug, not drift.** I added five registry columns and no KEYED BODY CELLS. v10.54 made the Break-Even body a keyed `CELLS` map precisely so header and body cannot drift; a registry column with no cell renders the fallback em-dash on every row - present in the header, blank in the table. That guard is the only reason it did not ship.
+- **The v10.36 uppercase-U sweep caught the escape trap again.** JS has no `\U` escape, so `"\U0001f501"` evaluates to the literal text `U0001f501`; in raw markup it renders as six characters (v10.20). Worse, the two occurrences Python *did* interpret produced a REAL repeat arrow - which already means **AutoShip Subscription** in `CHEWY_PNL_CATEGORY_LABELS`, so it broke one-glyph-one-concept (rule #2) as well. Both resolved: the flip marker is `⤴` (U+2934), verified unused.
+- **Wrong haystack in my own test harness.** Substituting `CONSTS` first inserted text containing the word ORDERS (`CHEWY_BE_LTV_ORDERS_DEFAULT`), so the next `.replace('ORDERS', ...)` matched INSIDE it and produced `const CHEWY_BE_LTV_function chewyBeLtvOrders() {`. The v10.53 wrong-haystack class, in a test. Placeholders are bracketed tokens now.
+- **⚠ Heredoc escape mangling bit twice more.** CLAUDE.md has warned since v9.77 and again at v10.68 / v10.88 / v10.92: a bash heredoc carrying `\U` or `\n` eats the backslash. **This is not "be careful", it is "do not use the heredoc" - use the Write tool for anything containing escapes.** The temp-file + `os.replace` pattern meant both failures wrote nothing.
+
+### ⚠ The escape sweep in the new suite had to guard its own guard
+Scanning the raw script for a literal uppercase-U escape flagged a **comment** - index.html carries a v4.189 note that QUOTES the bad escape to document a past bug. The sweep now strips line comments and asserts on LIVE CODE, while a second assertion REQUIRES the warning comment to survive so nobody optimises the documentation away. The v10.93 pattern; without the second half the sweep could pass against an empty haystack.
 ## v10.99 - an open planning horizon, and a TACOS ceiling that says whether it binds
 
 Two asks, one settings panel.

@@ -1,0 +1,125 @@
+
+==============================================================================
+PART 1  AUTOSHIP LTV
+==============================================================================
+
+Monthly autoship series (account-wide, all brands)
+MONTH        SIGNUPS  AS ORDERS  RECURRING     AS SALES     AD SPEND
+2025-05           17         18          1         $166         $710
+2025-06           21         21          0         $228         $769
+2025-07           13         14          1         $215         $474
+2025-08           12         14          2         $254         $479
+2025-09            6          5          0          $63         $475
+2025-10            4          6          2          $77         $469
+2025-11            9         19         10         $282         $465
+2025-12            7          7          0          $61         $471
+2026-01           14         26         12         $387         $469
+2026-02           11         20          9         $261         $477
+2026-03           50         58          8         $636       $2,127
+2026-04          335        409         74       $4,820       $5,773
+2026-05          271        384        113       $4,027       $5,059
+2026-06          433        534        101       $6,054       $6,539
+2026-07          355        439         84       $4,813       $7,129
+2026-08          350        385         35       $4,237       $6,638
+2026-09          297        313         16       $3,731       $6,251
+2026-10          227        209          0       $2,356       $4,801
+TOTAL           2432       2881        468      $32,667      $49,576
+
+Geometric retention fit
+  monthly survival rho      0.145   (14.5% of subscribers reorder next month)
+  fit quality R2            0.299   over 17 months
+  median subscriber life    ~1 months
+  LTV orders per signup     1.17   (1 first order + 0.17 recurring)
+  observed recurring/signup 0.19   (censored floor - recent cohorts
+                                   have not reordered yet)
+
+Order economics
+  autoship AOV              $11.34
+  spend-weighted list price $9.97
+  units per autoship order  1.14
+  autoship attach rate      11.8% of ad-driven units
+
+LTV MULTIPLIER on contribution per ad-driven unit
+  1 + 0.1182 attach x 0.17 extra orders x 1.14 units/order = 1.023
+  So every 100 ad-driven units are worth 102 units of contribution
+  over the subscriber life, not 100.
+
+wrote C:\Users\Jason\digital-forecast-engine\chewy_ltv_cohorts.csv (53 rows)
+
+Per-SKU break-even: first purchase vs lifetime (top 20 by spend)
+PRODUCT                                   ATTACH   BE 1st   BE LTV   BETTER   SPEND
+Meowi-Waui                                 13.3%     373%     364%       9  $9,126
+Kitty Ka-Zoom Super Zoomies Mix Catnip,    14.6%     335%     325%       9  $6,742
+Catnibas® King Size Rollies                11.8%     453%     443%      10  $4,725
+Purrple Passion                            13.4%     470%     458%      12  $3,437
+Meowijuana Silvervine Sticks | 4” Chew S   11.4%     365%     358%       8  $3,357
+Silvervine Fruit Sticks                     1.1%     461%     460%       1  $1,834
+Catnip Spray - 3 oz.                       10.4%     394%     386%       8  $1,808
+Birthjays™ Party Size Catnip Joints         8.2%     377%     371%       6  $1,640
+Kitty Ka-Zoom Zoomie Sea Turtle Cat Trea    0.0%     508%     508%       0  $1,498
+Kitty Ka-Zoom Silvervine Fruit Covered S   13.8%     533%     520%      14  $1,197
+Juananip Bites - Peanut Butter Flavor Do   21.2%     572%     549%      22  $1,078
+Kalico Kush                                14.3%     433%     421%      12  $1,000
+Catnip Spray - 1 oz.                        7.6%     534%     527%       8    $956
+Kitty Ka-Zoom Craze Catnip, 2-oz bag       13.1%     619%     604%      15    $879
+Jar of Catnibas® Catnip Pawty Mix          14.7%     512%     498%      14    $866
+Kitty Ka-Zoom Bubbles with Built-In Wand    9.7%     975%     957%      18    $751
+Kitty Ka-Zoom Silvervine Surge Catnip, 2   14.2%     774%     753%      21    $680
+Get Kickin' Spicy Pickle Refillable Kick    1.1%     565%     563%       1    $667
+Jar Catnibas® Catnip Buds                  16.4%     603%     585%      18    $624
+Meowijuana | 3oz. Catnip and Silvervine    10.1%     376%     369%       7    $579
+
+==============================================================================
+PART 2  ACCOUNT-LEVEL PROGRAM EFFICIENCY
+==============================================================================
+
+Coverage
+  sell-through months      2025-02 -> 2026-09 (20)
+  ad-report months         2025-05 -> 2026-10 (18)
+  comparable (both)        17 months
+  ads but no sell-through  2026-10  <- sell-through feed lags
+  sell-through but no ads  2025-02, 2025-03, 2025-04
+
+Account-level monthly (comparable months only)
+MONTH     TOT UNITS  AD UNITS   ORGANIC  AD SH%     RETAIL $   CONTRIB $    AD SPEND   TACOS
+2025-05        6578       167      6411    2.5%      $68,448     $13,923        $710    1.0%
+2025-06        8156       208      7948    2.6%      $84,245     $17,084        $769    0.9%
+2025-07        6154       119      6035    1.9%      $63,596     $12,771        $474    0.7%
+2025-08        7141        94      7047    1.3%      $72,914     $14,672        $479    0.7%
+2025-09        8954        49      8905    0.5%      $89,554     $17,330        $475    0.5%
+2025-10        7305        57      7248    0.8%      $74,391     $14,739        $469    0.6%
+2025-11       10963       142     10821    1.3%     $109,466     $18,780        $465    0.4%
+2025-12       21276       159     21117    0.7%     $212,055     $34,862        $471    0.2%
+2026-01        8646       107      8539    1.2%      $84,186     $16,630        $469    0.6%
+2026-02        8232        87      8145    1.1%      $82,149     $16,559        $477    0.6%
+2026-03       10832       481     10351    4.4%     $108,980     $22,743      $2,127    2.0%
+2026-04        9190      2561      6629   27.9%      $92,376     $19,841      $5,773    6.2%
+2026-05        7821      2370      5451   30.3%      $78,983     $16,988      $5,059    6.4%
+2026-06       11320      2999      8321   26.5%     $111,551     $24,922      $6,539    5.9%
+2026-07        9634      3010      6624   31.2%      $91,263     $20,997      $7,129    7.8%
+2026-08       11374      3105      8269   27.3%     $109,323     $25,154      $6,638    6.1%
+2026-09        8687      2829      5858   32.6%      $84,332     $18,808      $6,251    7.4%
+TOTAL        162263     18544    143719   11.4%   $1,617,811    $326,803     $44,775    2.8%
+
+Program verdict over the comparable window
+  total contribution       $326,803
+  total ad spend           $44,775
+  program net              $282,028
+  spend as % of contrib    13.7%
+  ad-attributed share      11.4% of units
+  organic share            88.6% of units
+
+wrote C:\Users\Jason\digital-forecast-engine\chewy_account_monthly.csv (17 rows)
+
+NTB acquisition vs organic volume (does paid seed organic?)
+  lag 0mo  n=17  r=-0.31
+  lag 1mo  n=16  r=-0.34
+  lag 2mo  n=15  r=-0.26
+  lag 3mo  n=14  r=-0.30
+  (directional only at this n - not a causal estimate)
+
+Per-brand over the comparable window
+BRAND            TOT UNITS  AD UNITS  AD SH%   CONTRIB $    AD SPEND       NET $   TACOS
+Doggijuana           13181       418    3.2%     $23,234      $1,998     $21,236    1.0%
+Kitty Ka-Zoom        28665      5431   18.9%     $46,236     $12,430     $33,806    5.5%
+Meowijuana          120417     12695   10.5%    $257,333     $30,347    $226,986    2.5%
