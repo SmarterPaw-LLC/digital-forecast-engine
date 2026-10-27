@@ -60,7 +60,10 @@ def fn(name):
 STRIPS = {
     # v10.36 added the Break-Even sub-tab (Chewy ad spend vs contribution
     # per unit). This count going red is the test doing its job.
-    'Chewy P&L':          ['chpnl-tab-sales', 'chpnl-tab-cost', 'chpnl-tab-breakeven', 'chpnl-tab-rebates'],
+    # v11.01 added the Program sub-tab (account-level efficiency). This count
+    # going red is the test doing its job, same as v10.36's 20 -> 21.
+    'Chewy P&L':          ['chpnl-tab-sales', 'chpnl-tab-cost', 'chpnl-tab-breakeven',
+                           'chpnl-tab-program', 'chpnl-tab-rebates'],
     'Data':               ['dst-uploads', 'dst-history', 'dst-query'],
     'Amazon P&L':         ['pnl-amzn-tab-summary', 'pnl-amzn-tab-perf', 'pnl-amzn-tab-diag',
                            'pnl-amzn-tab-changelog', 'pnl-amzn-tab-growth',

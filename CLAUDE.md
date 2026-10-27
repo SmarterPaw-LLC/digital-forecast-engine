@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.00**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.01**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,79 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.01 - account-level Chewy program efficiency (⚖ Program tab)
+
+- **Jason:** *"i also want to not only consider this as performance ads - there are new customers coming into and providing organic lift. we need to look at program efficiency at the account level."*
+- **He was right that the per-SKU view is the wrong lens.** Chewy attributes a click to **11.4% of the units that actually sell**. The Break-Even tab scores that slice and is structurally blind to the other 88.6%, and to the fact that ad-driven NTB customers seed later organic + autoship volume. So *"does the program pay?"* was a question the app could not ask.
+
+### What the account level says
+Seventeen comparable months, every unit Chewy sold:
+
+| | |
+|---|---|
+| Units | 162,263 (18,544 ad-attributed, **11.4%**) |
+| Retail sell-through | $1,617,812 |
+| Our contribution | **$326,803** |
+| Ad spend | $44,774 (**13.7%** of contribution) |
+| Program net | **+$282,029** |
+| TACOS | 2.8% |
+| Autoship | 39.2% of units |
+
+- **⚠ Program Net is NOT an incrementality claim**, and the tooltip says so. Most of that $326k would exist with no ad spend at all - Chewy is a replenishment channel first. Reading `+$282,029` as "the ads made us $282k" is the error this tab has to avoid creating, which is why the incrementality panel sits directly under the scorecards.
+
+### ⚠ Incrementality: year-over-year, not before/after
+A before/after on the March 2026 ad ramp credits the ads with every seasonal and merchandising move in between. Comparing the **same calendar months one year apart** strips the seasonality out. May-Sep 2026 vs May-Sep 2025:
+
+| | 2025 | 2026 | Δ |
+|---|---|---|---|
+| Units | 36,983 | 48,836 | **+32.0%** |
+| Ad-attributed | 637 | 14,313 | +13,676 |
+| Organic | 36,346 | 34,523 | **-5.0%** |
+| NTB customers | 511 | 10,977 | +10,466 |
+| Autoship units | 14,221 | 21,745 | +53% |
+| Ad spend | $2,907 | $31,617 | +$28,709 |
+
+- **Incrementality 86.7%** - total units grew 11,853 against 13,676 more attributed units, so ~13% of the "ad-driven" volume came out of organic (attribution shift) and ~87% was genuinely new. That is a real and reassuring number: the ads are mostly buying volume, not relabelling it.
+- **Incremental ROI 83-90%**, net **-$3k to -$5k** on the ramp.
+- **⚠ Two independent methods now agree the program runs at break-even.** The v11.00 per-SKU read said 98% ROI / -$1,180 on attributed units; this account-level YoY read says 83-90% / -$4,837 on total volume. Different data, different arithmetic, same verdict - which is worth far more than either figure alone.
+- **⚠ Stated as DIRECTIONAL, not causal**, in the panel, its tooltip AND the CSV header, because a year-over-year comparison cannot separate the ads from category growth, new SKU launches or Chewy's own merchandising. `tests/test_v1101.py` asserts that hedge is present so it cannot quietly be dropped.
+
+### ⚠ The comparable-months rule, which is the assertion that earns its keep
+The sell-through feed runs about two months behind the ad report (the v9.88 lag). A month with ads but no sell-through yet computes `organic = 0 - adUnits`, so **the most recent months would read as organic volume collapsing** - a reporting artefact that looks exactly like a real collapse, on the panel built to judge the program.
+- Only months present in BOTH feeds are shown, and the lagging tail is **NAMED** on the coverage line rather than silently dropped (`ad data but no sell-through yet: 2026-10`).
+- The mirror matters too: a sell-through month with no ads is excluded, or a pre-ramp month would dilute TACOS and make the program look artificially efficient.
+- **A genuine feed disagreement is still surfaced, never clamped.** When Chewy attributes more units to clicks than the sell-through feed recorded for a month, organic reads NEGATIVE and the cell goes red. Clamping at zero would hide that the two feeds disagree, which is itself worth knowing.
+
+### Design notes
+- **One contribution chain, not a fourth copy.** `chewyProgramContribBySku` calls `chewyAllowanceStack` / `chewyCatalogFor` / `chewyCatalogPricePerEach` / `chewyPnlCogs` / `chewyVendorUnitEcon` - the same chain the Cost and Break-Even tabs use, so the three tabs cannot disagree about a SKU's margin. Asserted that no inline allowance arithmetic crept in.
+- **Contribution is summed at each SKU's OWN rate**, never a blended average, and `pricedUnits` records how many units actually had an economics row so the coverage is STATED (`contribution priced on 97.2% of units`) rather than assumed.
+- **Columns live in a module-scope `CHEWY_PROGRAM_COLUMNS` registry**, like the other three Chewy tabs. v10.58 hoisted theirs so the column picker could read them; a fourth tab holding a function-local array is the divergence hard rule #1 exists to stop, and it would also have sat outside the v10.53 vocabulary sweep. `test_v1053` now sweeps this tab too.
+- **Labels reuse the existing vocabulary** rather than coining new words (rule #3): `Units` / `Ad Units` / `Autoship %` / `Merch Sales` / `Vendor Contrib` all already had a meaning on the Sales tab and keep it. Only six genuinely new measures are declared (`Month`, `Organic Units`, `Ad Share %`, `Program Net`, `TACOS`, `NTB`).
+- **No third loader** - reuses the caches the Sales and Break-Even tabs already fill. Asserted that no hand-rolled query appears in `loadChewyProgram`.
+- **CSV export** per the standing rule, carrying the comparable months, the lagging tail, the contribution coverage and the incrementality hedge in its header, so an archived file can be re-derived. The exporter reads the render SNAPSHOT and is asserted NOT to recompute (the v8.00 rule - a recompute could silently disagree with the panel it claims to export).
+- Glyph ⚖ (U+2696), verified unused before picking - one glyph one concept (rule #2).
+
+### Verification
+- `node --check` clean · **75 suites green** · new `tests/test_v1101.py` (63 behaviour + 40 static assertions).
+- The arithmetic is driven as a PURE function (`chewyProgramMonthly` takes rows and maps, no DOM, no fetch) against a hand-checkable two-SKU / two-month fixture where every figure is verifiable by eye, then: the comparable-months rule in both directions, a genuine feed disagreement surfacing as negative organic, unpriced SKUs adding units but no contribution, the brand filter narrowing BOTH feeds (narrowing one would compute organic against a total still containing the other brand), and four incrementality shapes - 100%, pure attribution shift (0%), a shrinking total (negative rather than hidden), and a flat attributed base (**null, not a divide-by-noise number**).
+- Nine degenerate shapes checked for a throw or a leaked `NaN` / `Infinity`, including a zero-retail month where TACOS must be null rather than `Infinity`.
+- **Driven in a browser against the shipped build** (chip confirmed `v11.01` first). The REAL aggregator, fed the account's actual 17-month shape, reproduced the offline analysis **exactly**: 162,263 units · 11.4% ad share · $326,803 contribution · $44,774 spend · +$282,029 net · 2.8% TACOS · 86.7% incrementality · NTB 511→10,977. The real renderer also ran against the live (empty, unauthenticated) state and reached the honest empty state - coverage line naming both uploads, 5 scorecards, 12 header columns, no throw, no leaked `undefined` / `NaN` / `[object` / `Infinity`. Only the expected unauthenticated 401s in console.
+- **Not verified here:** how the panel LOOKS. The login gate is a full-screen overlay, so it does not render with data without signing in - the v10.87 limitation. `chewyPnlSalesData` / `chewyAdSpendData` are module-scope `let`, which (unlike function declarations) do not land on `window`, so an injected scope cannot stub them either (the v10.93 limitation). The math is pinned by driving the pure function; only the pixels are not.
+
+### ⚠ Three suites went red; two caught REAL bugs
+- **`test_v1053` caught a real divergence**, not drift: the Program tab's columns were function-local, which put its labels outside the one-label-one-measure sweep. Hoisting them to module scope fixed the cause rather than the symptom.
+- **`test_v1100`'s escape sweep caught a real bug**: the three freshness icons were written as literal uppercase-U escapes (would have rendered as the text `U0001f4e6`) AND they invented new label/icon pairs for tables that already have canonical ones - breaking one-concept-one-glyph. Both fixed by reusing the existing pairs verbatim.
+- **`test_v1017`'s sub-tab census** went 22 → 23. Pure drift; re-pointed by registering the new tab, same as v10.36's 20 → 21.
+- **`test_v1011` was tightened, not just appeased.** It sliced from `renderChewyPnlCost` all the way to `downloadChewyPnlCostCSV`, so ANY later code containing `colspan="12"` tripped an assertion about the COST renderer - and v11.01's Program loader did exactly that. Bounded to the cost renderer's own body. The v10.53 wrong-haystack class, latent in a test.
+
+### ⚠ WRONG HAYSTACK, third time this session - and the one that nearly shipped
+The patch meant to compute the Program loader's error colspan from the registry matched a **byte-identical line inside `loadChewyPnlCost`** instead. So the Cost tab's error placeholder ended up spanning `CHEWY_PROGRAM_COLUMNS` while the Program loader kept its hardcoded 12 - **and it looked fine, because the Cost tab also shows 12 columns by default.** That is precisely how this class hides.
+- Caught by the new suite's own `no hardcoded colspan` assertion, not by reading the diff.
+- **The fix is the method, not the one line:** both edits are now addressed BY ENCLOSING FUNCTION (`rep_in(fnName, anchor, ...)`, which brace-balances the function body and asserts a single match INSIDE it) rather than by a line that repeats across a 4.7MB file. **When an anchor is a line that could plausibly appear in a sibling renderer, scope the replace to the function.**
+- Each site was also moved to the stronger guarantee while being touched: the Cost error span now computes from `chewyVisibleCols('cost').length`, so it cannot drift from that tab's column set either.
+
+### ⚠ All 75 suites passed while the file was syntactically broken
+Hoisting the column list left ten **orphaned array entries** dangling after `const COLS = CHEWY_PROGRAM_COLUMNS;`. Every suite went green - they are static text and node-sliced checks, none of which parse the whole script - and `node --check` is what caught it. **The v10.62 lesson, verbatim: a green suite run is not a syntax check.** `node --check` on the extracted script stays mandatory before any commit.
 ## v11.00 - autoship LTV in the Chewy break-even model (and the answer is no)
 
 - **Jason:** *"can we build in the ltv in our model?"*

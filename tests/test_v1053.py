@@ -142,15 +142,19 @@ CARD_L = re.compile(r"\bl\s*:\s*'([^']*)'")
 # Columns now live in module-scope registries (v10.57); scorecards are still
 # built inside the render functions. Sweep both so neither surface can add an
 # undeclared label.
+# v11.01 - the Program tab joins the sweep. Its columns are at module scope
+# for the same reason the other three are: so this rule can reach them.
 COL_REGISTRIES = [
     ('Sales',         'CHEWY_SALES_COLUMNS'),
     ('Cost to Chewy', 'CHEWY_COST_COLUMNS'),
     ('Break-Even',    'CHEWY_BE_COLUMNS'),
+    ('Program',       'CHEWY_PROGRAM_COLUMNS'),
 ]
 TABS = [
     ('Sales',         'renderChewyPnlSales'),
     ('Cost to Chewy', 'renderChewyPnlCost'),
     ('Break-Even',    'renderChewyBreakeven'),
+    ('Program',       'renderChewyProgram'),
 ]
 
 found = {}          # label -> [(tab, kind, key)]

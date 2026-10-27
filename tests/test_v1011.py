@@ -502,7 +502,13 @@ sok('colspan="9"' not in src[sales_start:sales_end],
 sok("colspan=\"' + (cols.length + 1) + '\"" in src[sales_start:sales_end],
     'Sales empty state spans the computed column count (cols.length + 1 checkbox col)')
 cost_fn_start = src.index('function renderChewyPnlCost()')
-cost_fn_end = src.index('function downloadChewyPnlCostCSV')
+# v11.01 - this ended at downloadChewyPnlCostCSV, a long way downstream, so
+# ANY later code containing colspan="12" tripped an assertion about the COST
+# renderer (v11.01's Program loader did exactly that). The v10.53
+# wrong-haystack class, latent in a test. Bounded to the cost renderer's own
+# body: the next top-level function declaration after it.
+_nxt = src.find(chr(10) + 'function ', cost_fn_start + 1)
+cost_fn_end = _nxt if _nxt != -1 else src.index('function downloadChewyPnlCostCSV')
 # v10.82 - the Cost body became KEYED (the v10.54 / v10.55 fix, third table),
 # so the empty-state span is COMPUTED from the visible column count instead of
 # a hardcoded 12. Same guarantee this assertion has always existed for - the
