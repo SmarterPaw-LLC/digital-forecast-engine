@@ -293,7 +293,27 @@ for f in ('pnlTrendSeries', 'pnlTrendRender', 'pnlSlotAdd', 'pnlChartMode',
     sok(len(re.findall(r'(?:async\s+)?function\s+%s\s*\(' % re.escape(f), js)) == 1,
         'exactly one %s definition' % f)
 sok(js.count('pnlTrendSeries({') == 4, 'all four P&L pages call the shared series builder')
-sok(js.count('pnlTrendRender({') == 4, 'all four P&L pages call the shared renderer')
+# v11.03 re-point: FIVE callers now. The Chewy Program monthly trend uses the
+# shared RENDERER but not the shared series builder - pnlTrendSeries builds
+# product BANDS, and that chart plots metrics over months, so there are no
+# products to band. The guarantee is that every P&L chart goes through the one
+# renderer rather than a hand-rolled `new Chart(`, which is now checked
+# DIRECTLY as well, so the count can grow without the rule going slack.
+sok(js.count('pnlTrendRender({') == 5, 'all five P&L charts call the shared renderer')
+for _caller in ('updateChewyProgramChart', 'updateChewyPnlChart'):
+    _i = js.index('function %s(' % _caller)
+    _d, _j = 0, js.index('{', _i)
+    while _j < len(js):
+        if js[_j] == '{': _d += 1
+        elif js[_j] == '}':
+            _d -= 1
+            if _d == 0: break
+        _j += 1
+    _body = js[_i:_j + 1]
+    sok('new Chart(' not in _body,
+        '%s does not construct its own Chart' % _caller)
+    sok('pnlTrendRender({' in _body,
+        '%s routes through the shared renderer' % _caller)
 sok(js.count('pnlInjectChartModeToggle(') == 5, 'toggle injected on all four pages (+1 definition)')
 
 # Every page has a mode-toggle host and a canvas.

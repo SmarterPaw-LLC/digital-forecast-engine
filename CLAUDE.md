@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.02**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.03**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,62 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.03 - the Program tab gets the Amazon P&L's scorecard + line-chart shape
+
+- **Jason:** *"this new program tab is great, but i need to see this data in a way i can measure yoy and month over month. make it similar to the scorecard and line chart views on the amazon p&l. keep the table as a expand/collapse section."*
+- Three surfaces: **delta chips on the scorecards** with a comparison-basis toggle, a **monthly line chart** with a prior-year overlay, and the table moved into a collapsed `<details>` with its row-count line promoted into the summary.
+
+### ⚠ The assertion that earns its keep: the totals regression guard
+The scorecards compare this window against a prior one, so the comparison bases have to roll up with the **identical** arithmetic. Two hand-written roll-ups would be two chances to disagree about what Program Net means, so the v11.01 inline block became `totalsOver(rows)` and `tests/test_v1103.py` **runs the old block and the new one over the same rows and requires a byte-identical result** - both over the full series and over a windowed subset. "Identical" is now a checkable claim rather than something read off a diff.
+
+### Two comparison bases, because MoM and YoY answer different questions
+| basis | what it pairs |
+|---|---|
+| `vs last year` (default) | the **same calendar months** one year apart - this tab's whole thesis |
+| `vs prev period` | the block of months immediately before the window, same length (for a one-month window this IS month-over-month) |
+
+- Both reuse the YoY pairing rule: **full months only, matched one for one**, so a window whose prior side is short compares like-for-like instead of a 5-month total against a 3-month one.
+- **⚠ `vs last year` is well defined on ALL TIME**, and that forced an override. The v10.13 global suppression exists because all-time has no PREVIOUS WINDOW - but this tab does not compare windows, it pairs months out of the data. So `_pnlSuppressDeltas` is set from **whether a pair actually exists**, and restored immediately afterwards so no other surface inherits it. Asserted in both directions, including that the renderer touches the flag at exactly three sites and in the right order.
+- **A basis that could not be built is SAID**, not left as five silently missing chips (the v10.99 lesson): *"no same-month match a year earlier - chips hidden"*.
+
+### ⚠ Ad Spend gets a NEUTRAL chip, and that needed a shared-helper change
+`pnlDeltaChip` had two verdicts: good-when-up and good-when-down. Spend rising is **neither**, and a red chip there reads as *"cut it"* - the one default Jason has explicitly ruled out for brand and awareness spend. `goodWhenUp === null` now shows the direction without colouring it. Opt-in and purely additive: every existing caller passes `true` or `false`, and the suite re-asserts all four of those branches plus flat plus the suppression flag, so the regression half is covered rather than assumed.
+- **Ad Share % is neutral too**, for a different reason: a rising ad share is the ads working OR organic being relabelled, and that card cannot tell which. The incrementality panel below it is the read that can.
+- TACOS (good down) and Program Net / Vendor Contrib (good up) keep a real verdict.
+
+### The chart
+- **The shared renderer, not a second chart stack.** `pnlTrendRender` is called with hand-built datasets; `pnlTrendSeries` is deliberately NOT used because it builds product BANDS and these series are metrics over months. `test_v1012`'s census went 4 → 5 and was **tightened while being re-pointed**: it now also asserts directly that neither Chewy chart constructs its own `new Chart(`.
+- **⚠ `pnlTrendRender` could not format a month bucket.** Its splitter read `YYYY-MM-DD` only, so a `YYYY-MM` bucket rendered **`5/undefined/26`** straight onto the x axis. Monthly series now read `May'26`; day buckets are untouched (asserted).
+- **⚠ The prior-year overlay reads the FULL month series, not the windowed one** - the same trap the YoY index has. A window under two years contains no prior year, so reading the twin from `months` would draw an empty dashed line on every period anyone would pick. The aggregator returns `allMonths` for this, and the suite **reproduces the naive windowed-only lookup and proves it really does find nothing**.
+- It is plotted **against this year's buckets**, so the two years sit on top of each other rather than side by side, and the subtitle says how many months matched (`prior year on 5 of 12`).
+- **No Stacked / Bands toggle.** These are metrics over months, not product bands, so a stack control would be a live-looking control that does nothing (the v10.19 lesson).
+- The metric list is built from `CHEWY_PROGRAM_COLUMNS`, so the chart and the table cannot name the same number differently (rule 3a) and a column added later is plottable with no second list to remember.
+
+### ⚠ The TOTAL row was twelve hand-ordered cells under a registry-driven header
+Exactly the shape v10.54 fixed for Break-Even and v10.82 for Cost and Sales, surviving in the Program footer. Adding the MoM column would have slid **every footer value under the wrong heading, silently**. Keyed now, from the same filtered list the header reads, and the suite fails if any registry column lacks a footer cell or a body cell.
+
+### Units MoM % - the literal month-over-month read
+A new column, declared in `CHEWY_MEASURE_VOCAB` (rule 3a), computed off the **full** series so the first month in the window still has a predecessor when one exists either side of the edge. Blank, never zero, when:
+- the predecessor is not the literal previous calendar month (**a feed gap would otherwise be reported as a one-month change** - asserted against a fixture that jumps 2025-08 → 2026-05),
+- either month is a part-month (fewer days is not a decline).
+
+### Expand / collapse
+Same `<details>` / `<summary>` shape as the Chewy Revision Tracker, with the row-count line **promoted into the summary** so the collapsed state still states what is inside. Open/closed persists per browser, defaults closed, and the table **re-fits on open** because a `tbl-wrap` measures 0 while collapsed (the v10.85 lesson).
+
+### Verification
+- `node --check` clean · **77 suites green** · new `tests/test_v1103.py` (22 aggregator + 20 chart + 12 chip + 7 CSV + 43 static) · `test_v1061` div balance re-run.
+- The chart is driven in node against a **stubbed `pnlTrendRender` that captures its cfg**, so the assertions are about what the chart is ASKED to draw: month buckets, the dashed overlay's values coming from `allMonths`, a percentage metric flipping `isPct`, a null in the series staying a GAP rather than a zero that reads as a crash, and an empty window hiding the panel AND destroying the stale instance rather than leaving a chart describing a different window.
+- **The CSV is driven for real** (Blob / URL / document stubbed) and the assertion that matters is that **every data row and the TOTAL row have exactly as many fields as the header** - a header wider than its rows is the commonest silent CSV defect, and this release widened the header. The window and its part-months are stated in the header lines so an archived file can be re-derived (the v10.79 rule).
+- **Driven in a browser against the shipped build** (chip confirmed `v11.03` first). The REAL chart through the REAL Chart.js, fed the account's actual 17-month shape under a 365-day window: 12 month labels rendering `Oct'25 Nov'25 Dec'25 Jan'26 ...`, two datasets - `Units` with 12 points and `Units · prior year` dashed `[5,4]` with **5** points (the five months that have a twin), subtitle *"12 months · 2025-10 → 2026-09 · prior year on 5 of 12 · part-month: 2025-10"*. Switching to TACOS retitled the panel and the y axis rendered `3.5%`, so `isPct` propagated.
+- The real chips off the real comparison basis: Vendor Contrib **green**, Ad Spend **neutral grey even at +1100%**, TACOS **red**. `compare.year` read 5 paired of 11 candidates, May-Sep 2026 vs 2025, 46,000 → 52,000 units. MoM read null, null, then +1.0% a month - the first two correctly blank because 2025-10 is a part-month and 2025-11's predecessor is that part-month.
+- The controls against the real DOM: the metric picker built from the registry (12 options, Month excluded), the compare toggle painting and persisting both ways, the `<details>` restoring open and closed from storage. The renderer ran to its honest empty state with **13 header columns**, a registry-driven `colspan="13"`, 5 scorecards, the chart panel correctly hidden, `_pnlSuppressDeltas` restored to false, and no leaked `undefined` / `NaN` / `[object` / `Infinity`. **Zero console errors**; only the expected unauthenticated 401s.
+- **Not verified here:** how any of it LOOKS. The login gate leaves the app container hidden, so every box measures 0 - the v10.87 limitation. The chart's DATA and options are read back off the real Chart instance, so what it draws is pinned; only the pixels are not.
+
+### ⚠ The suite caught a real defect of mine, and two of my own fixture mistakes
+- **The real one:** the comparison basis carried `complete: now.length === fullMonths.length`, and the scorecard note turned a false value into *"part-months held out"*. But a month goes unpaired either because it is a part-month **or because its twin is simply not on record** - which is the NORMAL case on all time, where the earliest year has nothing before it. One flag cannot distinguish them and the note blamed part-months for both. Replaced with two plain counts (`paired` / `candidates`) that the note states without naming a cause it cannot know.
+- `100+110+120+130` is 460, not 430. Arithmetic, mine.
+- My prev-period fixture jumped 2025-08 → 2026-05, so a three-month window shifted back three months landed on months that are not on record. It got its own contiguous fixture, and **the missing-twin case it exposed became its own assertion** rather than being tidied away.
+- A patch script of mine also built a 4-tuple where a 3-tuple was expected and refused before writing - the temp-file + `os.replace` pattern meaning the half that had already applied stayed applied and nothing was corrupted.
 ## v11.02 - ONE Chewy period control, and the Program tab learns a window
 
 - **Jason:** *"give me a period picker like on amazon p&L, which should persist across all chewy tabs."*
