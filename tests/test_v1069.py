@@ -219,7 +219,14 @@ HARNESS = (HARNESS
   .replace('__SRCFN__', src_fn)
   .replace('__VIEWER__', viewer)
   .replace('__CLOSER__', fn('closeChewyBeAudit'))
+  # v11.04 ⚠ openChewyBeAudit now resolves the allowance over its own
+  # window, so the harness has to supply that dep or the REAL function cannot
+  # run. Harness drift of the documented v10.43 / v10.45 / v10.97 kind: the
+  # stub is lifted in so every original assertion still exercises the real
+  # code path rather than being re-pointed at a copy.
   .replace('__STACKSTUB__',
+           "function getChewyBreakevenDateRange() { "
+           "return { from: '2026-01-01', to: '2026-10-27' }; }\n"
            "function chewyAllowanceStack() { return "
            "{ standingPct: 26.5, byCat: { coop_marketing: 16, damages: 2, "
            "freight: 1.5, autoship: 5, satisfaction_guarantee: 2 }, "

@@ -14,6 +14,7 @@ function chewyPnlCogsSource(mid) {
   }
   return { value: null, field: null, label: 'no COGS set', note: 'Every COGS field is empty for this product.', warn: true };
 }
+function getChewyBreakevenDateRange() { return { from: '2026-01-01', to: '2026-10-27' }; }
 function chewyAllowanceStack() { return { standingPct: 26.5, byCat: { coop_marketing: 16, damages: 2, freight: 1.5, autoship: 5, satisfaction_guarantee: 2 }, source: 'invoices' }; }
 let chewyBeAuditRows = [];
 
@@ -34,7 +35,7 @@ const document = {
 function openChewyBeAudit(sku) {
   const r = (chewyBeAuditRows || []).find(x => String(x.chewy_sku) === String(sku));
   if (!r) { alert('No break-even row loaded for Chewy SKU ' + sku + '. Re-run the tab and try again.'); return; }
-  const stack = (typeof chewyAllowanceStack === 'function') ? chewyAllowanceStack() : { standingPct: 0, byCat: {}, source: 'none' };
+  const stack = (typeof chewyAllowanceStack === 'function') ? chewyAllowanceStack(getChewyBreakevenDateRange()) : { standingPct: 0, byCat: {}, source: 'none' };
   const m = (v, d) => (v == null || !isFinite(v)) ? '<span style=\"color:var(--text3)\">n/a</span>' : '$' + Number(v).toFixed(d == null ? 2 : d);
   const p = (v) => (v == null || !isFinite(v)) ? '<span style=\"color:var(--text3)\">n/a</span>' : Number(v).toFixed(1) + '%';
   const esc = (t) => String(t == null ? '' : t).replace(/</g, '&lt;');

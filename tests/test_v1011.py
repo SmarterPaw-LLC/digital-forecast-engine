@@ -519,8 +519,27 @@ sok('colspan="12"' not in src[cost_fn_start:cost_fn_end],
     'Cost renderer no longer hardcodes a column count')
 
 # One allowance resolver, two surfaces — no second copy of the stack math.
-sok(src.count('function chewyAllowanceStack()') == 1, 'one chewyAllowanceStack definition')
-sok(src.count('chewyAllowanceStack()') >= 3, 'allowance stack read by several surfaces')
+# v11.04 ⚠ RE-POINTED, and tightened. These pinned `chewyAllowanceStack()`
+# with EMPTY PARENS - the MECHANISM - while the labels claimed a guarantee about
+# ONE resolver read by several surfaces. v11.04 gave it an optional window, so
+# the mechanism moved and the guarantee did not. The stronger claim is now
+# asserted directly: every Chewy surface passes the window it already resolved,
+# because a surface reading the FLAT rate is exactly the defect v11.04 fixed.
+sok(src.count('function chewyAllowanceStack(') == 1, 'one chewyAllowanceStack definition')
+sok(src.count('chewyAllowanceStack(') >= 9,
+    'allowance stack read by several surfaces')
+_WINDOWED = [
+    'chewyAllowanceStack(getChewyBreakevenDateRange())',
+    'chewyAllowanceStack(getChewyPnlSalesDateRange())',
+    'chewyAllowanceStack(getChewyPnlCostDateRange())',
+    'chewyAllowanceStack(getChewyProgramDateRange())',
+]
+for _w in _WINDOWED:
+    sok(_w in src, 'a Chewy surface resolves the stack over %s' % _w[22:-1])
+# ⚠ And NO caller reads the flat rate any more. An unwindowed call is
+# v11.03 behaviour: today's rate charged against months Chewy billed at 2-7%.
+sok(src.count('chewyAllowanceStack()') == 0,
+    'no surface reads the unwindowed (flat, all-history) rate')
 sok(src.count('function chewyCatalogPricePerEach') == 1,
     'one UOM normaliser (no second copy to drift)')
 

@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.03**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.04**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,72 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.04 - the allowance rate was frozen at TODAY and charged against all history
+
+- **Jason, on the Break-Even cost stack:** *"i don't think that is right. its based on promotions we run (the rebates tab)"*.
+- He was pointing at something real, and chasing it down found a bigger defect than the one he described.
+
+### ⚠ The standing stack is NOT static, and the model treated it as static
+`chewyPricingDeriveAllowances` takes the **most recent rate per rebate name** and applies it to every unit in every window. The invoices say the stack moved:
+
+| Agreement period | Lines in force | Rate |
+|---|---|---|
+| 2026-03-02 - 2026-04-05 | Damages, Auto Ship | 7.00% |
+| 2026-04-06 - 2026-05-03 | Damages | 2.00% |
+| 2026-05-04 - 2026-05-31 | Damages, Auto Ship | 7.00% |
+| 2026-06-01 - 2026-08-30 | + Freight, MDF/Coop, Satisfaction | **26.50%** |
+| 2026-08-31 - 2026-10-04 | same, Auto Ship not yet invoiced | 21.50% |
+
+So a 364-day window was charged **26.50% against months Chewy actually billed at 2-7%** - 60 to 180 points of break-even on the Chewy line, **on the exact figure Blake challenged**. The per-SKU read that went to him would have been wrong in the direction that makes everything look worse.
+
+### ⚠ Jason's actual hypothesis was WRONG, and checking it is what found the bug
+He thought MDF/Coop was promo funding. The invoices say otherwise, and it is worth recording WHY so nobody re-opens it:
+- MDF/Coop sits inside agreement **100-17384 "SMARTERPAW LLC ALLOWANCES"**, one continuous agreement billed P2-26 through P8-26. It did not arrive on a new agreement; three lines were ADDED to the existing one at P5-26.
+- In every period **Damages, Freight, MDF/Coop and Satisfaction imply an IDENTICAL base** (P5-26 $51,303 against $52,778 of our wholesale revenue; P6-26 $40,639 against $44,361). A promo-scoped rate would not share a base with Damages.
+- Every real promo is its **own `DEAL-xxxxxx` with its own date range** (`DEAL-042927` HG Toys Buy 3 Get 1, 8.1.26-8.31.26). MDF/Coop is not one of those.
+- **The disagreement was still worth having.** The hypothesis was wrong and the instinct was right: something about that number WAS wrong, just one level down.
+
+### The fix: an opt-in window, not a new default
+- `chewyAllowanceStack(opts)` returns a **revenue-weighted blend** of the periods overlapping `opts.from .. opts.to`. **Absent a window the return is byte-identical to v11.03**, which is the only way to make "no caller changes behaviour by accident" a checkable claim across eight call sites (asserted on the key set).
+- Periods come from `agreement_period_start` / `_end` on the invoices, so **a renegotiation shows up with no code change**.
+- **All eight Chewy surfaces converted in the same commit** (hard rule #5), each passing the window it had already resolved. `test_v1104` asserts every one by name AND that **zero unwindowed calls survive** - an unwindowed call IS v11.03 behaviour.
+- **The Pricing Scenarios working copy still wins**, windowed or not. Someone modelling a promo over there must keep seeing their own rate.
+
+### ⚠ Uncovered weeks are REPORTED, never folded in at 0%
+Rebate invoices only go back to **2026-03-02**, so a year-long window is about **40% dark** ($207,822 of $526,733). Averaging those weeks in at zero would read as a suspiciously CHEAP allowance rather than as missing data - a wrong number that looks like good news. The blend divides by COVERED revenue and reports `uncoveredPct` separately; a window with no invoices at all returns **null, not 0%**.
+
+### Two deduplication traps, both asserted
+- **(period, name)**, because P7-26 and P8-26 both land in August on the raw rows and a period invoiced twice must not charge its own rate twice.
+- **name across overlapping agreements**, because Allowances (100-17384) and AutoShip (100-17477) run in parallel and summing naively double-counts.
+
+### Weighting: retail, deliberately
+Weighting the blend by WHOLESALE instead moves it by under 0.2pt (**17.16% vs 16.99%** over the 364-day window, checked against `chewy_be_periodized.py`) and would cost a per-SKU catalog join on every render. The cheaper weighting is the right trade and the numbers are in the comment so the trade can be re-checked.
+
+### What it does to the answer
+| | Fleet BE ROAS | KKZ SKUs clearing |
+|---|---|---|
+| 26.50% as modelled before | 443% | 1 of 15 |
+| 21.50% current terms | 398% | 1 of 15 |
+| 17.2% period-matched | ~350% | 1 of 15 |
+| 5.50% (ruled out by the invoices) | 301% | 3 of 15 |
+
+**The verdict is robust and the numbers were not.** Super Zoomies is the only KKZ SKU that clears at every defensible rate, so Blake's conclusion survives - but his figures moved by up to 140 points, which is why the reply was held rather than sent.
+
+### Verification
+- `node --check` clean · **78 suites green** · new `tests/test_v1104.py` (47 assertions).
+- **A5 is the regression guard**: it runs the pre-v11.04 flat path and proves it really does charge 26.5% where the periodised path charges 4.5%, so "this was broken" is checkable rather than read off a diff.
+- Period edges asserted INCLUSIVE at both ends, a promo line asserted out of the standing floor, a rate-less FTAS line asserted to contribute nothing, and four degenerate shapes checked for a throw or a leaked `NaN` / `Infinity`.
+- **Driven in a browser against the shipped build** (chip confirmed `v11.04` first, per v10.67). The REAL `chewyStandingRateOn`, fed the account's REAL agreement periods, reproduced the period table exactly: `2025-12-01` → 0% · `2026-03-15` → 7% · `2026-04-20` → 2% · `2026-05-15` → 7% · `2026-06-14` → 26.5% · `2026-09-15` → 21.5%. `chewyAllowanceBlend` on the empty unauthenticated cache returned `null` rather than throwing or leaking `NaN`. **Zero console errors.**
+- **Not verified here:** how the blended rate RENDERS on the chip. The login gate leaves the app container hidden (v10.87) and `chewyPnlData` / `chewyPnlSalesData` are module-scope `let` that an injected scope cannot stub (v10.93), so the end-to-end render is pinned by the node suite instead.
+
+### ⚠ Two suites went red; both re-pointed, neither silenced
+- **`test_v1011`** pinned `chewyAllowanceStack()` with EMPTY PARENS - the MECHANISM - while its label claimed a guarantee about one resolver read by several surfaces. Re-pointed and **tightened**: it now names each of the four window resolvers and asserts **zero unwindowed calls**, which is the stronger claim and the one that would actually catch a new surface reading the flat rate.
+- **`test_v1069`** was harness drift of the documented v10.43 / v10.45 / v10.97 kind - `openChewyBeAudit` gained a module-level dep. The stub was lifted in so the REAL function still runs and all 78 of its assertions pass unchanged.
+
+### Still open
+- **The pre-2026-03 rebate invoices have never been uploaded.** That is the 40% dark window. If the Vendor Partner Portal still has the 2025 REB PDFs, the Chewy Rebates uploader closes it and the blend becomes real for a full year.
+- **"Current terms" reads 21.50%, not 26.50%, only because Auto Ship has not been invoiced for P8-26 yet.** Its agreement ran every period through P7-26. If it lands, current terms are 26.50% again. The model will pick that up on the next upload with no code change, which is the point of reading periods off the invoices.
+- One of my own fixture mistakes: A6 set `{damages: 9, coop_marketing: 3}` after I first wrote `{3, 1}` and asserted 3, forgetting both keys are standing categories and sum to 4. Re-pointed at values distinct from both the blend and the flat rate so "the edit won" cannot be confused with either.
 ## v11.03 - the Program tab gets the Amazon P&L's scorecard + line-chart shape
 
 - **Jason:** *"this new program tab is great, but i need to see this data in a way i can measure yoy and month over month. make it similar to the scorecard and line chart views on the amazon p&l. keep the table as a expand/collapse section."*
