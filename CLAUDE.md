@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.04**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.05**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,42 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.05 - backing out v11.04, which was built on a premise I inferred and never checked
+
+- **Jason:** *"my correction was that they didn't 'just start charging'. it's always been in the agreement"* and, on the Rebates tab, *"it is CLEARLY variable"*.
+- **Both are true, and v11.04 confused them.** The RATE is constant. The BILLING is variable.
+
+### ⚠ What v11.04 got wrong, and the direction it failed in
+v11.04 saw that P2-26 / P3-26 / P4-26 carry only a Damages line and concluded *"the standing rate was 2% then"*. It then blended a lower rate for any window reaching back that far. The agreement has always carried MDF/Coop 16%, Freight 1.5% and Satisfaction 2% alongside Damages and Auto Ship; Chewy just did not BILL those lines in those periods.
+
+**Unbilled is not unowed.** A lower allowance overstates contribution and reads break-even **LOWER** than reality, so a SKU that cannot pay its way looks like it can. That is the dangerous direction for this number, and it shipped.
+
+### The invoices settle it from the other side
+| Invoice | Period | Lines billed |
+|---|---|---|
+| REB00129398 | P2-26 | Damages only |
+| REB00143706 | P3-26 | Damages only |
+| REB00160150 | P4-26 | Damages only |
+| REB00175503 .. REB00224894 | P5-26 .. P8-26 | Damages, Freight, MDF/Coop, Satisfaction |
+
+Those early documents are **genuinely single-line invoices, not truncated uploads** - which is what I had assumed when I first guessed the other way. Neither reading of the gap was checkable from the gap itself. **The agreement was the evidence, and I never looked at it.**
+
+### What v11.05 keeps and what it removes
+- **Removed:** anything that lets coverage move the rate. `chewyAllowanceStack` charges the rate from the invoices, windowed or not.
+- **Kept:** the period helpers and the coverage read, renamed `rate` → **`observedRate`** so it cannot be charged by accident, and surfaced as a provenance caveat (*how much of this window has invoice backing*) which is still true and still useful.
+- `test_v1104`'s assertions **inverted**: A5 now asserts a windowed call charges the IDENTICAL rate, and names 4.5% as the v11.04 value that must not come back. B5a asserts the window never assigns `standingPct`.
+
+### ⚠ The process lesson, which is the real content of this entry
+I inferred a commercial fact from a data gap, shipped two releases and two draft emails on it, and reversed twice when Jason corrected me. He called it: *"WHY DO YOU KEEP WAFFLING"*.
+
+- **A gap in data is not evidence about the world.** Missing invoice lines were equally consistent with "not charged" and "not billed yet", and I picked one without noticing I had picked.
+- **The cost of asking was one sentence; the cost of guessing was two releases.** When a modelling choice hinges on a contractual or commercial fact, that fact is cheap to confirm and expensive to assume.
+- **Check the authority, not the artefact.** The agreement says what we owe. The invoices only say what was billed. I spent three rounds querying invoices to answer a question only the agreement could answer.
+
+### Verification
+- `node --check` clean · **78 suites green** · `tests/test_v1104.py` re-pointed (54 assertions).
+- Two of my own expectations were wrong again and both were re-pointed rather than forced: A7e asserted a non-zero uncovered share on a window that is genuinely fully covered, and A8 still read the renamed `rate` key.
+- The cp1252 console died printing a warning glyph inside an assertion LABEL (the v10.77 trap, in a test this time). Labels are ASCII; the glyphs stay in the docstring and comments.
 ## v11.04 - the allowance rate was frozen at TODAY and charged against all history
 
 - **Jason, on the Break-Even cost stack:** *"i don't think that is right. its based on promotions we run (the rebates tab)"*.

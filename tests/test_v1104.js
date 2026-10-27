@@ -104,7 +104,9 @@ function chewyAllowanceBlend(periods, from, to) {
   }
   const total = covered + uncovered;
   return {
-    rate: covered > 0 ? (num / covered) : null,
+    // Retained for the provenance note ONLY. No caller may read this as
+    // the rate to charge; chewyAllowanceStack deliberately ignores it.
+    observedRate: covered > 0 ? (num / covered) : null,
     revCovered: covered, revUncovered: uncovered,
     uncoveredPct: total > 0 ? (100 * uncovered / total) : 0,
   };
@@ -142,26 +144,24 @@ function chewyAllowanceStack(opts) {
     note:        d.note || '',
     blended:     false,
   };
-  // v11.04 — OPT-IN window scoping. Absent a window the return is
-  // byte-identical to v11.03, so no caller changes behaviour by accident; the
-  // Chewy surfaces opt in by passing the window they already resolved.
+  // v11.05 ⚠ A window attaches COVERAGE, and changes NOTHING ELSE.
+  // `standingPct` is the rate from the invoices and is the rate charged,
+  // windowed or not. v11.04 let the window move it and that was the bug:
+  // periods we simply have not uploaded read as cheap months.
   if (opts && opts.from && opts.to) {
     const periods = chewyAllowancePeriods();
     if (periods.length) {
       const b = chewyAllowanceBlend(periods, opts.from, opts.to);
-      if (b.rate != null) {
-        return Object.assign({}, base, {
-          standingPct:  b.rate,
-          blended:      true,
-          latestPct:    base.standingPct,   // what v11.03 would have charged
-          windowFrom:   opts.from,
-          windowTo:     opts.to,
-          revCovered:   b.revCovered,
-          revUncovered: b.revUncovered,
-          uncoveredPct: b.uncoveredPct,
-          source:       'invoices-periodised',
-        });
-      }
+      return Object.assign({}, base, {
+        windowFrom:   opts.from,
+        windowTo:     opts.to,
+        revCovered:   b.revCovered,
+        revUncovered: b.revUncovered,
+        // What share of this window has NO rebate invoice behind it. A
+        // provenance caveat for the reader, never an input to the maths.
+        uncoveredPct: b.uncoveredPct,
+        observedRate: b.observedRate,
+      });
     }
   }
   return base;
@@ -191,9 +191,10 @@ out.flatKeys = Object.keys(flat).sort();
 const win = chewyAllowanceStack({ from:'2026-04-06', to:'2026-05-31' });
 out.winPct = win.standingPct;
 out.winBlended = win.blended;
-out.winLatest = win.latestPct;
 out.winUncoveredPct = win.uncoveredPct;
+out.winObserved = win.observedRate;
 out.winSource = win.source;
+out.winKeys = Object.keys(win).sort();
 
 // the Pricing Scenarios working copy must still win, windowed or not
 // 9 + 3 = 12, deliberately distinct from BOTH the 4.5 blend and the 26.5

@@ -18,6 +18,18 @@ date range. But chasing that down surfaced the defect underneath:
   2026-06-01 .. 2026-08-30   + Freight, MDF/Coop, Satisfaction     26.50%
   2026-08-31 .. 2026-10-04   same, Auto Ship not yet invoiced      21.50%
 
+v11.05 ⚠ THE v11.04 PREMISE WAS WRONG AND THESE ASSERTIONS INVERTED.
+v11.04 read "P2-P4 carry only a Damages line" as "the standing rate was 2%
+then". Jason: "this did not change, i just only have the rebate invoices going
+back to that date." The terms were always the full stack; the early periods are
+INCOMPLETE UPLOADS. Blending them conflated MISSING INVOICES with a LOWER RATE,
+and it failed in the DANGEROUS direction - a lower allowance overstates
+contribution and reads break-even LOWER than reality, so a SKU that cannot pay
+looks like it can. The flat rate was right all along.
+
+What survives is the COVERAGE read: how much of a window has invoice backing,
+as a provenance caveat that never touches the maths.
+
 chewyPricingDeriveAllowances takes the LATEST rate per rebate name and applies
 it to every unit in every window, so a 364-day window charged 26.50% against
 months Chewy actually billed at 2-7%. That is 60 to 180 points of break-even
@@ -166,9 +178,10 @@ out.flatKeys = Object.keys(flat).sort();
 const win = chewyAllowanceStack({ from:'2026-04-06', to:'2026-05-31' });
 out.winPct = win.standingPct;
 out.winBlended = win.blended;
-out.winLatest = win.latestPct;
 out.winUncoveredPct = win.uncoveredPct;
+out.winObserved = win.observedRate;
 out.winSource = win.source;
+out.winKeys = Object.keys(win).sort();
 
 // the Pricing Scenarios working copy must still win, windowed or not
 // 9 + 3 = 12, deliberately distinct from BOTH the 4.5 blend and the 26.5
@@ -214,27 +227,36 @@ eq('A3c the day after falls out', res['rateDayAfter'], 0)
 # --- A4  uncovered revenue is REPORTED, never folded in at 0% --------------
 b = res['blendAll']
 # covered weeks: 1000@2 + 1000@7 + 2000@26.5 = 2000+7000+53000 = 62000 / 4000
-eq('A4a the blend is revenue-weighted over COVERED weeks only',
-   round(b['rate'], 2), 15.5)
+eq('A4a the OBSERVED rate is revenue-weighted over covered weeks',
+   round(b['observedRate'], 2), 15.5)
+ok('rate' not in b,
+   'A4a2 and it is NOT called `rate`, so it cannot be charged by mistake')
 eq('A4b the dark week is reported as uncovered, not averaged in at 0%',
    b['revUncovered'], 1000)
 eq('A4c and its share is stated', round(b['uncoveredPct'], 1), 20.0)
-ok(res['blendDark']['rate'] is None,
+ok(res['blendDark']['observedRate'] is None,
    'A4d a window with NO invoices at all returns null, not 0%')
 eq('A4e and reports 100% uncovered', round(res['blendDark']['uncoveredPct'], 1), 100.0)
-eq('A4f a single fully-covered month blends to its own rate',
-   round(res['blendJun']['rate'], 2), 26.5)
+eq('A4f a single fully-covered month observes its own rate',
+   round(res['blendJun']['observedRate'], 2), 26.5)
 
 # --- A5  THE REGRESSION GUARD ----------------------------------------------
-print('\n-- A5 the regression guard: reproduce v11.03 and prove it was wrong --')
-eq('A5a the pre-v11.04 flat path really does charge 26.5%', res['flatPct'], 26.5)
-ok(res['winPct'] < res['flatPct'],
-   'A5b  the periodised path over Apr-May charges LESS', res['winPct'])
-eq('A5c  and charges what Chewy actually billed those weeks (2% and 7%)',
-   round(res['winPct'], 2), 4.5)
-ok(abs(res['flatPct'] - res['winPct']) > 20,
-   'A5d  the gap is 22 points on this fixture - not a rounding difference',
-   round(res['flatPct'] - res['winPct'], 2))
+print('\n-- A5 THE GUARD: a window must not move the rate (the v11.04 bug) --')
+eq('A5a the flat path charges the rate from the invoices', res['flatPct'], 26.5)
+eq('A5b  !! a WINDOWED call charges the IDENTICAL rate',
+   res['winPct'], res['flatPct'])
+# v11.04 shipped 4.5% here, blended out of periods that are simply not
+# uploaded. A cheaper allowance overstates contribution and reads break-even
+# LOWER than reality, so a SKU that cannot pay looks like it can. This is the
+# assertion that stops that coming back.
+ok(res['winPct'] != 4.5,
+   'A5c  and is NOT the v11.04 blend, which read missing invoices as cheap months',
+   res['winPct'])
+ok(res['winObserved'] is not None and round(res['winObserved'], 2) == 4.5,
+   'A5d  the observed figure is still reported, just never charged',
+   res['winObserved'])
+ok(res['winObserved'] < res['winPct'],
+   'A5e  and it sits BELOW the charged rate, which is why it had to stop being the rate')
 
 # --- A6  the working copy still wins ---------------------------------------
 eq('A6a an EDITED Pricing Scenarios stack still wins over the blend',
@@ -249,15 +271,23 @@ eq('A7b and carries the v11.03 key set plus the blended flag',
    res['flatKeys'],
    sorted(['standingPct', 'promoPct', 'unclassifiedPct', 'byCat', 'source',
            'note', 'blended']))
-eq('A7c  a windowed call names its provenance distinctly',
-   res['winSource'], 'invoices-periodised')
-eq('A7d  and still reports what the flat rate WOULD have been',
-   res['winLatest'], 26.5)
+eq('A7c  a windowed call keeps the SAME provenance - the rate did not change',
+   res['winSource'], 'invoices')
+eq('A7d  a window ADDS coverage keys and nothing else',
+   [k for k in res['winKeys'] if k not in res['flatKeys']],
+   sorted(['windowFrom', 'windowTo', 'revCovered', 'revUncovered',
+           'uncoveredPct', 'observedRate']))
+ok(isinstance(res['winUncoveredPct'], (int, float)),
+   'A7e  the uncovered share is stated for the reader')
+eq('A7f  and it is 0 on a window that IS fully covered',
+   round(res['winUncoveredPct'], 1), 0.0)
+eq('A7g  while a window spanning the dark week reports a real share',
+   round(res['blendAll']['uncoveredPct'], 1), 20.0)
 
 # --- A8  degenerate shapes --------------------------------------------------
-ok(res['emptyWindow']['rate'] is None and res['emptyWindow']['uncoveredPct'] == 0,
+ok(res['emptyWindow']['observedRate'] is None and res['emptyWindow']['uncoveredPct'] == 0,
    'A8a an empty window yields null and 0%, not NaN')
-ok(res['noPeriods']['rate'] is None,
+ok(res['noPeriods']['observedRate'] is None,
    'A8b no periods at all yields null rather than throwing')
 _blob = json.dumps(res)
 ok('NaN' not in _blob and 'Infinity' not in _blob and 'null,null' not in _blob,
@@ -299,6 +329,11 @@ ok(js.count('chewyAllowanceStack(') == len(CALLERS) + 1,
 blend_body = fn('chewyAllowanceBlend')
 ok('uncovered' in blend_body and 'revUncovered' in blend_body,
    'B5  the blend reports uncovered revenue rather than swallowing it')
+stack_body = fn('chewyAllowanceStack')
+ok('standingPct:  b.' not in stack_body and 'standingPct: b.' not in stack_body,
+   'B5a !! the window NEVER assigns standingPct (the v11.04 bug)')
+ok('observedRate' in blend_body and 'rate:' not in blend_body,
+   'B5b  and the coverage read does not even expose a field called `rate`')
 ok('covered > 0' in blend_body,
    'B6  and divides by COVERED revenue, not the window total')
 per_body = fn('chewyAllowancePeriods')
