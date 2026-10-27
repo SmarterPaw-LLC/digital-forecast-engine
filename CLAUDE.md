@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.06**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.07**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,33 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.07 - the incrementality baseline was excluding the months with no ads
+
+- **Jason:** *"i don't know why your kitty kazoom is missing august and sept last year."*
+- **KKZ ads went dark 2025-07 through 2026-02** and came back in March 2026. The v11.01 comparable-months rule keeps only months present in BOTH feeds, so the dark months never entered the index and could not pair with their 2026 twins. **The KKZ incrementality read ran on 3 months instead of 5.**
+
+### ⚠ One rule, two jobs, and it was only right for one of them
+The comparable-months rule exists so a pre-ramp month cannot dilute TACOS and make the program look artificially efficient. That is correct **for the roll-up**, and it still governs `months` and `totals`.
+
+It is wrong as a **baseline filter**. A zero-ad prior-year month is the **cleanest counterfactual an incrementality read can have** - it is precisely the "what happens without ads" case the panel exists to measure - and the rule was throwing it away. KKZ going dark for eight months is close to a natural experiment, and the panel could not see it.
+
+- `priorIdx` relaxes the **prior side only**, built from sell months with `adUnits`/`spend` falling to 0.
+- **The current side still requires ads.** Without them there is nothing to measure, and letting a dark month in would turn the panel into a sell-through comparison wearing an ad label. Asserted.
+- `compare.year` reads the same index, so **"vs last year" means one thing** across the panel rather than two things one card apart (rule 3a).
+- A relaxed month carries `noAdsInPeriod: true`, so a caller can say WHY a baseline month has no spend instead of leaving it looking like a hole in the data.
+
+### ⚠ The test caught a real bug in my own patch, and it would have shipped silent
+`priorIdx` set `partial: isPartial(m)`. But **`isPartial` returns TRUE for every month BEFORE the window start**, so every relaxed baseline month was flagged a part-month and the pairs filter dropped it again. `allMonths` guards it as `inWindow(m) && isPartial(m)`; I wrote the bare call.
+
+**The fix would have looked applied and done nothing** - same 3 months, no error, no warning. Only A1c (asserting the prior months are *named*, not merely counted) caught it. **Assert the IDENTITY of what comes back, not just the quantity**; a count assertion would have gone green on a different three months.
+
+### Verification
+- `node --check` clean · **80 suites green** · new `tests/test_v1107.py` (26 assertions).
+- **A2 is the regression guard**: it rebuilds the pre-v11.07 comparable-only index against Jason's exact KKZ shape and proves it really did find **3** pairs (2026-05 → 07) where the fix finds **5** (2026-05 → 09). The fixture reproduces the 2025-07 zero-spend ad month, which is why the live tab read 3 rather than 2.
+- Asserted in both directions: the dark months contribute real sell-through and **zero** ad units, that volume lands in organic, no dark month enters the current side or the comparable set, and the roll-up still excludes every pre-ramp month so TACOS cannot be diluted.
+
+### Why this mattered beyond the panel
+The figure moved the answer going to Blake. Over 3 months KKZ read 107% incremental ROI; over the full 5 it is roughly break-even. Same conclusion, but the 5-month read is the honest one and it rests on twice the evidence.
 ## v11.06 - the Auto Ship 5% is charged on AUTOSHIP revenue, not every unit
 
 - **Jason:** *"autoship cannot be assigned to every unit. not every unit is even eligible."*
