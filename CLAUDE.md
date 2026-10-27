@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.05**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.06**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,51 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.06 - the Auto Ship 5% is charged on AUTOSHIP revenue, not every unit
+
+- **Jason:** *"autoship cannot be assigned to every unit. not every unit is even eligible."*
+- **The standing stack was never one rate**, and the model charged it as one. Four lines (Damages 2, Freight 1.5, MDF/Coop 16, Satisfaction 2) are charged on **every** invoice dollar. **Auto Ship 5% is charged on AUTOSHIP revenue only**, and each SKU's autoship share runs **21% to 51%** across the Chewy line.
+- Charging it flat overstated the allowance on every SKU, and **by most on the SKUs that barely autoship at all** - the small kickers and teasers sitting at 21-25%, which are exactly the ones in the "should we stop advertising this" conversation.
+
+### Why the per-SKU share needs no approximation
+**Within ONE SKU the autoship share of UNITS *is* the share of REVENUE**, because it is the same SKU at the same price. The account-level split was the shaky part of the earlier reads; per SKU it is exact.
+
+And it **reconciles against the invoices**, which is the check that matters:
+
+| | |
+|---|---|
+| 5% × 38.9% account autoship share | **1.945%** |
+| $6,210.11 Auto Ship invoiced / $318,910 revenue | **1.95%** |
+
+`test_v1106` A6 asserts the units-weighted per-SKU rates sum back to the account rate, so **the split places money rather than moving it**.
+
+### ⚠ An UNKNOWN share charges the line in FULL, never zero
+Sell-through may not be loaded on the tab being rendered. The fallback is deliberately the **expensive** direction: understating an allowance reads break-even **LOWER** than reality and makes a SKU that cannot pay look like it can. That is the same failure direction as v11.04, which this codebase has already shipped once, so the fallback is asserted in three forms (unknown SKU, no share map, empty SKU).
+
+### What it does to the numbers
+| SKU | autoship | BE flat | BE per-SKU |
+|---|---|---|---|
+| Super Zoomies Mix | 40.2% | 335% | **316%** |
+| Bubbles w/ Wand | 35.6% | 975% | **847%** |
+| Zoomie Snake Kicker | 24.9% | 797% | **701%** |
+| Zoomie Spider Teaser | 21.1% | 414% | **379%** |
+
+Break-evens improve by **15 to 128 points**, most where autoship is thinnest. **The verdict does not move**: 1 of 15 KKZ SKUs clears either way, and Super Zoomies is still the only one.
+
+### Design notes
+- `CHEWY_CONDITIONAL_CATS` names the categories charged on a SUBSET of revenue. Today it holds `autoship` alone; a second conditional line needs only a share source, not new arithmetic.
+- The share map is built **once per render** and asserted so - 150 SKUs each walking the full sell-through cache would be quadratic.
+- The share is computed over the **full** sell-through record, deliberately not windowed. A SKU's autoship mix is a property of the SKU, and a short window would make its allowance jump around on sampling noise.
+- Clamped to `[0, 1]` on the way in and the rate floored at 0 on the way out, because a restated week can report more autoship units than units.
+- `chewyAllowanceStack().standingPct` is unchanged and still the **account** figure the chip renders. Only the per-SKU econ chain moved.
+
+### ⚠ A ReferenceError caught before shipping, and it is the v10.8 class again
+The patch wrote `chewySkuStandingPct(stack, sku, _asShares)` into `renderChewyBreakeven`, where the loop variable is **`a.chewy_sku`** and there is no `sku` in scope. Valid JavaScript, clean `node --check`, every static assertion green, and it would have thrown on the first row with data. Found by grepping the enclosing loop for the variable rather than trusting the name I had written. **Check the variable exists in THAT scope, not that the name looks right.**
+
+### Verification
+- `node --check` clean · **79 suites green** · new `tests/test_v1106.py` (37 assertions).
+- **Driven in a browser against the shipped build** (chip confirmed `v11.06` first). The REAL `chewySkuStandingPct`, fed the account's REAL KKZ autoship shares, reproduced the offline figures exactly: Super Zoomies `23.51%` → BE **335% → 316%**, Bubbles `23.28%` → BE **975% → 847%**, Spider `22.55%`, a zero-autoship SKU `21.50%`, and an unknown SKU falling back to the full `26.50%`. `chewyAutoshipShareBySku()` on the empty unauthenticated cache returned `{}` rather than throwing. **Zero console errors.**
+- Three of my own test expectations were wrong and all three were re-pointed: two were rounding (`23.51` asserted against a 3dp `23.511`; an exact equality across a pre-rounded weighted sum), and the third was **a fixed 260-character window that overran the econ call and matched `return { contrib, brands, standingPct }`** - the v10.53 wrong-haystack class, in a test. The segment is paren-balanced now.
 ## v11.05 - backing out v11.04, which was built on a premise I inferred and never checked
 
 - **Jason:** *"my correction was that they didn't 'just start charging'. it's always been in the agreement"* and, on the Rebates tab, *"it is CLEARLY variable"*.
