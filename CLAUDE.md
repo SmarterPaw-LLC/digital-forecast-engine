@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.13**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.14**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,27 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.14 - the campaign parser assumed every row was Sponsored Products
+
+- **Jason:** *"campaigns is the main dashboard for the amazons console. so your answer doesn't make sense."*
+- **He was right and my framing was wrong.** I described what OUR DATABASE holds (campaigns only for SP, $130k of $438k) and presented it as a limit on what is POSSIBLE. The console's Campaigns view carries every campaign type with every metric and an Export button, and **the table and uploader for exactly that export already existed here**.
+
+### ⚠ The real blocker was a hardcoded line
+`parseAmazonSpCampaign` wrote `ad_product: 'sponsored_products'` for every row. So an all-types export would store Sponsored Brands and Display campaigns **as if they were SP** - worse than not having them, because the mislabelling is invisible and would quietly inflate SP in every roll-up.
+
+- `_amzAdProduct` now reads the export's **Type** column and maps onto the vocabulary `amazon_ad_spend` already uses, rather than coining a third set (rule #3).
+- **An unrecognised Type is returned as its own slug, never bucketed into SP.** A new Amazon format should show up as itself and be obvious.
+- The SP default applies only when the export carries no Type column at all, so older SP-only uploads still parse.
+
+### What was NOT the problem
+The parser already maps sales / orders / units / ACOS / ROAS / daily budget / impression share / top-of-search, each conditional on the column being present. Those read null on the existing upload because **the export did not have those columns ticked**, not because the parser drops them. That half is an export setting, not code.
+
+### Verification
+- `node --check` clean · **80 suites green**.
+- The REAL classifier driven in a browser against the wording the console actually writes: `Sponsored Products / Automatic Targeting`, `Sponsored Brands / Manual Targeting`, `Sponsored Display`, **`Display, Video & Audio`**, `Sponsored TV`, `Streaming TV`, empty, null, and an invented format. **10 of 10**, including the unrecognised one staying itself.
+
+### The lesson, which is v11.05's again
+I reported a limit of the DATA as a limit of the WORLD. The console was one screenshot away and would have corrected me immediately. **Check what the source system can produce before telling someone what cannot be built.**
 ## v11.13 - search the mapping ROWS, not just the product list
 
 - **Jason:** *"let me search within the mapping here."*
