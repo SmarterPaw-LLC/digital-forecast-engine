@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.14**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.15**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,47 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.15 - amazon_ad_spend learns the campaign
+
+- **Jason:** *"do you want me to reupload it after i add the campaign name? it pulls everything for quarter to date"* and *"where should i upload it? upload section?"*
+- Yes, and the **Amazon Ads — Unified Report** dropzone (Data → Uploads → Amazon Ads SB/SD/DSP/TV). This is the parser half, so that upload lands with campaign populated instead of needing a second round trip.
+- **SQL TO RUN:** `supabase_v11_15_amazon_ad_spend_campaign.sql`. Idempotent. Run BEFORE uploading.
+- **A re-upload is safe**: the handler DELETEs only `.gte('date', fromD).lte('date', toD)` from the file's own range and re-inserts, so a QTD re-upload replaces that window rather than duplicating it, and nothing outside it is touched.
+
+### Why the unified report and not the campaign snapshot
+`amazon_sp_campaign_snapshot` is a single-month rollup with **no per-row date**, Sponsored Products only. The unified report is **daily**, covers every ad product, and is already on a weekly cadence - so adding `Campaign name` as a dimension there gives campaign grain across all ad types with **no new upload cadence**. Jason confirmed the console exports it; v11.14 had already stopped the sibling parser mislabelling every row as SP.
+
+### ⚠ The grain had to move with the column
+Carrying `campaign` on the row **without putting it in the aggregation key** looks identical in a diff and is wrong in one specific way: two campaigns advertising the same ASIN on the same day in the same marketplace is the **ordinary** case, and they would collapse into one row stamped with whichever campaign the file happened to list first. The pair's whole spend would be attributed to one of them, **on the page built to judge campaigns**, and the surviving name is a real campaign - so there is nothing on screen to notice.
+
+`test_v1115` A3 reproduces the old key against exactly that shape and proves it collapses $30 of two campaigns under one name.
+
+### ⚠ The unique index had to move too, or the upload destroys the window it replaces
+`amazon_ad_spend_uniq` was `(date, region, ad_product, coalesce(asin,''), coalesce(advertiser_brand,''))`. At campaign grain the second campaign's row is a **unique violation** - and the handler DELETEs the window **before** it inserts, so the insert chunk throws after the quarter has already been emptied. A good upload would have destroyed the data it was replacing.
+
+- The migration rebuilds the index with `coalesce(campaign,'')`, **creating the new one before dropping the old**, so the table is never without a uniqueness guard. Widening a unique key can only reduce collisions, so existing rows satisfy it by construction and nothing needs cleaning first.
+- **The handler now probes the schema BEFORE the delete** (`select('campaign').limit(1)`), so running an upload before the migration is a **refusal that says *Nothing was deleted***, not silent data loss. One row read buys that difference. Ordering is the whole guarantee, so the suite asserts the probe's position against the delete's rather than merely asserting it exists.
+
+### What did NOT have to change, and how that was checked
+Every consumer of `amazonAdSpendData` **accumulates (`+=`) or set-adds** - `buildAdSpendBuckets`, both `perSlugSpend` scans, the SP attribution probe - so a finer row grain leaves every existing total byte-identical. Checked by reading each consumer before shipping, then pinned: the suite parses the same file with and without the column and asserts spend / impressions / clicks / purchases / attributed_sales match at both grains. **A consumer that OVERWROTE on a key would have started dropping rows here instead**, which is why this is an assertion and not a comment.
+
+### ⚠ Historical rows carry `campaign = NULL` and the Ads view must SHOW them
+Amazon's report builder cannot retrofit a dimension onto spend already pulled without it, so every pre-v11.15 row has no campaign and never will. A campaign-level view needs an explicit **(no campaign)** bucket: filtering nulls out would silently understate total spend on the exact page built to judge whether the spend pays. Stated in the migration so the view cannot be built without meeting it.
+
+### The card says what landed
+An export missing the column **parses fine and leaves the Ads view empty** - invisible otherwise, since the upload succeeds. The status line now carries one fragment: `N campaigns`, or `⚠ no Campaign name column`, or `⚠ Campaign column empty`. Three different operator next-moves, so three different messages rather than one merged "no campaigns".
+
+### Verification
+- `node --check` clean · **81 suites green** · new `tests/test_v1115.py` (61 assertions).
+- The **real** parser (plus the real `parseCSV` / `adsProductSlug` / `adsParseDate` / `adsStripExcel` / `adsMarketplaceToRegion` / `adsAdvertiserToBrand`) driven on a 7-row export built both ways: 4 campaigns counted, the two SP campaigns on one ASIN-day staying two rows at $10 and $20, a blank cell resolving to `null` rather than an empty-named campaign, a whitespace-only cell likewise, a brand-level TV row (no ASIN) keeping its campaign, `master_id` resolution identical at either grain, and three degenerate shapes neither throwing nor leaking `NaN` / `Infinity` / `undefined`.
+- **The bare-export path is asserted unchanged**: same row count as the old key, `campaign` present on every row and `null` on every row.
+
+### One of my own expectations was wrong, not the code
+I asserted impressions totalled 18,700. The file sums to **17,700**. Arithmetic, mine; re-pointed.
+
+### Still open
+- **The Ads sub-tab itself is NOT built.** This release only gets campaign into the pipeline. Chewy has the complete data (20 campaigns, full span, all $49,576) and should go first; Amazon follows once Jason's QTD re-upload lands.
+- **Walmart has no ads data at all** - still waiting on a Walmart Connect sample export, and the Walmart break-even model still needs the agreement first (the v11.05 lesson).
 ## v11.14 - the campaign parser assumed every row was Sponsored Products
 
 - **Jason:** *"campaigns is the main dashboard for the amazons console. so your answer doesn't make sense."*
