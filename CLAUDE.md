@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.08**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.09**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,38 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.09 - the matcher gets search, the SKU, and exact auto-match
+
+- **Jason, three things in a row:** *"there not being a search here for product match is diabolical."* / *"also i should see the sku on the product match"* / *"there should be a match for skus that exist."*
+- All three fair. v11.08 shipped 42 rows against a few hundred products in a bare `<select>`: a long scroll, 42 times, with no way to tell which product you had landed on.
+
+### A searchable picker, built as helpers because it is the FIRST one
+The app had **no datalist and no shared product picker anywhere** (grepped before building). So rather than inline markup, this is `productPickerLabel` / `productPickerDatalist` / `productPickerIndex`, which the next surface needing one can call instead of growing a second copy (hard rule #1).
+
+- **One datalist for the dialog, not one per row.** 42 x ~300 options would be 12,600 nodes for a list that is identical every time.
+- **⚠ The label carries BOTH ids** (`master_id · sp_sku`), which is what makes it safe as well as what Jason asked for. Two products can share a title and a datalist resolves on the VISIBLE STRING, so a title-only label would silently collapse them into whichever the map held last.
+- **⚠ A datalist input accepts FREE TEXT.** Unrecognised text resolves to `null` and gets its own refusal naming what was typed, never written as if it were an id. *"Needs a product"* would be the wrong message for someone who has clearly typed one.
+
+### Exact auto-match, which is NOT the fuzzy matching that was rejected
+Earlier attempts at name matching produced confident wrong answers (Tuffer Chewer Pizza — Mini Pizza, Zoom Sticks — Zoom Pops). **Identity is checkable; a name resemblance is not.** `walmartGuessMasterId` matches only on `sp_sku` / `master_id` / `shopify_sku`, plus two structural variants visible in the ledger itself:
+
+| ledger code | resolves via | |
+|---|---|---|
+| `KC211` | exact | the item itself |
+| `KC211-01` | strip trailing `-NN` | a pack variant of the same item |
+| `MKC110` | strip leading `M` | a MASTER CASE of that inner case |
+
+- **Auto-matched rows are outlined green and counted in the header**, so they read as *confirm this* rather than being applied behind the operator. A stored crosswalk entry always wins over a guess.
+- **No match returns null, never a near-miss.**
+
+### Verification
+- `node --check` clean · **80 suites green**.
+- **Driven in a browser against the shipped build** (chip `v11.09`). The real helpers: the label renders `Kitty Ka-Zoom · Zoomie Multipack Fish Toy  [SP-0353 · KC211]` and round-trips back to `SP-0353`; auto-match resolves exact, `-01` pack variant, `MKC` master case, by `master_id`, and case-insensitively, while an unknown code and an empty string both return **null**.
+- The real modal against the real file: the product cell is an `INPUT` bound to `list="wmc-products"`, and typing text that matches nothing is **refused by name** rather than saved.
+- **⚠ Not verified end to end: the auto-fill inside the modal.** `allProducts` is a module-scope `let` an injected scope cannot replace (v10.93), so the dialog saw an empty catalog and correctly auto-filled nothing. The matcher is verified as a pure function and the call site is pinned statically.
+
+### ⚠ The patch was refused once, by its own anchor check
+The first attempt wrote `\u2014` and `\u00b7` into anchors where index.html holds the REAL em dash and middle dot — the v10.77 mixed-escape trap. The script asserts every anchor matches exactly once and exits BEFORE the write, so it refused after applying one edit in memory and **wrote nothing**. Re-done with the real glyphs.
 ## v11.08 - Cost to Walmart, and a one-time case-SKU matcher
 
 - **Jason:** *"just build a tool and i'll upload to match each. we only need to do this once, so i don't need a highly visible UI component. just match the pattern on other pages with an upload function on the 'cost to walmart' tab under walmart P&L. the upload function should give a modal that matches the item in the sheet to the item in the products table."*
