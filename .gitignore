@@ -35,3 +35,4 @@ tests/*_guard.json
 /patch_*.py
 /fix_*.py
 /doc_v*.py
+/_walmart_in/

@@ -72,9 +72,14 @@ STRIPS = {
     'Inventory Planning': ['ipv-planning', 'ipv-reorder'],
     'Pricing Scenarios':  ['pricing-mode-new', 'pricing-mode-existing', 'pricing-mode-chewy'],
     'Digital Sales':      ['ds-view-grid', 'ds-view-reports'],
+    # v11.08 - Walmart P&L grew a strip (Sales + Cost to Walmart). Census
+    # 23 -> 25; this going red is the test doing its job, same as v10.36's
+    # 20 -> 21 and v11.01's 22 -> 23.
+    'Walmart P&L':        ['wmpnl-tab-sales', 'wmpnl-tab-cost'],
 }
 DEFAULT_ON = {'chpnl-tab-sales', 'dst-uploads', 'pnl-amzn-tab-summary',
-              'ipv-planning', 'pricing-mode-new', 'ds-view-grid'}
+              'ipv-planning', 'pricing-mode-new', 'ds-view-grid',
+              'wmpnl-tab-sales'}
 
 
 def tag_of(btn_id):

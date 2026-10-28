@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.07**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.08**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,57 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.08 - Cost to Walmart, and a one-time case-SKU matcher
+
+- **Jason:** *"just build a tool and i'll upload to match each. we only need to do this once, so i don't need a highly visible UI component. just match the pattern on other pages with an upload function on the 'cost to walmart' tab under walmart P&L. the upload function should give a modal that matches the item in the sheet to the item in the products table."*
+- **SQL TO RUN:** `supabase_v11_08_walmart_catalog.sql` - adds `walmart_catalog` + the `walmart_cost_per_each` view. Idempotent. Run BEFORE uploading or every save throws.
+
+### ⚠ The file is at CASE grain and `products` is at EACH grain
+Jason: *"its because these are case SKUs and not each SKUs, our system only has each skus."* That is the whole design constraint, and it was my second guess rather than my first - I initially proposed a separate table on the theory that one product had two competing costs.
+
+It does not. `KC211` (24/case) and `KC211-01` (6/case) are the same fish toy, and the ledger proves it: **$3.0942 vs $3.1092 per each**, a rounding difference on the case price. Several rows legitimately share one `master_id`.
+
+- **Cost per each is DERIVED from totals, never averaged across rows.** `SUM(amount) / SUM(qty_cases * pack)`. Averaging the row figures would weight a 1,428-case line the same as a 70,560-each one. On the fish that is 79,128 eaches on $244,967 = **$3.0958**.
+- **The SQL view and the renderer derive it the same way**, and the comment says so, because two formulas would be two answers (hard rule #1).
+- A row with no `master_id`, no `pack`, or flagged `is_fee_line` is **excluded rather than defaulted**, so an unmapped case SKU reads as absent instead of quietly poisoning a denominator.
+
+### Why the matching is manual, and why that is the right call
+I tried to automate it twice and both attempts produced **confident wrong answers**:
+
+| Internal code | Fuzzy match said | Actually |
+|---|---|---|
+| DC217 Tuffer Chewer **Pizza** $7.25 | Mini Pepperoni Pizza | that is DC268 at $4.20 |
+| KC110 **Zoom Sticks** | Zoom Pops | different product |
+| KC112 **Silvervine** Rollers | Valerian Rollers | different product |
+
+13 of 42 scored "high confidence" against the Walmart item master and several of those were wrong. **Those are exactly the pairs that put the wrong cost on the wrong SKU**, which is the failure mode this session spent all day cleaning up on Chewy. A matcher that asks once beats a matcher that guesses every time.
+
+### The modal
+- One row per case SKU: the ledger line as written, a **pack** input, a product `<select>`, and a **Not a product** tick for fee lines (`KD001 Walmart SideKick 2025`, 19 units at $0.01).
+- **Pre-selects from the crosswalk already stored**, so a re-upload is a review rather than a re-do. That is the entire reason the crosswalk persists - the cost changes, the mapping does not.
+- **Pack parses where the description says it** (35 of 42) and is left blank with an orange border where it does not (the 3 master cases, 2 singles, the fee line). It asks rather than inventing a denominator.
+- **Save refuses while any row is neither a fee line nor fully specified**, and names the offending SKUs. Without that, an incomplete row lands in the table and is then silently excluded by the view - present but invisible, the worst of both.
+
+### Design notes
+- Walmart P&L grew its first **sub-tab strip**, same `.subtab` class and `subtabApply` chokepoint as the Amazon and Chewy strips. Glyphs match their Chewy twins (💰 Sales / 💵 Cost to): one concept, one glyph (rule #2).
+- The existing Walmart content was wrapped in a panel **by DIV BALANCE, never by eye** - the v10.88 rule, after v10.59 left five orphaned closes.
+- **`esc2` is its own named global** rather than a call to `esc`, which is a local const inside 18 functions and never a global. That is the v10.86 trap, which cost a release once already.
+- `walmart_catalog` joins `dz-shopify` in **`DZ_RECENT_NO_RAIL`**, with the reason stated: it is a current-state upsert table, so there are no upload SESSIONS carrying a data period for a rail to list. A rail there would have to invent a date range.
+
+### Verification
+- `node --check` clean · **80 suites green**.
+- **Driven in a browser against the shipped build** (chip confirmed `v11.08` first) using **Jason's real file**, fetched and parsed by the REAL `walmartParseItemsSheet`: **42 rows, 35 packs parsed**, and the 7 that need one named exactly (`KD001, KF001, KF002, MKC003, MKC110, MKC111, MKC112`). The fish rows read `KC211` 2,940 cases / $218,327 / $74.26 per case and `KC211-01` 1,428 / $26,640 / $18.66 - the two pack configs the design turns on.
+- **The real modal driven end to end**: 42 rows rendered, a pre-seeded crosswalk entry pre-filling its pack, 7 blank packs all carrying the orange border, **Save refused while incomplete** and named the SKUs, then resolved and returned 42 rows with the dialog closed.
+- The cost tab switches correctly (sales hidden, cost shown, tab marked on), renders 7 header columns and a `colspan="7"` empty state, and leaks no `undefined` / `NaN` / `[object` / `Infinity`. **Zero console errors.**
+- **Not verified here:** the save round trip and the populated table. Both need auth, and the login gate leaves the app container hidden (v10.87). The parser, the modal and the renderer are each driven for real; only the Supabase write is not.
+
+### ⚠ Two guards tripped and both were doing their job
+- **`test_v1017`** sub-tab census 23 → 25. Pure drift; the Walmart strip is registered, same as v10.36's 20 → 21 and v11.01's 22 → 23.
+- **`test_v1086`** flagged the new dropzone as having no rail. That is the v10.86 rule working exactly as designed - the exclusion is now **stated** rather than assumed.
+
+### Still open
+- **Five product questions Jason has not answered**, carried from the mapping attempt: which product `ZOOM STICKS` (KC110) is and whether its $13.99 per each is right when `ZOOM CHEWS` is $2.59 on the same pack notation; `KK RED LOBSTER` (KC201) has no catalog match at all; the two Juananip lines; the inner counts for three master cases (MKC112 resolves itself at 12 inner cases of 12, giving $2.29 - matching its inner-case SKU exactly); and whether `KD001` is a fee line.
+- **The break-even model is NOT built.** This release only establishes cost. Walmart is 1P like Chewy, so break-even takes the Chewy shape (`list / contribution per unit` on a wholesale basis) and needs Walmart's list price plus whatever allowance structure Walmart charges. **Ask for the agreement first** - the v11.05 lesson, where I inferred a commercial fact from invoice gaps and shipped two wrong releases on it.
 ## v11.07 - the incrementality baseline was excluding the months with no ads
 
 - **Jason:** *"i don't know why your kitty kazoom is missing august and sept last year."*
