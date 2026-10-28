@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.10**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.12**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,27 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.12 - the Cost to Walmart panel was outside its own page
+
+- **Jason:** *"when i'm on cost to walmart and i switch to chewy P&L, the page does not switch."* and *"allow me to change any of the dimensions in cost to walmart."*
+
+### ⚠ The bug: a naive tag count is not div balance
+v11.08 located `pnl-view-walmart`'s closing tag by counting `<div` / `</div>` from the opening tag. That count includes tags inside **HTML comments and attribute prose**, of which this file has many. The depth went wrong, the walk **overran the container entirely**, and the panel was inserted after `<!-- /pnl-view-pricing -->`.
+
+So `wmpnl-view-cost` was a **SIBLING** of `pnl-view-walmart`, not a child. Nothing hid it when the P&L page changed, and the Walmart cost table sat on top of the Chewy P&L.
+
+**The v10.88 rule was followed in letter and missed in spirit.** "Cut markup by balance, never by eye" is right; a regex that cannot tell code from commentary is not balance. The container's own end comment (`<!-- /pnl-view-walmart -->`) is the reliable anchor and had been there all along. The patch also asserts the **open/close delta is unchanged** before writing, which is the check that would have caught this at the time.
+
+### Every stored dimension is editable
+Description, cases and amount were read-only text, so a ledger typo or a restatement meant re-uploading the whole file. All three are inputs now, alongside pack, product and the fee flag.
+
+- **`cost_per_case` is deliberately NOT an input.** It is amount / cases, and a third box would be a third number free to disagree with the two it comes from. It **recomputes live as you type**, so an edit shows its effect immediately, and it is re-derived from the edited figures on save so a stored per-case can never describe a cases/amount pair that no longer exists.
+- Same rule the SQL view follows: a computed figure is never also an input.
+
+### Verification
+- `node --check` clean · **80 suites green** · div balance 2,785 open / 2,785 close, unchanged by the move.
+- **Driven in a browser**: `wmpnl-view-cost` now reports `costInsideWalmart: true` with parent `pnl-view-walmart` (it read `false` before). Switching to the cost tab then to Chewy P&L leaves the Walmart wrap `display:none`, the cost panel off-screen, and the Chewy panel shown. Only the expected unauthenticated 401s in console.
+- **Jason's real upload landed in the meantime**: 42 case SKUs, 41 priced, 33 products, and the fish reads **$3.0958** per each — the exact weighted figure the design predicted from 79,128 eaches on $244,967.
 ## v11.10 - the picker label could not be read
 
 - **Jason:** *"oh come on. now i can't see the results."* then *"also show the full result."*
