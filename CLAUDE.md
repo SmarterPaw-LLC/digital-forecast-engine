@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.15**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.16**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,68 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.16 - the Ads sub-tab, campaign level, on BOTH P&Ls
+
+- **Jason:** *"there is still no ads tab"* — looking at the Amazon P&L after v11.15 shipped only the pipeline half. Correct, and the gap was mine to close.
+- The ask, from earlier in the session: *"Please start working on the ad view for amazon/chewy/walmart in chunks"* → **Ads sub-tab on each P&L** → *"I want to see the campaigns and metrics for each"*.
+
+### ⚠ ONE renderer, two channels - which is the whole design
+The two feeds differ in column NAMES and in which metrics exist at all: Chewy reports NTB customers, ad units and campaign status; Amazon reports an ad-product type. That difference lives in a per-channel **adapter** (`ADS_CHANNELS`) plus a **column registry** (`ADS_COLUMNS`). The rollup, the shell markup, the scorecards, the sort, the search, the footer and the CSV are shared.
+
+- **The panel markup is a bare host.** `adsEnsureShell` emits the controls and table once per host, so the Chewy tab is the same markup rather than a second copy of it. A third channel (Walmart Connect) is an adapter and a registry, not another renderer.
+- `tests/test_v1116.py` C1-C4 assert exactly ONE of each: renderer, rollup, shell builder, exporter.
+- The shell is built **once and then only repainted**, because re-emitting the controls on every render would blow away the search box's caret mid-keystroke (the v10.99 rule, applied to a whole control row).
+
+### ⚠ A row with no campaign is SHOWN, never filtered out
+`amazon_ad_spend` only learned `campaign` in v11.15, and Amazon cannot retrofit the dimension onto a pull already taken — so most of the history has none and never will. Dropping those rows would understate total spend **on the exact page built to judge whether the spend pays**: the figure would look clean and be wrong.
+
+They roll up under `(no campaign)`, dimmed and italic with a tooltip saying why, and the coverage line states the share. On the real data in the pane that read **$1,430 (80%) has no campaign on record**.
+
+`test_v1116` A4 is the guard: it reproduces the naive *"filter out the nulls"* and proves it really does understate the total by the whole bucket.
+
+### Measures, and the one that needed its own name
+The Chewy registry reuses `CHEWY_MEASURE_VOCAB`'s declared words verbatim — Spend / Impressions / Clicks / Direct $ / Direct ROAS / NTB / Total orders / Ad Units — which is the point of having the registry. Eight genuinely new labels are declared (`Campaign`, `Campaign Type`, `Status`, `SKUs`, `CTR %`, `CPC`, `CPA`, `Direct ACOS %`).
+
+- ⚠ **`Direct ACOS %` is deliberately NOT `Actual ACOS %`.** The declared `Actual ACOS %` divides by REALISED sales (direct plus recurring autoship) on the Break-Even tab. This divides by DIRECT sales. Same arithmetic, narrower population, so it gets a scoped name rather than two meanings one tab apart (rule 3a).
+- **Totals are summed from the rows, then the ratios derived once** — never averaged across campaigns, which would weight a $48 campaign the same as a $1,430 one. A5 asserts the two readings differ visibly on the fixture, so "summed" is checkable rather than read off a diff.
+- **The footer totals WHAT IS ON SCREEN**, so a search or the zero-spend filter cannot leave a TOTAL describing rows the operator cannot see. Driven: searching `meowi` took the footer to `$211`.
+
+### Three guards went red and ALL THREE caught real defects
+- **`test_v1050`** — I shipped the "Ads" label with a DIFFERENT glyph per page (loud megaphone on Amazon, megaphone on Chewy) and rationalised it as *each channel's own icon*. That is verbatim the v10.50 defect this suite exists to stop (Break-Even was money-bag on Amazon and dart on Chewy). **One label, one glyph**: both are now the loud megaphone. The DATA_SOURCES chips keep their per-channel ones — different registry, different question (which TABLE a number came from).
+- **`test_v103`** — the Ads tabs grew a page search and never registered it, so the top bar would have read *"No search on this page"* while a live search box sat below it — exactly the Seasonality bug v10.3 was written to fix. Both now in `GLOBAL_SEARCH_MAP`.
+- **`test_v1053`** — the new labels were undeclared because the one-label-one-measure sweep only reads the four `CHEWY_*_COLUMNS` registries. **Re-pointed to reach into `ADS_COLUMNS`'s `chewy` half** rather than the code growing a second parallel registry to satisfy an extractor regex. The sweep now covers a fifth tab, so the re-point TIGHTENS.
+- `test_v1017`'s sub-tab census 25 → 27. Pure drift.
+
+### ⚠ A null numerator was reading as zero
+Found by my own test expecting `adsDiv(null, 2)` to be null; `Number(null)` is 0, so it returned 0. Nothing on screen is wrong today — every numerator here is an accumulated number — but *"we have no value"* rendering as `0.00x` would be **indistinguishable from a campaign that genuinely returned nothing**, which is the one row on this page nobody can afford to confuse with a gap in the data. Fixed at the helper.
+
+**Zero stays zero**: `adsDiv(0, 20)` is still 0, because spending $20 and getting nothing back IS a ROAS of zero and is the most important row on the page. My first test expectation had that backwards and was re-pointed, not the code.
+
+### ⚠ Two counts on one screen that read as a contradiction
+Driving the render showed the scorecard saying **2 campaigns** and the TOTAL row directly beneath it saying **3 campaigns**. Both right: the card counts NAMED campaigns, the footer counts rows on screen, which include the bucket. Nothing said so, which is the v10.94 / v10.98 shape Jason has caught twice. **Fixed the WORD, not the arithmetic** — the footer counts `rows` and says so.
+
+### Verification
+- `node --check` clean · **82 suites green** · new `tests/test_v1116.py` (75 assertions).
+- **Driven in a browser against the shipped build** (chip confirmed `v11.16` first, per v10.67). `ADS_CHANNELS` is a const OBJECT, so its `rows` adapter can be swapped to drive the REAL renderer end to end with real-shaped data — which the module-scope `let` caches (v10.93) have never allowed on previous releases.
+  - **Amazon**: 13 columns, sorted Spend desc, `(no campaign)` dimmed/italic with its tooltip, `Meowi SP - Exact` correctly merging SP+SB into one row (`Sponsored Brands · Sponsored Products`, $306, 3.58x), `KKZ Display` reading **ROAS 0.00x with ACOS and CPA both em-dash** (spent, returned nothing, vs genuinely undefined).
+  - **The real region filter drops a CA row**: $1,805.64 → $1,795.65 and `CA SP` disappears.
+  - **The Ad Spend chip is NEUTRAL GREY at +650%**, while Sales/Clicks/Orders go green up and ROAS red down. A red spend chip reads as *"cut it"*, the one default Jason has ruled out for brand and awareness spend.
+  - **Chewy**: all 16 columns in its own vocabulary, brand picker filled FROM THE DATA (not a hardcoded list), filtering to Meowijuana narrowing to one row at $48.
+  - **Tab switching**: the Amazon panel resolves INSIDE `pnl-amzn-ads-wrap` and hides on switch — the v11.12 bug does not recur. Chewy likewise, with its BASIS line rendering.
+  - **The CSV driven for real** with the Blob captured: scope comments including the no-campaign disclosure, a campaign name containing a comma AND quotes escaped correctly, and **every data row plus TOTAL carrying exactly 13 fields against a 13-field header**.
+  - Only the expected unauthenticated 401s in console.
+- **Not verified here:** how it LOOKS. The login gate leaves the app container hidden (v10.87), so every box measures 0. The text, the structure and the handlers are read back off the real DOM; only the pixels are not.
+
+### ⚠ The heredoc ate an escape AGAIN, twice, in one session
+A test re-point written through a bash heredoc turned `\\n` into a real newline and produced an unterminated string literal. CLAUDE.md has warned since v9.77 and at v10.68 / v10.88 / v10.92 / v11.00: **this is not "be careful", it is "do not use the heredoc"** — use the Write tool for anything containing escapes. The file was recovered from git; nothing was lost, but it cost two rounds.
+
+### ⚠ My own harness decoded node's UTF-8 as the console codepage
+`subprocess.run(..., text=True)` with no `encoding` reads node's stdout as cp1252, so every non-ASCII value came back mangled and A2a failed on a string that was correct all along. The v10.77 trap, in a harness this time. `encoding='utf-8'` on the call.
+
+### Still open
+- **Amazon shows `(no campaign)` for everything until Jason re-uploads.** The weekly unified report needs `Campaign name` ticked as a dimension; a QTD re-upload backfills the quarter (v11.15's DELETE+INSERT is scoped to the file's own date range). **Chewy has had campaign data since v10.36 and lights up today.**
+- **Walmart has no ads feed at all** — still waiting on a Walmart Connect sample export. The Walmart break-even model still needs the agreement first (the v11.05 lesson).
+- The Ads tabs show no TREND yet. The per-campaign table answers *which campaign spent the money*; *when* is the obvious next chunk.
 ## v11.15 - amazon_ad_spend learns the campaign
 
 - **Jason:** *"do you want me to reupload it after i add the campaign name? it pulls everything for quarter to date"* and *"where should i upload it? upload section?"*

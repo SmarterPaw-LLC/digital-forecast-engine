@@ -15,6 +15,20 @@ ENGINE = js[a:b] + js[b:c]
 
 # Every search input that actually exists in the markup, with its page.
 inputs = dict(re.findall(r'<input[^>]*id="([^"]*(?:[Ss]rch|search)[^"]*)"[^>]*placeholder="([^"]*)"', RAW))
+# v11.16 - the two Ads tabs share ONE shell (hard rule #1), so their search
+# inputs carry ids built from ADS_CHANNELS[*].host and the scrape above sees
+# the raw template instead of an id. Resolve it against the registry that
+# fills it, so section F ends up asserting the REAL ids are mapped - which is
+# STRONGER than before: a third channel added without a GLOBAL_SEARCH_MAP
+# entry now fails here instead of sliding past as a template.
+_tmpl = [k for k in inputs if '${ch.host}' in k]
+if _tmpl:
+    _hosts = re.findall(r"host:\s*'([a-z0-9-]+)'", js[js.index('const ADS_CHANNELS = {'):])
+    assert len(_hosts) >= 2, 'ADS_CHANNELS hosts not found - sweep would pass vacuously'
+    for _k in _tmpl:
+        _ph = inputs.pop(_k)
+        for _h in _hosts[:2]:
+            inputs[_k.replace('${ch.host}', _h)] = _ph
 
 static = [
     ('Seasonality is mapped to its real input', "forecast_seasonality:   { id: 'sea-search' }" in js),

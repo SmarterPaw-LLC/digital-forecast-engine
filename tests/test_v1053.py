@@ -150,6 +150,20 @@ COL_REGISTRIES = [
     ('Break-Even',    'CHEWY_BE_COLUMNS'),
     ('Program',       'CHEWY_PROGRAM_COLUMNS'),
 ]
+# v11.16 - the Ads tab joins the sweep, which is why this went red when it
+# shipped. Its columns do NOT live in a CHEWY_* const: the Ads view is ONE
+# renderer serving both P&Ls (hard rule #1), so its registry is the
+# per-channel ADS_COLUMNS map. The sweep reaches into that map's `chewy`
+# half rather than the code growing a second, parallel registry just to
+# satisfy this extractor. The AMAZON half is deliberately out of scope:
+# this rule polices the CHEWY page group, and Amazon's labels follow its
+# own console's wording.
+_adsI = RAW.index('const ADS_COLUMNS = {')
+_adsC = RAW.index('chewy: [', _adsI)
+ADS_CHEWY_SLICE = RAW[_adsC:RAW.index('\n  ],', _adsC)]
+# Guard the guard: a slice that silently came back empty would make every
+# Ads label look undeclared-but-unrendered, or pass vacuously (v10.20).
+assert ADS_CHEWY_SLICE.count('label:') >= 10, 'Ads chewy slice looks wrong'
 TABS = [
     ('Sales',         'renderChewyPnlSales'),
     ('Cost to Chewy', 'renderChewyPnlCost'),
@@ -163,6 +177,8 @@ for tab, const in COL_REGISTRIES:
     j = RAW.index('\n];', i)
     for k, lab in COL.findall(RAW[i:j]):
         found.setdefault(norm(lab), []).append((tab, 'col', k))
+for k, lab in COL.findall(ADS_CHEWY_SLICE):
+    found.setdefault(norm(lab), []).append(('Ads', 'col', k))
 for tab, fname in TABS:
     b = fnbody(fname)
     for lab in CARD.findall(b) + CARD_L.findall(b):

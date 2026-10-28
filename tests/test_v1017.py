@@ -62,13 +62,15 @@ STRIPS = {
     # per unit). This count going red is the test doing its job.
     # v11.01 added the Program sub-tab (account-level efficiency). This count
     # going red is the test doing its job, same as v10.36's 20 -> 21.
+    # v11.16 added the Ads sub-tab (campaign level) to BOTH P&Ls. Census
+    # 25 -> 27; this going red is the test doing its job.
     'Chewy P&L':          ['chpnl-tab-sales', 'chpnl-tab-cost', 'chpnl-tab-breakeven',
-                           'chpnl-tab-program', 'chpnl-tab-rebates'],
+                           'chpnl-tab-program', 'chpnl-tab-ads', 'chpnl-tab-rebates'],
     'Data':               ['dst-uploads', 'dst-history', 'dst-query'],
     'Amazon P&L':         ['pnl-amzn-tab-summary', 'pnl-amzn-tab-perf', 'pnl-amzn-tab-diag',
                            'pnl-amzn-tab-changelog', 'pnl-amzn-tab-growth',
-                           'pnl-amzn-tab-opps', 'pnl-amzn-tab-adactivity',
-                           'pnl-amzn-tab-breakeven'],
+                           'pnl-amzn-tab-opps', 'pnl-amzn-tab-ads',
+                           'pnl-amzn-tab-adactivity', 'pnl-amzn-tab-breakeven'],
     'Inventory Planning': ['ipv-planning', 'ipv-reorder'],
     'Pricing Scenarios':  ['pricing-mode-new', 'pricing-mode-existing', 'pricing-mode-chewy'],
     'Digital Sales':      ['ds-view-grid', 'ds-view-reports'],
