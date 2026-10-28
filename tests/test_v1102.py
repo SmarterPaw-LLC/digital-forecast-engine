@@ -388,9 +388,19 @@ try { chewyPeriodRenderState(); chewyPeriodRestore(); onChewyPeriodChange(); }
 catch (e) { threw = String(e && e.message); }
 t('B6  the handlers no-op cleanly with no control in the DOM', threw, null);
 
-// B7 — an unknown view falls back rather than silently rendering nothing.
+// B7 - v11.18 RE-POINTED THIS. It used to assert "an unknown active view
+// falls back to Sales", which sounded like robustness and WAS the defect:
+// when v11.16 added a sixth Chewy tab without a CHEWY_PERIOD_RENDERERS row,
+// the control repainted the HIDDEN Sales panel and left the visible Ads panel
+// on a window nobody had selected. Work happened, nothing threw, and the
+// stale tab looked like a working one.
+//
+// Two cases, and they are not the same:
+reset('90'); chewyPnlView = ''; onChewyPeriodChange();
+t('B7a an UNSET view still falls back to Sales - the case the fallback was for',
+  RENDERS, ['renderChewyPnlSales']);
 reset('90'); chewyPnlView = 'nonsense'; onChewyPeriodChange();
-t('B7  an unknown active view falls back to Sales', RENDERS, ['renderChewyPnlSales']);
+t('B7b an UNKNOWN view repaints NOTHING rather than someone else', RENDERS, []);
 
 console.log(JSON.stringify(out));
 '''

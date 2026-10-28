@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.17**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.19**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,66 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.19 - two leftovers on the Amazon P&L control bar
+
+- **Jason:** *"1. AD HR target - what is this for? if it is for the growth model, it should live on that tab only. 2. the search is leftover from when we migrated search up to the top of the page, i think."*
+
+### The search label was dead furniture
+He is right. `hideLocalSearchDuplicates` hid the **input** and nothing else, so the bar kept rendering its `Search` label and the decorative 🔍 beside it. It read **`SEARCH 🔍 QUICK`** with nothing behind it — the v10.87 class: collapse the affordance, leave the furniture.
+
+Fixed in the **shared** function rather than by deleting one page's markup, so a page that grows a labelled search group later cannot reintroduce it:
+- the wrapper is hidden only when the input is the **one** control inside it, so a real control row can never go with it,
+- the preceding label is hidden only when it matches the **word** `search`, so it cannot eat the previous control's label,
+- the walk up is capped at two levels, short of the page's own layout.
+
+The markup is untouched — the label is hidden at runtime, not deleted, so a page that stops being driven by the top bar still has its own.
+
+### Ad HR target: right instinct, different tab
+It is **not** the Growth Model's. It drives the **Ad Headroom** column on the Summary table (opt-in via the View popup) and the fixed one on **Page Performance** — two sub-views out of nine, from a bar that spans all of them.
+
+**And it was already duplicated**: v8.01 put the same setting inside the View popup. Two controls for one number is exactly the divergence hard rule #1 exists to stop, so the **bar copy is removed** rather than a third home appearing, and the popup's copy now shows wherever the setting can bite — on Page Performance always, and on Summary **when that column is switched on**. Offering it while the column is off would be a control with no visible effect (the v10.19 rule), so Summary has to ask for the column first.
+
+The bar now reads `Region · Period · Brand · Category · Seasonal · Quick`.
+
+### ⚠ I shipped the widened condition BROKEN, and the suite was green
+`pnlVisibleCols` is a **Set of column keys**. The condition went out as `typeof pnlVisibleCols === 'function' && pnlVisibleCols()`, so the clause was dead and the control **never appeared on Summary** — the exact case it was widened for.
+
+I caught it before the first write and corrected it **in the patch script**, with a replacement built from memory of that script's own text. The replacement did not match. Nothing said so: `rep()` guards the anchors it applies to `index.html`, not my edits to the script itself, so the patch ran clean and shipped the uncorrected line.
+
+**A fix applied to a patch script is not a fix until the output is read back.** The browser check found it; the green suite did not, because no assertion named that branch. `test_v1119` C2 names it now, with a guard-the-guard line asserting `pnlVisibleCols` really is a Set so the check cannot pass against a shape that changed.
+
+### Verification
+- `node --check` clean · **85 suites green** · new `tests/test_v1119.py` (21 assertions) · div balance delta unchanged.
+- **Driven in a browser** (chip confirmed `v11.19`), reading **computed styles** rather than `textContent`, which includes hidden nodes and had me briefly believing the label was still showing:
+  - the visible bar is now `Region · Period · Brand · Category · Seasonal · Quick · 1 USD = 1.4036 CAD`, with `Search` the only hidden label and no 🔍 left,
+  - Summary + column **off** → no Ad Headroom control; Summary + column **on** → it appears under an `Ad Headroom` header with no PP-only buttons; Page Performance → it appears under `Page Performance controls` **with** them,
+  - the setting still round-trips (20 → 35 → 20).
+
+## v11.18 - the Chewy period control repainted the WRONG TAB
+
+- **Jason:** *"same issue with chewy"* — the readout said `2026-10-01 → 2026-10-28` (Quarter-to-date) while the Ads panel beneath it still said `2026-09-01 → 2026-09-30`.
+
+### ⚠ The silent fallback is what made it invisible
+`CHEWY_PERIOD_RENDERERS` is a hand-kept map of sub-view → renderer, and v11.16 added a sixth tab without adding a row. `chewyRerenderActiveTab` fell through its `|| CHEWY_PERIOD_RENDERERS.sales` default and **repainted the hidden Sales panel** while the visible Ads panel kept a window nobody had selected.
+
+Two defects, and the second is the one worth fixing properly:
+1. the missing row — one line,
+2. **"unknown tab → repaint Sales" turns a missing registration into wrong-looking-right behaviour**: work happens, nothing throws, and the tab you are looking at is stale. An unknown view is a BUG, not a case to default. It warns by name and repaints nothing; the fallback is scoped to the one case it was ever for, `chewyPnlView` not yet set.
+
+### ⚠ This was MY OWN comment coming back
+v11.17's patch carried the line *"The Chewy side has the same shape: its ONE period control calls chewyPeriodApply, which repaints the active tab. Confirm the Ads tab is in that list rather than assuming it."* I wrote the check down and shipped without doing it. **Writing down the check is not doing it.**
+
+### The guard that catches the NEXT one
+A per-tab spot check only ever catches the tab someone thought to check. `tests/test_v1118.py` A1 compares the **TABS registry inside `switchChewyPnlView`** against `CHEWY_PERIOD_RENDERERS` and `CHEWY_PERIOD_SOURCES` **as sets**, in both directions, so a seventh Chewy tab cannot ship with a missing row either.
+
+### Verification
+- `node --check` clean · **84 suites green** · new `tests/test_v1118.py` (21 assertions).
+- **Driven in a browser**: the readout and the Ads panel now agree on every period — QTD `2026-10-01 → 2026-10-28 · 1 campaign · $1,000`, 365d `4 campaigns · $3,400`, 30d `1 campaign · $1,000`. An unknown sub-tab emits exactly one warning naming `CHEWY_PERIOD_RENDERERS` and repaints nothing.
+
+### ⚠ `test_v1102` B7 encoded the BUG as the contract
+It asserted *"an unknown active view falls back to Sales"*, which sounded like robustness and was precisely the defect. Re-pointed to the two cases that are genuinely different: an **unset** view still falls back to Sales, an **unknown** one repaints nothing. Stronger, because a missing registration can no longer be silently absorbed.
+
+Two of my own test-harness mistakes, both caught before shipping: a key sweep that harvested the nested `field` / `rows` keys out of `CHEWY_PERIOD_SOURCES`' value objects and reported them as tabs that no longer exist, and a sweep that matched its own fix's explanatory comment (the v10.90 prose-in-source class, in a guard again — now asserted against comment-stripped code, with a second line requiring the comment to survive).
 ## v11.17 - the period bar drives the Ads tab, and Ad Activity moves under it
 
 - **Jason:** *"using the period filters on the ads tab does not filter anything. why is the reporting window locked to the range?"*
