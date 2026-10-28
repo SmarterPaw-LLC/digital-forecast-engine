@@ -170,11 +170,51 @@ for t in ['amazon_ads_bulk_upload', 'amazon_ads_bulk_snapshot',
 # ── E. The host sub-views wire what the Uploads page used to ───────────────
 print('\nE. host sub-views set up their uploaders on entry')
 
-m = re.search(r"if \(view === 'growth' \|\| view === 'adactivity'\) \{(.*?)\}", JS, re.S)
-ok(bool(m), 'both host sub-views share an entry hook')
-hook = m.group(1) if m else ''
-for fn in ['initUploadDropTargets', 'renderAllDzRecentUploads', 'refreshUploadDataRanges']:
-    ok(fn in hook, 'entry hook calls ' + fn)
+# v11.17 - this PINNED THE MECHANISM while its own heading claimed a
+# GUARANTEE. It required one particular `if (view === 'growth' || view ===
+# 'adactivity')` to exist. When Ad Activity became an AREA of the Ads tab,
+# its wiring moved into switchPnlAdsView: same guarantee, different branch.
+#
+# Re-pointed to assert EACH hosting surface wires all three on entry,
+# independently of whether they happen to share a branch. Stronger: two
+# hosts sharing one `if` was never the thing that mattered, and a third host
+# added later with a branch of its own now has to satisfy this too.
+WIRES = ['initUploadDropTargets', 'renderAllDzRecentUploads', 'refreshUploadDataRanges']
+
+
+def _fnbody(name):
+    i = JS.index('function %s(' % name)
+    j = JS.index('{', i)
+    d = 0
+    k = j
+    while True:
+        if JS[k] == '{':
+            d += 1
+        elif JS[k] == '}':
+            d -= 1
+            if d == 0:
+                return JS[i:k + 1]
+        k += 1
+
+
+# The Growth Model host: still a branch of the Amazon sub-view switch.
+_sw = _fnbody('switchPnlAmazonView')
+_growth = re.search(r"if \(view === 'growth'\) \{(.*?)\n  \}", _sw, re.S)
+ok(bool(_growth), 'the Growth Model host has an entry hook')
+for fn in WIRES:
+    ok(fn in (_growth.group(1) if _growth else ''),
+       'Growth Model entry hook calls ' + fn)
+
+# The Ad Activity host: now an area of the Ads tab, wired in its switcher.
+_ads = _fnbody('switchPnlAdsView')
+for fn in WIRES:
+    ok(fn in _ads, 'Ad Activity entry hook calls ' + fn)
+ok("renderPnlAdActivity" in _ads,
+   'and the Ad Activity area still renders its timeline on entry')
+# Guard the guard: a typo in either slice would make every check above pass
+# vacuously against an empty haystack.
+ok(len(_ads) > 200 and len(_sw) > 500,
+   'both function bodies were really found', (len(_ads), len(_sw)))
 
 
 # ── F. The reveal cannot depend on rAF alone ───────────────────────────────

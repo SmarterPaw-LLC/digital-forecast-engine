@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.16**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.17**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,54 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.17 - the period bar drives the Ads tab, and Ad Activity moves under it
+
+- **Jason:** *"using the period filters on the ads tab does not filter anything. why is the reporting window locked to the range?"*
+- **And:** *"ads activity tab on amazon p&L should be a sub area of the ads tab"*
+
+### ⚠ The filter bug was mine, and it is the v10.19 class
+v11.16 painted the Ads panel **on tab entry only**. Every other control on that bar repaints through `renderPnl`; the Ads tab did not join. So the period select showed *Last year* while the coverage line and the whole table still described the window that happened to be live when the tab was opened.
+
+**A control that repaints itself and not the numbers beneath it is worse than no control** — the page reports a window nobody selected, and nothing on screen says so.
+
+- **ONE hook, at the chokepoint.** Period, region, brand, category, custom from/to and the EU market all funnel through `renderPnl`, so the repaint lives there. Six hooks on six controls would be six chances to miss one; `test_v1117` A2 asserts each control really does funnel through it.
+
+### ⚠ My first fix was behind an EARLY RETURN, and only driving it found that
+I put the repaint at the tail of `renderPnl`, beside the v8.84 Opportunities sync — which exists because Opportunities had this exact defect. The control still did nothing, and `renderPnl` was not throwing.
+
+**`renderPnl` early-returns when `sku_economics` has no rows for the region.** Opportunities belongs below that return: it is **built from** the aggregates `renderPnl` computes, so it is meaningless when there are none. The Ads tab is not — it reads a **different table** (`amazon_ad_spend`) and resolves its own window from the control.
+
+Ad spend with no SKU Economics in the same window is an **ordinary** state: a backfilled ad pull, a new marketplace, a region whose economics upload is a week behind. In every one of those the period control would have gone dead on the Ads tab again, with nothing to explain it. **The sync moved above the early return**; Opportunities stayed below it, and the comment says why the two are not together.
+
+`test_v1117` A1b/A1c pin the ORDER against the early-return branch, which is the only form of this assertion that would have caught it.
+
+### Ad Activity is now an area of the Ads tab
+It reads `amazon_ad_spend` and answers *what CHANGED in the ad account* — an ads question, not a peer of the P&L summary. The Amazon strip goes from nine tabs to eight; **🗂 Campaigns** and **🛠 Ad Activity** sit inside **📢 Ads**.
+
+- Same `.subtab` class and the same `subtabApply` chokepoint as every other strip (hard rule #1). The ids share the prefix `pnl-amzn-ads-tab`, so `subtabStripKey` derives a strip of its own and the v10.97 visibility panel picks it up with no extra wiring.
+- The button is **deleted, not hidden**: a hidden `.subtab` still counts in the v10.17 census and still shows in the visibility panel — a tab that exists everywhere except on screen.
+- The glyph is new (🗂, verified unused) and **Ad Activity keeps 🛠**, so nothing re-learns an icon.
+
+### ⚠ The URL vocabulary did not change
+`#pnl/amazon/adactivity` has been a real link since v7.94, and the Bulk Sheet data-currency chip routes to it. **Moving a tab must not break a bookmark someone already has.** The name survives in both directions: `switchPnlAmazonView` still ACCEPTS `adactivity` and maps it onto the Ads tab's activity area, and `pnlAmazonRouteView` still WRITES it back out. Links made before the move and after it are the same string.
+
+The v10.88 uploader wiring (`initUploadDropTargets` / `renderAllDzRecentUploads` / `refreshUploadDataRanges`) moved with the panel into `switchPnlAdsView`, since that area still hosts the Bulk Sheet card.
+
+### Verification
+- `node --check` clean · **83 suites green** · new `tests/test_v1117.py` (30 assertions) · div balance delta asserted unchanged (2,797 / 2,797).
+- **Driven in a browser against the shipped build** (chip confirmed `v11.17` first), with `ADS_CHANNELS.amazon.rows` swapped for 10 months of daily rows:
+  - **The period control now moves the window**: 30d → `2026-09-28 → 2026-10-28 · 1 campaign · $3,000` · 90d → `3 campaigns · $8,100` · 365d → `10 campaigns · $16,500` · 7d → `$1,000`.
+  - **The region control drives it too**: CA → `0 campaigns · $0` on a US-only fixture, back to US → `10 campaigns · $16,500`.
+  - **The parent strip is eight tabs** with Ad Activity gone; the nested strip reads `🗂 Campaigns` / `🛠 Ad Activity` and each marks itself on.
+  - **The URL**: campaigns writes `#pnl/amazon/ads`, activity writes `#pnl/amazon/adactivity`. `switchPnlAmazonView('adactivity')` lands on the Ads tab's activity area, and the Bulk Sheet chip routes there with its uploader present.
+  - **Leaving Ads hides both areas** — the v11.12 orphaned-panel bug does not recur.
+
+### ⚠ Two suites went red; both were re-pointed, neither silenced
+- **`test_v1088`** pinned the MECHANISM while its own heading claimed a GUARANTEE: it required one particular `if (view === 'growth' || view === 'adactivity')` to exist. When Ad Activity became an area, its wiring moved into `switchPnlAdsView` — same guarantee, different branch. Re-pointed to assert **each hosting surface** wires all three on entry, independently of whether they share a branch. **57 → 66 assertions**, so the re-point tightens: a third host with a branch of its own now has to satisfy it too.
+- **`test_v1017`** census 27 → 28, with the nested strip registered as its own. Pure drift.
+
+### One of my own test expectations was wrong
+C5 asserted the lifted Ads wrap had a div delta of 1. The slice runs to the wrap's own **end comment**, so it takes the closing tag with it and a balanced wrap reads **0**. The code was right. (Anchoring on the end comment rather than counting tags from the opening one is the v11.12 rule: a naive count cannot tell code from the commentary this file is full of.)
 ## v11.16 - the Ads sub-tab, campaign level, on BOTH P&Ls
 
 - **Jason:** *"there is still no ads tab"* — looking at the Amazon P&L after v11.15 shipped only the pipeline half. Correct, and the gap was mine to close.

@@ -70,7 +70,11 @@ STRIPS = {
     'Amazon P&L':         ['pnl-amzn-tab-summary', 'pnl-amzn-tab-perf', 'pnl-amzn-tab-diag',
                            'pnl-amzn-tab-changelog', 'pnl-amzn-tab-growth',
                            'pnl-amzn-tab-opps', 'pnl-amzn-tab-ads',
-                           'pnl-amzn-tab-adactivity', 'pnl-amzn-tab-breakeven'],
+                           'pnl-amzn-tab-breakeven'],
+    # v11.17 - Jason: "ads activity tab on amazon p&L should be a sub area
+    # of the ads tab." Ad Activity LEFT the Amazon P&L strip and the Ads tab
+    # grew a nested one. Census 27 -> 28; this going red is the test working.
+    'Amazon Ads':         ['pnl-amzn-ads-tab-campaigns', 'pnl-amzn-ads-tab-activity'],
     'Inventory Planning': ['ipv-planning', 'ipv-reorder'],
     'Pricing Scenarios':  ['pricing-mode-new', 'pricing-mode-existing', 'pricing-mode-chewy'],
     'Digital Sales':      ['ds-view-grid', 'ds-view-reports'],
@@ -81,7 +85,7 @@ STRIPS = {
 }
 DEFAULT_ON = {'chpnl-tab-sales', 'dst-uploads', 'pnl-amzn-tab-summary',
               'ipv-planning', 'pricing-mode-new', 'ds-view-grid',
-              'wmpnl-tab-sales'}
+              'wmpnl-tab-sales', 'pnl-amzn-ads-tab-campaigns'}
 
 
 def tag_of(btn_id):
