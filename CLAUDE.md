@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.09**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.10**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,29 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.10 - the picker label could not be read
+
+- **Jason:** *"oh come on. now i can't see the results."* then *"also show the full result."*
+- v11.09 put the ids he had just asked for at the END of the label. A native `<datalist>` sizes its dropdown to the input and **truncates the tail**, so the SKU was the first thing cut. Measured: the widest label needed **535px against a 508px input**.
+
+### Three changes, all about fitting rather than styling
+A datalist gives no control over dropdown width, so the fix is the string and the column, not CSS.
+
+1. **Ids lead.** `KC211 · SP-0353  —  Zoomie Multipack Fish Toy`. They can never be the part that gets cut, which is the whole point of showing them.
+2. **The duplicated brand is dropped.** Half the catalog titles already start with the brand, so `Doggijuana · Doggijuana Juananip Refill Bottle` was spending ~12 characters saying it twice. Prefixed only when the title does NOT already carry it.
+3. **The blurb after the pipe is dropped, the identifying name never is.** The catalog uses `|` for marketing copy that repeats across products (`| Hand Harvested Organic Grown Catnip`). `(2-Pack)` is what tells two near-identical rows apart and it survives. **No ellipsis and no character cap** - a long name with no pipe stays whole, and the hover title carries the resolved label in full as the safety net.
+
+The product column also widened (520px minimum) and the ledger-line column is capped at 260px, since that column is reference and the product is the actual choice.
+
+### Verification
+- `node --check` clean · **80 suites green**.
+- **Measured in a browser** against the real catalog titles from the screenshot, at the real input's font and width: `Juananip™ Refill Bottle` **284px**, `Juananip™ Refill Bottle (2-Pack)` **343px**, `Kitty Ka-Zoom Zoomie Multipack Fish Toy` **389px**, all inside a 508px input in a pane narrower than Jason's screen. A deliberately absurd 71-character name with no pipe overruns at 700px and is **left uncut on purpose**, with hover covering it.
+- The two near-identical Juananip bottles stay distinguishable end to end, which is the case that matters.
+
+### ⚠ The patch was refused twice by its own anchor check, and wrote nothing both times
+- First: `\u2014` where the file holds a real em dash (the v10.77 mixed-escape trap).
+- Second: an anchor containing an escaped backtick. **Python has no backtick escape**, so `\`` stayed as backslash-plus-backtick and matched nothing.
+- Both exited BEFORE the write, so the file was untouched and the retry started from a clean state. **Anchors in this file should avoid backticks entirely** - pick a substring inside the template literal instead of spanning its delimiters.
 ## v11.09 - the matcher gets search, the SKU, and exact auto-match
 
 - **Jason, three things in a row:** *"there not being a search here for product match is diabolical."* / *"also i should see the sku on the product match"* / *"there should be a match for skus that exist."*
