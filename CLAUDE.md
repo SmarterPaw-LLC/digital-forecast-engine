@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.12**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.13**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,25 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.13 - search the mapping ROWS, not just the product list
+
+- **Jason:** *"let me search within the mapping here."*
+- v11.09 made the PRODUCT picker searchable. This is the other axis: narrowing the 42 ledger ROWS, so you can jump to one case SKU or to everything still missing something. Two different haystacks, so two different boxes.
+
+- A filter input matching on **case SKU, ledger line and the product currently in the box**, plus three quick filters: All / Needs product / Needs pack.
+- **A refused save now filters the view to the rows it is complaining about**, so the message and the screen agree instead of leaving the operator to hunt for named SKUs by eye.
+
+### ⚠ Hiding a row must not drop its edits
+The reader walks every `tr` in `#wmc-rows`, filtered or not. Anything that read only the VISIBLE rows would silently discard work the operator can no longer see, which is the worst kind of data loss: invisible at the moment it happens and undetectable afterwards.
+
+**Driven as the assertion that earns its keep**: set a pack of 144 on a row, filtered every row off screen, saved, and the edit came back intact on all 42 rows.
+
+### Verification
+- `node --check` clean · **80 suites green**.
+- Driven in a browser against the real ledger: opens at `42 of 42 rows`; `KC110` narrows to 2 (KC110 and its master case MKC110, both correct); `tuffer` to 5; **Needs pack** to exactly the 7 known SKUs (`KD001, KF001, KF002, MKC003, MKC110, MKC111, MKC112`).
+
+### ⚠ Wrong haystack, caught by the anchor check
+`document.body.appendChild(dlg)` appears in **all ten** of the app's dialogs, so anchoring the seed call there matched 10 times. The script refused before writing and nothing was touched. Re-anchored on the line unique to this modal. **A line that exists in every dialog is not an anchor** - the v10.53 class, caught by the count assertion rather than by reading.
 ## v11.12 - the Cost to Walmart panel was outside its own page
 
 - **Jason:** *"when i'm on cost to walmart and i switch to chewy P&L, the page does not switch."* and *"allow me to change any of the dimensions in cost to walmart."*
