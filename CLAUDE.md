@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.25**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.26**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,26 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.26 - the Walmart period control lived inside the Sales panel
+
+- **Jason, on the new Ads tab:** *"i don't have a period picker."*
+- Worse than missing. `ADS_CHANNELS.walmart.range()` reads `getWalmartPnlDateRange()`, which reads `wmpnl-period` - **an element that only renders inside `wmpnl-view-sales`**. So the Ads tab's window was being set by a control the operator could not see, could not change, and had no reason to believe existed. The coverage line read *"3 months - 2026-07 -> 2026-09"* and nothing on screen could move it.
+- This is **v11.02's Chewy fix verbatim**: one period control, hoisted to the page, scoping every tab under it. The Walmart strip had two tabs when v11.08 built it and the control happened to sit in the one that was always open; a third tab is what exposed it.
+
+### ⚠ The handler repainted Sales unconditionally
+Hoisting the markup alone would have left the v11.18 bug: a control above three tabs that always repaints the first one. Work happens, nothing throws, and the tab you are looking at goes stale.
+
+`WALMART_PERIOD_RENDERERS` is the registry, and `walmartRerenderActiveTab` reads it. **An unknown view warns by name and repaints nothing** rather than defaulting to Sales - the v11.18 lesson is that a silent fallback turns a missing registration into wrong-looking-right behaviour. The two custom-range date inputs route through it too; opening the custom inputs still does NOT repaint, because the window is incomplete until both dates are set (the v10.79 rule).
+
+### ⚠ The cut matched another page's controls bar
+`<span class="fl">Period</span>` is not unique in this file - several pages carry one at the same indentation. The first attempt anchored on it at file scope and lifted the wrong block. The v10.53 wrong-haystack class, caught by the patch's own *"the cut does not contain the control"* guard, which exited before writing; nothing was touched. Re-anchored by searching from `wmpnl-view-sales` forward.
+
+The block itself is **cut out of the live file by its own boundaries, never retyped**, so ten `<option>` values and four inline style strings cannot drift in transcription. Span balance inside the cut, whole-document div balance, and the uniqueness of all four moved ids are asserted before the write.
+
+### Verification
+- `node --check` clean - **91 suites green** - div balance 2,846 / 2,846 with comments masked.
+- **Driven in a browser** (chip `v11.26`): `wmpnl-period` now resolves OUTSIDE `wmpnl-view-sales` and inside `pnl-view-walmart`, is visible while the Ads panel is showing, and **changing it on the Ads tab repaints the Ads tab** - empty at 30 days, `$600 - 3 campaigns` at 365. `walmartPnlView` records `ads`, and the registry carries all three.
 
 ## v11.25 - Walmart Connect becomes the third ads channel
 
