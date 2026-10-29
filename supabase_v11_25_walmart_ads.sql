@@ -172,8 +172,56 @@ create unique index if not exists walmart_ad_keyword_uniq
 create index if not exists walmart_ad_keyword_month_idx    on walmart_ad_keyword (reporting_month);
 create index if not exists walmart_ad_keyword_campaign_idx on walmart_ad_keyword (campaign_id);
 
--- ─────────────────────────── grants ───────────────────────────
-grant select, insert, update, delete on walmart_ad_campaign to anon;
-grant select, insert, update, delete on walmart_ad_keyword  to anon;
-grant usage, select on sequence walmart_ad_campaign_id_seq to anon;
-grant usage, select on sequence walmart_ad_keyword_id_seq  to anon;
+-- ─────────────────────────── RLS + grants ───────────────────────────
+-- /!\ RLS WITH NO POLICY DENIES EVERYTHING. That is the secure default doing
+-- its job, and it is what produced
+--   new row violates row-level security policy for table "walmart_ad_campaign"
+-- on the first upload.
+--
+-- Checked against the live database rather than guessed, because the obvious
+-- diagnosis was wrong on both counts:
+--   pg_tables.rowsecurity    ALREADY true  - Supabase turns RLS on for a new
+--                            table by itself, so the alter below is a no-op
+--                            that only matters on a database that does not.
+--   role_table_grants        `authenticated` ALREADY had all seven privileges
+--                            from Supabase's default privileges.
+--   pg_policies              EMPTY. This was the whole problem.
+--
+-- The app connects with the anon KEY but then SIGNS IN, so every statement it
+-- runs arrives as `authenticated` - which is why the policy is written for
+-- that role and not for anon. Same shape as every other table here; see
+-- supabase_v11_08_walmart_catalog.sql.
+alter table walmart_ad_campaign enable row level security;
+alter table walmart_ad_keyword  enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'walmart_ad_campaign'
+      and policyname = 'walmart_ad_campaign_authenticated_all'
+  ) then
+    create policy walmart_ad_campaign_authenticated_all
+      on walmart_ad_campaign for all to authenticated using (true) with check (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'walmart_ad_keyword'
+      and policyname = 'walmart_ad_keyword_authenticated_all'
+  ) then
+    create policy walmart_ad_keyword_authenticated_all
+      on walmart_ad_keyword for all to authenticated using (true) with check (true);
+  end if;
+end $$;
+
+grant select, insert, update, delete on table walmart_ad_campaign to authenticated;
+grant select, insert, update, delete on table walmart_ad_keyword  to authenticated;
+grant usage, select on sequence walmart_ad_campaign_id_seq to authenticated;
+grant usage, select on sequence walmart_ad_keyword_id_seq  to authenticated;
+
+-- Verify: both tables should report rowsecurity = true and one policy each.
+-- select tablename, rowsecurity from pg_tables
+--   where schemaname='public' and tablename like 'walmart_ad_%';
+-- select tablename, policyname, roles from pg_policies
+--   where schemaname='public' and tablename like 'walmart_ad_%';
