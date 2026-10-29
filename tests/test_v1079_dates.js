@@ -106,6 +106,7 @@ const CHEWY_PERIOD_SOURCES = {
   cost:      { field: 'week_start',   rows: () => chewyPnlSalesData },
   breakeven: { field: 'date',         rows: () => chewyAdSpendData },
   program:   { field: 'week_start',   rows: () => chewyPnlSalesData },
+  ads:       { field: 'date',         rows: () => chewyAdSpendData },
   rebates:   { field: 'invoice_date', rows: () => chewyPnlData },
 };
 const CHEWY_PERIOD_DEFAULT = '365';

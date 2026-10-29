@@ -292,15 +292,20 @@ for f in ('pnlTrendSeries', 'pnlTrendRender', 'pnlSlotAdd', 'pnlChartMode',
     # the second string CONTAINS the first, so that double-counts an async fn.
     sok(len(re.findall(r'(?:async\s+)?function\s+%s\s*\(' % re.escape(f), js)) == 1,
         'exactly one %s definition' % f)
-sok(js.count('pnlTrendSeries({') == 4, 'all four P&L pages call the shared series builder')
+# v11.23 re-point: FIVE callers. The shared Ads trend (adsUpdateChart) is
+# the fifth, and it serves Amazon Campaigns, Amazon Keywords and Chewy
+# Campaigns from that one call - which is the point of it being shared.
+sok(js.count('pnlTrendSeries({') == 5, 'all five trend surfaces call the shared series builder')
 # v11.03 re-point: FIVE callers now. The Chewy Program monthly trend uses the
 # shared RENDERER but not the shared series builder - pnlTrendSeries builds
 # product BANDS, and that chart plots metrics over months, so there are no
 # products to band. The guarantee is that every P&L chart goes through the one
 # renderer rather than a hand-rolled `new Chart(`, which is now checked
 # DIRECTLY as well, so the count can grow without the rule going slack.
-sok(js.count('pnlTrendRender({') == 5, 'all five P&L charts call the shared renderer')
-for _caller in ('updateChewyProgramChart', 'updateChewyPnlChart'):
+sok(js.count('pnlTrendRender({') == 6, 'all six charts call the shared renderer')
+# v11.23 - adsUpdateChart joins the direct check. It is ONE surface serving
+# three tabs, so a per-page assertion would have missed it entirely.
+for _caller in ('updateChewyProgramChart', 'updateChewyPnlChart', 'adsUpdateChart'):
     _i = js.index('function %s(' % _caller)
     _d, _j = 0, js.index('{', _i)
     while _j < len(js):
@@ -314,12 +319,18 @@ for _caller in ('updateChewyProgramChart', 'updateChewyPnlChart'):
         '%s does not construct its own Chart' % _caller)
     sok('pnlTrendRender({' in _body,
         '%s routes through the shared renderer' % _caller)
-sok(js.count('pnlInjectChartModeToggle(') == 5, 'toggle injected on all four pages (+1 definition)')
+sok(js.count('pnlInjectChartModeToggle(') == 6,
+    'toggle injected on all five chart surfaces (+1 definition)')
 
 # Every page has a mode-toggle host and a canvas.
 for pid in ('pnl', 'spnl', 'wmpnl', 'chpnl'):
     sok('id="%s-chart-mode-host"' % pid in src, '%s has a mode-toggle host' % pid)
     sok('id="%s-chart-canvas"' % pid in src, '%s has a chart canvas' % pid)
+# The Ads panel is a BARE HOST - its shell is emitted by adsEnsureShell, so
+# its ids live in a template literal rather than in the page markup. Same
+# guarantee, asserted where the markup actually is.
+sok('${ch.host}-chart-mode-host' in js, 'the shared ads shell emits a mode-toggle host')
+sok('${ch.host}-chart-canvas' in js, 'the shared ads shell emits a chart canvas')
 
 # THE behaviour change: no page may still hide its chart purely because
 # nothing is selected.

@@ -704,7 +704,9 @@ print('\nE. call-site wiring')
 
 calls = [c for c in re.findall(r'pnlInjectChartModeToggle\([^)]*\)', js)
          if 'hostId' not in c]
-ok(len(calls) == 4, 'E1  four P&L pages inject the toggle', len(calls))
+# v11.23 re-point: the shared Ads trend is the fifth surface. It is ONE
+# call serving three tabs, so the number is surfaces, not tabs.
+ok(len(calls) == 5, 'E1  five chart surfaces inject the toggle', len(calls))
 
 missing = [c for c in calls if c.count(',') < 2]
 ok(not missing, 'E2  every call site passes isPct', missing)
@@ -727,8 +729,16 @@ for name, host in (('updateShopifyPnlChart', 'spnl-chart-mode-host'),
 
 # pnlTrendSeries is still the thing that actually forces the mode - the toggle
 # only REPORTS it. If these ever disagree the subtitle and the buttons split.
-ok("if (isPct && mode === 'stacked') {" in js,
+# v11.23 - the condition widened from 'is a percentage' to 'cannot be
+# stacked', because ROAS / CPC / CPA are ratios and do not sum either. The
+# guarantee is unchanged: pnlTrendSeries OWNS the fallback, the toggle only
+# reports it.
+ok("if (noStack && mode === 'stacked') {" in js,
    'E6  pnlTrendSeries still owns the forced fallback (toggle only reports it)')
+# Guard the guard: the flag must still DEFAULT to isPct, or E6 would pass
+# against a condition that had quietly stopped covering percentages at all.
+ok('const noStack = cfg.noStack != null ? !!cfg.noStack : !!isPct;' in js,
+   'E6b and it still defaults to isPct, so every pre-v11.23 caller is unchanged')
 
 # Chewy P&L has no percentage metric today; the explicit false keeps the
 # signature uniform and makes a future % metric a one-word edit.

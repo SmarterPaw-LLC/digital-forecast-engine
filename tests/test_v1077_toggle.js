@@ -18,7 +18,7 @@ function pnlChartMode() {
 // Marker stub so the test can assert the BANDS stepper's presence/absence.
 function pnlBandsStepperHtml(rerenderName) { return '<!--BANDS-->'; }
 
-function pnlInjectChartModeToggle(hostId, rerenderName, isPct) {
+function pnlInjectChartModeToggle(hostId, rerenderName, noStack) {
   const host = document.getElementById(hostId);
   if (!host) return;
   // ⚠ v10.77 — render the EFFECTIVE mode, not the stored one.
@@ -34,7 +34,7 @@ function pnlInjectChartModeToggle(hostId, rerenderName, isPct) {
   // fix lives HERE rather than in each caller. The STORED preference is left
   // untouched, so switching back to a $ metric restores stacked.
   const stored = pnlChartMode();
-  const blockStack = !!isPct;
+  const blockStack = !!noStack;
   const mode = (blockStack && stored === 'stacked') ? 'line' : stored;
   const btn = (m, label, tip) => {
     const on = mode === m;

@@ -39,14 +39,30 @@ function pnlSlotAdd(acc, s) {
 }
 function pnlTrendSeries(cfg) {
   const { perProd, buckets, mids, metricOf, labelOf, colors, isPct } = cfg;
+  // v11.23 - the band NOUN. Every caller before the Ads views charted
+  // PRODUCTS, so 'product' / 'SKUs' stay the defaults and those callers are
+  // untouched. An ads chart plots campaigns or search terms, and a legend
+  // reading 'Other — 12 SKUs' over a campaign chart is simply wrong.
+  const noun = cfg.noun || 'product';
+  const otherNoun = cfg.otherNoun || 'SKUs';
+  // ⚠ NOT EVERY UNSUMMABLE METRIC IS A PERCENTAGE. ROAS, CPC and CPA are
+  // RATIOS: stacking 2.0x on 3.0x to read 5.0x is meaningless in exactly the
+  // way stacking percentages is, and none of them is a percentage. isPct
+  // stays the default, so no existing caller changes behaviour.
+  const noStack = cfg.noStack != null ? !!cfg.noStack : !!isPct;
   const selectionActive = !!cfg.selectionActive;
   const topN = cfg.topN || pnlChartBands();   // v10.67 - one shared setting
   let mode = cfg.mode || 'line';
   let note = '';
 
-  if (isPct && mode === 'stacked') {
+  if (noStack && mode === 'stacked') {
     mode = 'line';
-    note = 'stacking is off for a percentage metric \u2014 percentages do not sum';
+    // The note names the REASON, which differs: a percentage and a ratio are
+    // both unsummable for their own reason, and 'percentages do not sum' over
+    // a ROAS chart would read as a bug in the label.
+    note = isPct
+      ? 'stacking is off for a percentage metric \u2014 percentages do not sum'
+      : 'stacking is off for a derived ratio \u2014 ratios do not sum';
   }
 
   const sumAcross = (midList) => buckets.map(b => {
@@ -66,7 +82,7 @@ function pnlTrendSeries(cfg) {
     return {
       mode, note,
       datasets: [{
-        label: `Total \u00b7 ${mids.length} product${mids.length === 1 ? '' : 's'}`,
+        label: `Total \u00b7 ${mids.length} ${noun}${mids.length === 1 ? '' : 's'}`,
         data: sumAcross(mids),
         borderColor: colors[0], backgroundColor: colors[0] + '22',
         borderWidth: 2, pointRadius: buckets.length > 52 ? 0 : 3,
@@ -126,7 +142,7 @@ function pnlTrendSeries(cfg) {
   if (otherMids.length) {
     const color = '#6b7280';
     datasets.push({
-      label: `Other \u00b7 ${otherMids.length} SKUs`,
+      label: `Other \u00b7 ${otherMids.length} ${otherNoun}`,
       data: sumAcross(otherMids).map(v => (mode === 'stacked' && v == null) ? 0 : v),
       borderColor: color, backgroundColor: mode === 'stacked' ? color + 'd9' : color + '22',
       borderWidth: 1, pointRadius: 0, tension: 0.3,

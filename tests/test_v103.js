@@ -7,10 +7,12 @@ function mk(id, ph) { return EL[id] = { id, placeholder: ph, value: '', style: {
 const document = { getElementById: (id) => EL[id] || null };
 class Event { constructor(t) { this.type = t; } }
 
+mk('amzads-search', 'Search…');
 mk('be-search', 'Search SKU / ASIN / title…');
 mk('bom-search-${i}', 'Search by name or ID…');
 mk('bundleSrch', 'Search bundle…');
 mk('catsy-search-input', 'Type to filter — title, SP SKU, master_id, ASIN, Shopify SKU…');
+mk('chads-search', 'Search…');
 mk('chpnl-be-search', 'Search product…');
 mk('chpnl-cost-search', 'Search product…');
 mk('chpnl-sales-search', 'Search product…');
@@ -66,6 +68,12 @@ const GLOBAL_SEARCH_MAP = {
   // never mapped either, so the bar went dead there too.
   pnl_amazon_changelog: { id: 'cl-search' },
   pnl_amazon_breakeven: { id: 'be-search' },             // v10.19
+  // v11.16 — the two Ads tabs. Their inputs are emitted by the SHARED
+  // shell, so the ids are built from ADS_CHANNELS[*].host rather than written
+  // in the markup - which is why the v10.3 sweep could not see them and why
+  // tests/test_v103.py now resolves the template against that registry.
+  pnl_amazon_ads:   { id: 'amzads-search' },
+  pnl_chewy_ads:    { id: 'chads-search' },
   // Deliberately NOT mapped: #pricing-search is a typeahead PICKER that
   // populates a scenario, not a page filter — its results render in a popover
   // anchored to the input, so hiding it would break the flow it belongs to.
@@ -89,6 +97,7 @@ function globalSearchCurrentKey() {
       const av = (typeof pnlAmazonView !== 'undefined' && pnlAmazonView) ? pnlAmazonView : 'summary';
       if (av === 'changelog') return 'pnl_amazon_changelog';
       if (av === 'breakeven') return 'pnl_amazon_breakeven';   // v10.19
+      if (av === 'ads')       return 'pnl_amazon_ads';         // v11.16
     }
     return `pnl_${sub}`;
   }
@@ -149,14 +158,56 @@ function globalSearchSyncFromTarget() {
 // so their filter handlers still fire — only the visible duplicate is hidden.
 // Idempotent: runs on auth resolve + on every nav (in case a page rebuilds
 // its controls bar). Late-mounted inputs get hidden the next time it fires.
+// ⚠ HIDE THE WHOLE LABELLED GROUP, NOT JUST THE INPUT.
+//
+// Jason: *"the search is leftover from when we migrated search up to the top
+// of the page, i think."* He was right. This hid the INPUT and nothing else,
+// so the Amazon P&L bar still rendered its 'Search' label and the decorative
+// magnifier beside it, reading 'SEARCH 🔍 QUICK' with nothing behind it.
+//
+// The v10.87 class: collapse the affordance, leave the furniture. Fixed in
+// the SHARED function rather than by deleting one page's markup, so a page
+// that grows a labelled search group later cannot reintroduce it.
 function hideLocalSearchDuplicates() {
+  // Is this element a wrapper that exists ONLY to decorate the input?
+  // Anything else interactive inside it means it is a real control row and
+  // hiding it would take a live control off the page with it.
+  const decorativeWrap = function (el, input) {
+    if (!el || el === document.body) return false;
+    const ctrls = el.querySelectorAll('input, select, textarea, button, a');
+    return ctrls.length === 1 && ctrls[0] === input;
+  };
+  const hide = function (el) {
+    if (!el || el.dataset.hiddenByGlobal === '1') return;
+    el.style.display = 'none';
+    el.dataset.hiddenByGlobal = '1';
+  };
   try {
     Object.values(GLOBAL_SEARCH_MAP).forEach(function(entry) {
       if (!entry || !entry.id) return;
       var el = document.getElementById(entry.id);
       if (!el || el.dataset.hiddenByGlobal === '1') return;
-      el.style.display = 'none';
-      el.dataset.hiddenByGlobal = '1';
+      // Walk up while the parent is just a wrapper around this input, so the
+      // inline icon goes with it. Capped at two levels: beyond that we are
+      // into the page's own layout.
+      var outer = el;
+      for (var i = 0; i < 2; i++) {
+        if (!decorativeWrap(outer.parentElement, el)) break;
+        outer = outer.parentElement;
+      }
+      hide(el);
+      if (outer !== el) hide(outer);
+      // ...and the label in front of it, but ONLY when it really is this
+      // input's label. Matching the WORD keeps it from eating the preceding
+      // control's label on a bar where the search has none of its own.
+      var prev = outer.previousElementSibling;
+      while (prev && prev.nodeType === 1 && !prev.textContent.trim()) {
+        prev = prev.previousElementSibling;
+      }
+      if (prev && prev.classList && prev.classList.contains('fl')
+          && /^search$/i.test(prev.textContent.trim())) {
+        hide(prev);
+      }
     });
   } catch (e) { /* non-fatal */ }
 }
@@ -264,7 +315,7 @@ console.log('\n== F. Nothing in the markup is left unmapped by accident ==');
 // one per component row).
 const EXCLUDE = new Set(['globalSearch', 'pricing-search', 'catsy-search-input',
                          'merge-src', 'merge-tgt', 'bom-search-${i}']);
-const unmapped = ["be-search", "bom-search-${i}", "bundleSrch", "catsy-search-input", "chpnl-be-search", "chpnl-cost-search", "chpnl-sales-search", "chpnl-search", "chwy-search", "cl-search", "cogs-search", "fba-ship-srch", "ip-srch", "ipr-srch", "pnl-search", "pricing-search", "prodSrch", "salesSrch", "sea-search", "seo-search", "spnl-search", "srchInput", "wmpnl-search"].filter(id => !EXCLUDE.has(id) && !mapped.includes(id));
+const unmapped = ["amzads-search", "be-search", "bom-search-${i}", "bundleSrch", "catsy-search-input", "chads-search", "chpnl-be-search", "chpnl-cost-search", "chpnl-sales-search", "chpnl-search", "chwy-search", "cl-search", "cogs-search", "fba-ship-srch", "ip-srch", "ipr-srch", "pnl-search", "pricing-search", "prodSrch", "salesSrch", "sea-search", "seo-search", "spnl-search", "srchInput", "wmpnl-search"].filter(id => !EXCLUDE.has(id) && !mapped.includes(id));
 t('no unmapped page-search inputs remain', unmapped.length === 0, unmapped);
 
 console.log('\n' + (fail ? '\u2717 ' + fail + ' FAILED, ' : '\u2713 ') + pass + ' passed');

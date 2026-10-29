@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.22**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.23**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,76 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.23 - checkbox selection and a trend chart on every Ads view
+
+- **Jason:** *"i should be able to multiselect with checkboxes and have the scorecards change. there should also be a line graph. i want functionality like exists on the summary page."*
+- Delivered on the **shared** renderer, so Amazon Campaigns, Amazon Keywords and Chewy Campaigns all get it from one implementation - and a Walmart adapter would get it for free.
+
+### It reuses the Summary page's engine rather than building a second one
+`pnlTrendSeries` / `pnlTrendRender` / `pnlTrendSubtitle` / `pnlInjectChartModeToggle` are the four functions the Amazon, Shopify, Walmart and Chewy P&L charts already share. The Ads chart is the fifth caller. Three things in that engine were hardcoded to the product charts that had been its only callers, and all three are now **parameters that default to the old behaviour**, which is the only way "no product chart changed" is checkable rather than read off a diff (`test_v1123` E1).
+
+### ⚠ NOT EVERY UNSUMMABLE METRIC IS A PERCENTAGE
+The engine blocked stacking for a percentage, on the correct reasoning that percentages do not sum. **ROAS, CPC and CPA are ratios**: stacking 2.0x on 3.0x to read 5.0x is meaningless in exactly the same way, and none of them is a percentage. Without widening it the Ads chart would have offered a *Stacked ROAS* - a control drawing a number nobody could act on. The note names the reason, which differs ("ratios do not sum" vs "percentages do not sum"), because the percentage wording over a ROAS chart reads as a bug in the label.
+
+### ⚠ ONE derivation of the ratios, because THREE places were about to sum rows
+The window TOTAL, the footer's on-screen re-sum and the new selection scorecards all sum ads rows and then derive. Three hand-written copies is three chances to **average a ratio**, which weights a $20 campaign the same as a $2,000 one. `adsSumRows` is the one helper; `test_v1123` A1 reproduces the pre-v11.23 total loop and requires a **byte-identical** result.
+
+The consolidation also fixed a live inconsistency it exposed: the footer re-derived ctr / cpc / cpa / roas / acos for the visible rows and **forgot cvr**, so a search on the Keywords tab left one footer cell describing the whole window while every other cell described the search.
+
+### Selection narrows the cards and the chart, never the window
+- Checkbox column, select-all with an indeterminate state, row highlight and a banner in the scorecard grid - the **Summary table's own shapes**, in its own grid slot (rule #4).
+- The selection reads `res.campaigns`, not the visible list, so a row the search has hidden **stays in the totals** and the banner says how many (`⚠ 2 hidden`). That is what lets a selection be built across several searches.
+- **⚠ The PRIOR period is narrowed to the same rows.** Comparing three selected campaigns now against a hundred and forty then would read as a collapse that never happened.
+- The coverage line still describes the **period**. Two numbers on one screen that cannot both be true is the shape Jason has caught three times, so the banner sits directly above the cards and says which of the two they are. `test_v1123` J5c asserts `cardT` never reaches the coverage line.
+- **⚠ A checkbox addresses its row by INDEX, never by name.** A campaign name can contain quotes and backslashes; interpolating one into an `onclick` breaks on the first apostrophe and is an injection besides. Driven with `O'Brien "Max" \ <b>bold</b> & 50% , ;` as a campaign name: it renders as text, clicks once, and leaves no `<b>` in the DOM.
+
+### The chart shares the rollup's scan
+`adsCampaignRollup` accumulates the per-bucket series **inside the same loop** as the table, under the same window, brand and ad-type filter - so the chart cannot describe a different slice (the v11.20 chokepoint argument). Absent a `bucket` grain nothing is built and **the returned object gains no key at all**, which `test_v1123` A2 checks by deep-equality both ways.
+
+The metric list is built from the **table's own column registry**, so the two can never name a number differently (rule 3a) and a column added later is plottable with no second list to keep in step.
+
+### ⚠ The grain is chosen from the window, and the chart says which it got
+Ad spend is daily: a 365-day window drawn per day is 365 points of noise, a 14-day window drawn per month is one. Auto-picking is only honest because the subtitle states what it resolved to (the v10.99 rule) - `<= 70 days` daily, `<= 400` weekly, longer monthly. Weeks are **Sun-Sat**, the definition `computePnlDateRange` already uses because it is Amazon's own; a second week rule would put this chart a day out of step with every other weekly figure in the app.
+
+- **A partial edge bucket is NAMED, not dropped and not rounded away** - the v11.02 part-month rule. A half week drawn beside full ones is a cliff that reads as spend collapsing. Driven: `first week partial - 1 of 7 days - last week partial - 5 of 7 days`.
+- **Skipped for a monthly VIEW**, where the rollup takes a month that merely OVERLAPS the window: those edge buckets carry MORE than the window, not less, so calling them partial would be the opposite of true.
+- The **Keywords feed is monthly and ignores a request for days**, which would otherwise draw one spike per month on whichever day the report happened to close.
+- Data ending before the window does is a different fact, reported separately as `data through <date>`.
+
+### ⚠ Three defects shipped in v11.22, all found while building on them
+1. **The prior-period rollup dropped the `view`.** With no view it runs the CHANNEL adapter, so the **Keywords scorecards were comparing search-term spend against unified-report spend** - two different tables under one chip.
+2. **And it dropped the `filters`**, so picking an ad type narrowed the current total and not the prior one, and every chip read as a collapse.
+3. **A monthly view needs a monthly prior block.** Shifting a 15-day window back 15 days lands inside the SAME month, so the "previous period" contained the period it was being compared against. `test_v1123` D runs the REAL prev block lifted out of the renderer and proves the naive shift resolves to `2026-09, 2026-10` where the shipped one resolves to September alone.
+
+### ⚠ The exporter wrote `NaN` into the Keywords CSV
+v11.22b fixed *"text is detected by value, not by a list of column names"* in the **table** and left the **CSV** on the old rule. `val()` special-cased campaign / type / status and sent everything else through `Math.round`, so every row of that export carried the literal string `NaN` in Search term and Match. Exactly the defect the table fix was for, in the second renderer of the same data - the fix went to the page in front of me and not to the pair.
+
+### ⚠ The search box did not search search terms
+Its haystack was hardcoded to campaign + type + status, which on the Keywords view is the campaign LIST and two empty strings - so typing a term filtered on everything except the thing the table is a list of. It is now every text column the view renders, detected by value. The placeholder said *"Search campaign, type or status"* on a table of search terms; it says `Search...` with the detail in the tooltip.
+
+### Verification
+- `node --check` clean - **89 suites green** - new `tests/test_v1123.py` (103 assertions) - div balance 2,811 / 2,811 with comments masked.
+- **Driven in a browser against the shipped build** (chip confirmed `v11.23` first), with `ADS_CHANNELS` / `ADS_VIEWS` adapters swapped so the REAL renderer ran end to end on 270 daily rows and 3 months of search terms:
+  - **Amazon Campaigns**: 14 cells per row (13 columns + the checkbox), one Total line over 14 weekly buckets, subtitle naming both partial edge weeks. Checking one row took the cards to `$1,092 / $1,710 / 1.57x / 540 clicks / 90 orders` and the banner to *"1 campaign selected - cards and chart below only - $1,092"* while the coverage line stayed on the window's `$5,229`. Select-all went **indeterminate** at one of three.
+  - **The chart follows the selection**: two checked rows drew two named lines; clearing it returned to one Total line, and Stacked drew 3 bands.
+  - **ROAS refuses to stack**: Stacked greyed `not-allowed`, the Bands stepper gone, the note reading *"stacking is off for a derived ratio"*, and the y axis rendering `2.35x` rather than `2.35`.
+  - **Keywords**: 17 cells, no `NaN` anywhere, monthly axis `Aug'26 Sep'26 Oct'26`, CVR offered as a metric on the one view that has it, and `indoor` finding `cat toys for indoor cats` - which the old haystack could not. The **monthly prior block** read `+100.0% vs prev` on a Sep+Oct window against Jul+Aug.
+  - **Chewy**: the NTB card narrows with the selection, and the CSV came back with **16 fields on the header and every row**, no `NaN`, and the selection stated in its scope header.
+  - All five Ads areas still show exactly one panel each and round-trip their URLs. Only the expected unauthenticated 401s plus one freshness-probe warning in console.
+- **Not verified here:** how it looks. The login gate leaves the app container hidden (v10.87), so every box measures 0. The text, the structure, the handlers and the chart's data are read back off the real DOM and the real Chart instance; only the pixels are not.
+
+### ⚠ Two census guards went red; both re-pointed and both TIGHTENED
+Neither found a bug; both pinned a literal count of chart surfaces while their labels claimed a structural guarantee - the documented brittle-count trap.
+- **`test_v1012`** counted callers of the series builder, the renderer and the toggle. Re-pointed, and the DIRECT check (*"this surface does not construct its own `new Chart(`, and does route through the shared renderer"*) now covers `adsUpdateChart` too, so the count can grow again without the rule going slack. Its mode-host / canvas sweep also learned that the Ads panel is a **bare host** whose ids live in a template literal, and asserts them there.
+- **`test_v1077` E6** pinned the literal `if (isPct && mode === 'stacked')`. Re-pointed to the widened condition **plus a guard-the-guard line** requiring the flag to still default to `isPct` - without it the re-point would pass against a condition that had quietly stopped covering percentages at all.
+
+### Three of my own test expectations were wrong, not the code
+- G2 asserted the first week bucket carried 5 of its 7 days. Sep 27 - Oct 3 against a window opening Oct 1 is **three**. And I asserted a partial LAST week where the last bucket with data sits wholly inside the window.
+- I2 read a joined `BROAD - EXACT` off a window that only reaches October, where the September row is correctly excluded. The joined list now has its own two-month assertion.
+
+### ⚠ The heredoc ate a backslash AGAIN, in a test re-point
+`\u00b7` written through a bash heredoc arrived as a real middle dot, so three `str.replace` calls matched nothing and reported success. CLAUDE.md has warned since v9.77 and at v10.68 / v10.88 / v10.92 / v11.00 / v11.16: **this is not "be careful", it is "do not use the heredoc"** - use the Write tool for anything containing escapes. Nothing was corrupted; it cost one round.
 
 ## v11.22 - a Keywords (search terms) area on the Amazon Ads tab
 
