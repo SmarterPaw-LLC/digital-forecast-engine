@@ -134,8 +134,23 @@ const plain = (o) => JSON.stringify(o, (k, v) =>
   (v instanceof Set) ? [...v].sort() : v);
 
 const base = run();
-out.oldVsNew = plain(oldTotals(base.campaigns.map(c => c), 'campaign'))
-            === plain(base.totals);
+// v11.25 - the old loop knew nothing of inStoreSales / dpv / atc, so a
+// whole-object compare now differs on SHAPE while every number matches.
+// Compared field by field instead, which is what the label claims.
+const OLD_FIELDS = ['campaign', 'impressions', 'clicks', 'spend', 'orders',
+                    'units', 'sales', 'ntb', 'signups', 'hasUnits', 'hasNtb',
+                    'types', 'statuses', 'skuSet', 'matches', 'campaigns',
+                    'adgroups', 'firstDate', 'lastDate', 'skus', 'cvr', 'ctr',
+                    'cpc', 'cpa', 'roas', 'acos', 'type', 'status'];
+const pick = (o) => plain(Object.fromEntries(OLD_FIELDS.map(k => [k, o[k]])));
+const oldT = oldTotals(base.campaigns.map(c => c), 'campaign');
+out.oldVsNew = pick(oldT) === pick(base.totals);
+out.oldVsNewDiff = OLD_FIELDS.filter(k => plain(oldT[k]) !== plain(base.totals[k]));
+// /!\ The slots a non-Walmart channel does not report must be NULL, never 0.
+out.amzInStore = base.totals.inStoreSales;
+out.amzOmni    = base.totals.omniRoas;
+out.amzDpv     = base.totals.dpv;
+out.amzAtc     = base.totals.atc;
 out.totalSpend = base.totals.spend;
 out.totalRoas  = +base.totals.roas.toFixed(4);
 
@@ -306,7 +321,16 @@ if res.returncode != 0:
 R = json.loads(res.stdout)
 
 ok(R['oldVsNew'],
-   'A1a adsSumRows is BYTE-IDENTICAL to the hand-written total loop it replaced')
+   'A1a adsSumRows reproduces the hand-written total loop it replaced, field '
+   'for field (v11.25: compared by NAME, because the row legitimately grew '
+   'Walmart-only slots the old loop never had)', R.get('oldVsNewDiff'))
+ok(R['amzInStore'] is None and R['amzOmni'] is None,
+   'A1a2 and on a channel that reports no in-store sales those slots are NULL, '
+   'not 0 - a fabricated 0 would read as "sold nothing in store" on a table '
+   'that is not Walmart at all',
+   (R['amzInStore'], R['amzOmni']))
+ok(R['amzDpv'] is None and R['amzAtc'] is None,
+   'A1a3 same for the funnel slots', (R['amzDpv'], R['amzAtc']))
 eq('A1b and the window total is the real one', R['totalSpend'], 2060)
 eq('A1c with the ratio derived from the sums', R['totalRoas'], 1.068)
 

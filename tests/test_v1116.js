@@ -4,6 +4,38 @@ const ADS_NO_CAMPAIGN = '(no campaign)';
 // de-slugs it for display rather than carrying a hand-kept label map, so a new
 // Amazon format that v11.14 passes through as its own slug shows up as itself
 // instead of falling off a lookup.
+// v11.25 - how a numeric column RENDERS, declared by the column and falling
+// back to the pre-v11.25 key rule.
+//
+// /!\ v11.22 fixed the TEXT half of cellOf by looking at the value instead of
+// a list of column names. The NUMERIC half cannot be fixed that way: 2.19 and
+// 2 are both numbers, and the difference between a ratio and a count is a
+// property of the MEASURE, not of the value. So the column declares it.
+//
+// Absent a declaration the old key rule applies verbatim, so every column that
+// existed before v11.25 resolves exactly as it did - which is what makes
+// "no existing table changed" a checkable claim rather than a read of a diff.
+//   '$'  money, whole dollars with separators      '$2'  money, 2dp
+//   '%'  percent, 1dp                              'x'   ratio, 2dp
+//   'n'  count, rounded with separators
+function adsColFmt(col) {
+  if (col && col.fmt) return col.fmt;
+  const k = col && col.k;
+  if (k === 'spend' || k === 'sales') return '$';
+  if (k === 'cpc' || k === 'cpa') return '$2';
+  if (k === 'ctr' || k === 'acos') return '%';
+  if (k === 'roas') return 'x';
+  return 'n';
+}
+
+function adsFmtNum(v, fmt) {
+  if (fmt === '$')  return '$' + Math.round(v).toLocaleString();
+  if (fmt === '$2') return '$' + v.toFixed(2);
+  if (fmt === '%')  return v.toFixed(1) + '%';
+  if (fmt === 'x')  return v.toFixed(2) + 'x';
+  return Math.round(v).toLocaleString();
+}
+
 function adsTypeLabel(slug) {
   const t = String(slug == null ? '' : slug).trim();
   if (!t) return '';
@@ -69,6 +101,9 @@ const ADS_CHANNELS = {
       sales:       +r.attributed_sales || 0,
       ntb:         null,
       signups:     null,
+      inStoreSales: null,
+      dpv: null,
+      atc: null,
     }),
   },
   chewy: {
@@ -80,7 +115,12 @@ const ADS_CHANNELS = {
     rows: () => (typeof chewyAdSpendData !== 'undefined' && chewyAdSpendData) || [],
     // The v11.02 shared Chewy period control, through its one resolver.
     range: () => (typeof getChewyPnlDateRange === 'function') ? getChewyPnlDateRange('ads') : { from: null, to: null },
-    brand: () => document.getElementById('chads-brand')?.value || '',
+    // v11.25 - `this.host`, not a literal id. adsViewCfg returns an object
+    // whose PROTOTYPE is the channel, so a view inherits this method and
+    // `this.host` resolves to the VIEW's host. Chewy's host is already
+    // `chads`, so the element id is unchanged.
+    brandPicker: true,
+    brand: function () { return document.getElementById(this.host + '-brand')?.value || ''; },
     regionOk: () => true,
     filters: [{ k: 'type', label: 'Campaign type' }, { k: 'status', label: 'Status' }],
     map: (r) => ({
@@ -97,6 +137,73 @@ const ADS_CHANNELS = {
       sales:       +r.direct_sales || 0,
       ntb:         +r.ntb_customers || 0,
       signups:     +r.autoship_signups || 0,
+      inStoreSales: null,
+      dpv: null,
+      atc: null,
+    }),
+  },
+  // ── v11.25 Walmart Connect ───────────────────────────────────────────
+  // The third channel is an ADAPTER, not another renderer - which is what
+  // the v11.16 design was for. It is the first one whose CAMPAIGN feed is
+  // monthly, and the rollup already reads monthOf / inWindow off whatever
+  // config a (channel, view) pair resolves to, so that costs nothing here.
+  walmart: {
+    label: 'Walmart Ads', icon: '\ud83d\udcef', host: 'wmads',
+    table: 'walmart_ad_campaign',
+    freshness: [{ label: 'Walmart Ads', table: 'walmart_ad_campaign', icon: '\ud83d\udcef' }],
+    src: ['walmart_ad_campaign'],
+    dateField: 'reporting_date',
+    rows: () => (typeof walmartAdCampaignCache !== 'undefined' && walmartAdCampaignCache) || [],
+    // The Walmart P&L's own period control, through its one resolver - the
+    // same relationship the Amazon tab has with getPnlDateRange.
+    range: () => (typeof getWalmartPnlDateRange === 'function') ? getWalmartPnlDateRange() : { from: null, to: null },
+    brandPicker: true,
+    brand: function () { return document.getElementById(this.host + '-brand')?.value || ''; },
+    // Walmart Connect is US-only here, so the Amazon region button must not
+    // silently empty this table. Returning true is a DECISION, not a default.
+    regionOk: () => true,
+    filters: [{ k: 'type', label: 'Campaign type' }, { k: 'status', label: 'Status' }],
+
+    // /!\ THE GRAIN IS MONTHLY AND THE PERIOD CONTROL IS DAILY.
+    // The export carries no reporting date at all, so reporting_month is
+    // stamped by the operator at upload and reporting_date is DERIVED as that
+    // month's last day. Filtering that derived end-date against a daily
+    // window would include or drop a WHOLE month on where its last day fell.
+    // Same rule, same reason, as ADS_VIEWS.amazon.keywords - a month is IN
+    // when it OVERLAPS, and the coverage line says which months it resolved
+    // to. See the header comment on supabase_v11_25_walmart_ads.sql.
+    inWindow: (raw, from, to) => {
+      const m = String(raw.reporting_month || '').slice(0, 7);
+      if (!m) return false;
+      if (from && m < String(from).slice(0, 7)) return false;
+      if (to && m > String(to).slice(0, 7)) return false;
+      return true;
+    },
+    monthOf: (raw) => String(raw.reporting_month || '').slice(0, 7),
+
+    map: (r) => ({
+      campaign: r.campaign || null,
+      type:     r.campaign_type || '',
+      status:   r.campaign_status || '',
+      // The campaign export has no item dimension at all - Walmart puts that
+      // in a separate Item report. Left null rather than faked, so the SKUs
+      // column is simply absent from this registry.
+      sku:      null,
+      brand:    r.advertiser_brand || null,
+      impressions: +r.impressions || 0,
+      clicks:      +r.clicks || 0,
+      spend:       +r.spend || 0,
+      orders:      +r.orders || 0,
+      units:       +r.units || 0,
+      sales:       +r.sales || 0,
+      ntb:         null,
+      signups:     null,
+      // /!\ null, not 0, when the column is absent - the three has* flags in
+      // the rollup are what keep an export without omni columns from reading
+      // as "nothing sold in store".
+      inStoreSales: r.in_store_sales == null ? null : +r.in_store_sales || 0,
+      dpv:          r.dpv == null ? null : +r.dpv || 0,
+      atc:          r.atc == null ? null : +r.atc || 0,
     }),
   },
 };
@@ -186,6 +293,9 @@ const ADS_VIEWS = {
         sales:       +r.sales_7d || 0,
         ntb:         null,
         signups:     null,
+        inStoreSales: null,
+        dpv: null,
+        atc: null,
       }),
 
       columns: [
@@ -205,6 +315,87 @@ const ADS_VIEWS = {
         { k: 'sales',       label: 'Ad Sales',     align: 'right', w: 104, tip: '7-day attributed sales (Amazon RETAIL dollars, not our revenue).' },
         { k: 'roas',        label: 'ROAS',         align: 'right', w: 76,  tip: 'Ad Sales / Spend.' },
         { k: 'acos',        label: 'ACOS %',       align: 'right', w: 80,  tip: 'Spend / Ad Sales.' },
+      ],
+    },
+  },
+
+  // ── v11.25 ──────────────────────────────────────────────────────────
+  // Walmart DOES have keyword-level detail, which is why it gets this tab
+  // and Chewy still does not: chewy_ad_spend goes campaign -> SKU -> day and
+  // the vendor export has no keyword dimension to show.
+  //
+  // /!\ These are KEYWORDS (targets we bid on), not SEARCH TERMS (what the
+  // customer typed). Amazon's view is the other one. The tab button says
+  // Keywords on both because that is the level of detail it reaches, but the
+  // noun and the column label say which of the two this actually is, so the
+  // two tabs cannot be read as the same report.
+  walmart: {
+    keywords: {
+      host: 'wmkw',
+      label: 'Keywords',
+      freshness: [{ label: 'Walmart Keywords', table: 'walmart_ad_keyword', icon: '\ud83d\udd11' }],
+      src: ['walmart_ad_keyword'],
+      rows: () => (typeof walmartAdKeywordCache !== 'undefined' && walmartAdKeywordCache) || [],
+      load: () => (typeof loadWalmartAdKeyword === 'function') ? loadWalmartAdKeyword() : null,
+      groupBy: 'term',
+      noun: 'keyword',
+      noneLabel: '(no keyword)',
+      filters: [{ k: 'match', label: 'Match type' }, { k: 'campaign', label: 'Campaign' }],
+
+      // Monthly, for the same reason the campaigns feed is - one aggregate
+      // per export, with the month supplied at upload.
+      inWindow: (raw, from, to) => {
+        const m = String(raw.reporting_month || '').slice(0, 7);
+        if (!m) return false;
+        if (from && m < String(from).slice(0, 7)) return false;
+        if (to && m > String(to).slice(0, 7)) return false;
+        return true;
+      },
+      monthOf: (raw) => String(raw.reporting_month || '').slice(0, 7),
+
+      map: (r) => ({
+        term:     String(r.keyword || '').trim() || null,
+        match:    String(r.match_type || '').trim().toUpperCase(),
+        campaign: String(r.campaign || '').trim(),
+        adgroup:  String(r.ad_group || '').trim(),
+        sku:      null,
+        brand:    r.advertiser_brand || null,
+        // /!\ A NEVER-SERVED KEYWORD HAS NULL METRICS, NOT ZERO - 132 of the
+        // 189 rows in the September export are enabled targets that have not
+        // delivered yet. They are kept because they are real targeting, and
+        // they fall to 0 HERE because the table sums them; the uploader is
+        // what preserves the null/0 distinction in the stored row.
+        impressions: +r.impressions || 0,
+        clicks:      +r.clicks || 0,
+        spend:       +r.spend || 0,
+        orders:      +r.orders || 0,
+        units:       +r.units || 0,
+        sales:       +r.sales || 0,
+        ntb:         null,
+        signups:     null,
+        inStoreSales: r.in_store_sales == null ? null : +r.in_store_sales || 0,
+        dpv:          r.dpv == null ? null : +r.dpv || 0,
+        atc:          r.atc == null ? null : +r.atc || 0,
+      }),
+
+      columns: [
+        { k: 'term',         label: 'Keyword',     align: 'left',  w: 260, tip: 'The keyword we bid on, from the Walmart Connect keyword export.\n\nThis is TARGETING, not the customer query - Walmart reports search terms separately. Amazon\u2019s equivalent tab shows the query side.' },
+        { k: 'match',        label: 'Match',       align: 'left',  w: 84,  tip: 'EXACT / PHRASE / BROAD. Several when one keyword is targeted more than one way in the window.' },
+        { k: 'campaign',     label: 'Campaign',    align: 'left',  w: 200, tip: 'The campaign the keyword spent under. Several when one keyword runs in more than one.' },
+        { k: 'impressions',  label: 'Impressions', align: 'right', w: 104, tip: 'Impressions over the window.' },
+        { k: 'clicks',       label: 'Clicks',      align: 'right', w: 80,  tip: 'Clicks over the window.' },
+        { k: 'ctr',          label: 'CTR %',       align: 'right', w: 72,  tip: 'Clicks / Impressions.' },
+        { k: 'cpc',          label: 'CPC',         align: 'right', w: 72,  tip: 'Spend / Clicks.' },
+        { k: 'spend',        label: 'Spend',       align: 'right', w: 96,  tip: 'Ad spend over the window.' },
+        { k: 'orders',       label: 'Orders',      align: 'right', w: 76,  tip: 'Ad-attributed online orders.' },
+        { k: 'units',        label: 'Units',       align: 'right', w: 72,  tip: 'Ad-attributed online units.' },
+        { k: 'cvr',          label: 'CVR %',       align: 'right', w: 76,  tip: 'Orders / Clicks.\n\nDerived from the window totals, never averaged across the per-row conversion rate the export carries - an average would weight a 2-click keyword the same as a 950-click one.' },
+        { k: 'cpa',          label: 'CPA',         align: 'right', w: 76,  tip: 'Spend / Orders - what an attributed order cost.' },
+        { k: 'sales',        label: 'Ad Sales',    align: 'right', w: 104, tip: 'Total Attributed Sales, ONLINE only (Walmart RETAIL dollars, not our revenue).' },
+        { k: 'roas',         label: 'ROAS',        align: 'right', w: 76,  tip: 'Ad Sales / Spend. Online only, which is what Walmart\u2019s own RoAS column reports.' },
+        { k: 'inStoreSales', label: 'In-Store $',  align: 'right', w: 96,  fmt: '$',  tip: 'In-Store Attributed Sales: physical-store purchases Walmart attributed back to an online ad click. Neither Amazon nor Chewy report anything like it.' },
+        { k: 'omniRoas',     label: 'Omni ROAS',   align: 'right', w: 88,  fmt: 'x',  tip: '(Ad Sales + In-Store $) / Spend.\n\nA SECOND BASIS, not a better ROAS - it divides a wider sales figure by the same spend. Walmart\u2019s own word for it, kept verbatim. Derived from the window totals, never averaged across rows.' },
+        { k: 'acos',         label: 'ACOS %',      align: 'right', w: 80,  tip: 'Spend / Ad Sales. Online only, to match ROAS beside it.' },
       ],
     },
   },
@@ -256,6 +447,30 @@ const ADS_COLUMNS = {
     { k: 'acos',        label: 'Direct ACOS %', align: 'right', w: 104, tip: 'Spend / Direct $.\n\nNOT the Break-Even tab\'s Actual ACOS %, which divides by REALISED sales (direct plus recurring autoship). Narrower population, so a different name.' },
     { k: 'ntb',         label: 'NTB',         align: 'right', w: 72,  tip: 'New-to-brand customers Chewy attributed to the ads.' },
   ],
+  // ── v11.25 Walmart. Its own names, because Walmart's console is what Jason
+  // reconciles this table against - and three of these measures (Page Views,
+  // Add to Cart, In-Store $) do not exist on the other two channels at all.
+  walmart: [
+    { k: 'campaign',     label: 'Campaign',    align: 'left',  w: 240, tip: 'Walmart Connect campaign name, from the Campaigns export.' },
+    { k: 'type',         label: 'Type',        align: 'left',  w: 180, tip: 'Sponsored Products (Auto) / Sponsored Products (Manual) / Sponsored Video, as Walmart names them.' },
+    { k: 'status',       label: 'Status',      align: 'left',  w: 92,  tip: 'Live / Paused / Completed / Proposal.\n\n\u26a0 This is the status WHEN THE FILE WAS DOWNLOADED, not during the month it reports. The feed carries one row per campaign per month and no status history.' },
+    { k: 'impressions',  label: 'Impressions', align: 'right', w: 104, tip: 'Impressions over the window.' },
+    { k: 'clicks',       label: 'Clicks',      align: 'right', w: 80,  tip: 'Clicks over the window.' },
+    { k: 'ctr',          label: 'CTR %',       align: 'right', w: 72,  tip: 'Clicks / Impressions.' },
+    { k: 'cpc',          label: 'CPC',         align: 'right', w: 72,  tip: 'Spend / Clicks.' },
+    { k: 'spend',        label: 'Spend',       align: 'right', w: 96,  tip: 'Ad Spend over the window.' },
+    { k: 'dpv',          label: 'Page Views',  align: 'right', w: 92,  tip: 'Total Product Detail Page Views driven by the ad. Walmart reports this at campaign level; Amazon does not.' },
+    { k: 'atc',          label: 'Add to Cart', align: 'right', w: 96,  tip: 'Total Add To Cart events driven by the ad.\n\nWith Page Views beside it this puts the whole funnel on one row: Impressions \u2192 Clicks \u2192 Page Views \u2192 Add to Cart \u2192 Orders.' },
+    { k: 'orders',       label: 'Orders',      align: 'right', w: 76,  tip: 'Ad-attributed ONLINE orders.' },
+    { k: 'units',        label: 'Units',       align: 'right', w: 72,  tip: 'Ad-attributed ONLINE units.' },
+    { k: 'cvr',          label: 'CVR %',       align: 'right', w: 76,  tip: 'Orders / Clicks.\n\nDerived from the window totals, never averaged across the per-row Conversion Rate the export carries - an average would weight a 137-click campaign the same as a 3,110-click one.' },
+    { k: 'cpa',          label: 'CPA',         align: 'right', w: 76,  tip: 'Spend / Orders - what an attributed order cost.' },
+    { k: 'sales',        label: 'Ad Sales',    align: 'right', w: 104, tip: 'Total Attributed Sales, ONLINE only (Walmart RETAIL dollars, not our revenue).' },
+    { k: 'roas',         label: 'ROAS',        align: 'right', w: 76,  tip: 'Ad Sales / Spend. Online only - the same basis as Walmart\u2019s own RoAS column.' },
+    { k: 'inStoreSales', label: 'In-Store $',  align: 'right', w: 96,  fmt: '$',  tip: 'In-Store Attributed Sales: physical-store purchases Walmart attributed back to an online ad click.\n\nNeither Amazon nor Chewy report anything like it, so it keeps its own column rather than being folded into Ad Sales.' },
+    { k: 'omniRoas',     label: 'Omni ROAS',   align: 'right', w: 88,  fmt: 'x',  tip: '(Ad Sales + In-Store $) / Spend.\n\n\u26a0 A SECOND BASIS, not a better ROAS - a wider sales figure over the same spend. Walmart\u2019s own word for it, reused rather than coined. Derived from the window totals, never averaged across campaigns.' },
+    { k: 'acos',         label: 'ACOS %',      align: 'right', w: 80,  tip: 'Spend / Ad Sales. Online only, so it reads against the ROAS column beside it rather than against Omni.' },
+  ],
 };
 
 // ⚠ ONE derivation of the ratio columns. The rollup's TOTAL, the footer's
@@ -283,8 +498,19 @@ function adsDeriveRow(c, group) {
   c.acos   = adsDiv(c.spend, c.sales);
   if (c.ctr  != null) c.ctr  *= 100;
   if (c.acos != null) c.acos *= 100;
-  if (!c.hasUnits) c.units = null;
-  if (!c.hasNtb)   c.ntb   = null;
+  // v11.25 - OMNI ROAS is a SECOND basis, not a better ROAS. Walmart
+  // attributes in-store purchases back to an online click, so Omni divides
+  // (online + in-store) sales by the same spend while `roas` stays online
+  // only. Two scopes, two names, per rule 3a - and `Omni ROAS` is Walmart's
+  // own word for it, reused rather than coined (rule #3).
+  //
+  // /!\ Derived from the SUMMED totals like every other ratio here, never
+  // averaged across the per-row Omni ROAS the export carries.
+  c.omniRoas = c.hasInStore ? adsDiv((c.sales || 0) + (c.inStoreSales || 0), c.spend) : null;
+  if (!c.hasUnits)   c.units        = null;
+  if (!c.hasNtb)     c.ntb          = null;
+  if (!c.hasInStore) c.inStoreSales = null;
+  if (!c.hasFunnel) { c.dpv = null; c.atc = null; }
   return c;
 }
 
@@ -297,12 +523,18 @@ function adsSumRows(rows, group, label) {
   const t = { campaign: label || 'TOTAL', types: new Set(), statuses: new Set(), skuSet: new Set(),
               matches: new Set(), campaigns: new Set(), adgroups: new Set(),
               impressions: 0, clicks: 0, spend: 0, orders: 0, units: 0, sales: 0,
-              ntb: 0, signups: 0, hasUnits: false, hasNtb: false, firstDate: '', lastDate: '' };
+              ntb: 0, signups: 0, inStoreSales: 0, dpv: 0, atc: 0,
+              hasUnits: false, hasNtb: false, hasInStore: false, hasFunnel: false,
+              firstDate: '', lastDate: '' };
   for (const c of (rows || [])) {
     t.impressions += c.impressions; t.clicks += c.clicks; t.spend += c.spend;
     t.orders += c.orders; t.sales += c.sales; t.signups += (c.signups || 0);
     if (c.units != null) { t.units += c.units; t.hasUnits = true; }
     if (c.ntb   != null) { t.ntb   += c.ntb;   t.hasNtb   = true; }
+    if (c.inStoreSales != null) { t.inStoreSales += c.inStoreSales; t.hasInStore = true; }
+    if (c.dpv != null || c.atc != null) {
+      t.dpv += (c.dpv || 0); t.atc += (c.atc || 0); t.hasFunnel = true;
+    }
     c.skuSet.forEach(x => t.skuSet.add(x));
     c.types.forEach(x => t.types.add(x));
     if (!t.firstDate || (c.firstDate && c.firstDate < t.firstDate)) t.firstDate = c.firstDate;
@@ -451,7 +683,11 @@ function adsCampaignRollup(opts) {
             matches: new Set(), campaigns: new Set(), adgroups: new Set(),
             skuSet: new Set(), impressions: 0, clicks: 0, spend: 0, orders: 0,
             units: 0, sales: 0, ntb: 0, signups: 0,
-            hasUnits: false, hasNtb: false, firstDate: d, lastDate: d };
+            // v11.25 - Walmart only. Amazon and Chewy map these to null, so
+            // the has* flags stay false and adsDeriveRow nulls them back out.
+            inStoreSales: 0, dpv: 0, atc: 0,
+            hasUnits: false, hasNtb: false, hasInStore: false, hasFunnel: false,
+            firstDate: d, lastDate: d };
       agg.set(name, c);
     }
     if (r.type)   c.types.add(r.type);
@@ -471,6 +707,10 @@ function adsCampaignRollup(opts) {
     if (r.units   != null) { c.units   += r.units;   c.hasUnits = true; }
     if (r.ntb     != null) { c.ntb     += r.ntb;     c.hasNtb   = true; }
     if (r.signups != null) { c.signups += r.signups; }
+    if (r.inStoreSales != null) { c.inStoreSales += r.inStoreSales; c.hasInStore = true; }
+    if (r.dpv != null || r.atc != null) {
+      c.dpv += (r.dpv || 0); c.atc += (r.atc || 0); c.hasFunnel = true;
+    }
     if (d && d < c.firstDate) c.firstDate = d;
     if (d && d > c.lastDate)  c.lastDate  = d;
     if (bucketOf) {
@@ -479,10 +719,12 @@ function adsCampaignRollup(opts) {
         bucketsSeen.add(bk);
         const byB = series[name] || (series[name] = {});
         const sl = byB[bk] || (byB[bk] = { impressions: 0, clicks: 0, spend: 0,
-                                           orders: 0, units: 0, sales: 0, ntb: 0, signups: 0 });
+                                           orders: 0, units: 0, sales: 0, ntb: 0, signups: 0,
+                                           inStoreSales: 0, dpv: 0, atc: 0 });
         sl.impressions += r.impressions; sl.clicks += r.clicks; sl.spend += r.spend;
         sl.orders += r.orders; sl.sales += r.sales;
         sl.units += (r.units || 0); sl.ntb += (r.ntb || 0); sl.signups += (r.signups || 0);
+        sl.inStoreSales += (r.inStoreSales || 0); sl.dpv += (r.dpv || 0); sl.atc += (r.atc || 0);
       }
     }
   }
@@ -707,8 +949,12 @@ function adsEnsureShell(channel, view) {
     + `style="font-family:var(--mono);font-size:11px;background:var(--surface2);color:var(--text);`
     + `border:1px solid var(--border2);border-radius:5px;padding:4px 8px">`
     + `<option value="">All</option></select></label>`).join('');
-  const brandPicker = channel === 'chewy'
-    ? `<select id="chads-brand" onchange="renderAdsCampaigns('chewy')" style="font-family:var(--mono);font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:5px;padding:4px 8px"><option value="">All Brands</option></select>`
+  // v11.25 - declared by the channel and keyed on the HOST, like every other
+  // control this shell emits. The old form wrote `chads-brand` and
+  // `renderAdsCampaigns('chewy')` in literally, so a view of the same channel
+  // would have emitted a duplicate id wired to re-render a different tab.
+  const brandPicker = ch.brandPicker
+    ? `<select id="${ch.host}-brand" onchange="renderAdsCampaigns('${channel}','${view || ''}')" style="font-family:var(--mono);font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:5px;padding:4px 8px"><option value="">All Brands</option></select>`
     : '';
   host.innerHTML =
       `<div id="${ch.host}-freshness" style="margin-bottom:10px"></div>`
@@ -982,13 +1228,14 @@ function renderAdsCampaigns(channel, view) {
       return `<td style="${pad};font-family:var(--mono);font-size:10px;color:var(--text3)">${esc2(v || '—')}</td>`;
     }
     if (v == null) return `<td style="${pad};color:var(--text3)">—</td>`;
-    let out;
-    if (col.k === 'spend' || col.k === 'sales') out = '$' + Math.round(v).toLocaleString();
-    else if (col.k === 'cpc' || col.k === 'cpa') out = '$' + v.toFixed(2);
-    else if (col.k === 'ctr' || col.k === 'acos') out = v.toFixed(1) + '%';
-    else if (col.k === 'roas') out = v.toFixed(2) + 'x';
-    else out = Math.round(v).toLocaleString();
-    const warn = (col.k === 'roas' && v < 1) || (col.k === 'acos' && v > 100);
+    // v11.25 - the column's declared format, defaulting to the old key rule.
+    const F = adsColFmt(col);
+    const out = adsFmtNum(v, F);
+    // /!\ The sub-1 warning follows the resolved FORMAT, not the literal key
+    // 'roas', so a second ratio column turns red for the same reason the
+    // first one does. Among the pre-v11.25 registries only `roas` resolves to
+    // 'x', so this is a no-op for every existing table.
+    const warn = (F === 'x' && v < 1) || (F === '%' && col.k === 'acos' && v > 100);
     return `<td style="${pad}${warn ? ';color:' + RED : ''}">${out}</td>`;
   };
 
@@ -1189,7 +1436,13 @@ async function loadAdsCampaigns(channel, view) {
     else if (channel === 'amazon' && typeof loadAmazonAdSpend === 'function') await loadAmazonAdSpend();
     if (channel === 'chewy') {
       if (typeof loadChewyAdSpend === 'function') await loadChewyAdSpend();
-      adsFillChewyBrands();
+      adsFillBrands(channel, view);
+    }
+    if (channel === 'walmart') {
+      // The keywords view has already loaded its own table through ch.load()
+      // above; this is the campaigns feed.
+      if (typeof loadWalmartAdCampaign === 'function') await loadWalmartAdCampaign();
+      adsFillBrands(channel, view);
     }
     renderAdsCampaigns(channel, view);
   } catch (e) {
@@ -1199,12 +1452,23 @@ async function loadAdsCampaigns(channel, view) {
 
 // The Chewy brand picker is filled from the DATA, not a hardcoded list, so an
 // advertiser account that appears later shows up with no code change.
-function adsFillChewyBrands() {
-  const sel = document.getElementById('chads-brand');
+// v11.25 - was adsFillChewyBrands, with Chewy's element id and its raw column
+// name both written in. Walmart needs the same control, and a second copy is
+// the divergence hard rule #1 exists to stop.
+//
+// /!\ The options come through the adapter's OWN map, never off a raw column.
+// The table filters on `map(r).brand`, so reading a different field here is
+// exactly how a picker comes to offer a value that matches no row. On Walmart
+// the raw column would be the ACCOUNT, which is "Kitty Ka-Zoom (SmarterPaw
+// LLC)" and carries Doggijuana campaigns inside it.
+function adsFillBrands(channel, view) {
+  const ch = adsViewCfg(channel, view);
+  if (!ch) return;
+  const sel = document.getElementById(ch.host + '-brand');
   if (!sel) return;
   const keep = sel.value;
-  const names = [...new Set((ADS_CHANNELS.chewy.rows() || [])
-    .map(r => String(r.advertiser || '').trim()).filter(Boolean))].sort();
+  const names = [...new Set((ch.rows() || [])
+    .map(r => String(ch.map(r).brand || '').trim()).filter(Boolean))].sort();
   sel.innerHTML = '<option value="">All Brands</option>'
     + names.map(n => `<option value="${esc2(n)}">${esc2(n)}</option>`).join('');
   if (keep && names.includes(keep)) sel.value = keep;

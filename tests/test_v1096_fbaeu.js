@@ -571,6 +571,26 @@ async function refreshUploadDataRanges() {
       }
     }
 
+    // ── v11.25 — Walmart Connect ads. reporting_month + uploaded_at, the
+    // same shape as the SP Search Term block above, because both feeds get
+    // their month from the operator rather than from the file.
+    for (const [tbl, card, grp, what] of [
+      ['walmart_ad_campaign', 'last-walmart-ad-campaign', 'last-walmart-ads-grp', 'Walmart Ads'],
+      ['walmart_ad_keyword',  'last-walmart-ad-keyword',  null,                   'Walmart Ads keyword'],
+    ]) {
+      try {
+        const { data: wRows } = await sb.from(tbl)
+          .select('reporting_month, uploaded_at').order('reporting_month', { ascending: false }).limit(1);
+        if (wRows && wRows.length) {
+          setLast(card, `📅 Latest month ${wRows[0].reporting_month} · uploaded ${ago(wRows[0].uploaded_at) || 'recently'}`);
+          if (grp) setLast(grp, `${wRows[0].reporting_month} · uploaded ${ago(wRows[0].uploaded_at) || 'recently'}`);
+        } else {
+          setLast(card, `📅 No ${what} data loaded yet`);
+          if (grp) setLast(grp, '— Never');
+        }
+      } catch (_) { /* table not created yet */ }
+    }
+
     // ── v8.44 — SP Search Term Report. reporting_month + uploaded_at.
     try {
       const { data: stRows } = await sb.from('amazon_sp_search_term')

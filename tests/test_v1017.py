@@ -86,11 +86,15 @@ STRIPS = {
     # v11.08 - Walmart P&L grew a strip (Sales + Cost to Walmart). Census
     # 23 -> 25; this going red is the test doing its job, same as v10.36's
     # 20 -> 21 and v11.01's 22 -> 23.
-    'Walmart P&L':        ['wmpnl-tab-sales', 'wmpnl-tab-cost'],
+    # v11.25 - Walmart gets an Ads tab, and that tab carries a nested strip
+    # of its own. Census 30 -> 33; this going red is the test working.
+    'Walmart P&L':        ['wmpnl-tab-sales', 'wmpnl-tab-cost', 'wmpnl-tab-ads'],
+    'Walmart Ads':        ['wmpnl-ads-tab-campaigns', 'wmpnl-ads-tab-keywords'],
 }
 DEFAULT_ON = {'chpnl-tab-sales', 'dst-uploads', 'pnl-amzn-tab-summary',
               'ipv-planning', 'pricing-mode-new', 'ds-view-grid',
-              'wmpnl-tab-sales', 'pnl-amzn-ads-tab-campaigns'}
+              'wmpnl-tab-sales', 'pnl-amzn-ads-tab-campaigns',
+              'wmpnl-ads-tab-campaigns'}
 
 
 def tag_of(btn_id):

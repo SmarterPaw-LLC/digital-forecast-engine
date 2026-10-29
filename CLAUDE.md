@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.24**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.25**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,64 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.25 - Walmart Connect becomes the third ads channel
+
+- **Jason:** *"not sure where to export data in walmart connect for the ads"*, then *"download keywords is here and campaigns here"*, then the sentence that settled the whole design: *"i'll have to indicate in the uploader what month the report is for."*
+- Walmart has had no ads feed at all since v11.16. It now has the Campaigns table, a Keywords tab under it, the scorecards, the checkbox selection, the trend chart and the CSV export - **from the same renderer Amazon and Chewy use**. A channel is an ADAPTER plus a column registry, which is what the v11.16 design was for.
+- **SQL TO RUN:** `supabase_v11_25_walmart_ads.sql` (two tables). Idempotent. Run BEFORE uploading.
+
+### ⚠ NEITHER EXPORT CARRIES A REPORTING DATE
+The campaign file has `Start Date` / `End Date`, but those are the **campaign's own schedule** (`2026-03-25` / `No end date`). The keyword file has no date column whatsoever. Every row is one aggregate over whatever range the console's picker happened to be set to.
+
+So the month is **operator-stamped** and the feed is **monthly** - the `amazon_sp_search_term` shape, not the `amazon_ad_spend` shape. This is the first monthly **CHANNEL** (v11.22 only had a monthly VIEW), and it cost nothing in the renderer: `adsCampaignRollup` already reads `monthOf` / `inWindow` off whichever config a (channel, view) pair resolves to.
+
+- `test_v1125` **C1 reproduces the naive read** - the derived period-end date against a daily window - and proves it drops **all of September** ($3,648.13, every row) on a window ending 2026-09-28, with nothing on screen to say so.
+- The uploader **defaults to LAST month, not this one.** There is nothing for the app to check the pick against, so defaulting to the current month would stamp a part-month as a whole one on the commonest path. Picking the current month **warns** rather than being refused, because a deliberate month-to-date pull is legitimate.
+
+### ⚠ I reported a $984 hole in his export that was not there
+I totalled the campaign file at $3,648.13 against the $4,632.27 on his screen and concluded the status filter was dropping 21% of the spend. **Jason:** *"that's because i filtered the date to last month."* The file was September; the summary I compared it against was Sep 29 - Oct 28.
+
+The arithmetic was right and the comparison was meaningless. **Two totals only disagree if they describe the same window**, and I never established that they did - on a release whose entire subject is that this feed carries no date. The lesson is v11.05's: check the window before reporting a gap.
+
+### Omni ROAS is a SECOND BASIS, not a better ROAS
+Walmart attributes **in-store** purchases back to an online click, which neither Amazon nor Chewy report. The export carries both: `RoAS` is online-only, `Omni ROAS` adds in-store. On SBV that is **2.19 against 2.40**, and the gap IS the $63.73 of store sales.
+
+Summing them into one figure would silently change what *"ROAS"* means on this one channel (rule 3a), so they are separate columns with Walmart's own words kept verbatim (rule #3). **`test_v1125` D1 drives the shipped derivation and gets 2.40** - the number Walmart's own column carries - so *"we compute this the way Walmart does"* is checkable rather than asserted.
+
+Three slots joined the **shared** accumulator for it (`inStoreSales` / `dpv` / `atc`), mirroring `ntb` / `signups` exactly: accumulate only when the channel's map returns non-null, null the field out when none did. Amazon and Chewy end with the nulls they would have had, and **A1a2 asserts the slots are NULL and not 0** on a channel that does not report them - a fabricated 0 would read as *"sold nothing in store"* on a table that is not Walmart at all.
+
+### ⚠ The brand comes from the CAMPAIGN NAME, not the account
+The account is `Kitty Ka-Zoom (SmarterPaw LLC) (1p - SS)` **and it carries Doggijuana campaigns inside it.** Reading the brand off the account files every Doggijuana dollar under Kitty Ka-Zoom - a wrong number that looks entirely plausible on a brand filter. `test_v1125` E2 runs that read beside the shipped one and pins the whole $3,648.13 landing on one brand.
+
+Resolved through the **existing** `adsAdvertiserToBrand` rather than a second brand table, and an unrecognised name stays null.
+
+### ⚠ A blank metric cell is NULL, never 0
+**132 of the 189 rows** in the real September keyword export are enabled targets that have never served - Walmart writes empty cells, not zeros. Storing 0 would make *"never delivered"* indistinguishable from *"delivered and returned nothing"*, which on an ads page is the one pair nobody can afford to confuse (the v11.16 `adsDiv` argument). The bid is kept on every row regardless, because it is why someone opens a keyword export. The upload card reports **how many actually delivered**, since an export that is mostly dead targets looks identical to a healthy one on a row count alone.
+
+### ⚠ cellOf's NUMERIC half was still a hardcoded list of column keys
+Driving the table showed **`Omni ROAS 2` beside `ROAS 2.19x` on the same row**, and In-Store $ with no dollar sign.
+
+v11.22 fixed the TEXT half of this exact function by detecting text **by value**. The numeric half cannot be fixed that way - **2.19 and 2 are both numbers**, and the difference between a ratio and a count is a property of the MEASURE. So the column declares it: an optional `fmt`, with the old key rule as the default.
+
+`test_v1125` **K1 reproduces the pre-v11.25 rule and requires `adsColFmt` to agree with it on all 45 existing columns**, so *"no existing table changed"* is checkable. The sub-1 red warning now follows the resolved format rather than the literal key `roas`, so a second ratio column turns red for the same reason the first does - a no-op on every existing registry, where only `roas` resolves to `x`.
+
+### One brand picker, not a Walmart copy
+`adsFillChewyBrands` wrote Chewy's element id **and** its raw column name in literally, and the shell emitted `<select id="chads-brand" onchange="renderAdsCampaigns('chewy')">` behind a `channel === 'chewy'` branch. Three ways that could not serve a second channel, and a duplicate id waiting for any VIEW of the same channel.
+
+Generalised to `adsFillBrands(channel, view)`, keyed on the HOST like every other control the shell emits, with `brand()` reading `this.host` - which `adsViewCfg` resolves to the **view's** host, because it hands back an object whose prototype is the channel. **Chewy's id does not change** (its host is already `chads`), which is what makes the conversion checkable as a no-op. The options now come through the adapter's own `map`, never a raw column - on Walmart the raw column would be the account.
+
+### Verification
+- `node --check` clean - **91 suites green** - new `tests/test_v1125.py` (94 assertions) - div balance 2,845 / 2,845 with comments masked, comments 360 / 360.
+- **The REAL parsers driven on Jason's REAL September exports**, with Supabase stubbed to capture what would have been written: 5 campaigns, 189 keywords, 57 with delivery, 132 null-metric rows, `No end date` to null on all 5, and the delete scoped to `(US, 2026-09, Kitty Ka-Zoom (SmarterPaw LLC) (1p - SS))`.
+- **And it reconciles to Walmart's own Performance Summary exactly**: `$3,648.13` spend, `$11,059.30` sales, `3.03` ROAS, `$0.57` average CPC, 1,530 orders, 1,608 units.
+- **Driven in a browser against the shipped build** (chip confirmed `v11.25` first), with the adapters swapped so the REAL renderer ran end to end: 20 cells per row against a 20-column header, the five Walmart scorecards, `📯 Walmart Ads` as the source chip, SBV reading `2.19x / 2.40x / $64`, a deliberately losing campaign turning **both** ratio columns red, the footer at `2.85x`, and the strip/panel pairs showing exactly one area at a time.
+- **The format regression proven in the browser too**: all 45 pre-v11.25 columns resolve to the identical format, drift `[]`.
+
+### Still open
+- **Only September is loaded.** The chart needs two or more months, and each month is its own pair of exports. Walmart holds roughly 12 months.
+- **The Walmart break-even model still needs the agreement first** - the v11.05 lesson, unchanged.
+- Whether Meowijuana and Doggijuana have their own Walmart ad accounts. The uploader stamps an account on every row either way, so a second account needs no code change.
 
 ## v11.24 - one uploader, FIVE names, and the commonest one was false
 
