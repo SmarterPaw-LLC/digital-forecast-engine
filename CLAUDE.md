@@ -96,6 +96,18 @@ Its haystack was hardcoded to campaign + type + status, which on the Keywords vi
   - All five Ads areas still show exactly one panel each and round-trip their URLs. Only the expected unauthenticated 401s plus one freshness-probe warning in console.
 - **Not verified here:** how it looks. The login gate leaves the app container hidden (v10.87), so every box measures 0. The text, the structure, the handlers and the chart's data are read back off the real DOM and the real Chart instance; only the pixels are not.
 
+### ⚠ The Amazon campaign backfill is DONE (checked 2026-10-29)
+`v11.15` and `v11.16` both close with *"Amazon shows (no campaign) for everything until Jason re-uploads"*. **That is no longer true**, and I repeated it at v11.23 from the changelog instead of querying the table. Jason: *"i've reuploaded amazon several times already."* He had.
+
+| | |
+|---|---|
+| `amazon_ad_spend.campaign` | exists, `amazon_ad_spend_uniq_v2` built on it |
+| **2026-10-01 -> 2026-10-28** | **8,159 rows, 100% named, 147 campaigns, $20,692.22** |
+| 2026-09 and earlier | 0 named - 86,000 rows that predate the dimension |
+
+So the Ads tab is **fully live on any window inside Q4**. A window reaching before Oct 1 correctly shows the `(no campaign)` bucket for the earlier part, which is what that bucket is for. Backfilling further back is optional: the unified report can be re-pulled for a past range, and the handler DELETEs only the file's own date range, so a month at a time is safe.
+
+**The lesson is v11.05's and v11.14's for the third time: a claim about the data is checkable, so check it.** One query would have replaced a wrong sentence in a hand-off.
 ### ⚠ Two census guards went red; both re-pointed and both TIGHTENED
 Neither found a bug; both pinned a literal count of chart surfaces while their labels claimed a structural guarantee - the documented brittle-count trap.
 - **`test_v1012`** counted callers of the series builder, the renderer and the toggle. Re-pointed, and the DIRECT check (*"this surface does not construct its own `new Chart(`, and does route through the shared renderer"*) now covers `adsUpdateChart` too, so the count can grow again without the rule going slack. Its mode-host / canvas sweep also learned that the Ads panel is a **bare host** whose ids live in a template literal, and asserts them there.
