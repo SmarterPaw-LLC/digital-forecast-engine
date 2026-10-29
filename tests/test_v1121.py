@@ -77,7 +77,8 @@ print('\n== C. one area registry ==')
 ads = fnbody('switchPnlAdsView')
 ok('const AREAS = {' in ads, 'C1a the areas are a registry, not hand-written lines')
 areas = dict(re.findall(r"(\w+):\s*'([\w-]+)'", ads[ads.index('const AREAS'):ads.index('};', ads.index('const AREAS'))]))
-eq('C1b naming all four panels', sorted(areas), ['activity', 'campaigns', 'growth', 'uploads'])
+eq('C1b naming every panel', sorted(areas),
+   ['activity', 'campaigns', 'growth', 'keywords', 'uploads'])
 for k, v in areas.items():
     ok('id="%s"' % v in s, 'C1c %s -> %s is a real element' % (k, v))
 ok("Object.entries(AREAS)" in ads,

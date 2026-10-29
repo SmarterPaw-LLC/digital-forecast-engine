@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.21**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.22**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,41 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.22 - a Keywords (search terms) area on the Amazon Ads tab
+
+- **Jason:** *"give me another sub-page tab for keywords. do you have this data? I need a way to see level of detail in the ads viewer for amazon, chewy, walmart."*
+
+### The data answer, checked rather than assumed
+| channel | detail below campaign |
+|---|---|
+| **Amazon** | `amazon_sp_search_term` — customer search term, targeting, match type, impressions, clicks, CPC, spend, 7-day sales/orders/units, ACOS, ROAS, CVR. **Monthly grain, Sponsored Products only.** |
+| **Chewy** | **No keyword dimension exists.** `chewy_ad_spend` goes campaign → promoted SKU → day; the vendor export has no search terms. Chewy's detail below campaign is the **SKU**. |
+| **Walmart** | No ads feed at all. |
+
+**So the tab exists only where the data does.** A Keywords tab on Chewy that could only ever say *no data* is a live-looking control that can never do anything (the v10.19 rule). `ADS_VIEWS` is keyed by channel; a channel with no entry simply has no extra tab.
+
+### ⚠ A monthly feed needs a monthly window
+The report has no per-day rows: `reporting_month` is `YYYY-MM` and `reporting_date` is the period END. Comparing that end-date against a daily window would include or drop a **whole month** depending on where its last day fell.
+
+`test_v1122` A3 reproduces that naive read against a window ending 2026-10-28: it drops **all of October** and **$780 of $900**, with nothing on screen to say so. A month is now IN when it OVERLAPS the window, and the coverage line states the months it resolved to — `monthly grain · 2 months · 2026-09 → 2026-10`. The Campaigns tab IS genuinely daily, so these two tabs under one period control legitimately resolve different windows, which is exactly why each says what it resolved to (the v11.02 rule).
+
+### Still ONE renderer
+The rollup, shell, scorecards, sort, search, filters, TOTAL row and CSV are the v11.16 ones. A **view** supplies its own mapper, grouping key, columns, noun and window rule; `adsViewCfg` falls back to the channel adapter, so **a view-less call is byte-identical to v11.21** — which `test_v1122` A1 proves by diffing the whole result rather than reading the diff.
+
+### ⚠ The cell renderer hardcoded WHICH columns are text
+Driving it showed **`NaN` in the Search term and Match columns**. `cellOf` special-cased `campaign` / `type` / `status` as text and sent everything else to the numeric formatter, so a view with its own text columns walked into `Math.round('catnip spray')`.
+
+Fixed by **looking at the value, not the column name**: a string renders as text whatever it is called. The name column is resolved from the view's own `groupBy`, so the dimmed un-named bucket and the footer's row-count label land on the right column instead of on whatever happens to be called `campaign` — which on Keywords is the campaign LIST.
+
+### ⚠ It called its rows "campaigns"
+The driven output read `2 campaigns · $900 spend` and *"No campaigns with spend in this window"* on a table of **search terms** — on a tab that also shows a campaign-list column, so two meanings of the word sat side by side (rule 3a). The view declares its own noun; `campaign` stays the default, so the Campaigns view's wording is untouched.
+
+### Verification
+- `node --check` clean · **88 suites green** · new `tests/test_v1122.py` (41 assertions) · div balance delta unchanged.
+- **Driven in a browser** (chip `v11.22`): `🔑 Keywords` at `#pnl/amazon/adskeywords`; a term targeted two ways merges into one row carrying `BROAD · EXACT` and both campaign names; the match filter narrows it to `$520 / EXACT` with the options still complete; a window overlapping no month reads *"No search terms with spend in this window."*; and the Campaigns view is untouched beside it — own columns, own sort state, own URL, still counting `1 campaign`.
+
+### Known, deliberately not changed
+The source chip reads `🎯 Amazon SP Search Term` because that is this table's icon in `DATA_SOURCES`, where the dart also means Break-Even's tab. A cross-registry overlap that predates this release; changing a shared registry on the way past is how the v10.59 sweep caused v10.87.
 ## v11.21 - Growth Model and both ad uploaders become areas of the Ads tab
 
 - **Jason:** *"3. the growth model should be a sub-tab of the ads page for amazon p&L (and other p&L pages). 4. the uploads for the growth model should be moved to an uploads sub-page tab within ads tab."*

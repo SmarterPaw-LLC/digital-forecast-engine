@@ -233,7 +233,14 @@ print('\n== B. static - the registries ==')
 ok("const ADS_CHANNELS = {" in js, 'B1  one channel registry')
 for ch in ('amazon:', 'chewy:'):
     ok(ch in CORE, 'B2  %s channel is registered' % ch.rstrip(':'))
-ok(CORE.count('host:') == 2, 'B3  exactly two hosts today', CORE.count('host:'))
+# v11.22 - a host per (channel, VIEW), not per channel: Amazon's Keywords
+# area has its own. The guarantee is that each one is a real element, which
+# is stronger than counting them.
+_hosts = re.findall(r"host: '([a-z0-9-]+)'", CORE)
+ok(len(_hosts) >= 3, 'B3a every view declares a host', _hosts)
+ok(len(set(_hosts)) == len(_hosts), 'B3b and they are distinct', _hosts)
+for _h in _hosts:
+    ok('id="%s-host"' % _h in s, 'B3c %s-host is a real element' % _h)
 ok("const ADS_COLUMNS = {" in js, 'B4  one column registry, keyed by channel')
 ok("'(no campaign)'" in CORE, 'B5  the bucket is a NAMED constant, not a magic string')
 _adsLabels = re.findall(r"label: '([^']+)'", CORE)
@@ -266,8 +273,8 @@ ok("ads:       { field: 'date'" in js,
    'C9  the Chewy Ads tab names its own feed for the shared period control')
 
 print('\n== D. static - the standing rules ==')
-ok("downloadAdsCampaignsCSV('amazon')" in js and "downloadAdsCampaignsCSV('chewy')" in js,
-   'D1  both tabs are reachable from the top-bar CSV button')
+ok("downloadAdsCampaignsCSV('amazon'" in js and "downloadAdsCampaignsCSV('chewy'" in js,
+   'D1  both channels are reachable from the top-bar CSV button')
 ok("pnl_amazon_ads:   { id: 'amzads-search' }" in js
    and "pnl_chewy_ads:    { id: 'chads-search' }" in js,
    'D2  both page searches are registered with the global search bar')
@@ -279,7 +286,7 @@ ok("pnlDeltaChip" in body, 'D5  and the shared delta chip')
 ok(re.search(r"label: 'Ad Spend'[^}]*?null\)", body, re.S) is not None,
    'D6  the Ad Spend chip is NEUTRAL - a red chip there reads as "cut it"')
 exp = js[js.index('function downloadAdsCampaignsCSV('):js.index('async function loadAdsCampaigns(')]
-ok('_adsExport[channel]' in exp and 'adsCampaignRollup' not in exp,
+ok('_adsExport[_adsKey(channel, view)]' in exp and 'adsCampaignRollup' not in exp,
    'D7  the CSV reads the render SNAPSHOT and never recomputes (the v8.00 rule)')
 ok('# window:' in exp and '# brand:' in exp,
    'D8  and states its scope, so an archived file can be re-derived')
