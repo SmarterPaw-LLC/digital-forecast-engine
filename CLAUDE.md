@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.19**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.20**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,38 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.20 - Ads sub-page filters, and a readable Campaigns icon
+
+- **Jason:** *"also i need ads sub-page filters for things like ad type etc."* and *"change the icon for campaigns."*
+
+### ⚠ The filter narrows at ROW level, inside the rollup
+A campaign can carry more than one ad product under one name. Filtering to Sponsored Products therefore has to **drop that campaign's Brands spend and re-derive its totals** - not drop the whole campaign, and not keep blended figures under a label claiming otherwise. A filter applied after the rollup would have shown a row labelled *Sponsored Products* whose spend silently still included Brands.
+
+Putting it in the rollup also means the scorecards, the table, the TOTAL row and the CSV narrow **together** - one chokepoint rather than four places that can disagree about what is being filtered.
+
+`test_v1120` A2 builds exactly that dual-product campaign and pins the shrink: $400 with both products, **$100** filtered, ROAS re-derived rather than carried over.
+
+### ⚠ Options come from the DATA, and survive being filtered
+- A hardcoded list would hide exactly what v11.14 exists to surface: an unrecognised Amazon ad product is passed through as its own slug so it shows up **as itself**. It is offered in the filter for the same reason.
+- **The option list is collected BEFORE the narrowing**, and the renderer refills it from an unfiltered pass over the same window. Reading options off the filtered result would leave the control showing only the value already picked - a filter you can enter and cannot leave.
+- A pick the window no longer contains falls back to All rather than leaving the control on a value the table cannot show (the v11.02 rule).
+
+### The strip is built from the adapter
+Each channel DECLARES its filterable dimensions (`filters: [{k, label}]`), so Amazon offers **Ad type** and Chewy offers **Campaign type** and **Status** - the unified Amazon report carries no campaign status. One generated strip, not a hand-written row per channel.
+
+An absent, empty-object or empty-Set filter is **byte-identical** to no filter, which is the only way to make "no existing caller changed behaviour" checkable.
+
+The active filters are named on the coverage line (the v10.99 rule) and in the CSV scope header (the v10.79 rule).
+
+### The icon, twice
+The card-index glyph read as a muddy block at 12px. My first replacement was a bar chart - which **`test_v1050`'s sibling check in `test_v1117` caught as already being Summary's glyph**. One label, one glyph (rule #2). It is now a satellite antenna: unused anywhere, and it pairs with the Ads megaphone.
+
+### ⚠ A FAILING assertion killed the run instead of reporting it
+`ok()` printed the offending glyph with `%r` into a cp1252 console, which raised `UnicodeEncodeError` **from inside the failure printer**. So the suite died on a traceback instead of naming the clash. The v10.77 trap, in a test printer. All four of this session's suites now print with `ascii()`.
+
+### Verification
+- `node --check` clean · **86 suites green** · new `tests/test_v1120.py` (33 assertions).
+- **Driven in a browser** (chip `v11.20`): the dual-product campaign reads `$400 · Sponsored Brands · Sponsored Products` unfiltered and `$100 · Sponsored Products` filtered; the option list stays complete while filtered so All is reachable; the coverage line gains `Ad type: Sponsored Products`; Chewy shows both its pickers.
 ## v11.19 - two leftovers on the Amazon P&L control bar
 
 - **Jason:** *"1. AD HR target - what is this for? if it is for the growth model, it should live on that tab only. 2. the search is leftover from when we migrated search up to the top of the page, i think."*

@@ -35,7 +35,7 @@ passed = failed = 0
 def ok(cond, name, got=None):
     global passed, failed
     if cond: passed += 1; print('  ok    ' + name)
-    else:    failed += 1; print('  FAIL  %s%s' % (name, '' if got is None else '  got: %r' % (got,)))
+    else:    failed += 1; print('  FAIL  %s%s' % (name, '' if got is None else '  got: ' + ascii(got)))
 
 def eq(name, got, want):
     ok(got == want, name, None if got == want else got)
