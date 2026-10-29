@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.20**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.21**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -38,6 +38,40 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v11.21 - Growth Model and both ad uploaders become areas of the Ads tab
+
+- **Jason:** *"3. the growth model should be a sub-tab of the ads page for amazon p&L (and other p&L pages). 4. the uploads for the growth model should be moved to an uploads sub-page tab within ads tab."*
+- The Amazon strip goes from eight tabs to **seven**; the Ads strip is now **📡 Campaigns / 🚀 Growth Model / 🛠 Ad Activity / 📥 Uploads**, and all four ad uploaders collect in one place instead of two panels each hosting the report it happened to consume.
+
+### ⚠ Markup cut by a COMMENT-AWARE tag matcher, never by line number
+v11.12 shipped a panel outside its own page because a regex counted `<div` inside HTML comments and attribute prose, and this file is full of both. Every block here was located by matching its **own** opening tag to its **own** closing tag with comments masked out, each extraction asserted to contain what it should and nothing it should not (`assert 'pnl-amzn-breakeven-wrap' not in G`), and whole-document balance re-checked before the write.
+
+### ⚠ '/ads' meant "wherever you were last", and that broke the URL
+Each area writes its own name, and `/ads` is written only by **Campaigns**. The first cut kept the last-visited area when that URL was read back, so a link saying `/ads` could land you on **Uploads** - the address bar describing a page nobody could navigate back to. v7.94 exists so a link restores the exact view; a sticky area quietly breaks that.
+
+Driven in a browser, all four now round-trip exactly: `/ads` → Campaigns, `/growth` → Growth Model, `/adactivity` → Ad Activity, `/adsuploads` → Uploads, and each area writes back the name that restores it.
+
+**The old links keep working.** `#pnl/amazon/growth` has been real since v7.94 and three data-currency chips route to it, so the name survives in both directions - the contract v11.17 established for `adactivity`.
+
+### One area registry
+`switchPnlAdsView` drives the strip and the show/hide from the same `AREAS` map, so a fifth area is one row rather than a pair of hand-written lines that can drift. An unknown area falls back to Campaigns rather than showing nothing.
+
+### ⚠ Exactly ONE surface wires the uploaders now
+Both cards moved into one area, so the Growth Model and Ad Activity branches **shed** their v10.88 wiring and the Uploads area took it. Two surfaces doing the same job is how that wiring got missed the first time; `test_v1121` D3 asserts the parent switch wires none of it.
+
+### Verification
+- `node --check` clean · **87 suites green** · new `tests/test_v1121.py` (42 assertions) · div balance delta unchanged with comments masked (2,798 / 2,798).
+- **Driven in a browser** (chip `v11.21`): seven parent tabs, four Ads areas with exactly one shown at a time, the Uploads area carrying all four cards in two sections, every area's URL round-tripping, and all three data-currency chips (SQP ASIN, SP Campaign Snapshot, Bulk Sheet) landing on `ads/uploads` with the panel shown.
+
+### ⚠ Five guards went red; all five were re-pointed and three were TIGHTENED
+Each pinned WHERE something lived while its label claimed a guarantee about it.
+- **`test_v1050`** found the Growth Model tab by a hardcoded button id. It now finds it **by label**, so the rule survives the tab moving again.
+- **`test_v1088`** and **`test_v1089`** asserted *"card X sits inside panel Y"* with Y written in. They now resolve Y through `PNL_HOSTED_UPLOAD_GROUPS`, the registry that is supposed to be the single source of that fact - so the map and the markup can no longer drift apart silently. v1088 went **66 → 73** assertions.
+- **`test_v1017`** census 28 → 29, and **`test_v1117`**'s chip target string. Pure drift.
+
+### Still open
+- **Keywords.** Amazon has the data (`amazon_sp_search_term`: customer search term, targeting, match type, impressions, clicks, CPC, spend, 7-day sales/orders/units, ACOS, ROAS, CVR - monthly, Sponsored Products only). **Chewy has no keyword dimension at all**; its detail below campaign is per-SKU. Walmart has no ads feed.
+- The Chewy Ads tab has no Growth Model or Ad Activity equivalent, so its strip stays flat for now.
 ## v11.20 - Ads sub-page filters, and a readable Campaigns icon
 
 - **Jason:** *"also i need ads sub-page filters for things like ad type etc."* and *"change the icon for campaigns."*

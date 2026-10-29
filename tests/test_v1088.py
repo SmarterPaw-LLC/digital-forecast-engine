@@ -71,13 +71,16 @@ def slice_div(html, anchor):
     raise AssertionError('unbalanced: ' + anchor)
 
 
+# v11.21 - all four ad uploaders now live in ONE place, the Ads tab's Uploads
+# area. They used to be split between the Growth Model panel and the Ad
+# Activity panel, each hosting the report it happened to consume; collecting
+# them means there is one surface to wire and one place to drop a file.
 MOVED = {
-    'grp-amazon-ads-bulk': 'pnl-amzn-adactivity-wrap',
-    'grp-amz-sqp-asin':    'pnl-amzn-growth-wrap',
-    # v10.89 - SQP split into one card per view (ASIN / Brand), both hosted
-    # on the Growth Model. The guard flagged the new card correctly.
-    'grp-amz-sqp-brand':   'pnl-amzn-growth-wrap',
-    'grp-amz-sp-campaign': 'pnl-amzn-growth-wrap',
+    'grp-amazon-ads-bulk': 'pnl-amzn-ads-view-uploads',
+    'grp-amz-sqp-asin':    'pnl-amzn-ads-view-uploads',
+    # v10.89 - SQP is one card per view (ASIN / Brand); both moved together.
+    'grp-amz-sqp-brand':   'pnl-amzn-ads-view-uploads',
+    'grp-amz-sp-campaign': 'pnl-amzn-ads-view-uploads',
 }
 STAYED = ['grp-amazon-ads', 'grp-amz-sp-search-term']
 
@@ -88,7 +91,26 @@ print('\nA. each uploader sits where its cadence says it should')
 up_s, up_e = slice_div(MARKUP, 'id="data-view-uploads"')
 UPLOADS = MARKUP[up_s:up_e]
 
-for gid, wrap in MOVED.items():
+# v11.21 - MOVED hard-coded which panel hosts each card. Both ad uploaders
+# then moved into the Ads tab's Uploads area and this went red on a rule that
+# still held. The hosting panel is now resolved through
+# PNL_HOSTED_UPLOAD_GROUPS -> AREA_WRAP, so the registry and the markup cannot
+# drift apart silently, which is a stronger claim than the literal was.
+AREA_WRAP = {
+    'growth':     'pnl-amzn-growth-wrap',
+    'adactivity': 'pnl-amzn-adactivity-wrap',
+    'adsuploads': 'pnl-amzn-ads-view-uploads',
+}
+import re as _re
+_m = _re.search(r'const\s+PNL_HOSTED_UPLOAD_GROUPS\s*=\s*\{(.*?)\};', JS, _re.S)
+_hosted = dict(_re.findall(r"'([\w-]+)'\s*:\s*'(\w+)'", _m.group(1) if _m else ''))
+ok(len(_hosted) >= 4, 'the hosted-group registry was really found', _hosted)
+for gid in MOVED:
+    area = _hosted.get(gid)
+    ok(area in AREA_WRAP, gid + ' routes to a known Ads area', area)
+    wrap = AREA_WRAP.get(area)
+    if not wrap:
+        continue
     w_s, w_e = slice_div(MARKUP, 'id="' + wrap + '"')
     host = MARKUP[w_s:w_e]
     ok('id="' + gid + '"' in host, gid + ' lives inside ' + wrap)
@@ -148,7 +170,13 @@ bad = sorted(v for v in hosted.values() if v not in views)
 ok(not bad, 'every host target is a real Amazon P&L sub-view', bad)
 
 # And the group must actually exist inside that sub-view's wrapper.
-mismatch = [g for g, v in hosted.items() if MOVED.get(g, '').find(v) == -1]
+# v11.21 - MOVED used to map a group to a wrapper id whose NAME contained the
+# chip's target ('growth' inside 'pnl-amzn-growth-wrap'). That substring trick
+# broke when the target became 'adsuploads' for a wrapper called
+# pnl-amzn-ads-view-uploads. Resolve through AREA_WRAP instead, which is an
+# explicit mapping rather than a coincidence of naming.
+mismatch = [g for g, v in hosted.items()
+            if AREA_WRAP.get(v) and MOVED.get(g) != AREA_WRAP[v]]
 ok(not mismatch, 'each chip target matches where the group really is', mismatch)
 
 ok('PNL_HOSTED_UPLOAD_GROUPS[groupId]' in JS,
@@ -197,20 +225,29 @@ def _fnbody(name):
         k += 1
 
 
-# The Growth Model host: still a branch of the Amazon sub-view switch.
+# v11.21 - BOTH ad uploaders now live in ONE place, the Ads tab's Uploads
+# area, so there is one hosting surface to wire rather than two. This used to
+# check the Growth Model branch of switchPnlAmazonView and the Ad Activity
+# branch of switchPnlAdsView; neither hosts an uploader any more.
+#
+# The guarantee is unchanged and is asserted where hosting now happens.
 _sw = _fnbody('switchPnlAmazonView')
-_growth = re.search(r"if \(view === 'growth'\) \{(.*?)\n  \}", _sw, re.S)
-ok(bool(_growth), 'the Growth Model host has an entry hook')
-for fn in WIRES:
-    ok(fn in (_growth.group(1) if _growth else ''),
-       'Growth Model entry hook calls ' + fn)
-
-# The Ad Activity host: now an area of the Ads tab, wired in its switcher.
 _ads = _fnbody('switchPnlAdsView')
+ok(len(_ads) > 400, 'the Ads switcher body was really found', len(_ads))
+_up = re.search(r"view === 'uploads'\) \{(.*?)\n  \} else", _ads, re.S)
+ok(bool(_up), 'the Uploads area has an entry hook')
 for fn in WIRES:
-    ok(fn in _ads, 'Ad Activity entry hook calls ' + fn)
+    ok(fn in (_up.group(1) if _up else ''),
+       'Uploads entry hook calls ' + fn)
 ok("renderPnlAdActivity" in _ads,
    'and the Ad Activity area still renders its timeline on entry')
+ok("pnlGrowthInit" in _ads,
+   'and the Growth Model area still initialises on entry')
+# Nothing is left wiring uploaders from the parent switch, which would be a
+# second place doing the same job.
+for fn in WIRES:
+    ok(_sw.count(fn) == 0,
+       'the parent sub-view switch no longer wires ' + fn, _sw.count(fn))
 # Guard the guard: a typo in either slice would make every check above pass
 # vacuously against an empty haystack.
 ok(len(_ads) > 200 and len(_sw) > 500,

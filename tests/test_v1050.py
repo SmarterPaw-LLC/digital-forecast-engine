@@ -87,8 +87,14 @@ ok(all(v.startswith(TARGET) for v in be.values()),
    '  and both use the target glyph', be)
 ok(MONEYBAG + ' Break-Even' not in RAW, '  the money-bag Break-Even is gone')
 
-ok(tabs.get('pnl-amzn-tab-growth', '').startswith(ROCKET),
-   'Growth Model vacated the target for the rocket', tabs.get('pnl-amzn-tab-growth'))
+# v11.21 - was pinned to the button id `pnl-amzn-tab-growth`. The Growth
+# Model moved into the Ads tab and the id changed, so the check went red on a
+# rule that still held. Find it BY LABEL instead: that follows the tab
+# wherever it lives, which is the guarantee this line was always about.
+_growth = {bid: v for bid, v in tabs.items() if v.endswith('Growth Model')}
+ok(len(_growth) == 1, 'there is exactly one Growth Model tab', sorted(_growth))
+ok(all(v.startswith(ROCKET) for v in _growth.values()),
+   'Growth Model vacated the target for the rocket', _growth)
 ok(RAW.count(ROCKET + ' Growth Model') == 2,
    '  including its empty state, so the tab and the panel agree',
    RAW.count(ROCKET + ' Growth Model'))

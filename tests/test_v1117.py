@@ -109,7 +109,7 @@ ok("'adactivity'" in js[js.index("if (page === 'pnl' && sub === 'amazon')"):][:9
    'B4c the router still lists it as a landable sub-view')
 ok('pnlAmazonRouteView' in fnbody('pnlUpdateRoute'),
    'B4d and the URL writer reads the route NAME, not the raw view')
-ok("'grp-amazon-ads-bulk': 'adactivity'" in js,
+ok("'grp-amazon-ads-bulk': 'adsuploads'" in js,
    'B5  the Bulk Sheet data-currency chip still resolves')
 
 print('\n== C. the panel really is nested ==')

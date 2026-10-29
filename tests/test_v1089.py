@@ -149,12 +149,17 @@ print('\nE. chips still land on a real host')
 
 m3 = re.search(r'const\s+PNL_HOSTED_UPLOAD_GROUPS\s*=\s*\{(.*?)\};', JS, re.S)
 hosted = dict(re.findall(r"'([\w-]+)'\s*:\s*'(\w+)'", m3.group(1) if m3 else ''))
+# v11.21 - the two SQP cards moved with the Growth Model's other uploaders
+# into the Ads tab's Uploads area. Same guarantee - the chip resolves to a
+# P&L-hosted area rather than dangling on Data -> Uploads - new address.
 for gid in ['grp-amz-sqp-asin', 'grp-amz-sqp-brand']:
-    ok(hosted.get(gid) == 'growth', gid + ' routes to the Growth Model', hosted.get(gid))
+    ok(hosted.get(gid) == 'adsuploads',
+       gid + ' routes to the Ads tab Uploads area', hosted.get(gid))
 
 # Both must physically live in that wrapper.
-w = re.search(r'<div id="pnl-amzn-growth-wrap"[^>]*>', MARKUP)
-ok(bool(w), 'growth wrapper located')
+# v11.21 - the SQP cards moved into the Ads tab's Uploads area.
+w = re.search(r'<div id="pnl-amzn-ads-view-uploads"[^>]*>', MARKUP)
+ok(bool(w), 'the Uploads wrapper was located')
 start = w.end() if w else 0
 depth, end = 0, len(MARKUP)
 for mm in re.finditer(r'<div\b|</div>', MARKUP[w.start():]):
@@ -163,7 +168,7 @@ for mm in re.finditer(r'<div\b|</div>', MARKUP[w.start():]):
         end = w.start() + mm.end(); break
 host = MARKUP[w.start():end]
 for gid in ['grp-amz-sqp-asin', 'grp-amz-sqp-brand', 'grp-amz-sp-campaign']:
-    ok('id="' + gid + '"' in host, gid + ' really sits inside the Growth Model')
+    ok('id="' + gid + '"' in host, gid + ' really sits inside the Uploads area')
 
 
 print('\n' + '=' * 62)

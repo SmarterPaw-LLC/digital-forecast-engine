@@ -68,13 +68,16 @@ STRIPS = {
                            'chpnl-tab-program', 'chpnl-tab-ads', 'chpnl-tab-rebates'],
     'Data':               ['dst-uploads', 'dst-history', 'dst-query'],
     'Amazon P&L':         ['pnl-amzn-tab-summary', 'pnl-amzn-tab-perf', 'pnl-amzn-tab-diag',
-                           'pnl-amzn-tab-changelog', 'pnl-amzn-tab-growth',
+                           'pnl-amzn-tab-changelog',
                            'pnl-amzn-tab-opps', 'pnl-amzn-tab-ads',
                            'pnl-amzn-tab-breakeven'],
+    # v11.21 - Growth Model LEFT the Amazon strip for the Ads one, which also
+    # grew an Uploads area. Census 28 -> 29.
     # v11.17 - Jason: "ads activity tab on amazon p&L should be a sub area
     # of the ads tab." Ad Activity LEFT the Amazon P&L strip and the Ads tab
     # grew a nested one. Census 27 -> 28; this going red is the test working.
-    'Amazon Ads':         ['pnl-amzn-ads-tab-campaigns', 'pnl-amzn-ads-tab-activity'],
+    'Amazon Ads':         ['pnl-amzn-ads-tab-campaigns', 'pnl-amzn-ads-tab-growth',
+                           'pnl-amzn-ads-tab-activity', 'pnl-amzn-ads-tab-uploads'],
     'Inventory Planning': ['ipv-planning', 'ipv-reorder'],
     'Pricing Scenarios':  ['pricing-mode-new', 'pricing-mode-existing', 'pricing-mode-chewy'],
     'Digital Sales':      ['ds-view-grid', 'ds-view-reports'],
