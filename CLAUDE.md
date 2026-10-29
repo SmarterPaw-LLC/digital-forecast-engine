@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.23**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.24**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,60 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.24 - one uploader, FIVE names, and the commonest one was false
+
+- **Jason, pointing at the Amazon Ads upload card:** *"is this the one? if so, why give it a new name all of a sudden?"*
+- **I had not renamed it.** That card has been carrying two names stacked on top of each other since v8.17, and three more live elsewhere. He was reading one screenshot and seeing a contradiction that had been shipped for months.
+
+| where | what it said |
+|---|---|
+| upload group header | `Amazon Ads - SB / SD / DSP / TV (per-ASIN)` |
+| the card inside it | `Amazon Ads - Unified Report` |
+| source chip on every scorecard | `Amazon Ads (non-SP)` |
+| upload-history picker | `Amazon Ads (non-SP)` |
+| product-delete confirmation | `Amazon Ads (non-SP) rows` |
+
+The group holds **exactly one dropzone**, so the first two are two labels for one thing - and the header contradicted **its own tooltip one line below it**, which has read *"Sponsored Products + Sponsored Brands + Sponsored Display + Sponsored TV + Amazon DSP"* since v8.17.
+
+### ⚠ "(non-SP)" was not a naming nit. It was FALSE.
+v6.76 dropped Sponsored Products rows, so the name was true then. **v8.17 started KEEPING them**, because Amazon Ads is the only per-ASIN source of ad-attributed sales. On the live data today:
+
+| ad product | YTD spend | share |
+|---|---|---|
+| **Sponsored Products** | **$165,239** | **78.1%** |
+| Sponsored Brands | $36,155 | 17.1% |
+| Sponsored Display | $5,402 | 2.6% |
+| Sponsored TV | $4,861 | 2.3% |
+
+The v11.16 Ads tab reads the **whole** table, so that chip sat beside `$211,657` telling the reader the figure excluded the thing it is mostly made of. Rule #2 and rule 3a in the worst form: one concept, five labels, and the one most people see is wrong about what the number contains.
+
+### The name, reused rather than coined (rule #3)
+- the **uploader** says `Amazon Ads - Unified Report`, which is what the card has said since v8.17 and what the parser is called,
+- everywhere narrow says `Amazon Ads`, which was **already** `ADS_CHANNELS.amazon.label` and the v11.16 freshness label. The declared abbreviation pair rule 3a allows.
+
+**`test_v1124` A2 compares the label across all THREE registries** (`DATA_SOURCES`, `UH_SOURCES`, `ADS_CHANNELS`) rather than checking each against a string I typed, so a fifth name cannot appear in one of them unnoticed. The glyph is compared the same way.
+
+### What KEEPS "non-SP", because there it is correct
+The P&L genuinely takes a **non-SP slice** of this table: SP SPEND comes from SKU Economics to match Amazon's charge line, and only SP attributed SALES come from here. The SQL view's `Ad Spend non-SP` column and the fold comments describe that slice and are untouched. **Name the SOURCE one way; describe a SLICE however the slice actually is.**
+
+The Ad Spend tooltip was the one place that confused the two - *"No SB/SD/DSP/TV upload yet"* when there is no separate upload. It now names the missing **rows** without renaming the card it sends you to.
+
+### ⚠ I broke an HTML comment fixing this, and only reading the output caught it
+The patch replaced a one-line comment with text that dropped its own `-->`. **An unterminated comment in this file swallows every element after it until the next one** - the entire Amazon Ads upload group, in this case. The patch applied cleanly; the mistake was in what I told it to write. That is the v11.19 lesson from the other direction: the script was fine and the *content* was not, so **read the output back either way**. `test_v1124` C1 now asserts `<!--` and `-->` balance and that no comment opens before the previous one closed.
+
+### ⚠ `grep` silently truncated my sweep
+I swept for the bad label and got eight hits followed by *"Binary file index.html matches"* - grep had stopped reading. There were **nine**. The ninth is the product-delete confirmation, which is the one place someone is about to destroy rows based on what the label calls them.
+
+**Use `grep -a` on this file.** A truncated sweep is worse than no sweep because it looks complete. The suite found it, which is the point of asserting *"the string is gone from the FILE"* rather than *"I replaced the ones I found"*.
+
+### Not asserted, deliberately
+That a group header must equal its card title. **Fifteen groups are legitimately hierarchical** - `Amazon Brand Analytics - SQP, ASIN view` over `Search Query Performance - ASIN view` is a source system over a file, not a contradiction. What was wrong here was a header naming a different **scope**, not a broader one. Asserting equality would have coined a rule the app does not follow and flagged fifteen false positives.
+
+### Verification
+- `node --check` clean - **90 suites green** - new `tests/test_v1124.py` (20 assertions) - comments 356/356, div balance 2,811 / 2,811 unchanged.
+- **B1 drives the REAL parser** on a mixed export and proves Sponsored Products rows land in the table, so *"a source label saying non-SP is wrong"* is checkable rather than my opinion.
+- **Driven in a browser** (chip `v11.24`): the group header and its one card both read `Amazon Ads - Unified Report`; `DATA_SOURCES`, `UH_SOURCES` and `ADS_CHANNELS` all return `Amazon Ads` with the same glyph; the history picker and the delete confirmation follow; `Amazon Ads (non-SP)` appears **nowhere** in the rendered page; and the Ads scorecard reads `Ad Spend $201,393 ... 📢 Amazon Ads` over a fixture that is 82% Sponsored Products.
 
 ## v11.23 - checkbox selection and a trend chart on every Ads view
 

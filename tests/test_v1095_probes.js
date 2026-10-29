@@ -501,19 +501,19 @@ async function refreshUploadDataRanges() {
       setLast('last-walmart-sales-grp', '— Never');
     }
 
-    // ── Amazon Ads (non-SP) — v6.87 new probe. amazon_ad_spend is daily-grain.
+    // ── Amazon Ads — v6.87 new probe. amazon_ad_spend is daily-grain.
     try {
       const { data: aaRows } = await sb.from('amazon_ad_spend')
         .select('date, uploaded_at').order('date', { ascending: false }).limit(1);
       if (aaRows && aaRows.length) {
-        renderCardFreshness('last-amazon-ads', aaRows[0].date, aaRows[0].uploaded_at, '📅 No Amazon Ads (non-SP) data loaded yet');
+        renderCardFreshness('last-amazon-ads', aaRows[0].date, aaRows[0].uploaded_at, '📅 No Amazon Ads data loaded yet');
         setLast('last-amazon-ads-grp', `${aaRows[0].date} (${relDays(aaRows[0].date)})`);
       } else {
-        setLast('last-amazon-ads', '📅 No Amazon Ads (non-SP) data loaded yet');
+        setLast('last-amazon-ads', '📅 No Amazon Ads data loaded yet');
         setLast('last-amazon-ads-grp', '— Never');
       }
     } catch (_) {
-      setLast('last-amazon-ads', '📅 No Amazon Ads (non-SP) data loaded yet');
+      setLast('last-amazon-ads', '📅 No Amazon Ads data loaded yet');
       setLast('last-amazon-ads-grp', '— Never');
     }
 
