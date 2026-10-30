@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.27**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.28**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,47 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.28 - click a point on any trend chart to scope the window to it
+
+- **Jason:** *"on all of the timeline graphs, it would be nice if i could click on a time and filter to that time. so, for example here, if i clicked on August, it would change the date picker to custom : aug 1 - aug 31"*
+- *"All of the timeline graphs"* is **one function**. `pnlTrendRender` is the engine behind six charts (Amazon / Shopify / Walmart product trends, the Chewy P&L chart, the Chewy Program chart, and the Ads chart on all three channels), so the handler lives there and each caller opts in with a single declared `periodHost`.
+
+### ⚠ It fires the PAGE'S OWN handlers, never a repaint picked here
+`pnlPickBucket` sets the three values and then dispatches `change` on the select and on the `to` input. That runs exactly what the operator's own two actions would run: the custom wrap opens, the table repaints, and **on Chewy the period and both dates persist to localStorage** - which a hand-picked repaint function would simply have missed.
+
+So nothing in this release knows what any of the four pages do, and a click and a typed date cannot resolve differently. The four bars have been uniform since v11.02 (`<host>-period`, `-custom-wrap`, `-from`, `-to`), which is what makes one implementation possible at all.
+
+**The wrap is deliberately NOT opened here.** Each period select already owns that from its own handler, and a second owner of one piece of state is what hard rule #1 forbids. `test_v1128` C1f asserts it against the code, so it cannot quietly gain one.
+
+### ⚠ The grain is inferred from the SERIES, and the guard is the gap case
+A `YYYY-MM` bucket is a month, always - the string is unambiguous and a caller's hint is not. A dated series is days or weeks, and the **MINIMUM step** between buckets says which.
+
+`test_v1128` **D1 runs the naive first-pair read** against a daily series with one missing day: it returns `week`, so a click on a single day would have scoped **seven**, silently, on a chart that looks entirely normal. The shipped read returns the one day clicked.
+
+Month ends are derived as **day 0 of the next month**, so February is pinned at 28 in a common year and 29 in a leap one with no table to keep in step. A week that crosses a month or a year boundary is not truncated at it.
+
+### ⚠ DEFERRED, because the repaint destroys the chart we are inside
+`pnlPickBucket` is called from the chart's own `onClick`. The repaint rebuilds that chart - v10.66's overlapping-render trap from the other direction - so the two dispatches go out on the next tick. C2a asserts nothing has fired when the call returns and C2b that both have, **select first**, a tick later.
+
+### Opt-in, and refusals rather than defaults
+- A caller that declares no `periodHost` is **byte-identical to v11.27**: no cursor change, no tooltip, and `onClick` returns immediately. That is the only way *"no existing chart changed"* is checkable rather than read off a diff.
+- An **unknown host warns by name and does nothing** (v11.18). Falling back to some default page's control would move a window on a tab nobody is looking at.
+- A control offering **no `custom` option is refused, not forced** - a `<select>` set to a value it does not offer shows its first option while the resolver reads something else (the v11.02 trap).
+- **E3 is the drift guard**: every host in `PNL_PERIOD_HOSTS` must have all four controls in the markup AND a custom option. A fifth host added without its bar fails the build instead of a click nobody tries.
+
+### A partial edge bucket resolves to the WHOLE bucket
+Which can widen the window past what was drawn, and that is deliberate: clicking the half week at the edge of a 90-day window is a request to see that week, not to keep the truncation that made it look short. The v11.23 part-bucket rule, read forwards.
+
+### No new prose on the page
+The pointer cursor is the affordance and the native tooltip carries the sentence (*"Click a point to set the period to that month."*, naming the grain it resolved). Six panels that already carry a subtitle and a coverage line do not need a seventh line of instructions.
+
+### Verification
+- `node --check` clean - **93 suites green** - new `tests/test_v1128.py` (84 assertions) - no markup touched, div balance unchanged.
+- **`pnlPickBucket` driven against the REAL DOM on all four pages** (chip confirmed `v11.28` first): each select moves to `custom` and the dates land immediately, each custom wrap opens on the next tick - proving the page's own handler ran - and all four repaints fire. **Chewy persisted `period=custom`, `from` and `to` to localStorage**, which is the thing a hand-picked repaint would have dropped.
+- **Verified with REAL MOUSE CLICKS**, not dispatched events: on a monthly chart, June -> `2026-06-01 -> 2026-06-30` and August -> `2026-08-01 -> 2026-08-31` (Jason's own example), and on a weekly chart the 8/16 column -> `2026-08-16 -> 2026-08-22`. Cursor `pointer` on hover in each.
+- **⚠ Synthetic `MouseEvent`s do not reach Chart.js's listeners** in this app, which cost several rounds and produced one false negative I nearly reported as a defect. The tooltip rendering under a dispatched hover is what showed events were arriving while `onClick` was not being called. **Real clicks through the browser are the only trustworthy check here** - note it for the next chart interaction.
+- Also confirmed: an **opted-out** chart leaves its title empty, its cursor default, and every one of the four period controls untouched.
 
 ## v11.27 - the Walmart P&L had TWO brand pickers, and neither was where Amazon puts it
 
