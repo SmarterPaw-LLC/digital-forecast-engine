@@ -73,6 +73,9 @@ const ADS_CHANNELS = {
     // same controls the Summary tab reads. A second period control one tab
     // away would be a second answer to "what window am I looking at".
     range: () => (typeof getPnlDateRange === 'function') ? getPnlDateRange() : { from: null, to: null },
+    // v11.28 - the control a clicked trend point writes back to. The SAME one
+    // range() reads, named once rather than inferred twice.
+    periodHost: 'pnl',
     brand: () => document.getElementById('pnl-brand')?.value || '',
     // EU is six country codes behind one button, exactly as the Fee Breakdown
     // scan resolves it — reused rather than re-listed.
@@ -115,6 +118,7 @@ const ADS_CHANNELS = {
     rows: () => (typeof chewyAdSpendData !== 'undefined' && chewyAdSpendData) || [],
     // The v11.02 shared Chewy period control, through its one resolver.
     range: () => (typeof getChewyPnlDateRange === 'function') ? getChewyPnlDateRange('ads') : { from: null, to: null },
+    periodHost: 'chpnl',
     // v11.25 - `this.host`, not a literal id. adsViewCfg returns an object
     // whose PROTOTYPE is the channel, so a view inherits this method and
     // `this.host` resolves to the VIEW's host. Chewy's host is already
@@ -157,6 +161,7 @@ const ADS_CHANNELS = {
     // The Walmart P&L's own period control, through its one resolver - the
     // same relationship the Amazon tab has with getPnlDateRange.
     range: () => (typeof getWalmartPnlDateRange === 'function') ? getWalmartPnlDateRange() : { from: null, to: null },
+    periodHost: 'wmpnl',
     // v11.27 - NO brandPicker. The Walmart P&L's own page-level Brand control
     // scopes this tab, exactly as the Amazon adapter reads `pnl-brand` - the
     // page Jason named as the reference (rule #4). The shell used to emit a
@@ -927,7 +932,7 @@ function adsUpdateChart(ctx) {
   // Fire and forget: pnlTrendRender awaits the Chart.js loader, and the
   // renderer that called us is synchronous (v11.03).
   pnlTrendRender({
-    canvasId: ch.host + '-chart-canvas', instance: _adsChartInstance[key],
+    canvasId: ch.host + '-chart-canvas', instance: _adsChartInstance[key], periodHost: ch.periodHost,
     buckets, datasets: built.datasets, mode: built.mode,
     isPct: !!m.isPct, unit: m.unit,
   }).then(inst => { _adsChartInstance[key] = inst; })

@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.28**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.29**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,56 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.29 - the Walmart "Partial P&L" note named the smaller gap
+
+- **Jason:** *"what's up with this note on walmart P&L?"* then, on my answer: *"the issue is the walmart sales export is not on the same basis, there is no way to arrive at the same number. scintilla report lumps some walmart.com sales into store sales (if they picked up order it counts as store sales)"*
+- The note said **fees and ad spend are not subtracted**, which is true and is not the thing that matters most about that page.
+
+### ⚠ THE FEED IS ECOM ONLY, AND NOT EVEN ALL OF ECOM
+`walmart_sales_weekly` is the Scintilla / Luminate **Ecom Sales** export. A walmart.com order **collected in store is reported as a STORE sale**, so it is absent here while Walmart Connect still counts it as an online conversion. The two feeds describe different populations and **cannot be reconciled** - there is no join, no ratio and no derivation that gets from one to the other.
+
+I had flagged the mismatch as a defect the release before: Connect attributes **$43,686.28** across 2026-03..09 against **$42,409.78** of recorded sell-through for the same months, i.e. 103% of everything the feed says we sold. Jason named the cause. **It is a basis difference, not a broken feed**, and it is now written into the markup so the next reader does not re-open it.
+
+### ⚠ Store POS is not loaded at all, so the page sees ~3% of Walmart
+Measured against the v11.08 cost ledger (what we invoice Walmart, 42 case SKUs, $1,047,045):
+
+| item | eaches invoiced | units in the ecom feed | |
+|---|---|---|---|
+| Craze | 112,608 | 17 | **0.0%** |
+| Zoom Pops | 89,004 | 124 | **0.1%** |
+| Zoom Sticks | 87,648 | 521 | **0.6%** |
+| Fish Multipack | 79,128 | 62 | **0.1%** |
+| Catnip Spray 4oz | 1,008 | 1,009 | 100.1% |
+| Eggs and Bacon | 192 | 235 | 122.4% |
+
+The store-led items are **absent**; the .com-led items read at or above 100% because shipments and sell-through are on different clocks. The whole feed is **$29,754.72 of wholesale equivalent against $1,047,045 invoiced**, so the tab titled *Walmart P&L* covers roughly **3%** of what we sell Walmart.
+
+### ⚠ And the top line is a RETAIL basis we never receive
+Separate from the coverage problem, and the reason the Contribution % reads high. Over **2025-12-13 -> 2026-10-24** (9,590 units, 32 products, 100% priced from the ledger):
+
+| | |
+|---|---|
+| Net Sales as shown | $51,422.31 ($5.36/unit) |
+| What Walmart pays us | $29,754.72 ($3.10/unit) |
+| Walmart's markup, never ours | **$21,667.59, 42%** |
+| Contribution shown | $39,800.11 / **77.4%** |
+| Contribution, wholesale basis | $18,132.52 / **60.9%** |
+
+**Not changed here.** Switching the basis changes what the headline number MEANS, which is Jason's call, not a silent cleanup (the known-divergence rule). The note states the basis instead.
+
+### What the note says now
+One line, detail on the tooltip (rule 1a): `⚠ Partial P&L - walmart.com only, before Walmart's margin, allowances and ad spend`. Two of the old tooltip's three claims had gone stale anyway - the wholesale price landed in **v11.08** and the Connect spend in **v11.25** (seven months, 2026-03..09, $10,941.48 - not the one month v11.25 closed by saying). Both exist and are simply not wired into the Sales math. **The only genuinely missing input is Walmart's allowance/fee agreement**, which is the v11.05 rule: ask for the document, never infer it.
+
+### ⚠ The patch refused TWICE, wrote nothing both times, and both were mine
+- `"Net Sales - COGS"` inside the comment uses **U+2212 MINUS SIGN**, not the em dash the rest of that comment uses. The v10.77 mixed-escape trap, caught by the match-exactly-once guard.
+- The *"retired wording is gone"* guard listed `are not subtracted <span` and `NOT captured yet` - **both of which the SHOPIFY note legitimately still says**. The v10.53 wrong-haystack class, in a guard rather than in an edit. Re-pointed at Walmart-specific strings.
+- A re-point written through a bash heredoc ate its backslashes again and asserted 0 where it wanted 2. CLAUDE.md has said since v9.77: **use the Write tool, not the heredoc.**
+
+### Verification
+- `node --check` clean - **93 suites green** - div balance 2,846 / 2,846, comments 360 / 360, both unchanged.
+- `test_v1059` asserts the phrase `Partial P&L` survives the v10.59 prose collapse; the patch asserts its count stays at **2** (Shopify + Walmart) before writing, so the note cannot be reworded out of that guard's reach.
+- Every figure above was **queried, not estimated**: the ledger join is per `master_id` against `walmart_cost_per_each`, and the sell-through side has **no unmapped rows**, so the ecom shortfall is scope and not a mapping gap.
 
 ## v11.28 - click a point on any trend chart to scope the window to it
 
