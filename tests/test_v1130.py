@@ -109,7 +109,11 @@ def fn(name):
 
 print('== A. the real renderWalmartCost, driven ==')
 
-CORE = fn('renderWalmartCost') + '\n\n' + fn('walmartPnlCogs')
+# v11.32 - the ledger roll-up moved into a shared helper, so the slice has to
+# take it too. That it is now ONE function both Walmart tabs call is asserted
+# in B, not worked around here.
+CORE = (fn('renderWalmartCost') + '\n\n' + fn('walmartPnlCogs')
+        + '\n\n' + fn('walmartLedgerByMaster'))
 
 HARNESS = r"""
 'use strict';
@@ -325,8 +329,14 @@ LW = fn('loadWalmartCost')
 ok('loadProductCogs' in LW,
    'B5 the loader fetches COGS. This tab can be entered directly, so it cannot '
    'assume the Sales tab\'s loader has run')
-ok(LW.index('loadProductCogs') < LW.index("from('walmart_catalog')"),
-   'B6 before the ledger query, so one await chain covers both')
+# v11.32 - the fetch moved into ensureWalmartCatalog, the ONE loader the Sales
+# tab shares. The ordering guarantee is unchanged; only its name is.
+ok('ensureWalmartCatalog' in LW,
+   'B6 and the ledger comes through the shared loader, not a second fetch')
+ok(LW.index('loadProductCogs') < LW.index('ensureWalmartCatalog'),
+   'B6b COGS first, so one await chain covers both')
+eq('B6c exactly ONE place fetches walmart_catalog (hard rule #1)',
+   js.count("from('walmart_catalog').select('*')"), 1)
 
 eq('B7 exactly one scorecard host for this tab',
    s.count('id="wmpnl-cost-scorecards"'), 1)
@@ -340,8 +350,14 @@ ok(cost_panel.index('wmpnl-cost-scorecards') < cost_panel.index('wmpnl-cost-thea
 nocom = re.sub(r'<!--.*?-->', '', s, flags=re.S)
 ok('What Walmart pays us per each' not in nocom,
    'B10 the tab subtitle no longer describes a cost sheet. It is the P&L now')
-ok('Invoiced revenue, COGS and margin' in nocom,
-   'B11 and says what it actually reports')
+ok('Wholesale price per each, and the one-time ledger it came from' in nocom,
+   'B11 and says what it actually reports. /!\\ v11.32 narrowed this from '
+   '"the complete Walmart P&L": Jason has no standing access to the ledger, so '
+   'its dollars are a frozen snapshot. The PER-EACH price is the durable part, '
+   'and that is what the Sales tab now applies to sell-through')
+ok('one-time cost mapping' in s,
+   'B12 and the reason is recorded in his own words, so the old framing is '
+   'not restored from the old reasoning')
 
 print('\n%d passed, %d failed' % (passed, failed))
 sys.exit(1 if failed else 0)

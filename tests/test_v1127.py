@@ -171,7 +171,11 @@ eq('B7  adsFillBrands is still ONE function - it is Chewy\'s filler now, not '
 
 
 print('\n== C. all THREE tabs honour it (driven) ==')
-CORE = fn('renderWalmartCost')
+# v11.32 - renderWalmartCost no longer rolls the ledger up itself; it calls
+# the helper both Walmart tabs share. Harness drift, not a behaviour change:
+# the slice has to take the dependency with it.
+CORE = '\n\n'.join(fn(x) for x in
+                   ['renderWalmartCost', 'walmartPnlCogs', 'walmartLedgerByMaster'])
 ok('const brand = ' in CORE, 'C0  the cost renderer reads the control at all')
 
 HARNESS = r"""

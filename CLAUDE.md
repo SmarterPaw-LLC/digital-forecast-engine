@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.31**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.32**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,50 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.32 - the ledger is a FROZEN snapshot, and its per-each price is the durable part
+
+- **Jason:** *"i will not have access to the items sold ledger. that was a one-time cost mapping."*
+- **v11.30 was built on the opposite assumption** and called that tab *"the complete Walmart P&L"*. One upload, 2026-10-28, and no more - so its invoiced dollars are a dated snapshot that will drift further from the truth every week while continuing to look current. **A number that goes stale silently is worse than a number that is missing.**
+
+### What the file was actually FOR
+Not the dollars. **The crosswalk**: case SKU -> product -> pack -> **our wholesale price per each**. That does not expire, and it is the piece v11.08 went to the trouble of making the operator confirm by hand.
+
+So the dollars get labelled as the snapshot they are (with the upload date on the card and the reason in Jason's own words on the tooltip), and **the price gets applied to the one Walmart feed that DOES refresh**: walmart.com sell-through, weekly.
+
+### The Sales tab gets a wholesale basis, ADDITIVELY
+`Our Rev`, `GM $`, `GM %` as columns, `Our Rev` and `GM %` as cards. **Every retail figure is untouched** - Net Sales, Net Proceeds and Contrib % read exactly what they read in v11.31, which is the only way *"nothing a reader already relies on changed meaning"* is checkable rather than read off a diff (`test_v1132` A2b).
+
+Coverage is **100%**: 32 of 32 selling products priced, 0 unpriced units, checked 2026-10-30.
+
+### ⚠ The two bases now sit side by side, and they disagree on purpose
+`Contribution %` divides by **Walmart's shelf price**. `GM %` divides by **our invoice**. On the live data that is **77.4% against 60.9%**, and showing only the first is what made this page read like a 77-point-margin business.
+
+`test_v1132` **A3d/A3e compute the old retail-only read beside the new one** on the same product and pin **76.0% against 60.0%**, so *"the page was overstating"* is a measurement rather than a claim. Each card and column states its basis, because `Contrib %` and `GM %` one cell apart is precisely the rule 3a trap.
+
+### ⚠ An unpriced product is NULL on the wholesale side, never zero
+Zero `Our Rev` reads as *sold at no revenue* and drags the blend toward a loss that never happened. The blend divides by **priced** wholesale revenue and the card **states the coverage** (`priced on 93.8% of units` on the fixture). Its RETAIL figures are untouched, so an unpriced product still reports everything this page reported before.
+
+### One roll-up, one fetch
+`walmartLedgerByMaster()` is now the only place the ledger is aggregated and `ensureWalmartCatalog()` the only place it is fetched - both asserted at **exactly one** occurrence in the file. The Sales tab resolves it **once per render, not per row**: the helper re-rolls the whole ledger on every call, so a per-row read would be quadratic (`test_v1132` B4).
+
+`our_rev` / `gm` / `gm_pct` are declared in `COLUMN_SOURCES`. Left to `_default` they would have credited the whole figure to `walmart_sales_weekly` and hidden the ledger the PRICE comes from - the chip now names both feeds.
+
+### ⚠ Two harnesses went red; both were drift, neither was silenced
+`test_v1127` and `test_v1130` slice `renderWalmartCost` out of the shipped file, and it no longer rolls the ledger up itself. Both now slice the shared helper with it, which is the point: the dependency is real and the suites follow it. `test_v1130` B6 was **re-pointed and widened** - it pinned an ordering against a fetch that has moved, and now asserts the shared loader is used AND that only one fetch path exists.
+
+### ⚠ The heredoc ate `\n\n` again, in a test re-point
+It became two real newlines inside a Python string literal and the file would not parse. CLAUDE.md has warned since v9.77 and at v10.68 / v10.88 / v10.92 / v11.00 / v11.16 / v11.23: **use the Write or Edit tool, never a heredoc, for anything containing escapes.** Nothing was lost; it cost one round.
+
+### Verification
+- `node --check` clean - **95 suites green** - new `tests/test_v1132.py` (42 assertions) - div balance 2,847 / 2,847.
+- **The real `renderWalmartPnl` driven** with `pnlCard` stubbed to capture the strip: 13 columns, `Our Rev` of `$3,625.00` from two priced products, `GM %` of `60.0%` blended over priced revenue, the brand filter narrowing the strip, and the unpriced product reporting `null` on all three wholesale fields while its retail Net Proceeds stays at `570`.
+- **Driven in a browser against the shipped build** (chip confirmed `v11.32` first): 13 headers in order, the strip a 3-wide grid, the empty state at `colspan="13"`, the `Our Rev` header's source chip naming **both** `walmart_sales_weekly` and `walmart_catalog`, the Cost tab's subtitle reading *"Wholesale price per each, and the one-time ledger it came from"*, its tooltip carrying Jason's sentence verbatim, and `walmartWholesalePerEach` returning `null` on the empty unauthenticated cache rather than throwing. Only the expected 401 in console.
+- One of my own expectations was wrong: A3g compared a `sorted()` card list against one I had typed in reading order. `Net Proceeds` sorts before `Net Sales`.
+
+### Still open
+- **Walmart's allowance/fee agreement**, unchanged and still the only missing input. `GM %` is before allowances and before Connect ad spend, and says so on every surface.
+- **Walmart Connect spend is still not netted in.** $10,941.48 over 2026-03..09 is on record, but it is monthly while this page is daily-windowed, so the two would be stated over different windows. Jason's call on which window the page reports.
 
 ## v11.31 - the Walmart Ads uploader defaults to the CURRENT month
 

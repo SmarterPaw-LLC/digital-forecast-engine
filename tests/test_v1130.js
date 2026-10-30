@@ -85,18 +85,10 @@ function renderWalmartCost() {
     if (sc0) sc0.innerHTML = '';   // v11.30 - never leave a strip describing a load that is gone
     return;
   }
-  // ⚠ Derived the same way the SQL view derives it: total dollars over
-  // total eaches. A second formula here would be a second answer (hard rule #1).
-  const by = {};
-  let unmapped = 0, feeLines = 0;
-  for (const r of rows) {
-    if (r.is_fee_line) { feeLines++; continue; }
-    if (!r.master_id || !r.pack || !(r.qty_cases > 0)) { unmapped++; continue; }
-    const a = by[r.master_id] || (by[r.master_id] = { skus: 0, cases: 0, eaches: 0, amount: 0 });
-    a.skus++; a.cases += Number(r.qty_cases) || 0;
-    a.eaches += (Number(r.qty_cases) || 0) * (Number(r.pack) || 0);
-    a.amount += Number(r.amount) || 0;
-  }
+  // v11.32 - ONE roll-up, shared with the Sales tab (hard rule #1).
+  const led = walmartLedgerByMaster();
+  const by = led.by, unmapped = led.unmapped, feeLines = led.feeLines;
+  const snapDate = led.uploadedAt ? String(led.uploadedAt).slice(0, 10) : null;
   const pmap = {};
   (allProducts || []).forEach(p => { pmap[p.map_id || p.master_id] = p; });
   const out = Object.keys(by).map(mid => {
@@ -163,9 +155,9 @@ function renderWalmartCost() {
   const sc = document.getElementById('wmpnl-cost-scorecards');
   if (sc) sc.innerHTML = out.length ? [
     { label: 'Invoiced Revenue', val: money(tot.amount, 2),
-      sub: `${tot.eaches.toLocaleString()} eaches · ${tot.skus} case SKUs`,
+      sub: `${tot.eaches.toLocaleString()} eaches · ${tot.skus} case SKUs` + (snapDate ? ` · snapshot ${snapDate}` : ''),
       src: 'walmart_catalog',
-      tip: 'What we billed Walmart, store and ecom. This ledger is 100% of the channel, unlike the Sales tab, which is walmart.com sell-through only.' },
+      tip: 'What we billed Walmart, store and ecom - 100% of the channel, unlike the Sales tab, which is walmart.com only. ⚠ A ONE-TIME SNAPSHOT: Jason has no standing access to this ledger, so these dollars do not refresh and the window they cover is whatever the uploaded file held. The per-each price below is the durable part.' },
     { label: 'Total COGS', val: money(tot.cogs, 2),
       sub: tot.unpriced ? `⚠ ${tot.unpriced} product(s) unpriced` : 'landed-cost basis',
       src: 'product_cogs',
@@ -191,6 +183,25 @@ function walmartPnlCogs(mid) {
   const c = (typeof cogsByMaster !== 'undefined') ? cogsByMaster[mid] : null;
   if (!c) return null;
   return (c.landed_cost ?? c.dtc_cogs ?? c.amazon_cogs) ?? null;
+}
+
+function walmartLedgerByMaster() {
+  const by = {};
+  let unmapped = 0, feeLines = 0, uploadedAt = null;
+  for (const r of (walmartCatalogData || [])) {
+    if (r.uploaded_at && (!uploadedAt || r.uploaded_at > uploadedAt)) uploadedAt = r.uploaded_at;
+    if (r.is_fee_line) { feeLines++; continue; }
+    if (!r.master_id || !r.pack || !(r.qty_cases > 0)) { unmapped++; continue; }
+    const a = by[r.master_id] || (by[r.master_id] = { skus: 0, cases: 0, eaches: 0, amount: 0, perEach: null });
+    a.skus++; a.cases += Number(r.qty_cases) || 0;
+    a.eaches += (Number(r.qty_cases) || 0) * (Number(r.pack) || 0);
+    a.amount += Number(r.amount) || 0;
+  }
+  for (const mid of Object.keys(by)) {
+    const a = by[mid];
+    a.perEach = a.eaches > 0 ? a.amount / a.eaches : null;
+  }
+  return { by, unmapped, feeLines, uploadedAt };
 }
 
 function run(brand) {
