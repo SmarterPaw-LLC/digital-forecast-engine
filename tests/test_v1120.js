@@ -157,8 +157,17 @@ const ADS_CHANNELS = {
     // The Walmart P&L's own period control, through its one resolver - the
     // same relationship the Amazon tab has with getPnlDateRange.
     range: () => (typeof getWalmartPnlDateRange === 'function') ? getWalmartPnlDateRange() : { from: null, to: null },
-    brandPicker: true,
-    brand: function () { return document.getElementById(this.host + '-brand')?.value || ''; },
+    // v11.27 - NO brandPicker. The Walmart P&L's own page-level Brand control
+    // scopes this tab, exactly as the Amazon adapter reads `pnl-brand` - the
+    // page Jason named as the reference (rule #4). The shell used to emit a
+    // second one in the control row, so picking a brand on Sales and
+    // switching to Ads silently reset it.
+    //
+    // /!\ The options are the hardcoded three rather than adsFillBrands' read
+    // of the data, which is DELIBERATE and matches Amazon. A brand we are not
+    // advertising on Walmart now shows an empty table, which is a fact worth
+    // seeing; the option quietly disappearing hid it.
+    brand: () => document.getElementById('wmpnl-brand')?.value || '',
     // Walmart Connect is US-only here, so the Amazon region button must not
     // silently empty this table. Returning true is a DECISION, not a default.
     regionOk: () => true,

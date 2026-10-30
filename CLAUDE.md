@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.26**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.27**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,45 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.27 - the Walmart P&L had TWO brand pickers, and neither was where Amazon puts it
+
+- **Jason, on the Ads tab:** *"add the brand drop down for walmart P&L, like exists on amazon P&L."*
+- He is looking at a page that already had two of them:
+
+| where | id | options from |
+|---|---|---|
+| inside `wmpnl-view-sales` | `wmpnl-brand` | a hardcoded three |
+| inside the Ads control row | `wmads-brand` | the data, via `adsFillBrands` |
+
+Two controls for one concept on one page, and **they could not agree**: pick a brand on Sales, switch to Ads, and you are back to All Brands. That is the divergence hard rule #1 exists to stop, and it is v11.26's shape one control over - the Walmart strip had two tabs when v11.08 built it, and the third is what exposed both.
+
+The Amazon P&L is the reference (rule #4) and it has **exactly one**, on the page-level bar, which the ads adapter READS:
+
+```js
+brand: () => document.getElementById('pnl-brand')?.value || '',
+```
+
+So Walmart converges on that, byte for byte with its own id. The bar is now **Period + Brand**.
+
+### ⚠ The Cost tab had the field and never the filter
+`renderWalmartCost` has resolved `brand: p.brand || ''` on every row since v11.08 and **rendered it beside the title** - it simply never filtered on it. A control hoisted above three tabs that bites on two of them is the v10.19 case, which is the whole reason the Ads tab got a period control last release. One line, against a field that was already there.
+
+Its empty state had to grow a second branch: a brand that matches nothing is the operator's own doing, an unmatched ledger is work still to do, and **a bare header over an empty tbody reads as a load that failed** rather than as a filter that excluded everything.
+
+### Category deliberately did NOT hoist
+Campaigns have no category. A page-level Category control would be dead on two tabs out of three - the exact thing this release is fixing, so it stays in the Sales panel with the product search. `test_v1127` A6 pins that as a decision rather than an oversight.
+
+### ⚠ The option list is now the hardcoded three, and that is the point
+`adsFillBrands` built Walmart's options from the data, so a brand with no Walmart campaigns had **no option at all**. On the shared control a brand we are not advertising there now resolves to an empty table, which is a fact worth seeing; the option quietly disappearing hid it. Amazon has always behaved this way, and `adsAdvertiserToBrand` returns exactly the three strings the control offers, so the values still match.
+
+### ⚠ My own comment tripped my own guard, again
+B6 asserted `wmads-brand` is gone **from the file**, and the explanatory comment I had just written names it. Fixed the v11.18 way: assert against comment-stripped source AND require the comment to survive, so grepping the old id still lands somewhere. E1's registry slice cut at the first closing brace - which is `cost:`'s block body - and silently checked two thirds of `WALMART_PERIOD_RENDERERS`. Brace-balanced now. **Three failures on the first run, all three mine.**
+
+### Verification
+- `node --check` clean - **92 suites green** - new `tests/test_v1127.py` (39 assertions) - div balance 2,846 / 2,846 with comments masked.
+- **D1 reproduces the disagreement** rather than asserting it: the pre-v11.27 pair of reads against a DOM where only the Sales picker was set, showing the two tabs resolve different brands from one operator action. D2 then pins that there is now exactly one element for both to land on, so it is unreachable and not merely fixed.
+- **The real `renderWalmartCost` driven** on a v11.08-shaped ledger (case grain, a fee line, an unmatched SKU): 3 products unfiltered, 1 under Meowijuana and the right one, the two case configs of the fish still collapsing to **one** row under its brand, the note naming the brand while `case SKUs on record` stays the whole ledger, and an unmatched brand reaching its own message.
 
 ## v11.26 - the Walmart period control lived inside the Sales panel
 
