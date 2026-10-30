@@ -404,13 +404,30 @@ print('\n== I. the uploader asks for what the file cannot say ==')
 ok('function promptWalmartAdMeta(' in js, 'I1a there is a month prompt')
 eq('I1b used by BOTH uploaders, so the two cannot drift about what a month is',
    js.count('await promptWalmartAdMeta('), 2)
-ok("const defMonth = prev.getFullYear()" in js,
-   'I2a the default month is LAST month, not this one - the file has no date '
-   'to check the pick against, so defaulting to the current month would stamp '
-   'a part-month as a whole one on the commonest path')
-ok('is the CURRENT month' in js,
-   'I2b and picking the current month WARNS rather than being refused, '
-   'because a deliberate month-to-date pull is legitimate')
+# v11.31 - RE-POINTED. v11.25 defaulted to LAST month on the reasoning that a
+# part-month must not be stamped as a whole one on the commonest path. Jason:
+# "this should default to the current month." The commonest path IS the month
+# in progress, so the old default was wrong every time. The guarantee the
+# original assertion was really protecting - that a month-to-date pull is
+# NAMED rather than silently stored as a whole month - is what survives, and
+# it is asserted below in the form it now takes.
+ok("const defMonth = thisMonth;" in js,
+   'I2a the default month is the CURRENT month (Jason, v11.31). The export '
+   'gets pulled for the month in progress, so defaulting to last month meant '
+   'changing the control by hand on every single upload')
+ok("const prev = new Date(now.getFullYear()" not in js,
+   'I2a2 and the retired last-month computation is gone, not left dangling')
+ok('is the current month' in js and 'month-to-date' in js,
+   'I2b the month-to-date fact is still STATED. The file carries no date to '
+   'check the pick against and the row is read downstream as a whole month, '
+   'so the one thing that must not disappear with the default is the sentence '
+   'saying so')
+ok("warnEl.style.color = 'var(--text3)'" in js,
+   'I2c but NEUTRAL, not amber. It now fires on the path everyone takes, and '
+   'an alarm on the default is an alarm nobody reads (v11.31)')
+ok("'⚠ ' + v + ' is in the future.'" in js,
+   'I2d the FUTURE month keeps its amber warning, because that one really is '
+   'the operator having picked wrong')
 ok("resolve({ account, region: 'US', reportingMonth })" in js,
    'I3  no region picker - Walmart Connect is US-only here, and a <select> '
    'with one option is a live-looking control that cannot do anything')

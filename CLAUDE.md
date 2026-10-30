@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.30**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.31**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,27 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.31 - the Walmart Ads uploader defaults to the CURRENT month
+
+- **Jason, on the Reporting month field:** *"this should default to the current month."*
+
+### ⚠ v11.25's reasoning was sound and its PREMISE was wrong
+That release defaulted to **last** month, and the entry says why: *"defaulting to the current month would stamp a part-month as a whole one on the commonest path."* The risk is real. The premise is not. **The commonest path is the month in progress** - the export gets pulled to see how the month is going, which is exactly what Jason's screenshot shows (September defaulted on 30 October, with 2026-10 already loaded beside it).
+
+So the old default was wrong on every upload and had to be corrected by hand on every upload, which is a worse failure than the one it was guarding against: a default nobody can use trains the operator to change the field without reading it, on the one field in this dialog that **cannot be checked against the file**.
+
+### The month-to-date fact survives; the alarm does not
+The sentence stays, because it is still true and still unverifiable: a month-to-date pull is stored as a whole month and read as one downstream. What changes is its register. It was amber with a **⚠**; it is now **neutral text3**, because it now fires on the path everyone takes, and an alarm on the default is an alarm nobody reads.
+
+**The FUTURE month keeps its amber ⚠**, because that one really is the operator having picked wrong rather than a fact about the export.
+
+### ⚠ test_v1125 I2 had encoded the old default as the contract
+It asserted the literal `const defMonth = prev.getFullYear()`, which pins the MECHANISM while its label claimed a guarantee about part-months. Re-pointed and **widened to four assertions**: the current-month default, the retired computation being gone rather than dangling, the month-to-date sentence surviving, its colour being neutral, and the future-month warning staying amber. The guarantee it was really protecting - *a month-to-date pull is NAMED* - is now asserted directly instead of through the default that used to imply it.
+
+### Verification
+- `node --check` clean - **94 suites green** - `tests/test_v1125.py` re-pointed, **94 -> 97 assertions**.
+- No markup touched; the dialog is built in JS.
 
 ## v11.30 - Cost to Walmart becomes the complete Walmart P&L
 
