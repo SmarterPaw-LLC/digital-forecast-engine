@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.29**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.30**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,50 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.30 - Cost to Walmart becomes the complete Walmart P&L
+
+- **Jason**, on pulling the Scintilla store export: *"no, i'm not doing that."* Then: *"we just need to work with what we've got."*
+- What we've got is the **v11.08 Items Sold ledger**, and it is the thing the Sales tab is not: **100% of what we invoice Walmart, store and ecom**, $1,047,045 across 42 case SKUs. It already carried invoiced dollars and derived eaches. **All it was ever missing was COGS**, so the complete Walmart P&L was one join away on a surface that already existed, needing nothing from outside the app.
+
+| | covers | basis | |
+|---|---|---|---|
+| Sales tab (`walmart_sales_weekly`) | walmart.com, minus pickup orders | RETAIL | **~3%** of the channel |
+| **Cost tab (`walmart_catalog`)** | **every unit we ship them** | **WHOLESALE** | **100%** |
+
+### The tab gains COGS, GM $ and GM %, and a scorecard strip
+`Invoiced $` (renamed from `Amount`, which did not say whose money it was), `COGS/u`, `COGS`, `GM $`, `GM %`, plus four cards through **`pnlCard`** - not a sixth bespoke card renderer (v10.49 / v10.60). The COGS comes from **`walmartPnlCogs`, the Sales tab's own resolver**, so the two tabs cannot price a product differently (hard rule #1). `loadWalmartCost` now fetches COGS itself, because this tab can be entered directly and cannot assume the Sales loader ran.
+
+### ⚠ v11.08 said "no scorecards" and that call has expired
+*"Deliberately low-key per Jason: no banner, no scorecards, just the uploader and what it produced."* That was right for a **one-time matcher**. It is now the only complete view of Walmart, so it carries a strip like every other P&L. The comment says which of the two it is, so the next reader does not restore the old shape from the old reason.
+
+### ⚠ UNPRICED IS NOT ZERO-COST, and this is the guard
+A product with no COGS row is **excluded** from COGS, GM and the GM% denominator, and the shortfall is **stated** (`priced on 90.0% of invoiced $`). Counting it at zero would render it as a **100% margin** - the one wrong answer on this page that looks like good news, and it always flatters.
+
+`test_v1130` **A3f/A3g run the naive `|| 0` read beside the shipped one**: on a fixture where one product in three is unpriced it returns **65.7% against the honest 61.9%**, so *"this would have been wrong"* is checkable rather than asserted. The row itself says `⚠ missing` and its GM cells are em dashes, never `0.0%`.
+
+### ⚠ 'GM' is the app's wholesale prefix, and Walmart's GM is NOT Chewy's
+v10.53 declares `GM ...` = WHOLESALE basis and `Contrib ...` = RETAIL. Reusing `GM` is right - the Sales tab one click away reports `Contrib %` on a RETAIL basis and the two must not read as the same measure. But **Chewy's `GM $/u` deducts allowances and Walmart's cannot**, because that agreement has never been loaded. So every new label carries the basis AND the exclusion in its tip, and `GM %` says outright that it is not comparable with the Sales tab. Naming it `GM` and leaving the shared prefix to imply a deduction we do not make would be the rule 3a defect.
+
+### The period control cannot bite here, and the note says so
+The ledger is one cumulative YTD snapshot with **no per-row date** (`period_start` / `period_end` are null on all 42 rows). Rather than leave a live control looking like it scopes this tab (the v10.19 case), the row-count line states `cumulative, not scoped by Period`.
+
+### ⚠ A nested template literal truncated my own test slicer
+The first draft built the `<th>` as a template **inside another template's `${}`**. It rendered correctly and **`test_v1130` sliced a TRUNCATED function**, because a brace-balance slicer scans a template to its next backtick and the nested one closed it early. Node died on *"Unexpected end of input"*. Fixed on **both** sides: the source concatenates instead (clearer anyway), and the suite's slicer learned regex literals - which it also needed, since `.replace(/"/g, ...)` had it reading a regex as the start of a string.
+
+### ⚠ test_v1060 caught a real defect of mine on the way past
+The new strip cites `src: 'walmart_catalog'`, and **that key was not declared in `DATA_SOURCES`** - so the chip would have rendered the RAW TABLE NAME with no icon and no label, which is verbatim the defect v10.60 added that guard for. Declared with the **uploader’s own** name and glyph (v11.24: one name across every registry), and the banknote deliberately matches `chewy_catalog` - same concept on the other 1P channel, what the retailer pays us.
+
+It gets **no `TABLE_TO_UPLOAD_GROUP` entry**, on purpose: that map makes a chip clickable through to its uploader on Data → Uploads, and this uploader sits on the very tab the chip renders on.
+
+### Verification
+- `node --check` clean - **94 suites green** - new `tests/test_v1130.py` (48 assertions) - div balance 2,847 / 2,847, comments balanced.
+- **The real `renderWalmartCost` driven** on a v11.08-shaped ledger (case grain, a fee line, an unmatched SKU, one product with no COGS) with `pnlCard` stubbed to capture what the strip is ASKED to show (the v11.03 pattern): 11 columns in order, the two case configs of the fish still collapsing to one row at `$8,359.00`, `$3.0959` per each, COGS falling back landed -> dtc exactly as the Sales tab resolves it, and the brand control narrowing the **strip** as well as the table.
+- One of my own expectations was wrong: A6a asserted the empty-brand case renders **zero** rows. The empty state **is** a `<tr>`. Re-pointed to assert it is the message row carrying a `colspan`, which is the stronger claim - a bare header over an empty tbody reads as a load that failed.
+
+### Still open
+- **Walmart's allowance/fee agreement.** Unchanged, and now the only missing input: GM here is before allowances and before Connect ad spend. The v11.05 rule stands - ask for the document, never infer it from invoice gaps.
+- Connect spend is **not** netted into this strip. $10,941.48 over 2026-03..09 is on record and could be, but it is monthly while this ledger is cumulative YTD, so the two would be stated over different windows. That needs Jason's call on which window the page reports.
 
 ## v11.29 - the Walmart "Partial P&L" note named the smaller gap
 
