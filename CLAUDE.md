@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.32**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.33**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,75 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.33 - the Amazon console's metric tiles, on all three Ads pages
+
+- **Jason, with a screenshot of advertising.amazon.com -> Campaigns:** *"on the ads pages, can we have a view that looks like this?"*
+- Four coloured tiles, each with a **+ / -** that puts its own metric on ONE chart below, **each metric on its own axis**. That is the whole shape, and it is three parameters on two shared renderers rather than a new surface.
+
+### Nothing new was built. Two shared renderers were WIDENED.
+| | gains | absent it |
+|---|---|---|
+| `pnlTrendRender` | an optional `axes` array | byte-identical to v11.32 |
+| `pnlCard` | an optional `plot` descriptor | byte-identical to v11.32 |
+| `adsUpdateChart` | a second reading behind one switch | the Campaigns reading is v11.23 verbatim |
+
+`test_v1133` **B1a pins the whole no-`plot` card string against the v11.32 output**, character for character. That is the only form in which *"no other strip changed"* is checkable rather than read off a diff - six P&L strips call `pnlCard` and none of them asked for any of this.
+
+### ⚠ The axis is per METRIC, because the units are not comparable
+$480 of spend and $1,600 of sales on one shared scale leaves the spend line a flat squiggle along the bottom - which is exactly why the console Jason pointed at draws three axes. So one axis per plotted metric, alternating left and right, each labelled in **its own unit**, and only the first drawing gridlines (four overlaid grids is a hatch pattern, not a reference).
+
+The formatter had to move with it. It was one `fmt` per CHART, so **a ROAS line on a dollar chart rendered `$2.49`**. `test_v1133` **A4f runs the pre-v11.33 formatter beside the shipped one** and pins `$2.49` against `2.49x`, and `$40.12` against `40.1%` for an ACOS tick.
+
+**Stacking is forced off** whenever axes are present - the bands would be summing dollars on top of percentages - and the Line / Stacked toggle is cleared rather than left live (the v10.19 rule).
+
+### Capped at FOUR, and the control says so
+Four axes is what a 340px plot labels without the ticks colliding. The fifth card's **+ renders disabled** carrying the reason, and `adsToggleChartMetric` **also** refuses - either half alone is a half-fix, since a disabled button is bypassable from the console and a silent refusal is the v10.19 defect.
+
+### ⚠ The ratio is derived ONCE PER BUCKET, from the summed slots
+The per-bucket total accumulates the same slots the table rolled up and then derives, so a bucket's ROAS can never be an average of its campaigns' ROAS - the v11.23 rule, one level down. A bucket with spend and no sales gives **ACOS null and ROAS 0.00x**, which are different facts: nothing to divide by, against spent-and-returned-nothing. `spanGaps:false`, so the null is drawn as a gap.
+
+### The ACOS tile is new, and the ROAS card lost its sub-line
+The console shows ACOS as its own tile, and only a card can carry the toggle. Its label comes from the **column registry** (`ACOS %` on Amazon and Walmart, **`Direct ACOS %`** on Chewy - rule 3a's scoped name, unchanged), so a card and its column cannot drift. The ACOS that used to sit on the ROAS card's sub-line is gone, because the same number twice one tile apart is the shape Jason has caught three times.
+
+**⚠ It is the one card here that is GOOD WHEN DOWN**, and the only one whose chip passes `goodWhenUp=false` with `pctPoints=true`. Verified in a browser: ACOS +1.8 pts renders **red**, Ad Sales +14.3% green, Ad Spend +20.0% **neutral** (the v11.03 rule, intact).
+
+### ⚠ One Chewy label changed: `Direct Sales (retail)` -> `Direct $`
+Not cosmetic. Every card label now reads from `ADS_COLUMNS`, and the Chewy column has said `Direct $` since v11.16 - so the card and the column one scroll apart were two strings for one measure, which is the rule 3a divergence. The **basis moved to the tooltip** (*"Chewy RETAIL sales attributed to the click"*), which is rule 1a done the right way round. Worth knowing before reading a Chewy screenshot.
+
+### Colour is a property of the METRIC, not of its position
+`ADS_METRIC_COLOR` keys by metric, so switching Spend off does not recolour Ad Sales, and a card's lit edge always matches its own line (rule #2). `test_v1133` **D6 requires every key in `ADS_METRIC_SPEC` to have a declared colour**, so a metric added later cannot fall through to a positional one.
+
+The lit state is an **inset shadow, deliberately not a border** - a real 3px border would add 3px of height to the lit card only, so a strip of tiles would jiggle as metrics were switched on and off. B2b pins that as a decision.
+
+### ⚠ "dayly trend" - shipped since v11.23, found by reading the output
+`grain + 'ly'` gives weekly and monthly and **dayly**. The Campaigns reading has rendered it since v11.23 and this release was one line away from shipping a SECOND copy of the same typo. One `adsGrainAdv` helper, both callers, and D7b asserts no raw concatenation survives. **Driving it and reading the title back is what found it; no assertion would have.**
+
+### Verification
+- `node --check` clean - **96 suites green** - new `tests/test_v1133.py` (108 assertions) - div balance 2,848 / 2,848 with comments masked.
+- **The real `pnlTrendRender` driven** with Chart stubbed to capture the config: the no-axes call produces the identical `{x, y}` scale set, and the three-axis call produces four scales, alternating sides, gridlines on the first only, and `$1,200 / 2.49x / 40.1%` off three ticks.
+- **The real `adsUpdateChart` driven in both readings** on 29 days of two campaigns: the Metrics reading returns 2 then 4 datasets with one axis each, the cap refuses the fifth without repainting, the Campaigns reading comes back with **no `axes` key at all** so `pnlTrendRender` takes the single-y path, and a row selection narrows the metric lines while the subtitle says which of the two it is describing.
+- **Driven in a browser against the shipped build** (chip confirmed `v11.33` first) with the adapters swapped so the REAL renderer ran end to end on **all three channels**:
+  - **Amazon** - six tiles, two lit in `#6366f1` / `#06b6d4`, two axes left/right. Clicking ROAS then ACOS through the REAL buttons took it to four axes with ticks reading `$1,200 / 2.49x / 40.1%`, tooltips resolving **per dataset**, and the Clicks and Orders tiles going **disabled with the reason on their title**. Clicking a disabled one changed nothing.
+  - **Chewy** - seven tiles in Chewy's own vocabulary (`Direct $`, `Direct ROAS`, `Direct ACOS %`, `Total orders`, `NTB`), plotting `Spend + Direct $`.
+  - **Walmart** - the MONTHLY path, x axis `Jul'26 Aug'26 Sep'26`, title *"Metrics - monthly trend"*.
+  - Switching to **Campaigns** restored one `y` scale, the Metric picker, the Line / Stacked toggle, and removed every card's button. Only the expected unauthenticated 401s in console.
+- **Not verified here:** how it looks. The login gate leaves the app container hidden (v10.87) so every box measures 0. Structure, text, colours, handlers and the Chart instances are read off the real DOM; only the pixels are not.
+
+### ⚠ The heredoc ate the backslashes AGAIN, in a test re-point
+`\\u00b7` arrived as a real middle dot and `\\s` as `\s`, so three `str.replace` anchors matched nothing and Python warned about the regex besides. CLAUDE.md has said this since v9.77 and at v10.68 / v10.88 / v10.92 / v11.00 / v11.16 / v11.23 / v11.32: **use the Write or Edit tool, never a heredoc, for anything containing escapes.** Nothing was written; it cost one round.
+
+### ⚠ And the patch refused once, on the same class of trap from the other side
+The `ads-cards` anchor was written with `\\u2014` / `\\u00b7` where **index.html holds the real em dash and middle dot** - while `pnlTrendRender` twenty thousand lines up genuinely holds the escapes. The v10.77 mixed-escape trap, caught by the match-exactly-once guard, which exited before writing anything.
+
+### Two of my own test expectations were wrong
+- B1a's expected card string was missing its closing `</div>`.
+- D7c counted the bare `adsGrainAdv(grain)` and got **3**: the helper's own signature contains it. Re-pointed at the call form.
+
+And the suite's function slicer needed two fixes before it could run at all: it dropped the `async` keyword off `pnlTrendRender`, and it **balanced on a DESTRUCTURED PARAMETER LIST** - `function pnlTrendSubtitle({ a, b })` opens a brace before the body does, so the slice closed on the parameters and returned a stub.
+
+### Still open
+- Nothing from this release. The Amazon P&L's Summary / Page Performance charts and the four product trends are untouched and still single-axis; converting any of them is Jason's call, not a silent cleanup.
 
 ## v11.32 - the ledger is a FROZEN snapshot, and its per-each price is the durable part
 

@@ -302,7 +302,12 @@ sok(js.count('pnlTrendSeries({') == 5, 'all five trend surfaces call the shared 
 # products to band. The guarantee is that every P&L chart goes through the one
 # renderer rather than a hand-rolled `new Chart(`, which is now checked
 # DIRECTLY as well, so the count can grow without the rule going slack.
-sok(js.count('pnlTrendRender({') == 6, 'all six charts call the shared renderer')
+# v11.33 re-point: SEVEN. adsUpdateChart now has two readings - Metrics
+# (several metrics, one axis each) and Campaigns (v11.23's per-campaign split)
+# - and each calls the shared renderer with its own datasets. The count is
+# drift; the GUARANTEE is the direct check below, which v11.33 tightens so the
+# new branch cannot be the one that grows a `new Chart(` of its own.
+sok(js.count('pnlTrendRender({') == 7, 'all seven charts call the shared renderer')
 # v11.23 - adsUpdateChart joins the direct check. It is ONE surface serving
 # three tabs, so a per-page assertion would have missed it entirely.
 for _caller in ('updateChewyProgramChart', 'updateChewyPnlChart', 'adsUpdateChart'):
@@ -319,6 +324,14 @@ for _caller in ('updateChewyProgramChart', 'updateChewyPnlChart', 'adsUpdateChar
         '%s does not construct its own Chart' % _caller)
     sok('pnlTrendRender({' in _body,
         '%s routes through the shared renderer' % _caller)
+    # v11.33 - BOTH of adsUpdateChart's readings route through it. Asserting
+    # only "at least one call" would pass on a version where the new Metrics
+    # branch built its own chart and the old branch carried the check.
+    if _caller == 'adsUpdateChart':
+        sok(_body.count('pnlTrendRender({') == 2,
+            'adsUpdateChart routes BOTH readings through the shared renderer')
+        sok("by === 'metric'" in _body,
+            'adsUpdateChart branches on the declared reading, not on page state')
 sok(js.count('pnlInjectChartModeToggle(') == 6,
     'toggle injected on all five chart surfaces (+1 definition)')
 

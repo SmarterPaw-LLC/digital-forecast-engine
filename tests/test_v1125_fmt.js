@@ -842,6 +842,15 @@ function adsClearSelection(channel, view) {
 // Skipped for a monthly VIEW, where the rollup takes a month that merely
 // OVERLAPS the window: those edge buckets carry MORE than the window, not
 // less, so calling them partial would be the opposite of true.
+// v11.33 - the adverb for a bucket grain. `grain + 'ly'` gives weekly and
+// monthly and **dayly**, which the Campaigns reading has rendered since
+// v11.23. One helper, so the Metrics reading added beside it cannot ship a
+// second copy of the same typo (hard rule #1).
+function adsGrainAdv(grain) {
+  return grain === 'day' ? 'daily' : grain === 'week' ? 'weekly'
+       : grain === 'month' ? 'monthly' : (grain + 'ly');
+}
+
 function adsBucketEdges(buckets, grain, win) {
   if (grain === 'day' || !buckets || !buckets.length || !win || !win.from || !win.to) return [];
   const DAY = 86400000;
@@ -875,6 +884,77 @@ function adsBucketEdges(buckets, grain, win) {
 // pnlInjectChartModeToggle paints Line / Stacked.
 const _adsChartInstance = {};
 const ADS_CHART_COLORS = ['#4a9e38','#f97316','#3b82f6','#a855f7','#ef4444','#eab308','#06b6d4','#ec4899','#84cc16','#f59e0b'];
+
+// v11.33 - WHICH METRICS ARE PLOTTED, per (channel, view). The Amazon
+// console's shape, which Jason named as the reference (rule #4): the
+// scorecards are the series toggles.
+//
+// Capped at FOUR. One axis per metric is what makes the overlay readable at
+// all - spend and sales share a unit and not a magnitude - and four axes is
+// what a 340px plot can label without the ticks colliding. The fifth card's
+// control renders DISABLED and says why, rather than accepting a click and
+// silently dropping it (the v10.19 rule).
+const ADS_CHART_MAX = 4;
+const ADS_CHART_DEFAULT = ['spend', 'sales'];
+const _adsChartSel = {};
+const _adsChartBy = {};
+function adsChartSel(channel, view) {
+  const k = _adsKey(channel, view);
+  return _adsChartSel[k] || (_adsChartSel[k] = new Set(ADS_CHART_DEFAULT));
+}
+function adsChartBy(channel, view) { return _adsChartBy[_adsKey(channel, view)] || 'metric'; }
+function adsSetChartBy(channel, view, by) {
+  _adsChartBy[_adsKey(channel, view)] = (by === 'campaign') ? 'campaign' : 'metric';
+  renderAdsCampaigns(channel, view);
+}
+function adsToggleChartMetric(channel, view, k) {
+  const sel = adsChartSel(channel, view);
+  if (sel.has(k)) sel.delete(k);
+  else if (sel.size < ADS_CHART_MAX) sel.add(k);
+  else return;                 // belt and braces: the control is already disabled
+  renderAdsCampaigns(channel, view);
+}
+// The colour a metric is drawn in, FIXED PER METRIC KEY rather than taken by
+// position in the selection. Toggling one series off must not recolour the
+// others, and a card's lit edge has to match its own line on the chart - one
+// concept, one colour (rule #2).
+const ADS_METRIC_COLOR = {
+  spend: '#6366f1', sales: '#06b6d4', roas: '#a855f7', acos: '#4a9e38',
+  clicks: '#f97316', orders: '#eab308', impressions: '#3b82f6',
+  ctr: '#ec4899', cvr: '#84cc16', cpc: '#f59e0b', cpa: '#ef4444',
+  units: '#14b8a6', ntb: '#d946ef', omniRoas: '#8b5cf6', inStoreSales: '#0ea5e9',
+  dpv: '#64748b', atc: '#22c55e',
+};
+function adsMetricColor(k, i) {
+  return ADS_METRIC_COLOR[k] || ADS_CHART_COLORS[(i || 0) % ADS_CHART_COLORS.length];
+}
+
+// The chart's two readings, as one segmented control in the panel header -
+// the same shape and the same slot as the Line / Stacked toggle it sits
+// beside. Each of the other controls is shown only where it bites: the Metric
+// picker and the Line / Stacked toggle both belong to the Campaigns reading.
+function adsInjectChartBy(ch, channel, view, by) {
+  const host = document.getElementById(ch.host + '-chart-by-host');
+  if (host) {
+    const btn = (v, label, tip) => {
+      const on = by === v;
+      return `<button type="button" onclick="adsSetChartBy('${channel}','${view || ''}','${v}')" title="${tip}"`
+        + ` style="padding:3px 9px;font-size:10px;font-family:var(--display);font-weight:${on ? 700 : 600};`
+        + `background:${on ? 'var(--sp-green)' : 'transparent'};color:${on ? '#fff' : 'var(--text2)'};`
+        + `border:none;border-radius:4px;cursor:pointer">${label}</button>`;
+    };
+    host.innerHTML = '<span style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Compare</span>'
+      + '<span style="display:inline-flex;gap:2px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:2px">'
+      + btn('metric', 'Metrics', 'Several metrics over time, each on its own axis. Use the + on a scorecard above to add or remove one.')
+      + btn('campaign', 'Campaigns', 'One metric over time, split into a line per selected row. Tick rows in the table below.')
+      + '</span>';
+  }
+  // v10.19 - a control that cannot bite is hidden, not left looking live.
+  const mw = document.getElementById(ch.host + '-chart-metric-wrap');
+  if (mw) mw.style.display = (by === 'campaign') ? 'inline-flex' : 'none';
+  const mh = document.getElementById(ch.host + '-chart-mode-host');
+  if (mh && by !== 'campaign') mh.innerHTML = '';
+}
 function adsUpdateChart(ctx) {
   const { ch, channel, view, COLS, res, win, list, sel, grain, totals } = ctx;
   const panel = document.getElementById(ch.host + '-chart-panel');
@@ -885,9 +965,14 @@ function adsUpdateChart(ctx) {
     if (_adsChartInstance[key]) { try { _adsChartInstance[key].destroy(); } catch (e) {} _adsChartInstance[key] = null; }
   };
   const metrics = adsChartMetrics(COLS);
+  // v11.33 - which reading the panel is showing. Injected on every paint, like
+  // the Line / Stacked toggle, because the shell is built once and only
+  // repainted afterwards.
+  const by = adsChartBy(channel, view);
+  adsInjectChartBy(ch, channel, view, by);
   const picked = (document.getElementById(ch.host + '-chart-metric') || {}).value || 'spend';
   const m = metrics.find(x => x.k === picked) || metrics.find(x => x.k === 'spend') || metrics[0];
-  if (!m) return hide();
+  if (!m && by === 'campaign') return hide();
   const NAMECOL = ch.groupBy || 'campaign';
   const selectionActive = !!(sel && sel.size);
   // No selection -> ONE total line across the rows on screen, which is the
@@ -897,6 +982,68 @@ function adsUpdateChart(ctx) {
     : list.map(c => c[NAMECOL]);
   const buckets = res.buckets || [];
   if (!names.length || !buckets.length) return hide();
+  // The window facts both readings state identically, resolved once so the two
+  // cannot describe the same chart differently (v10.99).
+  const edgeNotes = (typeof ch.monthOf === 'function' ? [] : adsBucketEdges(buckets, grain, win))
+    .concat((typeof ch.monthOf !== 'function' && totals && totals.lastDate && win.to && totals.lastDate < win.to)
+      ? ['data through ' + totals.lastDate] : []);
+  const subFrom = (typeof ch.monthOf === 'function' ? buckets[0] : (win.from || 'start'));
+  const subTo   = (typeof ch.monthOf === 'function' ? buckets[buckets.length - 1] : (win.to || 'today'));
+  const titleEl0 = document.getElementById(ch.host + '-chart-title');
+  const subEl0   = document.getElementById(ch.host + '-chart-sub');
+
+  if (by === 'metric') {
+    const want = adsChartSel(channel, view);
+    // Ordered by the REGISTRY, not by the order they were clicked, so the
+    // legend and the axes keep a stable order across toggles.
+    const plot = metrics.filter(x => want.has(x.k)).slice(0, ADS_CHART_MAX);
+    // The per-bucket TOTAL across the names on screen (or the selection),
+    // summed from the SAME slots the table rolled up and the ratio derived
+    // ONCE per bucket - never averaged across campaigns, which would weight a
+    // $2 campaign the same as a $20,000 one (the v11.23 rule, per bucket).
+    const perB = buckets.map(b => {
+      const acc = { impressions: 0, clicks: 0, spend: 0, orders: 0, units: 0,
+                    sales: 0, ntb: 0, signups: 0, inStoreSales: 0, dpv: 0, atc: 0 };
+      for (const nm of names) {
+        const sl = (res.series || {})[nm] && res.series[nm][b];
+        if (!sl) continue;
+        for (const kk in acc) acc[kk] += (sl[kk] || 0);
+      }
+      return acc;
+    });
+    const datasets = plot.map((x, i) => {
+      const col = adsMetricColor(x.k, i);
+      return { label: x.label, yAxisID: 'y_' + x.k, borderColor: col, backgroundColor: col,
+               // A bucket with no denominator is a GAP, never a zero - 0.00x
+               // ROAS means spent and returned nothing, which is a different
+               // fact from having spent nothing at all (the v11.16 argument).
+               data: perB.map(a => x.sum(a)), spanGaps: false,
+               borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: .25, fill: false };
+    });
+    const axes = plot.map((x, i) => ({ id: 'y_' + x.k, unit: x.unit, isPct: !!x.isPct,
+                                       color: adsMetricColor(x.k, i) }));
+    if (titleEl0) titleEl0.textContent = 'Metrics \u00b7 ' + adsGrainAdv(grain) + ' trend';
+    if (subEl0) subEl0.textContent = pnlTrendSubtitle({
+      selectionActive, midCount: names.length, bandCount: 0,
+      buckets: buckets.length, from: subFrom, to: subTo, mode: 'line',
+      // An empty selection is STATED rather than left as a blank plot: the
+      // toggles live on the cards above, so a chart that just vanished would
+      // leave nothing on screen explaining how to get it back.
+      extra: plot.length
+        ? (plot.map(x => x.label).join(' + ') + ' \u00b7 own axis each')
+        : 'no metric plotted \u00b7 use + on a scorecard above',
+      note: edgeNotes.filter(Boolean).join(' \u00b7 '),
+      bucketNoun: grain, noun: ch.noun || 'campaign',
+    });
+    panel.style.display = 'block';
+    pnlTrendRender({
+      canvasId: ch.host + '-chart-canvas', instance: _adsChartInstance[key], periodHost: ch.periodHost,
+      buckets, datasets, mode: 'line', axes,
+    }).then(inst => { _adsChartInstance[key] = inst; })
+      .catch(e => console.warn('ads trend chart:', (e && e.message) || e));
+    return;
+  }
+
   const built = pnlTrendSeries({
     perProd: res.series || {}, buckets, mids: names, metricOf: m.sum,
     colors: ADS_CHART_COLORS, mode: pnlChartMode(),
@@ -915,7 +1062,7 @@ function adsUpdateChart(ctx) {
   }
   const titleEl = document.getElementById(ch.host + '-chart-title');
   const subEl   = document.getElementById(ch.host + '-chart-sub');
-  if (titleEl) titleEl.textContent = m.label + ' · ' + grain + 'ly trend';
+  if (titleEl) titleEl.textContent = m.label + ' · ' + adsGrainAdv(grain) + ' trend';
   if (subEl) subEl.textContent = pnlTrendSubtitle({
     selectionActive, midCount: names.length, bandCount: built.bandCount,
     // A MONTHLY view states the MONTHS it resolved to, not the daily window
@@ -991,11 +1138,18 @@ function adsEnsureShell(channel, view) {
     +       `<div style="flex:1;min-width:0"><div class="ds-title" id="${ch.host}-chart-title">Trend</div>`
     +         `<div class="ds-sub" id="${ch.host}-chart-sub"></div></div>`
     +       `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">`
+    +         `<span id="${ch.host}-chart-by-host" style="display:inline-flex;gap:6px;align-items:center"></span>`
     +         `<span id="${ch.host}-chart-mode-host" style="display:inline-flex;gap:6px;align-items:center"></span>`
-    +         `<span style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Metric</span>`
-    +         `<select id="${ch.host}-chart-metric" onchange="renderAdsCampaigns('${channel}','${view || ''}')" style="font-family:var(--mono);font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:5px;padding:4px 8px;outline:none">`
-    +           adsChartMetrics(COLS).map(m => `<option value="${m.k}"${m.k === 'spend' ? ' selected' : ''}>${esc2(m.label)}</option>`).join('')
-    +         `</select>`
+    // v11.33 - the Metric picker belongs to the Campaigns reading only, so it
+    // is wrapped in a span the renderer shows and hides as a unit. The LABEL
+    // went inside it too: v11.19 shipped exactly this bug the other way round,
+    // hiding a search input and leaving its label as dead furniture.
+    +         `<span id="${ch.host}-chart-metric-wrap" style="display:none;gap:6px;align-items:center">`
+    +           `<span style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Metric</span>`
+    +           `<select id="${ch.host}-chart-metric" onchange="renderAdsCampaigns('${channel}','${view || ''}')" style="font-family:var(--mono);font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:5px;padding:4px 8px;outline:none">`
+    +             adsChartMetrics(COLS).map(m => `<option value="${m.k}"${m.k === 'spend' ? ' selected' : ''}>${esc2(m.label)}</option>`).join('')
+    +           `</select>`
+    +         `</span>`
     +       `</div>`
     +     `</div>`
     +     `<div class="ds-body" style="padding:0;height:calc(100% - 56px);position:relative">`
@@ -1177,6 +1331,30 @@ function renderAdsCampaigns(channel, view) {
       </div>`
     : '';
 
+  // v11.33 - every metric card is a chart toggle, built from the metric list
+  // the CHART itself reads. A card and its series therefore cannot name the
+  // same number differently (rule 3a), and a card whose metric the chart
+  // cannot plot gets no control at all rather than a dead one.
+  const chartBy = adsChartBy(channel, view);
+  const plotSel = adsChartSel(channel, view);
+  const plotMetrics = adsChartMetrics(COLS);
+  const colLabel = (k, dflt) => (COLS.find(c => c.k === k) || {}).label || dflt;
+  const colTip = (k) => (COLS.find(c => c.k === k) || {}).tip;
+  const plotOf = (k) => {
+    if (chartBy !== 'metric') return null;     // v10.19 - no control where it cannot bite
+    const mi = plotMetrics.findIndex(x => x.k === k);
+    if (mi < 0) return null;
+    const on = plotSel.has(k);
+    const full = !on && plotSel.size >= ADS_CHART_MAX;
+    return {
+      on, disabled: full, color: adsMetricColor(k, mi),
+      onclick: `adsToggleChartMetric('${channel}','${view || ''}','${k}')`,
+      tip: full ? ('Four metrics is the most the chart can label at once. Switch one off first.')
+                : (on ? 'Remove this line from the chart below.'
+                      : 'Add this line to the chart below, on its own axis.'),
+    };
+  };
+
   const cards = document.getElementById(ch.host + '-cards');
   if (cards && typeof pnlCardStrip === 'function') {
     cards.innerHTML = selBanner + pnlCardStrip([
@@ -1190,23 +1368,42 @@ function renderAdsCampaigns(channel, view) {
           ? (selRows.length + ' of ' + res.campaigns.length + ' selected')
           : (res.coverage.campaignCount + ' ' + NOUN
              + (res.coverage.campaignCount === 1 ? '' : 's')),
-        color: 'var(--sp-red)', delta: chip(cardT.spend, pt && pt.spend, null), src: ch.src },
-      { label: channel === 'chewy' ? 'Direct Sales (retail)' : 'Ad Sales', val: $0(cardT.sales),
-        sub: 'attributed to a click', delta: chip(cardT.sales, pt && pt.sales, true), src: ch.src },
-      { label: channel === 'chewy' ? 'Direct ROAS' : 'ROAS',
+        color: 'var(--sp-red)', delta: chip(cardT.spend, pt && pt.spend, null), src: ch.src,
+        tip: colTip('spend'), plot: plotOf('spend') },
+      { label: colLabel('sales', 'Ad Sales'), val: $0(cardT.sales),
+        sub: 'attributed to a click', delta: chip(cardT.sales, pt && pt.sales, true), src: ch.src,
+        tip: colTip('sales'), plot: plotOf('sales') },
+      { label: colLabel('roas', 'ROAS'),
         val: cardT.roas == null ? '—' : cardT.roas.toFixed(2) + 'x',
-        sub: cardT.acos == null ? 'no attributed sales' : cardT.acos.toFixed(1) + '% ACOS',
+        // ⚠ The ACOS that used to live on this line now has its own card
+        // one slot over, because the console Jason named shows it as its own
+        // tile AND because only a card can carry the chart toggle. Repeating
+        // it here would be the same number twice, a card apart.
+        sub: cardT.roas == null ? 'no attributed sales' : '',
         color: cardT.roas == null ? 'var(--text3)' : (cardT.roas >= 1 ? 'var(--sp-green)' : 'var(--sp-red)'),
-        delta: chip(cardT.roas, pt && pt.roas, true), src: ch.src },
+        delta: chip(cardT.roas, pt && pt.roas, true), src: ch.src,
+        tip: colTip('roas'), plot: plotOf('roas') },
+      // ⚠ ACOS is the one card here that is GOOD WHEN DOWN, and the only
+      // one whose chip passes goodWhenUp=false. It is also a percentage, so
+      // the delta is in POINTS - a 40% to 30% move is 10 points, not -25%.
+      { label: colLabel('acos', 'ACOS %'),
+        val: cardT.acos == null ? '—' : cardT.acos.toFixed(1) + '%',
+        sub: cardT.acos == null ? 'no attributed sales' : '',
+        color: cardT.acos == null ? 'var(--text3)' : (cardT.acos > 100 ? 'var(--sp-red)' : 'var(--text)'),
+        delta: chip(cardT.acos, pt && pt.acos, false, true), src: ch.src,
+        tip: colTip('acos'), plot: plotOf('acos') },
       { label: 'Clicks', val: n0(cardT.clicks),
         sub: (cardT.ctr == null ? '—' : cardT.ctr.toFixed(2) + '% CTR') + ' · ' + (cardT.cpc == null ? '—' : '$' + cardT.cpc.toFixed(2) + ' CPC'),
-        delta: chip(cardT.clicks, pt && pt.clicks, true), src: ch.src },
-      { label: channel === 'chewy' ? 'Total orders' : 'Orders', val: n0(cardT.orders),
+        delta: chip(cardT.clicks, pt && pt.clicks, true), src: ch.src,
+        tip: colTip('clicks'), plot: plotOf('clicks') },
+      { label: colLabel('orders', 'Orders'), val: n0(cardT.orders),
         sub: cardT.cpa == null ? 'no attributed orders' : '$' + cardT.cpa.toFixed(2) + ' per order',
-        delta: chip(cardT.orders, pt && pt.orders, true), src: ch.src },
+        delta: chip(cardT.orders, pt && pt.orders, true), src: ch.src,
+        tip: colTip('orders'), plot: plotOf('orders') },
     ].concat(channel === 'chewy' ? [{
       label: 'NTB', val: n0(cardT.ntb), sub: 'new-to-brand customers',
       delta: chip(cardT.ntb, pt && pt.ntb, true), src: ch.src,
+      tip: colTip('ntb'), plot: plotOf('ntb'),
     }] : []));
   }
 
