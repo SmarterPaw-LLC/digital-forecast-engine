@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.34**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.35**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,66 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.35 - an HTML chart legend, with "only"
+
+- **Jason, on the stacked trend charts:** *"when i click an item it removes it from the report. i'd like an option for 'only' when i click that will select only that item, then cross through the others. then i can click the others to add them back."*
+- Hover a legend item and it grows a small **`only`** chip. Click the label and it hides, exactly as before. Click the chip and everything else crosses through. The chip on the isolated series then reads **`all`**, so the way back needs no second control.
+
+### ⚠ Chart.js draws its legend ON THE CANVAS
+Which is the whole reason this is a new legend rather than a click handler: there is nowhere on a canvas to hang a second affordance. `CHART_HTML_LEGEND` is a Chart.js plugin that renders an HTML overlay **into the room the canvas legend used to take** - the chart reserves exactly that much through `layout.padding.top` - so nothing about the look moves. Same `#9ca3af`, same 12px swatch, same strikethrough when a series is off.
+
+**OPT-IN, through each chart's OWN `plugins: []` array.** Three charts list it (`pnlTrendRender`, which is seven surfaces, plus the two on Units Sold); the thirty-odd that do not are byte-identical to v11.34, which is the only way *"no other chart changed"* is checkable rather than read off a diff.
+
+| | |
+|---|---|
+| `pnlTrendRender` | Amazon / Shopify / Walmart P&L, Chewy P&L, Chewy Program, Ads (both readings) |
+| Units Sold | Total + By Channel, **added beside** `salesCoveragePlugin`, not in place of it |
+
+**Each chart keeps the exact show rule its canvas legend had** (`datasets.length > 1`, `salesSelected.size > 1 || _salesGoalDs.length > 0`, `_chGoalDs.length > 0`), asserted verbatim, so the only thing that changed is the affordance.
+
+### ⚠ THE REGRESSION I SHIPPED AND CAUGHT IN THE BROWSER: rAF never fired
+The padding reservation has to defer - it schedules an update from inside an update - and the first cut used `requestAnimationFrame`. **The browser pane was not compositing, rAF was throttled to nothing, the callback never ran, and the guard flag stayed `true` FOREVER.** So one throttled frame disabled the reservation for the life of the chart: `layout.padding.top` read 24 while `chartArea.top` stayed at 9 and the plot drew under the legend, with nothing on screen to say so.
+
+That is the **v10.85 trap**, which `openUploadGroupForTable` two screens away already documents (*"rAF can be throttled to nothing in a background or non-compositing tab"*) - and I wrote rAF-or-setTimeout as an either/or instead of rAF-plus-fallback. It is now `setTimeout(..., 0)`, which is all a defer-out-of-this-update needs and is what v11.28 uses for the same job in the same function.
+
+`test_v1135` **A7k-A7m run the pre-fix scheduler under a rAF that never fires** and pin the flag stuck true, zero re-layouts, and the reservation frozen at its first value - so *"this was broken"* is a measurement rather than a claim. **Reading `chartArea.top` back off the live chart is what found it; every assertion I had written was green.**
+
+### ⚠ The item nodes are rebuilt only when the SERIES change
+Rebuilding the legend's `innerHTML` on every update is the obvious implementation and it is wrong: a toggle replaces the node under the pointer, so **the chip you just clicked vanishes until you move the mouse.** The markup is rebuilt against a signature of (label, colour) and the on/off state is refreshed **in place**. `test_v1135` A4 asserts the node identities survive a toggle and do not survive a change of series.
+
+The chip is hidden with **`visibility`, not `display`**, for the same class of reason: `display:none` would change the item's width, so the whole legend reflows the moment you hover it.
+
+### "only" from any state, and the round trip
+- From all-visible it isolates. From a **hidden** series it shows that one and hides the rest, rather than reading as not-soloed and doing nothing.
+- On the already-isolated series it **restores everything**.
+- **One repaint per action**, not one per series (B5).
+- A single-series chart cannot be blanked by it (B6).
+
+### The overlay passes clicks through
+`.ch-lg` is `pointer-events:none` and only the items take them, so the gaps between labels still reach the canvas - the v11.28 click-a-point-to-set-the-period handler is untouched, and was seen firing during this release's own browser run.
+
+### ⚠ Pixels verified for once, and v10.87's reason was only half right
+The standing caveat says the login gate leaves the app hidden so nothing can be measured. **The gate is a `position:fixed` overlay; it suppresses no layout.** What measures 0 is the chart panel itself, which is `display:none` until data loads. Reveal `pnl-chart-panel` and the geometry is real.
+
+So this release is the first with the layout actually checked: `.ds-body` 322x972, legend 24px high at the canvas's own top edge, `chartArea.top` landing exactly on 24, and **a real mouse click on the `only` chip isolating Catnip Spray with the other three crossed through and the chip flipped to `all`** - then a real click on `all` bringing all four back.
+
+### Verification
+- `node --check` clean - **98 suites green** - new `tests/test_v1135.py` (83 assertions) - div balance 2,848 / 2,848, comments 361 / 361.
+- **The real plugin driven** with a stub Chart and a recording DOM: host created inside the canvas's parent, a STATIC parent given a containing block and a relative one left alone, `show:false` and a single series both rendering nothing, `afterDestroy` taking the host with it, and a label carrying `O'Brien "Max" <b>bold</b>` rendering as text with no `<b>` anywhere.
+- **The real actions and the real delegated listener driven**: label -> toggle, chip -> only, a click on neither doing nothing, a stale index refused rather than thrown on, and the listener wired exactly once across rebuilds.
+- **Driven in a browser against the shipped build** (chip confirmed `v11.35` first) on the Amazon P&L with real mouse clicks, and structurally on the Chewy P&L and Chewy Program canvases (host overlaying the canvas, 24px measured, padding reserved, canvas legend off on all of them) and on **Units Sold**, whose `salesChartPanelTotal` is the one host with no `position:relative` of its own - it went from `static` to `relative` automatically. Only the expected unauthenticated 401s in console.
+
+### Two of my own test expectations were wrong
+- Three of them read values that are `undefined` in the harness. **`JSON.stringify` drops `undefined` keys**, so the suite died on a `KeyError` rather than a failed assertion - the same shape that cost a round in v11.34.
+- C5 asserted the chart was all-visible after a stale-index click, on a chart an earlier step had left isolated. Re-pointed to the stronger claim: the click changes NOTHING.
+- And A7n tripped on **my own comment**, which names `requestAnimationFrame` while explaining why it is not used. The v11.18 / v11.27 fix: assert against comment-stripped source AND require the comment to survive, so grepping for the trap still lands on the explanation.
+
+### ⚠ The heredoc ate backslashes AGAIN, in that same re-point
+`\\*` and `\\s` arrived halved and Python warned about the regex. The written file happened to be correct, which is worse than a clean failure. CLAUDE.md has said this since v9.77 and at v10.68 / v10.88 / v10.92 / v11.00 / v11.16 / v11.23 / v11.32 / v11.33: **use the Write or Edit tool, never a heredoc, for anything containing escapes.**
+
+### Still open
+- Nothing from this release. The non-stacked multi-line charts (Inventory, Forecast, Chewy Revision, Digital Sales, SEO) still use the canvas legend. Jason scoped this to the stacked ones; converting the rest is his call, not a silent cleanup.
 
 ## v11.34 - the uploader's "not in catalog" report becomes clickable
 

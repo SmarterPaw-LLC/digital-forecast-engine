@@ -245,8 +245,14 @@ async function main() {
 main();
 """
 
+# v11.35 — pnlTrendRender now passes CHART_HTML_LEGEND in the chart's own
+# plugins array, so the slice carries a real reference to it. Stubbed rather
+# than lifted: this suite is about the CONFIG pnlTrendRender builds, and the
+# plugin's own behaviour has its own suite (test_v1135). A stub keeps the
+# dependency visible without this harness growing a DOM.
 A = run_node(os.path.join(SP, '_v1133_a.js'),
-             A_SRC.replace('__FN__', fn('pnlTrendRender')))
+             'const CHART_HTML_LEGEND = { id: "htmlLegend" };\n'
+             + A_SRC.replace('__FN__', fn('pnlTrendRender')))
 
 print('-- A1 no axes: the v11.32 chart, unchanged (REGRESSION GUARD) --')
 eq('A1a single y scale', A['plainScaleKeys'], ['x', 'y'])
