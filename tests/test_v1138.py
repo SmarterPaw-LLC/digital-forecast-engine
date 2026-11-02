@@ -125,7 +125,11 @@ def run_node(path, src):
 # A. The click handler.
 # ---------------------------------------------------------------------------
 A = run_node(os.path.join(SP, '_v1138_a.js'),
-    fn('seaOpenFromNeed') + '\n' + r"""
+    # v11.43 - seaOpenFromNeed delegates to the shared ipDeepLinkClick now, so
+    # the slice follows the dependency. The modifier contract below is
+    # unchanged and is now being driven through the handler every in-table
+    # deep link uses, which is the stronger claim.
+    fn('ipDeepLinkClick') + '\n' + fn('seaOpenFromNeed') + '\n' + r"""
 const out = { jumps: [] };
 let defaulted = 0, bubbled = 0;
 function seaOpenForProduct(mid) { out.jumps.push(mid); }
@@ -238,7 +242,7 @@ ok('href="${href}"' in _cellcode, 'C4b but it is still a real link')
 ok('NOT target="_blank" (v11.38)' in _cell,
    'C4c with the comment explaining why still present')
 
-eq('C5 version chip', s.count('>v11.42 \u00b7 2026-11-02<'), 1)
+eq('C5 version chip', s.count('>v11.43 \u00b7 2026-11-02<'), 1)
 
 print('\n%d passed, %d failed' % (passed, failed))
 sys.exit(1 if failed else 0)

@@ -134,6 +134,13 @@ function fcWalmartVel() { return 0; }
 function getAutoSeaIdx() { return 1; }
 function rederiveNeeds() {}
 function getBundleAttrDailyVelocity() { return 1.1; }
+// v11.43 - the Vel/day cell is a link now and escapes the master_id through
+// esc2, the ONE global escaper (v11.08). Stubbed rather than sliced: this
+// suite is about the bundle-attribution arithmetic the cell renders, not
+// about attribute escaping, which test_v1143 drives for real.
+function esc2(v) { return String(v == null ? '' : v); }
+function ipDeepLinkClick() { return false; }
+function salesOpenForProduct() {}
 __REAL__
 const ADJ = __ADJ__;
 const mk = () => ({ master_id:'SP-X', region:'US', daily_v30: 53.32,

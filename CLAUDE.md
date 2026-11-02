@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.42** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.43** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,43 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.43 - Vel/day links to that product's Units Sold trend
+
+- **Jason:** *"the velocity/day should link to the units sold page filtered to that product"*
+
+### Third page, so the handler is SHARED rather than copied again
+Products (v11.34), Seasonality (v11.38 / v11.41) and now Units Sold all grew the same journey. `ipDeepLinkClick(ev, go)` is the one modifier-aware handler: a plain click runs the destination in place, **ctrl / cmd / shift / alt / middle go to the browser untouched** because the href is real and `routeApply` consumes `?mid=`. `seaOpenFromNeed` keeps its name and delegates, so there is exactly **one** click-modifier list in the file - asserted.
+
+A destination that throws is caught and warned, not left to fall through to the browser's default navigation with a half-done jump behind it.
+
+### ⚠ THE HANDOFF: showPage('sales') wipes the selection you just made
+`showPage('sales')` does `salesData = {}; salesSelected.clear(); loadSalesAnalytics()`. So selecting on the way in is erased a moment later by the page's own entry code, and the async reload means there is nothing to select against yet either.
+
+`salesSelectPending` applies **immediately** when the data is already in hand and otherwise **arms** `_salesPendingSelect`, which `loadSalesAnalytics` consumes at its tail. `test_v1143` **C2 reproduces the exact post-showPage state** - `salesData` emptied, reload not landed - and proves nothing is selected and nothing repaints, which is what makes the pending path necessary rather than belt-and-braces.
+
+⚠ **The pending id is cleared BEFORE the apply**, so a throw inside the apply cannot leave it armed to re-fire on the next load. Asserted by index order, not by reading.
+
+### ⚠ v11.41's lesson, one page over: SELECTING is not SHOWING
+The Units Sold table filters on search, brand and category. A selection whose row is hidden by any of them is a checked box nobody can see. So the jump clears brand and category and SETS the search to the master_id - the same shape `openProductsForTerm` and `seaOpenForProduct` use.
+
+**Hide bundles is only unticked when the product being navigated to IS a bundle.** It is a deliberate view choice, and clearing it for every jump would be over-reach; B3 pins that a plain product leaves it alone.
+
+The selection **isolates** rather than adds. This is "show me THIS", so leaving an existing selection in place would describe a mix the click did not ask for - the `only` gesture from the chart legend (v11.35), one surface up.
+
+### The +B badge stays OUTSIDE the link
+It is the bundle-attributed slice, a different number with its own tooltip. Wrapping it would make one link claim both. Asserted by position.
+
+### Verification
+- `node --check` clean - **103 suites green** - new `tests/test_v1143.py` (48 assertions) - div balance 2,869 / 2,869.
+- **The real handler driven**: all five modifiers handed to the browser without preventDefault and without navigating, a throwing destination caught, and only the unmodified clicks running.
+- **The real selection driven**: an existing pick replaced rather than joined, brand and category cleared, the search set, one table repaint and one chart repaint, a bundle unticking Hide bundles and a plain product not, and a blank id selecting nothing.
+
+### Two suites re-pointed
+`test_v1064` slices the Vel/day renderer, which now escapes through `esc2` - stubbed, because that suite is about bundle-attribution arithmetic and `test_v1143` drives the escaping for real. `test_v1138` slices `seaOpenFromNeed`, which now delegates, so it slices `ipDeepLinkClick` with it: the dependency is real and the modifier contract is now being driven through the handler every deep link uses, which is the stronger claim.
+
+### ⚠ And one of my own guards was too broad
+It counted `ctrlKey` across the file and found two, refusing the write. The second is the query editor's **Ctrl+Enter keyboard shortcut**, which has nothing to do with click modifiers. Re-pointed at `ev.button === 1`, which only a click handler has.
 
 ## v11.42 - Traffic leads the SEO page, and its chart gets Line / Stacked
 
