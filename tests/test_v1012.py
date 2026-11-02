@@ -307,7 +307,9 @@ sok(js.count('pnlTrendSeries({') == 5, 'all five trend surfaces call the shared 
 # - and each calls the shared renderer with its own datasets. The count is
 # drift; the GUARANTEE is the direct check below, which v11.33 tightens so the
 # new branch cannot be the one that grows a `new Chart(` of its own.
-sok(js.count('pnlTrendRender({') == 7, 'all seven charts call the shared renderer')
+# v11.41 - eight: the SEO page's GA4 Traffic chart joined. Still a census, and
+# still drift; the GUARANTEE is the direct check below.
+sok(js.count('pnlTrendRender({') == 8, 'all eight charts call the shared renderer')
 # v11.23 - adsUpdateChart joins the direct check. It is ONE surface serving
 # three tabs, so a per-page assertion would have missed it entirely.
 for _caller in ('updateChewyProgramChart', 'updateChewyPnlChart', 'adsUpdateChart'):

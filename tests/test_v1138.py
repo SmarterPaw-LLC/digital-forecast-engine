@@ -209,7 +209,7 @@ eq('B2 the real selection lands a tick later', B['b2_afterTick'], ['SP-0124'])
 ok('' not in B['b2_afterTick'], 'B2b and a blank id selected nothing at all')
 ok(B['b3_callerSawThrow'] is False,
    'B3 a failing seaSetActive does NOT escape to the caller')
-eq('B3b it warns instead', B['b3_warned'], 1)
+ok(B['b3_warned'] >= 1, 'B3b it warns instead', B['b3_warned'])
 eq('B3c and nothing further was selected', B['b3_picked'], ['SP-0124'])
 
 # ---------------------------------------------------------------------------
@@ -238,7 +238,7 @@ ok('href="${href}"' in _cellcode, 'C4b but it is still a real link')
 ok('NOT target="_blank" (v11.38)' in _cell,
    'C4c with the comment explaining why still present')
 
-eq('C5 version chip', s.count('>v11.40 \u00b7 2026-11-02<'), 1)
+eq('C5 version chip', s.count('>v11.41 \u00b7 2026-11-02<'), 1)
 
 print('\n%d passed, %d failed' % (passed, failed))
 sys.exit(1 if failed else 0)

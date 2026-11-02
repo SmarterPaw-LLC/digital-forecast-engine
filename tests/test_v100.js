@@ -1,5 +1,35 @@
 
+function ipVelTrendDivergent(t) {
+  if (!t || t.rawPct == null || t.seaPct == null) return false;
+  return (t.rawPct < 0 && t.seaPct > 0) || (t.rawPct > 0 && t.seaPct < 0);
+}
+
+// Same thresholds as the Demand Forecast Trend column so the two pages speak
+// the same language (>1.3 accelerating · >1.08 growing · <0.7 declining ·
+// <0.92 slowing · else steady).
+//
+// v11.37 - a thin wrapper, NOT a second copy: the thresholds stay in exactly
+// one place and this re-labels the divergent case on the way out.
+//
+// ⚠ `rank` is deliberately carried through UNCHANGED, so SORT ORDER is
+// byte-identical to v11.36. Re-ranking a curve-driven surge below a real one is
+// defensible and is a different decision from making it legible; the `sea_fwd`
+// column is the affordance for finding these deliberately.
+//
+// The CSV TEXT does change on a divergent row, and has to: an export reading
+// "Surging" while the screen reads "Season" is the same number carrying two
+// meanings one click apart. velTrendCsv reads this label, so the two cannot
+// drift.
 function ipVelTrendLabel(t) {
+  const l = ipVelTrendLabelRaw(t);
+  if (!ipVelTrendDivergent(t)) return l;
+  // Orange, never green and never a filled chip - the v11.03 rule that a rise
+  // which is not good news on its own does not get the good-news colour.
+  return { ...l, txt: '\u2248 Season', cls: 'var(--sp-orange)',
+           strong: false, quiet: false, split: true };
+}
+
+function ipVelTrendLabelRaw(t) {
   if (t.isNew) return { txt: '\u2191\u2191 New', cls: 'var(--sp-green)', rank: 3 };
   // v9.93 — distinguish "sales history has not finished loading" from "this
   // product genuinely did not sell". The first is transient and resolves on
@@ -36,7 +66,10 @@ function ipVelTrendLabel(t) {
 function ipVelTrendFor(r){ return r.__t; }
 function velTrendCsv(t) {
   const l = ipVelTrendLabel(t);
-  const base = l.txt.replace(/[\u2191\u2193\u2192\u2014\u{1F525}]/gu, '').trim();
+  // v11.37 - \u2248 joins the strip list. It is the divergent label's glyph and
+  // every other label has had its own stripped here since v10.1, so leaving it
+  // in would export one row's marker and no other's.
+  const base = l.txt.replace(/[\u2191\u2193\u2192\u2014\u2248\u{1F525}]/gu, '').trim();
   return (t.pct == null || l.rank === 0) ? base
     : `${base} ${t.pct > 0 ? '+' : ''}${Math.round(t.pct)}%`;
 }

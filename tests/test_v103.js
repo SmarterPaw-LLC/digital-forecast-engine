@@ -29,6 +29,7 @@ mk('prodSrch', 'Search product, SP SKU, ASIN, Shopify SKU, Chewy SKU, Walmart ID
 mk('salesSrch', 'Search product, SKU…');
 mk('sea-search', 'Search product, master_id, ASIN…');
 mk('seo-search', 'Search keyword...');
+mk('seo-tr-search', 'Search landing page...');
 mk('spnl-search', 'Search product…');
 mk('srchInput', 'Search product or ASIN…');
 mk('wmpnl-search', 'Search product…');
@@ -52,9 +53,11 @@ const GLOBAL_SEARCH_MAP = {
   forecast_seasonality:   { id: 'sea-search' },
   forecast_chewy:         { id: 'chwy-search' },
   'forecast_fba-shipments': { id: 'fba-ship-srch' },
-  // v10.73 - SEO tab. globalSearchCurrentKey() falls through to
-  // currentPage for simple pages, so the key is just 'seo'.
-  seo:           { id: 'seo-search' },
+  // v10.73 - SEO tab. v11.41 gave it sub-tabs, so the key now carries the
+  // view: `seo` alone would leave the top bar aimed at the keyword box while
+  // the operator is looking at landing pages - the v10.3 defect.
+  seo_keywords:  { id: 'seo-search' },
+  seo_traffic:   { id: 'seo-tr-search' },
   // P&L sub-views (pnlView drives the pick; Chewy has an extra tab)
   pnl_amazon:      { id: 'pnl-search' },
   pnl_shopify:     { id: 'spnl-search' },
@@ -100,6 +103,10 @@ function globalSearchCurrentKey() {
       if (av === 'ads')       return 'pnl_amazon_ads';         // v11.16
     }
     return `pnl_${sub}`;
+  }
+  // v11.41 - the SEO page has sub-tabs now, each with its own search.
+  if (currentPage === 'seo') {
+    return `seo_${(typeof seoView !== 'undefined' && seoView) ? seoView : 'keywords'}`;
   }
   return currentPage;
 }
@@ -315,7 +322,7 @@ console.log('\n== F. Nothing in the markup is left unmapped by accident ==');
 // one per component row).
 const EXCLUDE = new Set(['globalSearch', 'pricing-search', 'catsy-search-input',
                          'merge-src', 'merge-tgt', 'bom-search-${i}']);
-const unmapped = ["amzads-search", "be-search", "bom-search-${i}", "bundleSrch", "catsy-search-input", "chads-search", "chpnl-be-search", "chpnl-cost-search", "chpnl-sales-search", "chpnl-search", "chwy-search", "cl-search", "cogs-search", "fba-ship-srch", "ip-srch", "ipr-srch", "pnl-search", "pricing-search", "prodSrch", "salesSrch", "sea-search", "seo-search", "spnl-search", "srchInput", "wmpnl-search"].filter(id => !EXCLUDE.has(id) && !mapped.includes(id));
+const unmapped = ["amzads-search", "be-search", "bom-search-${i}", "bundleSrch", "catsy-search-input", "chads-search", "chpnl-be-search", "chpnl-cost-search", "chpnl-sales-search", "chpnl-search", "chwy-search", "cl-search", "cogs-search", "fba-ship-srch", "ip-srch", "ipr-srch", "pnl-search", "pricing-search", "prodSrch", "salesSrch", "sea-search", "seo-search", "seo-tr-search", "spnl-search", "srchInput", "wmpnl-search"].filter(id => !EXCLUDE.has(id) && !mapped.includes(id));
 t('no unmapped page-search inputs remain', unmapped.length === 0, unmapped);
 
 console.log('\n' + (fail ? '\u2717 ' + fail + ' FAILED, ' : '\u2713 ') + pass + ' passed');

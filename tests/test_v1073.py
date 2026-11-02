@@ -77,8 +77,15 @@ ok("label: '\\ud83d\\udcf6 SEO'" in js,
    'APP_TABS label uses the JS escape form (inside <script>, which DOES parse it)')
 
 print('\n== C. the search input: mapped AND bare ==')
-ok("seo:           { id: 'seo-search' }" in js or "seo: { id: 'seo-search' }" in js,
-   'seo-search is in GLOBAL_SEARCH_MAP, so the global bar drives the tab')
+# v11.41 re-point: the SEO page gained sub-tabs, so the key carries the view.
+# `seo` alone would have left the top bar aimed at the keyword box while the
+# operator was looking at landing pages - the v10.3 defect this guards against.
+ok("seo_keywords:  { id: 'seo-search' }" in js or "seo_keywords: { id: 'seo-search' }" in js,
+   'seo-search is in GLOBAL_SEARCH_MAP, so the global bar drives the Keywords tab')
+ok("seo_traffic:   { id: 'seo-tr-search' }" in js or "seo_traffic: { id: 'seo-tr-search' }" in js,
+   'and the Traffic tab has its own entry, not a shared one')
+ok("return `seo_${" in js,
+   'globalSearchCurrentKey resolves the SEO sub-view rather than falling through to the page')
 seg = s[s.index('id="page-seo"'):s.index('<!-- /page-seo -->')]
 ok('id="seo-search"' in seg, 'the input exists for the global bar to write into')
 # the orphan-label trap: hideLocalSearchDuplicates hides the INPUT only

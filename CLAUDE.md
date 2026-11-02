@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.40** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.41** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,52 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.41 - GA4 Traffic joins the SEO page, and the seasonality link finds its product
+
+Two things in one release because the second is a regression in the first's neighbour.
+
+### The Traffic view
+- **Jason:** *"do you have a stream of data to build this view into the SEO page?"* then *"please continue with the seo tab."*
+- The SEO page gets its **first sub-tab strip**: **Keywords** (GSC, what Google reports about queries, ORGANIC ONLY) and **Traffic** (GA4, what the site reports about visits, EVERY channel). Those are different questions, which is why they are tabs rather than one page, and the tab titles say which is which.
+- **The channel filter defaults to ALL, and the tab is called Traffic rather than SEO.** That is what stops a page called SEO owning the number for Paid Social (rule 3a). Organic Search is 26,646 of 133,050 sessions YTD.
+
+Scorecards through `pnlCard`, the chart through `pnlTrendRender` (its eighth caller), the strip through `subtabApply` - no new renderer anywhere (hard rule #1). The panel is a **BARE HOST**: `seoTrEnsureShell` emits the controls once and the renders only repaint, so a keystroke in the search box cannot be eaten mid-word (the v10.99 rule).
+
+### ⚠ The prior-year series shifts 364 days, not 365
+52 whole weeks, so a Monday still lands on a Monday. A one-day slip puts a weekend against a weekday and every comparison inherits the weekly shape as if it were a trend. Asserted, including that `365` appears nowhere in the loader.
+
+### ⚠ A channel pick and a device pick together are REFUSED
+GA4 reports them as two independent breakdowns with no (channel × device) table, so intersecting them would produce a number neither feed carries. The panel says so instead of guessing.
+
+### The landing-page table says it is a RANKING
+Landing-page sessions run ~7% above sitewide and ~18% land in GA4's own `(not set)`. Both facts are on the count line where the table is read, and in the CSV header, not only in the migration comment.
+
+### ⚠ seoTrSum's coercion was unsafe, and a test fixture found it
+`Number(v || 0)` looks like a guard and is not: a truthy non-number passes the `||`, `Number('x')` is NaN, and one junk cell then blanks the whole scorecard. The loader casts so nothing should arrive junk - but a card that silently empties is the wrong way to discover it did.
+
+### ⚠ THE GLYPH COST THREE ROUNDS
+An astral-plane character does not survive a Python source file, the Edit tool and a shell reliably: `ὑ1` is not even a valid 4-digit escape, the Edit tool wrote a surrogate PAIR, and a heredoc mangled the repair. `test_v1050` then caught the result as a real defect - the same **Keywords** label carrying `&#128273;` on one strip and the literal glyph on another, which is two spellings of one glyph and a grep that misses half of them.
+
+**The rule: subtabs carry the literal character** (what every other `.subtab` in this file does; entities are the NAV row's convention), **and a patch script writes it via `chr()` or an ASCII placeholder, never as an escape or a pasted character.**
+
+### The seasonality link, which did not filter
+- **Jason:** *"when i click the seasonality link, it doesn't filter the page to show the product"*
+- **SELECTING a product is not the same as SHOWING it.** v11.38 set the detail view correctly and did nothing about the LIST, which filters `allProducts` by status, brand, category, method and a search box - and **status defaults to "Active only"**. Any of them hides the row you just navigated to, so the page arrives looking like it ignored the click.
+- Verbatim the problem `openProductsForTerm` solved in v11.34, so it takes the same shape: clear only what can HIDE a match, SET the search to the master_id (which is in the list's own search blob), and sync the top bar so the screen says what it narrowed by. Category VISIBILITY is deliberately not cleared - a saved cross-device preference (v10.6), same call v11.34 made.
+- **And an unresolvable product now says so.** `seaSetActive` resolves out of `records` and does nothing at all when it is not there, leaving the PREVIOUS product's curve on screen under the new product's name.
+
+### Verification
+- `node --check` clean - **102 suites green** - new `tests/test_v1141.py` (44 assertions) - div balance 2,868 / 2,868, comments 364 / 364.
+- **The real query builder driven** against a recording PostgREST double: a 2-element filter still resolves to `.eq` so every pre-v11.41 caller is byte-identical, a 3-element one resolves its operator, and an UNKNOWN operator falls back to `.eq` rather than dropping the filter silently.
+- **The real window resolver driven**: 28 / 90 / 180 / 365 each span exactly that many days inclusive, YTD starts Jan 1 of the CURRENT year, and an unknown value still yields a real date rather than NaN.
+
+### Five census guards re-pointed, none silenced
+`test_v1012` (7 × 8 charts on the shared renderer), `test_v1017` (33 × 35 sub-tabs, with Keywords registered as the default-active one), `test_v1073` (the search key carries the view now), plus the version pins. Each pinned a COUNT while its label claimed a guarantee; the guarantees are unchanged.
+
+### Still open
+- `computeProductSeasonality` **still has no upper bound on its window**, unchanged from v11.40 and still the thing to do before recalculating any curve.
+- Kitty Ka-Zoom has no GA4 property, so the Traffic tab is smarterpaw.com only. The property picker is data-driven, so KK needs an OAuth grant and a pull, not code.
 
 ## v11.40 - the incomplete-reporting band reaches the Seasonality chart
 

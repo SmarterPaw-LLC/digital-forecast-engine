@@ -369,10 +369,50 @@ function ipVelTrendForKeys(r, keys) {
            isNew: prev <= 0 && now > 0 };
 }
 
+// v11.37 - DOES THE BLENDED % STILL DESCRIBE DEMAND?
+//
+// ipVelTrend has reported `rawPct` (demand) and `seaPct` (the curve) separately
+// since v9.90, and the badge rendered only their product. When the two point
+// the SAME way that product is a fair summary. When they point OPPOSITE ways it
+// is not a statement about demand at all - and the failing case is the one that
+// matters: Catnip & Honeysuckle Bubbles rendered a green flaming "Surging
+// +146%" while Shopify sell-through fell 24% (16.80 -> 12.73 units/day) and the
+// curve climbed 1.30x -> 2.18x. A green surge over falling sell-through is the
+// one reading on this page nobody can afford.
+//
+// Defined here, beside the thresholds, so the CELL, the SORT KEY and the CSV
+// all resolve it identically rather than three renderers agreeing by accident.
+function ipVelTrendDivergent(t) {
+  if (!t || t.rawPct == null || t.seaPct == null) return false;
+  return (t.rawPct < 0 && t.seaPct > 0) || (t.rawPct > 0 && t.seaPct < 0);
+}
+
 // Same thresholds as the Demand Forecast Trend column so the two pages speak
 // the same language (>1.3 accelerating · >1.08 growing · <0.7 declining ·
 // <0.92 slowing · else steady).
+//
+// v11.37 - a thin wrapper, NOT a second copy: the thresholds stay in exactly
+// one place and this re-labels the divergent case on the way out.
+//
+// ⚠ `rank` is deliberately carried through UNCHANGED, so SORT ORDER is
+// byte-identical to v11.36. Re-ranking a curve-driven surge below a real one is
+// defensible and is a different decision from making it legible; the `sea_fwd`
+// column is the affordance for finding these deliberately.
+//
+// The CSV TEXT does change on a divergent row, and has to: an export reading
+// "Surging" while the screen reads "Season" is the same number carrying two
+// meanings one click apart. velTrendCsv reads this label, so the two cannot
+// drift.
 function ipVelTrendLabel(t) {
+  const l = ipVelTrendLabelRaw(t);
+  if (!ipVelTrendDivergent(t)) return l;
+  // Orange, never green and never a filled chip - the v11.03 rule that a rise
+  // which is not good news on its own does not get the good-news colour.
+  return { ...l, txt: '\u2248 Season', cls: 'var(--sp-orange)',
+           strong: false, quiet: false, split: true };
+}
+
+function ipVelTrendLabelRaw(t) {
   if (t.isNew) return { txt: '\u2191\u2191 New', cls: 'var(--sp-green)', rank: 3 };
   // v9.93 — distinguish "sales history has not finished loading" from "this
   // product genuinely did not sell". The first is transient and resolves on
@@ -413,12 +453,20 @@ function velTrendCell(r, t) {
   // same and the column could not be read without sorting it.
   const mag = (t.pct == null || l.rank === 0) ? ''
     : ` <span style="font-size:10px;opacity:.85">${t.pct > 0 ? '+' : ''}${Math.round(t.pct)}%</span>`;
+  // v11.37 - on a divergent row, name the direction DEMAND moved. Without it
+  // the only honest number on the cell is one hover away.
+  const dmd = (l.split && t.rawPct != null)
+    ? ` <span style="font-size:10px;color:${t.rawPct < 0 ? 'var(--sp-red)' : 'var(--sp-green)'}"` +
+      ` title="Real demand moved ${t.rawPct > 0 ? '+' : ''}${Math.round(t.rawPct)}% while the seasonal` +
+      ` multiplier moved ${t.seaPct > 0 ? '+' : ''}${Math.round(t.seaPct)}%.">` +
+      `${t.rawPct > 0 ? '\u2191' : '\u2193'}${Math.abs(Math.round(t.rawPct))}% dmd</span>`
+    : '';
   const tip = ipVelTrendTip(r, t).replace(/"/g, '&quot;');
   const base = 'padding:7px 8px;text-align:left;font-family:var(--mono);font-size:11px;cursor:help';
   if (l.strong) {
-    return `<td style="${base}" title="${tip}"><span style="display:inline-block;background:${l.cls};color:#fff;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.2px">${l.txt}${mag}</span>${lagChip}</td>`;
+    return `<td style="${base}" title="${tip}"><span style="display:inline-block;background:${l.cls};color:#fff;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.2px">${l.txt}${mag}</span>${dmd}${lagChip}</td>`;
   }
-  return `<td style="${base};color:${l.cls}${l.quiet ? ';opacity:.6' : ''}" title="${tip}">${l.txt}${mag}${lagChip}</td>`;
+  return `<td style="${base};color:${l.cls}${l.quiet ? ';opacity:.6' : ''}" title="${tip}">${l.txt}${mag}${dmd}${lagChip}</td>`;
 }
 
 // v10.1 — the sort key and the export cell, also shared.
@@ -428,7 +476,10 @@ function velTrendSortVal(t) {
 }
 function velTrendCsv(t) {
   const l = ipVelTrendLabel(t);
-  const base = l.txt.replace(/[\u2191\u2193\u2192\u2014\u{1F525}]/gu, '').trim();
+  // v11.37 - \u2248 joins the strip list. It is the divergent label's glyph and
+  // every other label has had its own stripped here since v10.1, so leaving it
+  // in would export one row's marker and no other's.
+  const base = l.txt.replace(/[\u2191\u2193\u2192\u2014\u2248\u{1F525}]/gu, '').trim();
   return (t.pct == null || l.rank === 0) ? base
     : `${base} ${t.pct > 0 ? '+' : ''}${Math.round(t.pct)}%`;
 }
@@ -441,12 +492,20 @@ function velTrendCell(r, t) {
   // same and the column could not be read without sorting it.
   const mag = (t.pct == null || l.rank === 0) ? ''
     : ` <span style="font-size:10px;opacity:.85">${t.pct > 0 ? '+' : ''}${Math.round(t.pct)}%</span>`;
+  // v11.37 - on a divergent row, name the direction DEMAND moved. Without it
+  // the only honest number on the cell is one hover away.
+  const dmd = (l.split && t.rawPct != null)
+    ? ` <span style="font-size:10px;color:${t.rawPct < 0 ? 'var(--sp-red)' : 'var(--sp-green)'}"` +
+      ` title="Real demand moved ${t.rawPct > 0 ? '+' : ''}${Math.round(t.rawPct)}% while the seasonal` +
+      ` multiplier moved ${t.seaPct > 0 ? '+' : ''}${Math.round(t.seaPct)}%.">` +
+      `${t.rawPct > 0 ? '\u2191' : '\u2193'}${Math.abs(Math.round(t.rawPct))}% dmd</span>`
+    : '';
   const tip = ipVelTrendTip(r, t).replace(/"/g, '&quot;');
   const base = 'padding:7px 8px;text-align:left;font-family:var(--mono);font-size:11px;cursor:help';
   if (l.strong) {
-    return `<td style="${base}" title="${tip}"><span style="display:inline-block;background:${l.cls};color:#fff;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.2px">${l.txt}${mag}</span>${lagChip}</td>`;
+    return `<td style="${base}" title="${tip}"><span style="display:inline-block;background:${l.cls};color:#fff;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.2px">${l.txt}${mag}</span>${dmd}${lagChip}</td>`;
   }
-  return `<td style="${base};color:${l.cls}${l.quiet ? ';opacity:.6' : ''}" title="${tip}">${l.txt}${mag}${lagChip}</td>`;
+  return `<td style="${base};color:${l.cls}${l.quiet ? ';opacity:.6' : ''}" title="${tip}">${l.txt}${mag}${dmd}${lagChip}</td>`;
 }
 
 // v10.1 — the sort key and the export cell, also shared.
@@ -456,7 +515,10 @@ function velTrendSortVal(t) {
 }
 function velTrendCsv(t) {
   const l = ipVelTrendLabel(t);
-  const base = l.txt.replace(/[\u2191\u2193\u2192\u2014\u{1F525}]/gu, '').trim();
+  // v11.37 - \u2248 joins the strip list. It is the divergent label's glyph and
+  // every other label has had its own stripped here since v10.1, so leaving it
+  // in would export one row's marker and no other's.
+  const base = l.txt.replace(/[\u2191\u2193\u2192\u2014\u2248\u{1F525}]/gu, '').trim();
   return (t.pct == null || l.rank === 0) ? base
     : `${base} ${t.pct > 0 ? '+' : ''}${Math.round(t.pct)}%`;
 }
