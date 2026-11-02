@@ -259,12 +259,17 @@ ok('no landing page on record' in _pages,
 # The two views must not both be visible, and Keywords is the default.
 ok('id="seo-view-traffic" style="display:none"' in s,
    'D6 Traffic starts hidden')
-ok('id="seo-tab-keywords" onclick="switchSeoView(\'keywords\')"' in s
-   and 'class="subtab on" id="seo-tab-keywords"' in s,
-   'D6b Keywords is the tab that starts active')
+# v11.42 re-point: Jason asked for the tabs swapped, so Traffic leads and is
+# the one that starts active. Keywords keeps its button, without the on class.
+ok('class="subtab on" id="seo-tab-traffic"' in s,
+   'D6b Traffic is the tab that starts active (v11.42)')
+ok('<button class="subtab" id="seo-tab-keywords"' in s,
+   'D6c and Keywords is still there, just not active')
+ok(s.index('id="seo-tab-traffic"') < s.index('id="seo-tab-keywords"'),
+   'D6d with Traffic first in the strip')
 
 ok("ga4_by_date:              { icon:" in js, 'D7 DATA_SOURCES declares the GA4 feed')
-eq('D8 version chip', s.count('>v11.41 \u00b7 2026-11-02<'), 1)
+eq('D8 version chip', s.count('>v11.42 \u00b7 2026-11-02<'), 1)
 
 print('\n%d passed, %d failed' % (passed, failed))
 sys.exit(1 if failed else 0)

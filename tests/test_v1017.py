@@ -86,7 +86,9 @@ STRIPS = {
     # Google reports about queries) and GA4 traffic (every channel, what the
     # site reports about visits) are different questions, so they are tabs
     # rather than one page. Census 33 -> 35.
-    'SEO':                ['seo-tab-keywords', 'seo-tab-traffic'],
+    # v11.42 - Jason: "swap traffic and keywords tabs". Traffic leads and
+    # is the default; this list is in MARKUP ORDER, which B checks.
+    'SEO':                ['seo-tab-traffic', 'seo-tab-keywords'],
     'Digital Sales':      ['ds-view-grid', 'ds-view-reports'],
     # v11.08 - Walmart P&L grew a strip (Sales + Cost to Walmart). Census
     # 23 -> 25; this going red is the test doing its job, same as v10.36's
@@ -100,9 +102,8 @@ DEFAULT_ON = {'chpnl-tab-sales', 'dst-uploads', 'pnl-amzn-tab-summary',
               'ipv-planning', 'pricing-mode-new', 'ds-view-grid',
               'wmpnl-tab-sales', 'pnl-amzn-ads-tab-campaigns',
               'wmpnl-ads-tab-campaigns',
-              # v11.41 - the SEO page opens on Keywords, the view it has always
-              # had. Traffic is the addition, not the new default.
-              'seo-tab-keywords'}
+              # v11.42 - the SEO page opens on Traffic.
+              'seo-tab-traffic'}
 
 
 def tag_of(btn_id):

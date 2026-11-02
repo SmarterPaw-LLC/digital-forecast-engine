@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.41** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.42** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,32 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.42 - Traffic leads the SEO page, and its chart gets Line / Stacked
+
+- **Jason:** *"on seo page, swap traffic and keywords tabs. i also want stacked vs line view like on other pages"*
+
+### Traffic leads, and is the default
+Both halves: first in the strip AND the view the page opens on. That also fixed a cost nobody had noticed - `loadSeoTab` fetched **every `gsc_query` row for the snapshot on entry**, roughly 13k rows, whether or not Keywords was the tab showing. Page entry now loads the ACTIVE view, and Keywords fetches on first entry only (its snapshot and compare pickers already refetch themselves, so re-fetching on every tab click would re-download a snapshot to show what is already on screen).
+
+### ⚠ STACKED BY CHANNEL GROUP, because it is the only thing here that sums
+Sessions is one series. Stacking a total against its own prior year would draw this year plus last year as a combined height, which is not a quantity. So Stacked means the channel bands - the same thing the table under the chart lists.
+
+- **Ranked over the WHOLE window, then the top N kept.** Ranking per bucket would let a band change colour and meaning between one column and the next.
+- **Blocked while a channel or device is picked**: the scope is then a single series and there is nothing to stack. The toggle renders disabled with the reason rather than live and inert (the v10.19 rule), through the `noStack` parameter v11.23 already added for exactly this.
+- Bands drawn smallest-first so the biggest sits on top, as the P&L strips do.
+
+### ⚠ The prior-year line needs its OWN stack group
+`stack: '_prev'`. Without it Chart.js folds the reference line into the stack and the top of the chart reads as this year PLUS last year - the identical trap the sales-goal overlay documents at `stack: '_goal'`, which also records that such a dataset must be pushed LAST because the stacked fill chain is index-relative. Both followed.
+
+### ⚠ The Bands stepper called them "products" on a chart of channels
+All four of its tooltips did, which is true of every caller before this one and false here (rule 3a: the label names what the number is). `pnlBandsStepperHtml` takes an optional noun that **defaults to the old word**, so every existing caller renders byte-identical markup, and the SEO chart passes `channel groups`.
+
+### Verification
+- `node --check` clean - **102 suites green** - div balance 2,869 / 2,869, comments 364 / 364.
+
+### Four census guards re-pointed, none silenced
+`test_v1012` and `test_v1077` (five chart surfaces × six), `test_v1067` (the stepper's new signature, plus a new line pinning the default noun), `test_v1017` (the strip list is in MARKUP order, which its container check depends on, and the default-active tab moved to Traffic). Each pinned a count while its label claimed a guarantee; the guarantees are unchanged.
 
 ## v11.41 - GA4 Traffic joins the SEO page, and the seasonality link finds its product
 

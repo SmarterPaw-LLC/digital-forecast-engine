@@ -18,7 +18,7 @@ function pnlChartMode() {
 // Marker stub so the test can assert the BANDS stepper's presence/absence.
 function pnlBandsStepperHtml(rerenderName) { return '<!--BANDS-->'; }
 
-function pnlInjectChartModeToggle(hostId, rerenderName, noStack) {
+function pnlInjectChartModeToggle(hostId, rerenderName, noStack, bandNoun) {
   const host = document.getElementById(hostId);
   if (!host) return;
   // ⚠ v10.77 — render the EFFECTIVE mode, not the stored one.
@@ -53,7 +53,7 @@ function pnlInjectChartModeToggle(hostId, rerenderName, noStack) {
       ${btn('line', '\u2197 Line', 'One line per product, or a single total line when nothing is selected.')}
       ${btn('stacked', '\u25e2 Stacked', 'Filled areas stacked to the total, so you can see which products make it up.')}
     </span>`
-    + (mode === 'stacked' ? pnlBandsStepperHtml(rerenderName) : '');
+    + (mode === 'stacked' ? pnlBandsStepperHtml(rerenderName, bandNoun) : '');
 }
 
 // Faithful copy of the PRE-v10.77 body, for the regression guard.

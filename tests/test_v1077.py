@@ -706,7 +706,8 @@ calls = [c for c in re.findall(r'pnlInjectChartModeToggle\([^)]*\)', js)
          if 'hostId' not in c]
 # v11.23 re-point: the shared Ads trend is the fifth surface. It is ONE
 # call serving three tabs, so the number is surfaces, not tabs.
-ok(len(calls) == 5, 'E1  five chart surfaces inject the toggle', len(calls))
+# v11.42 re-point: the SEO Traffic chart is the sixth.
+ok(len(calls) == 6, 'E1  six chart surfaces inject the toggle', len(calls))
 
 missing = [c for c in calls if c.count(',') < 2]
 ok(not missing, 'E2  every call site passes isPct', missing)

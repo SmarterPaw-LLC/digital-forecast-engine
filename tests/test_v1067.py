@@ -47,8 +47,13 @@ ok(js.count('function pnlBandsStepperHtml') == 1, 'one stepper renderer')
 ok(js.count("pnlBandsStepperHtml('updateSalesChart')") == 1,
    '  reused by Units Sold')
 inj = fn('pnlInjectChartModeToggle')
-ok("mode === 'stacked' ? pnlBandsStepperHtml(rerenderName)" in inj,
-   '  and injected into all four P&L charts via the shared toggle')
+# v11.42 - the stepper takes an optional noun, so a chart whose bands are
+# channel groups stops calling them products (rule 3a). Defaults to the old
+# word, so every existing caller renders identical markup.
+ok("pnlBandsStepperHtml(rerenderName, bandNoun)" in inj,
+   '  and injected into every P&L chart via the shared toggle')
+ok("const N = noun || 'products';" in fn('pnlBandsStepperHtml'),
+   '  with the noun defaulting to what it always said')
 ok("mode === 'stacked' ?" in inj,
    'the stepper is hidden in line mode (where a band count does nothing)')
 ok('id="sales-chart-bands-host"' in s, 'Units Sold has a host for it')
