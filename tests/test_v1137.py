@@ -373,15 +373,23 @@ ok("ipVisibleCols.push('sea_fwd')" in js, 'D5b and it surfaces the column once')
 # --- the deep link ------------------------------------------------------
 _colcode = re.sub(r'(?m)^\s*//.*$', '', _col)
 eq('D7 the cell is exactly one anchor', (_colcode.count('<a '), _colcode.count('</a>')), (1, 1))
-ok('target="_blank"' in _colcode and 'rel="noopener"' in _colcode,
-   'D7b opening a new tab, with the noopener the other 29 links in this file use')
+# v11.38 re-point. A PLAIN click no longer opens a tab: this file is ~4.2MB and
+# cold-boots its entire dataset, so a new tab paid a full reload to move one
+# screen sideways. The href SURVIVES, which is what keeps ctrl/middle-click
+# working, so that is what these now assert.
+ok('target="_blank"' not in _colcode,
+   'D7b a plain click no longer forces a new tab (v11.38)')
+ok('rel="noopener"' in _colcode,
+   'D7b2 the link keeps the noopener the other 29 links in this file use')
+ok('seaOpenFromNeed(event,' in _colcode,
+   'D7b3 and routes through the modifier-aware handler')
 ok('#forecast/seasonality?mid=' in _colcode, 'D7c pointing at the seasonality page')
-ok('encodeURIComponent(r.master_id' in _colcode,
+ok('encodeURIComponent(mid)' in _colcode and "const mid = String(r.master_id" in _colcode,
    'D7d with the id escaped, even though master_id is app data (the v11.23 rule)')
-ok('event.stopPropagation()' in _colcode,
-   'D7e and the row click does not fire behind it')
-ok('only an <a href> gives you those for free' in _col,
-   'D7f the comment saying WHY this is a link, not an onclick, survives')
+ok('esc2(mid)' in _colcode,
+   'D7e and escaped AGAIN for the attribute, through the one global escaper (v11.08)')
+ok('NOT target="_blank" (v11.38)' in _col,
+   'D7f the comment saying why a plain click stays in page survives')
 
 # The href has to name a sub the router will actually accept, or the new tab
 # silently falls back to the default forecast view.
@@ -423,13 +431,20 @@ eq('E3b and does not leak into the path', E['e3']['sub'], 'seasonality')
 _ra = fn('routeApply')
 ok("sub === 'seasonality'" in _ra and 'filters.mid' in _ra,
    'D9 routeApply consumes the mid')
-ok('seaSetActive' in _ra, 'D9b through the page own selector')
-_mid_i = _ra.index('filters.mid')
-ok('setTimeout' in _ra[_mid_i:_mid_i + 260],
-   'D9c deferred, so initSeasonalityView has populated the picker first')
+# v11.38 re-point: routeApply no longer inlines the defer. It calls the ONE
+# shared selector that the in-page jump also calls, which is the stronger
+# claim - the URL restore and the click cannot select differently.
+ok('seaSelectProductDeferred' in _ra, 'D9b through the one shared selector')
+_sel = fn('seaSelectProductDeferred')
+ok('setTimeout' in _sel,
+   'D9c which defers, so initSeasonalityView has populated the picker first')
+ok('catch' in _sel,
+   'D9d and catches, because a throw out of a timer has no caller and blanks the page')
+eq('D9e exactly one definition of it', js.count('function seaSelectProductDeferred('), 1)
 
-eq('D6 version chip', s.count('>v11.37 \u00b7 2026-11-02<'), 1)
-eq('D6b the old chip is gone', s.count('>v11.35 \u00b7'), 0)
+eq('D6 version chip', s.count('>v11.38 \u00b7 2026-11-02<'), 1)
+eq('D6b no older chip survives',
+   s.count('>v11.35 \u00b7') + s.count('>v11.37 \u00b7'), 0)
 
 print('\n%d passed, %d failed' % (passed, failed))
 sys.exit(1 if failed else 0)

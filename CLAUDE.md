@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.37** (v11.36 is reserved for the GA4 schema + loader, whose SQL is written and not yet run)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.38** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,33 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.38 - the Season × link jumps in the SAME TAB
+
+- **Jason, on v11.37's new-tab link:** *"the click to open seasonality tab does not work well. it takes forever to load, and loads to a blank screen."* Then: *"maybe we should use the same tab."*
+- **My call in v11.37 was wrong, and the reason is specific to this app.** index.html is a single ~4.2MB file that re-authenticates and re-fetches its ENTIRE dataset on boot, so `target="_blank"` paid a full cold start to move one screen sideways. v11.34 had already established the in-place pattern for exactly this (`openProductsForTerm`) and hard rule #1 says reuse it rather than invent a second journey.
+
+### The href SURVIVES
+A plain click is handled in page and is instant. **ctrl / cmd / shift / alt / middle-click are handed to the browser untouched**, so a deliberate new tab still works and `routeApply` still restores the product there - it just pays the reload, which is the whole reason the plain click no longer does.
+
+`test_v1138` **A2b drives all five modifiers through the REAL handler** and requires that none of them preventDefault, stop propagation, or jump.
+
+### ⚠ The blank screen, and the guard for it
+`seaSetActive` runs from a `setTimeout` with no caller to catch it. On a cold boot the router fires it while data may still be settling, and **an uncaught throw out of a timer is exactly how a page ends up half-rendered with nothing on screen to say why.** `seaSelectProductDeferred` is guarded now and warns instead. B3 proves a failing `seaSetActive` does not escape.
+
+### One selector, two callers
+The in-page jump and the URL restore both go through `seaSelectProductDeferred`, so a click and a bookmark cannot select differently. `seaOpenForProduct` deliberately does **not** call `showPage`: `switchForecastView` activates `page-forecast` itself (its own v5.81 branch), and a second owner of that is what rule #1 forbids.
+
+### Verification
+- `node --check` clean - **100 suites green** - new `tests/test_v1138.py` (30 assertions) - `test_v1137` re-pointed, 83 × 87 assertions - div balance 2,848 / 2,848, comments 361 / 361.
+
+### ⚠ THE SAME TRAP THREE TIMES IN ONE RELEASE
+1. The patch anchor carried `×` where index.html holds the **real** multiplication sign. The v10.77 mixed-escape trap; refused before writing, cost a round. Fixed by splitting into **ASCII-only anchors** that never touch the glyph - which is the actual lesson: do not put a non-ASCII character in an anchor at all.
+2. A guard counted `target="_blank"` inside **the comment explaining that we no longer use it** - the v11.18 / v11.27 trap, for the third time this session (v11.37b's anchor guard and `test_v1135`'s A7n were the other two). Now counted against comment-stripped source, with the comment required to survive.
+3. And a heredoc ate `·` in a test re-point, so the replace matched nothing and the script threw **after** a successful earlier replace - which meant that edit was silently lost too. CLAUDE.md has said since v9.77: **use the Write or Edit tool, never a heredoc, for anything containing escapes.**
+
+### Still open
+- Unchanged from v11.37: the coverage treatment on the Seasonality chart, and the trailing-incomplete-week bias in `computeProductSeasonality` measured below.
 
 ## v11.37 - how much of a Need is the seasonal curve
 
