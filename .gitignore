@@ -36,3 +36,7 @@ tests/*_guard.json
 /fix_*.py
 /doc_v*.py
 /_walmart_in/
+
+# Per-run suite harnesses (tests/_vNNNN_x.js) - regenerated from index.html on
+# every run, so they prove nothing on their own and only add noise to status.
+tests/_v*.js

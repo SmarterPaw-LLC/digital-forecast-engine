@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.33**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.34**
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,73 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.34 - the uploader's "not in catalog" report becomes clickable
+
+- **Jason, on the line a Sales & Traffic upload leaves behind** (`⚠ 1 ASINs not in catalog (stored unlinked)`): *"whenever i see a report like this in the uploader tool, allow me to click to that product on the products page."*
+- **FOUR uploaders report that shape**, so it is one renderer and one destination rather than a chip per card (hard rule #1):
+
+| uploader | what it could not match | now also offers |
+|---|---|---|
+| Amazon Sales & Traffic | ASIN | the ASIN, with the title the FILE carried |
+| Amazon FBA Fee Preview | ASIN | the ASIN, **plus the seller SKU as a second try** |
+| Chewy Ad Spend | Chewy SKU | the SKU + name (the Map already held them; they were only ever `console.warn`ed) |
+| Chewy Catalog | Chewy SKU | the SKU + item name + vendor part number |
+
+### ⚠ Three of the four only ever reported a COUNT
+`skippedUnknownAsinCount` is a number. There was no list to click, anywhere, so the first half of this release is the parsers KEEPING what they already computed - `unknownAsinList` off the same Set the count comes from, so the two can never disagree (`test_v1134` E5b).
+
+### The destination resolves BEFORE the click
+The uploader matched on ONE field. **The Products page searches nine.** So an id the uploader could not match may still resolve here - an FBA row whose ASIN is on no product often carries a seller SKU that is - and the chip says which, before you click: a resolved chip shows the **product title** with a solid border, an unresolved one shows the **raw id** with a dashed one and a tooltip reading *"Nothing in the catalog carries ASIN B0NOPE999 (the file calls it ...)"*.
+
+That is the honest shape for a report whose whole subject is things that are NOT in the catalog. An empty Products table is the answer, not a dead end, and `prodCount` already states it.
+
+### ⚠ THE DRIFT GUARD: one haystack, two readers
+The Products search haystack was spelled inline inside `prodRowMatchesFilters`. A second copy in the finder is exactly the rule #1 divergence, **one chip and one table apart** - the chip would promise a match the page it navigates to does not deliver. `prodSearchHaystack` is now the only definition and both read it.
+
+`test_v1134` **C1 drives the REAL `prodRowMatchesFilters` and the REAL `prodFindByTerm` over a product carrying all NINE searchable fields** and requires them to agree on every one. A field the table searches and the chip does not lands there.
+
+### ⚠ Nothing out of the file reaches an attribute
+Every id in these lists comes out of an UPLOADED FILE. The status lines **stay on `textContent`** (asserted, E4), the chips are a separate element, and a chip **addresses its item by INDEX** into a module cache - the v11.23 checkbox rule one surface over. Driven with `O'Brien "Max" \ <b>bold</b> & 50% , ;` as a Chewy SKU: it renders as text, leaves **zero** `<b>` in the DOM, the onclick reads `uploadUnmatchedGo("st-sales-traffic",0)`, and the raw value still round-trips into the search box intact.
+
+### What the drill-in clears, and what it deliberately does not
+`openProductsForTerm` mirrors `openUploadGroupForTable` - navigate through the standard nav funcs so the URL is written, then reveal. It clears only what can HIDE a match:
+- **Brand / Show / the legacy category select**, set directly.
+- **The v7.08 Top Products chip**, through **its own setter**, which also drops the `localStorage` copy that would otherwise bring it back on the next load.
+- **NOT `clearProdFilters()`** - that clears the SEARCH it is about to set and persists the cleared multi-selects. Same neighbourhood, different job (E7).
+- **NOT category visibility** - a saved, cross-device preference (v10.6). `renderProductsTbl` already reports what that removed (v10.46), and a short table that says why beats a preference wiped by a click-through (E8).
+
+**⚠ `#prodSrch` is HIDDEN on that page** (v8.43 - the global bar drives it), so the sync to the global bar is not cosmetic: without it the term filters the table while nothing on screen says what it filtered BY, which reads as a table that came back short on its own. Deferred by a tick, asserted both ways (B3e/B3f).
+
+### ⚠ `.dz-warn` has been set by six upload handlers since v7.x with NO RULE BEHIND IT
+Found while styling the chip row. `.dz-ok`, `.dz-err` and `.dz-ld` all have one; `.dz-warn` never did, so every *partly OK* upload rendered in the default body colour, **indistinguishable from a clean one**. The v10.49 missing-class defect, in the status line that this release exists to make actionable. Verified in a browser: the Sales & Traffic line now reads `rgb(251, 146, 60)`.
+
+### ⚠ And v8.76's Products reset has been aimed at three ids that do not exist
+Found while deciding whether `openProductsForTerm` should reuse `clearPageFiltersForTopProductChip`. It resets `prod-brand` / `prod-search` / `prod-filter`. **The controls are `prodBrand` / `prodSrch` / `prodFilter`.** Every other page in that function is correct, so clicking a Top Products chip has cleared the Amazon P&L, Shopify, Walmart, Inventory and Units Sold filters since v8.76 and **never the Products page's own** - which is verbatim the case its own comment describes (*"a KKZ chip clicked while Brand=Doggijuana was active would return zero products with no indication why"*).
+
+`test_v1134` **D4 runs the three pre-v11.34 ids against the real markup and proves all three resolved to NOTHING**, so *"these lines were dead"* is a measurement rather than a claim.
+
+### ⚠ The FBA note counted LINES and called them ASINs
+`unmatched` increments per raw CSV line, before the `(sku, store)` dedupe, so one SKU listed in two marketplaces counted twice under a label reading `ASIN(s) not in catalog`. The rule 3a defect in miniature. The displayed number is now **distinct ASINs**, which is what its own words always claimed; the line count survives untouched in the audit log as `unmatched`, beside the new `unmatched_asins` (E6).
+
+### Capped at 12, and a stale list cannot survive a clean upload
+Twelve chips is what fits a dropzone without the card becoming the list; the rest collapse into a `+N more` whose tooltip names them (and does **not** repeat the twelve already shown, A5e). Each handler calls the renderer with an **empty list at parse time**, so a clean upload after a dirty one cannot leave the previous file's orphans sitting under a green status line (E2b).
+
+### Verification
+- `node --check` clean - **97 suites green** - new `tests/test_v1134.py` (102 assertions) - div balance 2,848 / 2,848 and comments 361 / 361, both unchanged.
+- **The real `uploadUnmatchedChips` driven** with a recording DOM: the clear case removes the row AND empties the cache, a miss renders dashed with the raw id, a hit renders solid with the product title, the cap renders 12 + `+3 more`, the row inserts directly between the status line and the `dz-last` line, a flex parent drops the top margin, an out-of-range index is a no-op rather than a throw, and a missing status element is a no-op.
+- **The real `openProductsForTerm` driven**: B2b pins the ORDER against `showPage`, which repaints the page it enters - controls set before it would be painted over.
+- **Driven in a browser against the shipped build** (chip confirmed `v11.34` first), on the REAL Sales & Traffic dropzone: three chips with the right borders and tooltips, every button computing `z-index: 2` (the file input overlays that card, which is why the existing `<a>` buttons there carry the same), and **a real `.click()` through the attribute handler** navigating `#data/uploads` -> `#products`, marking the nav tab, clearing `Doggijuana` + `needs_review`, and landing `B0NOPE999` in the search box. The nasty id round-tripped byte for byte. The global bar synced a tick later. The Chewy catalog card's FLEX row placed the chips between the status span and the timestamp with no margin. Only the expected unauthenticated 401s in console.
+- **Not verified here:** a real MOUSE click on a chip. The login gate leaves the app container hidden (v10.87), so every box measures 0 and `elementFromPoint` returns the gate. The handler chain is driven for real; only the pixel hit-test is not.
+
+### One suite went red; re-pointed, not silenced
+`test_v1046` slices `prodRowMatchesFilters`, which no longer spells its haystack inline. It now slices `prodSearchHaystack` with it - which is the point: the dependency is real and the harness follows it (the v10.43 / v10.45 / v10.97 pattern).
+
+### One of my own test expectations was wrong
+A7 read `style.marginTop` on the flex path, where it is never set. `JSON.stringify` **drops `undefined` keys**, so the value did not come back short - it did not come back at all, and the suite died on a `KeyError` rather than a failed assertion.
+
+### Still open
+- Nothing from this release. The Walmart cost ledger reports unmapped case SKUs too, but it has had its own matching MODAL since v11.08 - a different and better affordance for the same problem, deliberately not converted.
 
 ## v11.33 - the Amazon console's metric tiles, on all three Ads pages
 

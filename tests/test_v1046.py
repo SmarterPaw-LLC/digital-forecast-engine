@@ -333,7 +333,13 @@ t('  and a matching search still passes',
 console.log('\n  ' + P + ' passed, ' + F + ' failed');
 if (F) process.exit(1);
 """
-prod = prod.replace('//<<PRODMATCH>>', fn('prodRowMatchesFilters'), 1)
+# v11.34 — prodRowMatchesFilters no longer spells its search haystack inline;
+# it calls the shared prodSearchHaystack, which prodFindByTerm (the uploader
+# drill-in) also reads. Slice BOTH, so this suite keeps running the real
+# engine rather than a stub of it — the dependency is genuine and the harness
+# follows it (the v10.43 / v10.45 / v10.97 pattern).
+prod = prod.replace('//<<PRODMATCH>>',
+                    fn('prodSearchHaystack') + '\n' + fn('prodRowMatchesFilters'), 1)
 tmp3 = os.path.join(tempfile.gettempdir(), 'test_v1046_prod.js')
 io.open(tmp3, 'w', encoding='utf-8', newline='').write(prod)
 r3 = subprocess.run(['node', tmp3], capture_output=True, text=True, encoding='utf-8')
