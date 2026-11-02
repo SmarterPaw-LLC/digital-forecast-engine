@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.38** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.39** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,32 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.39 - two SEASONAL sections in the column picker, and an `undefined` row
+
+- **Jason, on the Inventory Planning column picker:** *"there are two seasonal sections on the column picker"*
+- Both defects were in that screenshot and only one was new.
+
+### ⚠ MINE: I coined a group without grepping for the one that existed
+v11.37 gave `Season ×` `group:'seasonal'` / `groupHdr:'SEASONAL'`. There has been a **SEASONALITY** group (key `sea-settings`, three columns) for far longer. Two groups one letter apart for one concept is rule #2 at its plainest, and **hard rule #1 says FIND the existing implementation first** - I reasoned about which group it belonged in and never checked whether one already existed.
+
+It is the fourth column in `sea-settings` now. Still NOT in VELOCITY TREND: it is a property of the forecast, not of the trend beside it (rule 3a), and that part of v11.37's reasoning stands.
+
+### ⚠ NOT mine: the picker offered a checkbox for a column that cannot be hidden
+`_chk` is the locked selection checkbox and carries no label, so the Inventory picker rendered it as **`undefined`** with a control that does nothing - a locked column is always visible, so the checkbox is the v10.19 case.
+
+**The Forecast picker has filtered locked columns all along**, and so has the Products one:
+```js
+const cols = FC_COLUMNS.filter(c => c.group === gid && !c.locked);
+```
+So this was the rule #1 divergence rather than a missing idea, and Inventory converges on that line instead of growing a third spelling. **`ipGroupSet` had the same gap** - its "all / none" links wrote a locked key into the persisted column list, where it did nothing and outlived the session as junk. Both converted in this commit (rule #5).
+
+### Verification
+- `node --check` clean - **100 suites green** - `test_v1137` re-pointed (87 × 88 assertions) with a new D4c3 requiring **exactly one group key per header**, so a fifth seasonality group cannot appear.
+- The version assertion now counts `>v11.\d+ {chr(0x00b7)} <date><` occurrences instead of naming the previous release, so it stops needing a two-line edit every time.
+
+### ⚠ THE SAME GUARD TRAP, A FOURTH TIME IN ONE SESSION
+The static guard scanned raw source and tripped on **my own comment**, which quotes the group key it is explaining the removal of. v11.37b's anchor guard, both of v11.38's, and now this. The rule is no longer "remember the v11.18 fix": **every static guard over this file strips comments FIRST and then requires the comment to survive.** Written that way here.
 
 ## v11.38 - the Season × link jumps in the SAME TAB
 

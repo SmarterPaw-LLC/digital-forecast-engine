@@ -363,7 +363,16 @@ _col = _col[:_col.index("\n  { key:'")]
 for bit in ('sortVal:', 'csv:', 'render:', 'tip:'):
     ok(bit in _col, 'D4 the Season column declares %s' % bit)
 ok("label:'Season \u00d7'" in _col, 'D4b labelled with the multiplication sign')
-ok("groupHdr:'SEASONAL'" in _col, 'D4c under its own group, not VELOCITY TREND')
+# v11.39 re-point: v11.37 coined group:'seasonal' / 'SEASONAL' without checking,
+# and the picker rendered it beside the SEASONALITY group that already existed
+# (key 'sea-settings'). It joins that one now. Still NOT vel-trend.
+ok("groupHdr:'SEASONALITY'" in _col and "group:'sea-settings'" in _col,
+   'D4c in the SEASONALITY group that already existed')
+ok("group:'vel-trend'" not in _col,
+   'D4c2 and still not filed under VELOCITY TREND (rule 3a)')
+eq('D4c3 exactly one group key carries the SEASONALITY header',
+   len(set(re.findall(r"group:'([^']+)', groupHdr:'SEASONALITY'",
+                      re.sub(r'(?m)^\s*//.*$', '', js)))), 1)
 ok(_col.count('seaForwardAvg(r, 30)') >= 2,
    'D4d sort and csv read the same helper the cell renders')
 
@@ -442,9 +451,9 @@ ok('catch' in _sel,
    'D9d and catches, because a throw out of a timer has no caller and blanks the page')
 eq('D9e exactly one definition of it', js.count('function seaSelectProductDeferred('), 1)
 
-eq('D6 version chip', s.count('>v11.38 \u00b7 2026-11-02<'), 1)
-eq('D6b no older chip survives',
-   s.count('>v11.35 \u00b7') + s.count('>v11.37 \u00b7'), 0)
+eq('D6 version chip', s.count('>v11.39 \u00b7 2026-11-02<'), 1)
+eq('D6b exactly one chip, and no older one survives',
+   len(re.findall(r'>v11\.\d+ \u00b7 [\d-]+<', s)), 1)
 
 print('\n%d passed, %d failed' % (passed, failed))
 sys.exit(1 if failed else 0)
