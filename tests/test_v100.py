@@ -14,7 +14,18 @@ def grab(a, b, label):
         print('ANCHOR FAIL %s' % label); sys.exit(1)
     return js[i:j]
 
-LABEL = grab('function ipVelTrendLabel(t) {', '\nfunction ', 'ipVelTrendLabel')
+# v11.37 - the thresholds moved into ipVelTrendLabelRaw and ipVelTrendLabel
+# became a thin wrapper that re-labels the divergent case. Both are sliced, plus
+# the divergence test they share, so this suite exercises what the page actually
+# calls instead of half of it.
+# Joined with newlines, NOT concatenated: each slice runs to the next
+# `\nfunction ` and so can end mid-comment, which would otherwise swallow the
+# next declaration into a `//` line.
+LABEL = '\n'.join([
+    grab('function ipVelTrendDivergent(t) {', '\nfunction ', 'ipVelTrendDivergent'),
+    grab('function ipVelTrendLabel(t) {', '\nfunction ', 'ipVelTrendLabel'),
+    grab('function ipVelTrendLabelRaw(t) {', '\nfunction ', 'ipVelTrendLabelRaw'),
+])
 
 # The vel_trend csv function, verbatim.
 # v10.1 moved this body into the shared velTrendCsv(t).

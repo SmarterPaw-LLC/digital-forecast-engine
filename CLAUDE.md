@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.35**
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.37** (v11.36 is reserved for the GA4 schema + loader, whose SQL is written and not yet run)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,77 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.37 - how much of a Need is the seasonal curve
+
+- **Jason, on a 30d Shopify need of 1,016 for a product selling about 104/week:** *"why does the export show bubbles for shopify needed at 1000+ for 30 day when the trend line doesn't support? ... I need a way to check issues like this"*
+- It was seasonality, worth **2.29×**, and nothing on screen said so. Nothing here moves a forecast number; it makes the composition of one legible.
+
+### The arithmetic, reproduced before anything was built
+`forwardSeaDemand` is not rate × days. It walks forward a day at a time and multiplies each day by that week's multiplier:
+
+| | |
+|---|---|
+| Shopify velocity | 14.79/day (60d window) |
+| forward curve weight, 30 days | **× 68.72** = 2.29× flat |
+| = | **1,016** |
+
+All four horizons reproduce against the export (1,016 / 1,779 / 2,329 / 2,759 vs 1,016 / 1,778 / 2,326 / 2,755), and the saved `mix` curve reproduces week for week, so the diagnosis was a measurement rather than a reading.
+
+**Where the 2.29× comes from:** a 50/50 blend of the product's own de-trended history (**1.71×**, worth 759) and the hand-seeded `bubbles` category curve (**2.87×**, worth 1,273). The category half is adding **257 of the 1,016 units**.
+
+### ⚠ THE BADGE SAID "SURGING" WHILE SELL-THROUGH FELL A QUARTER
+`ipVelTrend` has reported `rawPct` (demand) and `seaPct` (the curve) separately since v9.90 and the badge rendered **only their product**. On Bubbles that was demand 16.80 {chr(0x2192)} 12.73 units/day (**-24.2%**) against a curve climbing 1.30× {chr(0x2192)} 2.18× (**+67.7%**), blended into a green flaming **Surging +146%**.
+
+When the two point the SAME way the product is a fair summary. When they point OPPOSITE ways it is not a statement about demand at all. `ipVelTrendDivergent` detects exactly that, and the label goes orange with the demand delta beside it - the **v11.03 rule** that a rise which is not good news on its own does not get the good-news colour.
+
+- `ipVelTrendLabel` is now a thin **wrapper**, not a second copy: the thresholds stay in `ipVelTrendLabelRaw` and the cell, the sort key and the CSV all resolve the same object.
+- **`rank` is carried through UNCHANGED**, so sort order is byte-identical. Re-ranking a curve-driven surge below a real one is defensible and is a different decision from making it legible.
+- **The CSV text DOES change** on a divergent row, and has to: an export reading *Surging* while the screen reads *Season* is one number carrying two meanings a click apart.
+
+### ⚠ A guard found that velTrendCsv would have exported a raw glyph
+Every other label has had its arrow or flame stripped here since v10.1. The new one was not in the strip class, so a divergent row would have exported `{chr(0x2248)} Season +146%` while every sibling exported `Surging +146%`. Found by an assertion, not by reading.
+
+### `seaForwardWeight` - one definition, extracted not re-derived
+`forwardSeaDemand` multiplied the weight in and threw it away, so the number that explains a Need could not be read anywhere. It is its own function now and `forwardSeaDemand` calls it, because a second walk over the same curve is a second answer waiting to drift (hard rule #1).
+
+`test_v1137` **A5 runs the pre-v11.37 implementation beside the shipped one** over six record shapes {chr(0x00D7)} eight horizons and requires zero drift, so *"no forecast number moved"* is a measurement.
+
+### `Season ×` - the scan affordance, because a tooltip only helps on a row you already suspect
+Sortable, exportable, its own group (it is a property of the FORECAST, not of the velocity trend beside it - rule 3a). Sort 231 SKUs by it and every forecast that is mostly curve surfaces at once. Orange above 1.5×; flat renders a dimmed `×1.00`, because *no adjustment* is a real answer rather than a blank.
+
+**And the cell is a LINK** (Jason: *"i also want an option to click on the seasonality and it opens a new tab to that product's seasonality page trend"*), to `#forecast/seasonality?mid=...`. A real `<a href target="_blank">`, not an onclick, so middle-click and open-in-new-tab work for free.
+
+⚠ **`routeApply` had to LEARN that param.** `routeParse` has always collected every non-`view` query param into `filters` and `routeApply` only ever read them for `pnl/amazon` - so the link would have opened the right PAGE and the wrong PRODUCT, with nothing on screen saying the row you asked for is not the row you got. `test_v1137` **E drives the REAL routeParse on the REAL href the REAL renderer emits**, including an id full of route punctuation.
+
+### The Need tooltip states what "seasonal" was worth
+Every line in `buildTipBase` ended in the word *seasonal* and none said what it multiplied by. It now names the multiplier, the curve that produced it, and what flat would have been.
+
+⚠ **The horizon is an ARGUMENT, not a field on `nb`.** `inventoryNeedBreakdown` does not stamp one and cannot: `EMPTY_NEED_BREAKDOWN` is a frozen singleton handed back for every horizon, so a `nb.horizon` would be a lie on exactly the rows with no data. Reading one would have left the footer silently never rendering - the v10.19 shape. All **16** call sites (Base, Bundle, Walmart, Shopify {chr(0x00D7)} 4 horizons) pass the record and their own horizon, converted in this commit (rule #5).
+
+### ⚠ Chewy's lag is NOT what makes Bubbles read as declining
+Jason, on the incomplete-reporting zone: *"this is why bubbles shows declining sales."* Reasonable, and checked rather than accepted: **`ipVelWindow` already shifts each channel's window back by `ipChannelLagDays(key)`**, so Chewy is measured over its own last 30 REPORTED days instead of reading a false zero (the v9.88 / v10.5 rule).
+
+The Shopify decline is real and independent: 370 units in the current 30 days against 502 in the prior 30, **-26%**, on a feed with no lag at all. The CHART tail is genuinely incomplete; the TREND is not.
+
+### Verification
+- `node --check` clean - **99 suites green** - new `tests/test_v1137.py` (83 assertions) - div balance 2,848 / 2,848, comments 361 / 361, both unchanged.
+- **The real functions driven**: the weight identity at every horizon, both flat overrides, the no-movement guard, the real Bubbles row through the real label and the real cell on BOTH render paths, an agreeing row proven byte-identical to v11.36, and the real router on the real href.
+
+### Two suites went red; both re-pointed, neither silenced
+`test_v1062` slices `forwardSeaDemand`, which no longer walks the curve, and `test_v100` slices `ipVelTrendLabel`, which is now a wrapper. Both slice their new dependency with them - the dependency is real and the harness follows it (the v10.43 / v10.45 / v10.97 pattern).
+
+⚠ **`test_v100`'s re-point then failed on a missing NEWLINE.** Its `grab()` runs to the next `\nfunction `, so a slice can end mid-comment; concatenated directly, `// drift.` swallowed the `function` that followed it. Joined with newlines.
+
+### ⚠ The heredoc ate the backslashes AGAIN, in that same re-point
+`'\n'.join` arrived with the escape halved and the assertion matched nothing. CLAUDE.md has said this since v9.77 and at v10.68 / v10.88 / v10.92 / v11.00 / v11.16 / v11.23 / v11.32 / v11.33 / v11.35: **use the Write or Edit tool, never a heredoc, for anything containing escapes.** Nothing was written; it cost one round.
+
+### And one of my own guards tripped on my own comment, again
+The anchor-balance check counted `<a ` inside the comment explaining *why this is a link and not an onclick*. The v11.18 / v11.27 fix: count against comment-stripped source AND require the comment to survive.
+
+### Still open
+- **The coverage treatment on other aggregated trends.** Jason: *"we need the units sold treatment on other pages with aggregated sales trend, like the seasonality chart."* `salesCoveragePlugin` (v9.91) is on the two Units Sold charts only; the Seasonality chart draws a tail that is incomplete rather than low and says nothing. Next change, not this one.
+- Whether `sea_method` on SP-0124 should move from `mix` to `calculated` (105 weeks of data against a 26-week minimum, and the curve was last computed **2026-05-11**). That is Jason's call: the category curve encodes a belief about Q4 his own history cannot see yet at this volume.
 
 ## v11.35 - an HTML chart legend, with "only"
 

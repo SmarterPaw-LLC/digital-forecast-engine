@@ -77,7 +77,10 @@ peakC();
 const qty = forwardSeaDemand({ blended_daily: V }, 60 + 90) - forwardSeaDemand({ blended_daily: V }, 60);
 console.log(JSON.stringify({ flat, peak, launch, ovr, qty, flatQty: 90 * V }));
 '''
-real = '\n'.join([fn('isoWeekOfYear'), fn('forwardSeaDemand')])
+# v11.37 - forwardSeaDemand delegates the curve walk to seaForwardWeight.
+# Sliced WITH it rather than stubbed: the dependency is real and this suite is
+# about the integration the pair performs.
+real = '\n'.join([fn('isoWeekOfYear'), fn('seaForwardWeight'), fn('forwardSeaDemand')])
 js_path = os.path.join(HERE, '_v1062_tmp.js')
 io.open(js_path, 'w', encoding='utf-8', newline='\n').write(HARNESS.replace('__REAL__', real))
 try:
