@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.39** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.40** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,45 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.40 - the incomplete-reporting band reaches the Seasonality chart
+
+- **Jason:** *"we need the units sold treatment on other pages with aggregated sales trend, like the seasonality chart"* and then, with a screenshot of the green actuals line falling off a cliff at the right edge: *"i need that indicator on the trend line. chewy sales are now showing and that's causing the slump."*
+- He is right, and it is the same root cause he spotted on Units Sold. **Chewy ends 2026-09-28 while Shopify runs to 2026-11-02**, so the last five weeks of the actuals line are missing a channel carrying 25-50% of that product's volume. The line reads as collapsing demand. It is a reporting lag, and nothing on that chart said so.
+
+### ⚠ THE INDICATOR WOULD HAVE SILENTLY NEVER DRAWN
+`salesLatestByChannel` was assigned in exactly one place: inside `updateSalesChart`. Open Seasonality without visiting Units Sold first and it is `{}`, `salesCoverage` finds no boundaries, and the band never appears - **the v10.19 case, failing in precisely the situation it exists for**: someone going straight to a product's curve to find out why it slumped.
+
+`salesLatestByChannelMap()` derives it where it is needed. `updateSalesChart` still owns the authoritative sweep (it computes other things in the same pass) and still assigns the global; the new function fills it in for whoever arrives first, and `test_v1140` A6 pins that both remain true.
+
+**⚠ It is DATASET-WIDE on purpose, not per product.** *"Chewy has not reported week X yet"* is a fact about the feed. A product that reported 0 units that week genuinely sold none, and must not be marked missing.
+
+### ⚠ The band needed a RIGHT edge, because this chart projects forward
+Units Sold hatches to the end of the plot, correctly: everything past the gap really is unreported. The Seasonality chart draws **17 weeks of projection** past its last actual, and *"has not happened yet"* is a different fact from *"has not reported"* - hatching the forecast would claim it was missing data.
+
+`cov.bandEndWeek` is optional and **absent it is `ca.right`**, which is the only form in which *"Units Sold is byte-identical"* is checkable rather than read off a diff (`test_v1140` B1b).
+
+### ⚠ And every channel read as stale, which the suite's own fixture exposed
+On a chart that projects forward, **no channel has reported the projected weeks** - so Shopify, perfectly up to date, earned a dashed boundary reading *"Shopify ends 11/2/26"* right beside Chewy's. Two boundaries, and the reader's eye lands on the wrong one.
+
+A channel is **LAGGING** only if its gap opens at or before the band's right edge. Absent `bandEndWeek` nothing is filtered, so Units Sold keeps every boundary it had. Driven: unbounded draws 2 boundary lines, bounded draws 1, and it is Chewy's.
+
+### The weeks array indexes 1:1 with the chart's labels
+The plugin resolves a week to an x position with `cov.weeks.indexOf(wk)`, so the array it is handed has to pair with `labels` element for element. `labels` is `keys.map(fmt)` followed by `futureDates.map(fmt)`, so the coverage array is `keys.concat(futureDates.map(_seaIso))` - the future dates converted to the same `YYYY-MM-DD` form rather than left as `Date`s, because `salesCoverage` compares weeks as STRINGS. `test_v1140` C2b asserts the `labels` construction it depends on, so the pairing cannot drift silently.
+
+### ⚠ salesCoverage reads a MODULE GLOBAL, not its third argument
+Its third parameter is `displayLatest`, which only feeds the `shown` subtitle field; the staleness comes from `salesLatestByChannel`. The first cut passed `salesLatestByChannelMap()` as that argument and worked **only because arguments evaluate before the call** populates the global. Made an explicit statement first. Found by a test fixture that set the argument and watched the band draw anyway.
+
+### Verification
+- `node --check` clean - **101 suites green** - new `tests/test_v1140.py` (29 assertions) - div balance 2,848 / 2,848, comments 361 / 361.
+- **The real plugin driven with a recording canvas**: unbounded the band spans x 45 × 140 (the plot edge), bounded it spans 45 × 95, an UNKNOWN `bandEndWeek` falls back to the plot edge rather than vanishing, a band that would end before it starts draws nothing, and a fully-reported chart draws nothing.
+- **The real `salesLatestByChannelMap` driven**: dataset-wide max per channel with the newest Chewy row on a DIFFERENT product, a null channel skipped rather than filed under `null`, a timestamped `week_start` still comparing as a date, and an absent `salesData` returning `{}` rather than throwing.
+
+### One census guard re-pointed, and it was right to go red
+`test_v1135` D3d pinned *"`salesCoveragePlugin` never appears on its own"*, which encoded v11.35's state as a rule. The Seasonality chart legitimately opts into coverage **without** the HTML legend - it has its own canvas legend and did not ask for one. Re-pointed to the guarantee the label actually claimed: exactly one coverage-only opt-in, and it belongs to `seaRenderFitChart`.
+
+### Still open
+- **`computeProductSeasonality` still has no upper bound on its window.** It stops at `stableStart` and never at the end, so the week in progress (4 units on one day, averaged in as a full week) and the five weeks missing Chewy feed the curve as if complete. This release DRAWS the problem; it does not yet stop the calculation eating it. That is the next change, and it matters more now that SP-0124 is on `calculated`.
 
 ## v11.39 - two SEASONAL sections in the column picker, and an `undefined` row
 

@@ -597,8 +597,20 @@ ok('plugins: [CHART_HTML_LEGEND],' in js,
 ok('plugins: [salesCoveragePlugin, CHART_HTML_LEGEND],' in js,
    'D3b Units Sold ADDS it beside the coverage plugin rather than replacing it')
 eq('D3c and both Units Sold charts did', js.count('plugins: [salesCoveragePlugin, CHART_HTML_LEGEND],'), 2)
-eq('D3d the coverage plugin is not left anywhere on its own',
-   js.count('plugins: [salesCoveragePlugin],'), 0)
+# v11.40 re-point. This pinned a CENSUS (`salesCoveragePlugin` alone appears
+# zero times) while its label claimed a GUARANTEE about Units Sold. v11.40 gave
+# the Seasonality chart the coverage band WITHOUT an HTML legend - it has its
+# own canvas legend and did not ask for one - which is a legitimate new caller,
+# not the regression this was written to catch.
+#
+# The guarantee it was really protecting is asserted directly by D3c above: the
+# two Units Sold charts carry BOTH. What is added here is the other half of it -
+# neither of those two may quietly lose the legend by being rewritten as a
+# coverage-only opt-in.
+eq('D3d exactly one coverage-only opt-in exists',
+   js.count('plugins: [salesCoveragePlugin],'), 1)
+ok('plugins: [salesCoveragePlugin],' in fn('seaRenderFitChart'),
+   'D3d2 and it is the Seasonality chart, which has its own canvas legend')
 
 eq('D4 the canvas legend is off on all three', js.count('legend: { display: false },'), 3)
 ok("legend: { display: datasets.length > 1, labels:" not in js,
