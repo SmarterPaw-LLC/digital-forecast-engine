@@ -302,7 +302,34 @@ def strip_tpl_prose(js):
         out.append('`'); i = j + 1
     return ''.join(out)
 
-_scan = strip_tpl_prose(strip_comments(rail))
+def strip_quoted(js):
+    """Blank the inside of '...' and "..." literals, keeping the quotes.
+
+    v11.47: the coverage grid builds its rollup as SQL, so `max(`, `nullif(`
+    and `to_jsonb(` appear inside ordinary string literals. strip_tpl_prose
+    already blanked BACKTICK prose for exactly this reason and ordinary
+    quotes were simply never covered. A call site inside a string is not a
+    call site, so blanking them makes this sweep MORE accurate, not slacker -
+    the same reasoning that excluded `var(` in v11.45.
+    """
+    out, i, n = [], 0, len(js)
+    while i < n:
+        c = js[i]
+        if c not in ("'", '"'):
+            out.append(c); i += 1; continue
+        out.append(c); j = i + 1
+        while j < n and js[j] != c:
+            if js[j] == '\\':
+                out.append('  '); j += 2; continue
+            if js[j] == '\n':
+                break                      # unterminated; do not run away
+            out.append(' '); j += 1
+        out.append(c if j < n and js[j] == c else '')
+        i = j + 1
+    return ''.join(out)
+
+
+_scan = strip_quoted(strip_tpl_prose(strip_comments(rail)))
 _scan = re.sub(r'title="[^"]*"', 'title=""', _scan)
 called = set(re.findall(r'(?<![\w.$])([a-zA-Z_$][\w$]*)\s*\(', _scan))
 defined = set(re.findall(r'(?m)^(?:async\s+)?function\s+([\w$]+)\s*\(', JS))

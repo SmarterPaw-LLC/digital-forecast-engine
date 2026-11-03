@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.46** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.47** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,172 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.47 - the coverage grid asks the DATABASE, and resolves brand ONE way
+
+Five messages from Jason in one sitting, card by card, ending in the one that
+named the cause:
+
+> *"most of the uploaded items are kitty kazoom"* · *"this doesn't make sense - the
+> same report should cover all regions and brands (but only us, ca, uk)"* ·
+> **"why are all of these inconsistent? you have the mapping to the product and
+> brand"**
+
+He is right on every count, and the cause is one decision in v11.45: the grid
+read a HAND-TYPED list per source (`UH_SOURCES.regionOptions` / `brandOptions`)
+as if it were the data.
+
+### ⚠ MEASURED AGAINST THE LIVE TABLES, THE TYPED LIST WAS WRONG ALMOST EVERYWHERE
+
+| source | declares | actually has |
+|---|---|---|
+| `amazon_ad_spend` | 10 regions | **US 293,342 / CA 188 / MX 215.** EU/UK, GB, DE, FR, IT, ES, NL are ZERO |
+| `sku_economics` | US, CA, MX, AU, JP | US 26,264 / CA 14,565. **MX, AU, JP empty** |
+| `sku_economics_eu` | 10 regions | GB, DE, FR, IT, ES, NL. **IE, SE, PL, BE empty** |
+| `fba_inventory_snapshots` | 6 regions | US, CA, EU/UK. **MX, AU, JP empty** |
+
+**17 declared region rows across 5 tables have never held a single row.**
+
+One correction to Jason's note, worth knowing: there is **no UK ad spend at
+all** in `amazon_ad_spend`. The live regions are US, CA and MX.
+
+### ⚠ AND THREE BRAND METHODS HAD GROWN UP IN ONE PANEL
+A stored brand column on some tables, the v11.46 catalog lookup on others, and
+nothing at all on the rest - the divergence hard rule #1 forbids, which is
+exactly what Jason was looking at. **14 of the 22 sources carry `master_id`**,
+`amazon_ad_spend` and `chewy_forecasts` included: both had it all along and
+neither was DECLARED with it, so one card used the catalog and its neighbour
+used a column.
+
+**ONE RULE NOW: the catalog first, through `master_id`, with a stored brand
+column as the PER-ROW fallback.** `test_v1147` A2 requires all 22 sources to
+resolve by that rule rather than case by case.
+
+### ⚠ Catalog-ONLY was the first cut, and it LOST information
+Measured before shipping: **4,849 `amazon_ad_spend` rows join to no product**,
+including *every* CA and MX row. The catalog alone reported CA and MX as
+unmapped while the stored `advertiser_brand` had them as Doggijuana all along.
+`coalesce` of the two is consistent AND complete - **100% brand coverage on
+that table against 98.3%** for the catalog alone.
+
+### FOUR DEFECTS, one per card he screenshotted
+
+**1. The column shift.** The header emitted a leading spacer `<th>`
+unconditionally while the body only emitted a row header when there WAS a
+region axis. Every brand-only grid rendered each label one column right of its
+data. That is why Walmart 1P read as *Kitty Ka-Zoom empty* when **705 of its
+912 rows are Kitty Ka-Zoom**, and why Chewy Weekly read as *Meowijuana empty*
+when all three brands carry the same `2026-09-28`.
+
+**2. The probe cap LIED.** v11.45 sampled the newest 4,000 rows and then probed
+at most 12 empty cells. On `amazon_ad_spend` - 293,745 rows, 30 cells - that
+left **FIFTEEN cells rendering a dash they had never checked**. A dash that
+means *we gave up* is indistinguishable from *never uploaded*, and nothing on
+screen said which.
+
+**3. Two "date" fields are not dates.** `walmart_calendar_week` is **202639**,
+a fiscal week code, and `digital_sales_tracker.year` is **2026**. `Date.parse`
+returned NaN, the cell fell to its not-fresh branch, and both rendered the raw
+code in ORANGE as though it were a stale date. The age now comes from
+`uploaded_at` whenever the period is not itself a date.
+
+**4. `table {{ width: 100% }}` is global**, so the Walmart Ads grid - one
+region, one row - stretched a single checkmark across the whole card.
+`width:auto` beats it.
+
+### ⚠ NO MIGRATION, because exec_sql already answers this shape of question
+PostgREST aggregates are disabled on this project (**PGRST123**), so an exact
+per-cell answer cannot be assembled client-side without pulling whole tables.
+The first cut was a dedicated `upload_coverage()` RPC in a migration file -
+**and this app already rolls numbers up through `exec_sql`** (the break-even
+query, the query editor). A second mechanism for the same job is what hard
+rule #1 forbids, and it would have left the panel broken until Jason ran SQL.
+The migration was deleted before it shipped. **Nothing to run.**
+
+Identifiers are still validated: `uploadSqlIdent` passes only `[A-Za-z_]\w*`,
+so a filter column that is not a bare identifier is dropped and an impossible
+table yields no SQL at all. Filter VALUES double their quotes.
+
+`max(to_jsonb(t) ->> 'uploaded_at')` reaches the timestamp **without needing a
+hand-kept list of which tables have the column** - it is NULL where absent
+instead of failing the rollup.
+
+### The Settings control
+- **Jason:** *"in the settings region, allow me to control which regions are
+  showing globally for each upload list"*
+- A **🗺 Upload regions** card on Settings, stored on `app_settings` under
+  `upload_regions_hidden` - the generic v9.85 key/value table, so no migration
+  and no new table.
+- **Only the HIDDEN ones are recorded.** Absent means visible, so a marketplace
+  we open later appears by itself instead of inheriting someone's old
+  hide-list. That is the v10.95 sub-tab rule, and it is why this is a
+  hide-list rather than a show-list.
+- **Fails OPEN.** A settings read that cannot complete never removes a region.
+- Hiding the LAST region is refused - the way back would be through the control
+  you just emptied.
+
+### Verification
+- `node --check` clean - **105 suites green** - new `tests/test_v1147.py`
+  (**91 assertions**).
+- **The real SQL run against the live database**, then fed back into the real
+  `uploadCoverageFetch` and the real `uploadCoverageHtml`: all six cards square,
+  Amazon Ads down from 10 region rows to the 3 that exist, Walmart 1P showing
+  Kitty Ka-Zoom and Doggijuana, Chewy showing all three brands.
+- **Driven in a browser against the shipped build** (chip confirmed `v11.47`
+  first): table 251px inside a 1024px host (so `width:auto` bites), the Walmart
+  tooltip reading *"Most recent walmart_calendar_week: 202639 (1 day ago) ·
+  uploaded 2026-11-02 · fresh within 14 days · brand resolved through the
+  catalog (master_id), not stored on this table"*, 16 region checkboxes all
+  ticked, and **the REAL `setUploadRegionVisible` driven end to end** - MX's row
+  disappears on untick, returns on re-tick, and the stored payload goes
+  `{{MX:false}}` → `null`. No console errors.
+
+### ⚠ The browser could not set the module-scope `let`, and said so
+`window._uploadRegionsHidden = {{...}}` does not reach a module-scope `let`
+(the **v10.93** rule), so the first browser check showed the hidden row still
+drawing and looked like a defect. It was the harness. Driving the real setter
+with `getSB` stubbed assigns the variable from INSIDE the module, which is the
+only honest way to exercise that path from the console - and it also means
+nothing was written to the real `app_settings`.
+
+### Three of my own guards went red, and all three were right
+- **`test_v1059`** - the Settings card's `ds-sub` was 185 characters of prose in
+  the markup. **Rule 1a: collapse prose into a TOOLTIP, never a visible block.**
+- **`test_v1086` / `test_v1090`** - the region-settings writers landed inside the
+  upload-history rail's slice, which is asserted display-only. They are settings
+  code, not grid code, and now sit beside the other `app_settings` helpers.
+- **`test_v1086`'s called-but-undefined sweep** then read `max(`, `nullif(` and
+  `to_jsonb(` **inside string literals** as JS calls. It already blanked
+  BACKTICK prose for exactly this reason; ordinary quotes were never covered.
+  `strip_quoted` makes the sweep MORE accurate, not slacker - the same
+  reasoning that excluded `var(` in v11.45.
+
+### Seven version-chip pins re-pointed, and they should never have been literal
+Six suites went red on a release that touched none of their subjects, because
+each pinned `>v11.46 · <date><`. **v11.39 already established the
+version-AGNOSTIC form** and these were written the old way anyway. All seven now
+count `>v11.\d+ · <date><`, so this stops being a two-line edit every release.
+
+### `tests/test_v1145.py` is RETIRED, not silenced
+Its subject - the typed-axes grid with its probe cap - is the thing this release
+removes, so half of it asserted a design that no longer exists. The guarantees
+that SURVIVE (the freshness table, the host insertion and its z-index, the
+single rail hook, `dzTablesFor`, the three marks) are carried into
+`test_v1147` rather than left in a suite whose other half is fiction. Two
+overlapping suites for one subject is hard rule #1 applied to tests.
+
+### ⚠ THE ESCAPE TRAP AGAIN, from a new direction
+The chip re-point was written with `\u00b7` and **the Edit tool wrote a REAL
+middle dot**, so the pattern matched nothing in files that hold the six-character
+escape. v11.41's rule is not "avoid heredocs", it is broader: **a script that
+edits this file writes non-ASCII via `chr()`, never as an escape and never as a
+pasted character.** It cost two rounds.
+
+### Still open
+- The conformity guard covers **1 of 28** uploaders, unchanged since v11.44.
+- `computeProductSeasonality` still has no upper bound on its window.
+- **No UK Amazon ad spend is loaded.** If Jason expects it, that upload has not
+  landed - it is not a display problem.
 
 ## v11.46 - the grid's brands were blank, and so were three of its cards
 
