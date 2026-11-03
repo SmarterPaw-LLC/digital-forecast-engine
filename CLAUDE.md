@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.49** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.50** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,74 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.50 - update a saved price option to the current inputs
+
+- **Jason, on a saved card reading *"inputs changed since saved"*:** *"i can't
+  update it to match the new inputs."*
+
+The card was RIGHT to be frozen. v9.65 says so in the source: *"folding in
+whatever the inputs say now would quietly change two things at once and make
+the 'inputs changed since saved' flag meaningless."* That reasoning stands and
+is untouched.
+
+What was missing is a way to say **yes** to the new assumptions. The badge
+named a difference and offered nothing to do about it - the **v10.19** case,
+on a card the operator is actively comparing against.
+
+### An EXPLICIT, named, audited action
+`pricingOptionRefresh(id)` lives beside `pricingOptionRecalc`, whose contract
+it respects: it never fires because a number moved somewhere else, only
+because the button was pressed.
+
+- **The PRICE is kept.** The card is a candidate price; re-pricing it is what
+  `pricingOptionEditPrice` is for. Everything the staleness check compares -
+  COGS, pack, size, unit, ad %, floor, brand, category - is taken from the
+  live render.
+- Brand and category are only carried onto a card that **recorded** them, so a
+  legacy card is not handed a basis it never had. That is the same rule the
+  diff itself uses.
+- The economics go through **`pricingOptionRecalc`**, not a second derivation.
+  Asserted: `o.proceeds =` / `o.contribAbs =` / `o.contribPct =` appear nowhere
+  in the refresh.
+
+### ⚠ The band-aware fee is the part pricingOptionCurrentBasis could not know
+`pricingOptionCurrentBasis()` reads the raw Step 1 inputs for the staleness
+check. The **platform fee** is not one of them: it depends on the price band,
+and that lookup only exists inside `pricingNewRender`. So the render publishes
+`pricingLiveBasis`, carrying a `platformAt(price)` closure, and the refresh
+takes the fee **at this card's own price** rather than at the rung it was
+saved from.
+
+A control that cannot do its job **says so**: with no live basis yet, it
+alerts instead of silently doing nothing.
+
+### ⚠ "Is this band trustworthy" was already spelled TWICE, and this would have made three
+Found by the patch's own guard, not by reading. `pricingNewRender` had the
+rule in the min-price refinement **and** in the per-rung platform fee, and
+v11.50's `platformAtPrice` was about to be a third. Extracted to
+**`bandUsable(band)`** - three samples, the threshold v9.56 set - and both
+existing callers converted in the same commit (rule #5). The guard now fails
+the build if the literal rule appears more than once.
+
+### Verification
+- `node --check` clean · **107 suites green**.
+- The patch refuses on: a refresh that changes the price, one that recomputes
+  instead of calling the shared recalc, a missing band-aware fee, a silent
+  no-basis path, the button wired more than once, and any second spelling of
+  the band rule.
+
+### ⚠ A brace-matched slice, because an end-anchor is only as stable as its neighbour
+`test_v1149` sliced the v11.49 ladder block by anchoring on the statement that
+FOLLOWED it. v11.50 inserted `platformAtPrice` into that gap, the slice
+swallowed it, and the harness died on an undefined `cogs`. It brace-matches
+the block now. **A test that slices shipped source has to slice a BLOCK, not a
+range between two landmarks**, or the next edit nearby breaks it.
+
+### Still open
+- The conformity guard covers **1 of 28** uploaders.
+- `computeProductSeasonality` still has no upper bound on its window.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
 
 ## v11.49 - a target price on the New Product Launch scenario
 

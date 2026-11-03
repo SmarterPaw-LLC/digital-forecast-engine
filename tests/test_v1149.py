@@ -54,8 +54,25 @@ def slice_between(start, end, label):
 
 
 # The two blocks this release adds, lifted out of the shipped file.
-LADDER = slice_between("      if (targetPrice > 0) {",
-                       "      pricingLadderPayloads = [];", "ladder")
+def slice_block(start):
+    """Brace-matched slice, so inserting code AFTER the block cannot drag
+    unrelated statements into it. v11.50 added platformAtPrice between this
+    block and the anchor this used to end on, and the harness then died on an
+    undefined `cogs` - an end-anchor is only as stable as its neighbour."""
+    i = js.index(start)
+    d, started, k = 0, False, js.index("{", i)
+    while k < len(js):
+        if js[k] == "{":
+            d += 1; started = True
+        elif js[k] == "}":
+            d -= 1
+            if started and d == 0:
+                return js[i:k + 1]
+        k += 1
+    raise SystemExit("unbalanced block at %s" % start[:40])
+
+
+LADDER = slice_block("      if (targetPrice > 0) {")
 HEAD = slice_between("      const tgtPay = targetPrice > 0",
                      "      recBlock = `<div", "headline")
 
