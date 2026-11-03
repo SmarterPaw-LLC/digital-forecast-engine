@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.51** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.52** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,84 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.52 - Walmart ad ROAS is judged against BREAK-EVEN, not against 1.0
+
+- **Jason:** *"i need to be able to analyze walmart.com ads and make decisions
+  about what changes to make."*
+
+The blocker was never a missing table - the Walmart Ads tab has shipped since
+v11.25 and 8 months are loaded. It was that **the one number every decision
+rests on was being graded against the wrong line.**
+
+### ⚠ WE ARE 1P. THE REPORTED ROAS IS ON RETAIL, AND WE ARE PAID WHOLESALE.
+Walmart Connect reports ROAS on **retail** sales. Walmart buys from us at
+wholesale and keeps the retail margin, so a dollar of reported ad sales is not
+a dollar of our revenue.
+
+    break-even ROAS = 1 / (our share of retail × our GM on wholesale)
+
+Measured on the live feeds for **Kitty Ka-Zoom, which is 95% of Walmart ad
+spend**: we keep **52.6%** of retail and make **59.2%** GM on that, so
+**break-even is 3.21x, not 1.00x.** Every Walmart ROAS between 1.00 and 3.21
+was rendering as ordinary text while losing money on every dollar.
+
+### What that does to the record
+| month | spend | ad sales | ROAS | contribution | net |
+|---|---|---|---|---|---|
+| 2026-06 | $2,932.94 | $7,095.81 | 2.42 | $2,209.58 | **-$723** |
+| 2026-07 | $1,676.92 | $9,674.77 | 5.77 | $3,012.65 | +$1,336 |
+| 2026-08 | $1,326.83 | $8,723.69 | 6.57 | $2,716.49 | +$1,390 |
+| 2026-09 | $3,648.13 | $11,059.30 | 3.03 | $3,443.78 | **-$204** |
+| 2026-10 | $4,447.17 | $11,139.21 | 2.50 | $3,468.66 | **-$979** |
+
+Before allowances, which are still not loaded and can only make it worse.
+
+### ⚠ DERIVED, NEVER TYPED
+The share and the margin move as prices and COGS move; a hardcoded 3.21 would
+be quietly wrong a quarter from now. It is read from **walmart_sales_weekly
+× walmart_cost_per_each × product_cogs** - the same three feeds the Walmart
+P&L uses - and `test_v1152` E3 fails the build if a literal 3.2 ever appears.
+
+**Share and margin are computed over the SAME joined rows.** Taking the share
+over all sell-through and the margin over the priced subset would multiply two
+figures describing different populations.
+
+### The floor follows the BRAND filter
+Kitty Ka-Zoom keeps 52.6% of retail; blended across brands it is 57.2%, a
+materially different floor. An unrecognised brand falls back to the blend,
+never to 1.0.
+
+### Amazon and Chewy are byte-identical
+On those channels the reported sales ARE our revenue, so 1.0 is the right
+line. A channel with no entry runs **no derivation query at all** and keeps
+the old threshold - asserted, so this cannot quietly become a cross-channel
+change.
+
+### ⚠ Fails to 1.0, never to a guess
+A break-even that could not be computed must not colour anything and must not
+claim a line it does not know. The cache entry is set to pending **before**
+the await, so the repaint-on-arrival cannot loop.
+
+### Verification
+- `node --check` clean · **109 suites green** · new `tests/test_v1152.py` (28
+  assertions), driven on the REAL per-brand rollup the query returns.
+
+### ⚠ A DATA DEFECT FOUND ON THE WAY: June and July keyword files are THE SAME FILE
+All **189 rows identical** - same keywords, same clicks, same spend ($749.94),
+same sales ($650.40) - uploaded **8 seconds apart** (21:50:03 and 21:50:11 on
+2026-10-29) and stamped for two different months. The campaign-level files for
+those months differ, so it is the KEYWORD upload that was double-stamped.
+
+This is the **v11.44 twin-upload failure exactly**, on one of the 27 uploaders
+the conformity guard does not cover. **One of June or July is wrong and both
+are being charted.** Jason's call which to re-pull; nothing was deleted.
+
+### Still open
+- The conformity guard covers **1 of 28** uploaders - and this release found
+  the second real instance of the defect it exists to catch.
+- Walmart's allowance agreement, still the only missing input to this margin.
+- `computeProductSeasonality` still has no upper bound on its window.
 
 ## v11.51 - a wholesale price on the New Product Launch scenario
 
