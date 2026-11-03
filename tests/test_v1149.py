@@ -146,12 +146,17 @@ eq("B6 the rung is marked so the renderer can tell it apart", B["marked"], 1)
 # C. THE HEADLINE. It must READ the ladder row, never recompute.
 # ---------------------------------------------------------------------------
 C = run_node(os.path.join(SP, "c.js"), """
+globalThis.skumigEsc = (v) => String(v == null ? '' : v)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 function headline(targetPrice, pay, opts) {
   const targetContrib = opts.targetContrib, packSize = opts.packSize;
   const cogs = opts.cogs, cogsPerUnit = opts.cogsPerUnit, feePct = opts.feePct;
   const platformUsed = opts.platformUsed, adPct = opts.adPct, minPrice = opts.minPrice;
   const hasMarket = opts.hasMarket, marketRateForMySize = opts.marketRateForMySize;
   const mySizeLabelLong = opts.mySizeLabelLong;
+  // v11.51 put the wholesale block inside this slice. Zero keeps it inert, so
+  // these assertions stay about the HEADLINE; test_v1151 drives the block.
+  const wholesalePerUnit = opts.wholesalePerUnit || 0;
   const pricingLadderPayloads = pay;
   let frameColor = 'var(--sp-green)', frameBg = 'x';
   let headline = 'UNCHANGED', headSub = 'UNCHANGED';

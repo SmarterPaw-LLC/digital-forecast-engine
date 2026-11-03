@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.50** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.51** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,88 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.51 - a wholesale price on the New Product Launch scenario
+
+- **Jason:** *"allow me to add a wholesale price for these scenarios."*
+
+The tab modelled ONE basis: what a shopper pays, less Amazon's fees. A new
+product is usually pitched on both at once - an MSRP on .com and an invoice
+price to a 1P retailer - and the second had nowhere to go.
+
+**Scoped to New Product Launch.** The Chewy tab already has a wholesale price;
+Bulk-Pack does not, and mirroring it there is Jason's call rather than a
+silent spread.
+
+### ⚠ A SECOND BASIS, not a rung
+A wholesale invoice carries **no FBA and no referral fee**, so it cannot share
+the ladder's arithmetic and must not become a row in it. It renders as its own
+line under the recommendation, and `test_v1151` D1 fails the build if
+`scenarios`, `pricingLadderPayloads`, `platformAtPrice` or `feePct` ever appear
+inside the block.
+
+**Absent a wholesale price it renders the empty string**, which is the only
+form in which *"every existing scenario is unchanged"* is checkable rather
+than read off a diff (B1).
+
+### ⚠ RULE 3a, in its sharpest form: two bases, one page
+`Contribution` on this page is a **RETAIL** basis, net of Amazon's fees. `GM`
+is the app's declared **WHOLESALE** pair (v10.53, `CHEWY_MEASURE_VOCAB`). So
+the new block says **GM** and the ladder goes on saying **Contribution**, and
+a guard strips the identifier `targetContrib` before asserting the retail word
+appears nowhere in the block.
+
+The input's label is lifted **verbatim** from the Chewy tab - *Wholesale price
+per unit* - rather than coined fresh (rule #3). One concept, one label, two
+tabs.
+
+### ⚠ And it is NOT the Chewy tab's GM
+Chewy's `GM $/u` **deducts allowances**. A launch scenario has no allowance
+agreement to deduct, so the tooltip names the exclusion by name rather than
+letting the shared prefix imply a deduction we are not making - the **v11.30**
+rule, which exists because `GM` means *after allowances* one tab over.
+
+### What it shows
+`$0.75/unit · $4.50/listing · GM $3.90 (86.7%) · 45% of your $9.99 MSRP`
+
+The per-listing figure is omitted on a single item, where it would repeat the
+per-unit number, and the MSRP comparison only appears once v11.49's target
+price has been named. Everything else - the basis, the fee exclusion, the
+allowance exclusion and the floor it is checked against - is on the **tooltip**
+(rule 1a), not printed on the page.
+
+### Verification
+- `node --check` clean · **108 suites green** · new `tests/test_v1151.py` (31
+  assertions).
+- The block is sliced out of the shipped file and driven with its locals
+  supplied, for the reason v11.49 records: `pricingNewRender` is gated on
+  `pnlData`, a module-scope `let` the browser console cannot set.
+- In a browser against the shipped build (chip `v11.51`): the field sits in
+  Step 1 between **Target price (MSRP)** and **Ad spend (TACOS) %**, its
+  tooltip names both the WHOLESALE basis and the Chewy exclusion, no console
+  errors.
+
+### ⚠ I wrote the same guard bug twice in two releases
+`recBlock = ` occurs EARLIER in `pricingNewRender` than the block being
+checked, so indexing it against the whole file gives an **empty slice** and
+every negative assertion passes vacuously. v11.49's guard hit this; v11.51's
+hit it again three releases later. **A guard that slices shipped source
+searches FORWARD from its own start anchor**, never from the file's.
+
+Both times the patch refused and wrote nothing, which is the guard working -
+but a guard that can pass vacuously is a guard that will.
+
+### ⚠ test_v1149's headline slice swallowed this release
+Same class as v11.50's: the slice runs to the statement that FOLLOWS the
+block, and v11.51 inserted between them, so the harness died on an undefined
+`wholesalePerUnit`. Supplied as 0 rather than re-anchored - the slice now
+drives MORE real code, and `test_v1151` owns the block itself.
+
+### Still open
+- The conformity guard covers **1 of 28** uploaders.
+- `computeProductSeasonality` still has no upper bound on its window.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- Whether Bulk-Pack should get the same wholesale input.
 
 ## v11.50 - update a saved price option to the current inputs
 
