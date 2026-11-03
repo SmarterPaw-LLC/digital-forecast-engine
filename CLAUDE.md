@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.47** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.48** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,80 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.48 - a brand with no rows is not a missing upload
+
+- **Jason, on the Amazon Ads card:** *"this still doesn't make sense - it's one
+  report for all regions and brands. i think you aren't seeing any campaigns
+  for certain brands, but that doesn't mean there is data missing."*
+- **And on FBA Inventory EU/UK:** *"only meow products are available in the UK."*
+
+v11.47 fixed WHERE the axes come from and left the deeper error in place:
+every (region, brand) CELL still carried its own upload date, so a brand with
+no campaigns - or one not listed in that market - drew a dash that reads as a
+missing file.
+
+### ⚠ THE CARD'S OWN SUBTITLE SAID SO
+The FBA EU card reads *"One upload covers GB + DE/FR/IT/ES/NL/SE/PL/BE/IE."*
+It was drawing `EU/UK | -- | -- | OK |` directly underneath that sentence.
+
+### Checked, not assumed: NOTHING here is uploaded per brand
+Every one of the 22 upload cards was scanned for a brand control. **21 have
+none at all**, and the single hit is a FILE input on the SQP Brand-view card -
+a report name, not a scope. Regions are different: six cards genuinely make
+the operator pick one, which is the v11.44 FBA defect's whole subject.
+
+**So a brand can never be a coverage gap, and `test_v1148` F1 fails the build
+if an uploader ever grows one** - that is the day this design needs revisiting,
+and it should not pass silently.
+
+### The mark is the REGION'S, the brand is the TOOLTIP'S
+`byRegion` / `byRegionFresh` are new and the marks read from them. `cells` and
+`fresh` are still built per (region, brand) and now feed **only** the tooltip,
+asserted by `res.cells` appearing exactly once in the renderer, under a name
+that cannot reach the mark.
+
+| | |
+|---|---|
+| brand with rows | `· Doggijuana: rows through 2026-10-20` |
+| brand with none | `· Kitty Ka-Zoom: no rows here. One upload covers every brand, so this is no activity in this market, NOT a missing file.` |
+
+**The per-brand figure is not discarded**, which matters: US Doggijuana rows
+stop on **2026-10-20** while the file itself was uploaded **2026-11-02**. That
+is worth knowing and it is not a coverage gap, so it reads on the tooltip
+instead of as a red date on the grid.
+
+### ⚠ Staleness still bites
+Removing the brand dash must not remove the one mark the grid exists for. D1
+drives a region whose only load is from January and requires the DATE, in
+orange, with nothing in that grid reading as fresh.
+
+### The standing merge audit
+`byRegion` and `byRegionFresh` are carried through the multi-table merge and
+declared on the empty object, asserted both ways - the rule that every change
+to this grid re-audits the merge, which has bitten this project 6+ times.
+
+### Verification
+- `node --check` clean · **106 suites green** · new `tests/test_v1148.py` (26
+  assertions) · `test_v1147` D2c re-pointed.
+- **The REAL fba_inventory_snapshots rollup**, pulled from the live database
+  through the shipped SQL builder, is the fixture: `EU/UK` holds **Meowijuana
+  only, 47 rows**, exactly as Jason said. The grid now draws
+  `EU/UK | ✓ | ✓ | ✓ |` and the tooltips carry the rest.
+- Amazon Ads likewise goes to `CA/MX/US` × three brands, **all ticks** - which
+  is what his original request asked for: *"if one upload covers all regions
+  for all brands, it should have a grid with a checkmark for each."*
+
+### One guard went red and it was right
+`test_v1147` D7 required the tooltip to name the catalog as the brand's source.
+Rewriting the tip for the per-brand fact dropped it. Provenance is restored
+rather than the assertion silenced - a reader who wants to know where a brand
+came from should not have to read the source.
+
+### Still open
+- The conformity guard covers **1 of 28** uploaders.
+- `computeProductSeasonality` still has no upper bound on its window.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
 
 ## v11.47 - the coverage grid asks the DATABASE, and resolves brand ONE way
 

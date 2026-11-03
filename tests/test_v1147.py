@@ -313,8 +313,13 @@ eq("D1c and the labels sit over their own data",
 eq("D2 a region+brand grid keeps its spacer", D["ads"]["shape"], [4, 4, 4, 4])
 eq("D2b header row: spacer then the brands",
    D["ads"]["texts"][0], ["", "Doggijuana", "Kitty Ka-Zoom", "Meowijuana"])
-eq("D2c CA is Doggijuana only, and says so",
-   D["ads"]["texts"][1], ["CA", "OK", "--", "--"])
+# ⚠ RE-POINTED at v11.48. This pinned CA as ["CA","OK","--","--"] - the brand
+# columns drawing their own dashes - which is exactly the defect Jason came
+# back on: "it's one report for all regions and brands ... that doesn't mean
+# there is data missing." The region's coverage is the mark now, so the row is
+# uniform and the per-brand fact lives on the tooltip. test_v1148 owns it.
+eq("D2c a covered region is covered for every brand",
+   D["ads"]["texts"][1], ["CA", "OK", "OK", "OK"])
 
 ok(D["ads"]["width"] and D["wm"]["width"],
    "D3 width:auto beats the global table{width:100%} that stretched one tick")
