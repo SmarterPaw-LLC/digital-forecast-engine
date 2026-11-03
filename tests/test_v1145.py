@@ -288,7 +288,14 @@ for f in ('uploadFreshDays', 'uploadCoverageAxes', 'uploadCoverageFetch',
 
 # NO SECOND REGISTRY. The grid reads the two that already describe a source.
 ok('UH_SOURCES[table]' in code, 'E2 it reads UH_SOURCES for the dims')
-ok('DZ_RECENT_SOURCES[dzId]' in code, 'E2b and DZ_RECENT_SOURCES for the card')
+# v11.46 re-point: the grid reaches the card map through dzTablesFor, which
+# normalises all THREE of DZ_RECENT_SOURCES' value shapes. Reading the map raw
+# is what blanked Sales & Traffic and both SQP cards.
+ok('dzTablesFor(dzId)' in code, 'E2b and dzTablesFor for the card')
+_rc = code[code.index('async function renderUploadCoverage('):]
+_rc = _rc[:_rc.index('async function renderAllUploadCoverage')]
+ok('DZ_RECENT_SOURCES[' not in _rc,
+   'E2b2 and never the raw map, which has three value shapes')
 ok(not re.search(r'const UPLOAD_COVERAGE\w*\s*=', code),
    'E2c and declares no second description of the same 22 sources')
 
@@ -304,7 +311,92 @@ ok('z-index:2' in _host,
    'E4 the grid sits above the file input that overlays the card (v11.34)')
 ok('.dz-last' in _host, 'E4b and lands under the last-upload line')
 
-eq('E5 version chip', len(re.findall(r'>v11\.45 \u00b7 [\d-]+<', s)), 1)
+eq('E5 version chip', len(re.findall(r'>v11\.46 \u00b7 [\d-]+<', s)), 1)
+
+
+# ---------------------------------------------------------------------------
+# F. v11.46 - the derived brand, and the three source shapes.
+# ---------------------------------------------------------------------------
+# Jason: "huh? this is not showing the brands" / "nor this"
+#
+# FOURTEEN of the 22 sources have no brand column (checked against the live
+# tables). They carry master_id, and the catalog knows every product's brand,
+# so the answer exists and v11.45 simply was not deriving it.
+F = run_node(os.path.join(SP, '_v1145_f.js'),
+    UH.replace("t_region:  { dateField: 'week_start', regionField: 'region',",
+               "t_region:  { dateField: 'week_start', masterIdField: 'master_id', regionField: 'region',")
+    + """
+let allProducts = [
+  { master_id: 'SP-1', brand: 'Meowijuana' },
+  { master_id: 'SP-2', brand: 'Doggijuana' },
+  { master_id: 'SP-3', brand: 'Kitty Ka-Zoom' },
+  { master_id: 'SP-4', brand: '' },
+];
+const QUERIES = [];
+let SCAN = [];
+function mkQ() {
+  const q = { _eq: {}, _limit: null };
+  q.select = (c) => { q._cols = c; return q; };
+  q.order = () => q;
+  q.limit = (n) => { q._limit = n; return q; };
+  q.eq = (c, v) => { q._eq[c] = v; return q; };
+  q.then = (res, rej) => {
+    QUERIES.push({ cols: q._cols, limit: q._limit, eq: { ...q._eq } });
+    return Promise.resolve({ data: q._limit === 1 ? [] : SCAN }).then(res, rej);
+  };
+  return q;
+}
+async function getSB() { return { from: () => mkQ() }; }
+console.warn = () => {};
+""" + chr(10).join([fn('uploadCoverageBrands'), fn('uploadCoverageAxes'),
+                    fn('uploadCoverageFetch')]) + chr(10) + r"""
+const out = {};
+(async () => {
+  out.f1 = uploadCoverageAxes('t_region');
+  SCAN = [
+    { week_start: '2026-10-26', region: 'US', master_id: 'SP-1' },
+    { week_start: '2026-10-19', region: 'US', master_id: 'SP-1' },
+    { week_start: '2026-10-26', region: 'CA', master_id: 'SP-2' },
+    { week_start: '2026-10-26', region: 'US', master_id: 'SP-9' },
+  ];
+  QUERIES.length = 0;
+  out.f2 = await uploadCoverageFetch('t_region');
+  out.f2_cols = QUERIES[0].cols;
+  out.f2_probes = QUERIES.filter(q => q.limit === 1).length;
+  // the filter reaches the query
+  QUERIES.length = 0;
+  await uploadCoverageFetch('t_region', { view_type: 'asin' });
+  out.f3_eq = QUERIES[0].eq;
+  console.log(JSON.stringify(out));
+})();
+""")
+
+eq('F1 a table with NO brand column still gets a brand axis from the catalog',
+   F['f1']['cols'], ['Doggijuana', 'Kitty Ka-Zoom', 'Meowijuana'])
+eq('F1b marked as derived, so the tooltip can say so', F['f1']['brandVia'], 'master_id')
+ok('' not in F['f1']['cols'], 'F1c and a product with no brand adds no column')
+eq('F2 the brand is resolved per row through master_id',
+   F['f2']['US|Meowijuana'], '2026-10-26')
+eq('F2b a second brand in another region', F['f2']['CA|Doggijuana'], '2026-10-26')
+ok('master_id' in F['f2_cols'],
+   'F2c which means the scan has to SELECT the id it resolves through', F['f2_cols'])
+eq('F3 a derived-brand cell is NOT probed - there is no column to filter on',
+   F['f2_probes'], 0)
+eq('F4 a {table, filter} source reaches the query', F['f3_eq'].get('view_type'), 'asin')
+
+# THE THREE SHAPES. dzTablesFor is real; this pins that the map still has all
+# three and that the grid goes through the normaliser for them.
+_map = js[js.index('const DZ_RECENT_SOURCES'):]
+_map = _map[:_map.index(chr(10) + '};')]
+ok("['amazon_sales_traffic', 'amazon_sales_traffic_snapshot']" in _map,
+   'F5 the map still carries an ARRAY shape (Sales & Traffic)')
+ok("{ table: 'amazon_query_performance_asin', filter:" in _map,
+   'F5b and a {table, filter} shape (the two SQP cards)')
+_rc2 = nocomment(fn('renderUploadCoverage'))
+ok('sources[0].table' in _rc2 and 'for (const src of sources)' in _rc2,
+   'F5c and the grid iterates the normalised list rather than one table')
+ok('latest[k] > merged[k]' in _rc2,
+   'F6 a multi-table card takes the NEWEST date per cell across them')
 
 print('\n%d passed, %d failed' % (passed, failed))
 sys.exit(1 if failed else 0)

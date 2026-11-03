@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.45** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.46** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,66 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.46 - the grid's brands were blank, and so were three of its cards
+
+Jason, on v11.45, twice: *"huh? this is not showing the brands"* and then *"nor this"*. Two
+separate defects in one screenshot, and both were measured before anything was changed.
+
+### ⚠ FOURTEEN of the 22 sources have no brand column
+Queried, not assumed. `uploadCoverageAxes` required `src.brandField`, so `sku_economics`,
+`sku_economics_eu`, `fba_inventory_snapshots`, `amazon_sales_traffic` and ten others fell to a
+single unlabelled column - **the majority of the panel, with no brand axis anywhere on it.**
+
+They all carry `master_id`, and `allProducts` knows every product's brand, so **the answer
+existed and v11.45 simply was not deriving it.** `uploadCoverageBrands()` reads the catalog's
+distinct brands and the axis falls back to them, with `brandVia` recording that it was derived
+so the cell's tooltip can say the brand came from the catalog rather than from the row.
+
+A product with a blank brand adds **no column** - an unnamed band on a brand axis is the v10.19
+shape, a cell that can never be anything but ambiguous.
+
+### ⚠ And a derived cell cannot be PROBED
+v11.45's targeted probe per empty cell is `.eq(brandField, brand)`, which needs a column to
+filter on. There is none here, so a derived-brand grid issues **zero** probes and reads
+everything off the one bounded scan. Asserted (F3), because a probe against a column that does
+not exist is a PostgREST error per empty cell on every repaint.
+
+The scan also has to **select the id it resolves through**, which is its own assertion (F2c) -
+the one mistake here that would look like "this brand has never uploaded" rather than like a
+failure.
+
+### ⚠ DZ_RECENT_SOURCES has THREE value shapes, and v11.45 read all of them as strings
+```js
+'dz-sales-skuecon':  'sku_economics',                                             // string
+'dz-sales-traffic':  ['amazon_sales_traffic', 'amazon_sales_traffic_snapshot'],   // ARRAY
+'dz-amz-sqp-asin':   { table: 'amazon_query_performance_asin', filter: {...} },  // OBJECT
+```
+So **Sales & Traffic and both SQP cards resolved to nothing** and drew a single dash - the
+second half of Jason's screenshot. `dzTablesFor(dzId)` already normalises all three for the
+rail beside it, which is hard rule #1 exactly: the helper existed and the grid had reinvented
+reading the map. It goes through `dzTablesFor` now, and E2b2 asserts it never touches the raw
+map again.
+
+A multi-table card **merges newest-per-cell** across its tables rather than taking the first:
+`amazon_sales_traffic` and `amazon_sales_traffic_snapshot` are two loads of one feed, and the
+card is answering *when did this last arrive*, not *which table holds it*. The `{table, filter}`
+shape carries its filter into the query, so the ASIN and the parent SQP cards cannot report
+each other's freshness.
+
+### Verification
+- `node --check` clean - **105 suites green** - `tests/test_v1145.py` widened **45 → 58**
+  assertions with a new section F.
+- **The real axes and the real fetch driven** against a recording PostgREST double: a
+  brand-less table gets the catalog's three brands, a blank brand adds no column, two brands
+  resolve through `master_id` in two different regions, the scan selects `master_id`, the probe
+  count is 0, and a `{table, filter}` source lands `view_type: 'asin'` on the query.
+- The three shapes are pinned in the map itself, so a fourth shape cannot appear without the
+  normaliser being taught it.
+
+### Still open
+- The conformity guard covers **1 of 28** uploaders, unchanged since v11.44.
+- `computeProductSeasonality` still has no upper bound on its window.
 
 ## v11.45 - a coverage grid on every upload card
 
