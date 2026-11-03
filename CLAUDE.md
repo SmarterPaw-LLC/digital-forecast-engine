@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.52** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.53** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,88 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.53 - the SEO Traffic period control converges on every other page's
+
+- **Jason:** *"on seo i don't have the same date pickers as the other pages."*
+
+The Traffic tab shipped in v11.41 with a period select of its **own
+invention** - five options (28 / 90 / 180 / 365 / YTD) and no custom range -
+while the four P&L bars have carried the same ten options and a from/to pair
+since v11.02. One concept, two controls, and the one I built was the poorer.
+
+That is hard rule #1 in its plainest form, and I wrote the second copy.
+
+### The SAME ten, value for value
+Not *a* custom range and *about* the same presets - the identical list,
+lifted from the Walmart bar: `30 / 60 / 90 / 180 / 365 / this-month /
+last-month / ytd / all / custom`. `test_v1153` A1 and A1b compare the SEO
+options against `wmpnl-period`'s **value for value and label for label**, so
+the two cannot drift in vocabulary either (rule #3).
+
+In a browser the comparison is made against the live DOM: `matchesWalmart:
+true`.
+
+### ⚠ An incomplete custom range is not a window
+Opening the custom inputs does **not** repaint. Until both dates are in -
+and in the right order - `seoTrWindow` returns `incomplete: true` and resolves
+no dates at all, so the page keeps the last complete window rather than
+querying a half-specified one and reporting the result as if it had been
+asked for. That is the **v10.79** rule the other four bars already follow.
+
+Driven: choosing Custom opens the wrap with **zero** loads, one date set is
+still zero, both dates set loads exactly once, and returning to a preset
+closes the wrap and loads again.
+
+A `from` **after** its `to` is refused rather than silently swapped.
+
+### Last month is the WHOLE previous month
+`to` moves back with `from` - day 0 of the current month - rather than
+staying on today. A window labelled *Last month* that runs to today is two
+months of data under a one-month name.
+
+### `All time` reaches before GA4 can
+Deliberately earlier than any GA4 data can exist, because the page's own
+coverage line already reports the days that actually came back
+(`364 days on record`). An over-wide floor therefore cannot overstate what is
+on record - and a typed property epoch would have gone stale the day a second
+property is added.
+
+### ⚠ And it joins the SHARED host registry
+Now that the bar carries all four controls and a custom option, `seo-tr` is a
+`PNL_PERIOD_HOSTS` entry and the SEO chart declares `periodHost: 'seo-tr'`.
+So **v11.28's click-a-point-to-scope works on the SEO chart for free** - no
+second journey, and v11.28's own E3 guard (every registered host must have all
+four controls AND a custom option) now walks five hosts instead of four.
+
+`test_v1153` D3 re-asserts that for every host, so a sixth cannot be
+registered without its bar.
+
+### Verification
+- `node --check` clean · **110 suites green** · new `tests/test_v1153.py` (55
+  assertions).
+- **The real `seoTrWindow` driven on all ten options** with the clock pinned to
+  2026-11-03: 30 days spans `2026-10-05` → today inclusive, YTD starts Jan 1,
+  This month the 1st, Last month `2026-10-01` → `2026-10-31`.
+- **The real `seoTrPeriodChange` driven** for the open / half-set / complete /
+  back-to-preset sequence.
+- In a browser against the shipped build (chip `v11.53`): the option list is
+  byte-identical to the Walmart bar, Custom opens the wrap without reloading,
+  both dates resolve `2026-03-01 → 2026-03-31`, no console errors.
+
+### ⚠ Two anchors wrong before anything was written
+The select closes `'</select></div>'`, not `'</select>'`, and the guard that
+compares option values was written for **escaped** quotes where this markup is
+a plain JS string. Both refused the patch rather than writing something
+half-applied. And a heredoc ate the escapes correcting them - the Write/Edit
+rule, again.
+
+### Still open
+- The conformity guard covers **1 of 28** uploaders.
+- `computeProductSeasonality` still has no upper bound on its window.
+- **One of the June / July Walmart keyword files is a duplicate of the other**
+  (v11.52) - Jason's call which to re-pull.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
 
 ## v11.52 - Walmart ad ROAS is judged against BREAK-EVEN, not against 1.0
 
