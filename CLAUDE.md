@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.48** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.49** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,93 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.49 - a target price on the New Product Launch scenario
+
+- **Jason:** *"on this pricing scenario, i can't set a target msrp to run the
+  scenario."*
+
+The tool only ever ran **cost → price**: it told you the least you could
+charge. The inverse question, *"I intend to charge $X, what does that leave
+me, and does it clear my floor?"*, had **no input at all** - so the only way
+to ask it was to nudge the contribution floor until the recommendation
+happened to land on the price you already had in mind.
+
+### NO NEW SURFACE. The target is a RUNG.
+The ladder was already an array of `{{label, price, note, rec}}` fed through one
+renderer that does the fee lookup, the net-proceeds maths and the contribution
+formula per row. A target price is one more entry in that array, so **the
+number it reports cannot disagree with the table it sits in** (hard rule #1).
+
+### ⚠ It takes the highlight, because the operator just told us which price is theirs
+Two highlighted rows would be two recommendations. With a target set, the cost
+floor stops being the ANSWER and becomes the CONSTRAINT the answer is checked
+against. `test_v1149` B3 requires exactly one highlighted row.
+
+A target **below** the floor still sorts into the ladder and keeps the
+highlight rather than being dropped - that is the finding, not an error.
+
+### ⚠ THE HEADLINE READS THE LADDER ROW, IT DOES NOT RECOMPUTE
+A second derivation is a second answer waiting to drift, and it would sit one
+line above the table it contradicts. `tgtPay` is looked up out of
+`pricingLadderPayloads` by price, and C5 fails the build on `proceeds - cogs`,
+`contribAbs =` or `contribPct =` appearing anywhere in the headline block.
+
+| | |
+|---|---|
+| clears the floor | `💡 At $2.49 ($0.42/unit × 6-pack) you keep $0.75 — 30.1% contribution, clears your 15% floor` |
+| short of it | `⚠ At $1.00 you keep $-0.06 — -6.0% contribution, short of your 15% floor` |
+
+The sub-line quantifies the gap (`$0.53 short`), says what to do about it, and
+- when competitor cards exist - where the price sits against market. **A
+negative contribution is reported as negative**, not clamped.
+
+### The input is per LISTING, and says so on a tooltip
+Bundle qty multiplies both COGS and price, so a target typed per unit would be
+wrong by 6× on Jason's own scenario. The basis is in the `title`, not printed
+on the page (rule 1a), and the headline echoes the per-unit figure back.
+
+### Verification
+- `node --check` clean · **107 suites green** · new `tests/test_v1149.py` (43
+  assertions).
+- **The two blocks this release adds are sliced out of the shipped file and
+  driven directly**, with their locals supplied: the ladder injection over four
+  ladder shapes, and the headline over Jason's own numbers (COGS $0.10/unit
+  × 6, 45.8% fees, 15% floor).
+- **B1 pins that a blank target leaves the ladder byte-identical**, which is
+  the only form in which *"nothing changed for anyone not using this"* is
+  checkable rather than read off a diff.
+- In a browser against the shipped build (chip `v11.49`): the field renders in
+  the Step 1 grid between **Target contribution % floor** and **Ad spend
+  (TACOS) %**, wired to the same `pricingNewRender()` as every other input.
+
+### ⚠ The full render could NOT be driven in the browser, and that is stated rather than glossed
+`pricingNewRender` is gated on `pnlData`, a module-scope `let` that injected
+browser scope cannot set (**v10.93**), and the panel reads *"Loading SKU
+Economics data"* until it is populated. Signing in with production credentials
+to get past it is not something a test should do. Slicing the real blocks is
+the honest substitute; **the end-to-end render with live comparables is not
+verified here.**
+
+### Two of my own assertions were wrong, and one guard was asserting a falsehood
+- A1d matched `whole listing` against a tooltip that says `WHOLE listing`, and
+  C3d looked for `$0.53 short` as one string where markup sits between them.
+- **D3 asserted `<label` and `</label>` balance - and index.html has carried a
+  skew of 2 since long before this release** (HEAD measures the same 2, because
+  the string occurs inside JS as well as markup). Re-pointed to the guarantee
+  worth making: this change added a balanced pair and left the skew where it
+  found it. Pre-existing, not introduced here, and not chased on the way past.
+
+### And a patch guard sliced the wrong region
+`recBlock = ` occurs earlier in `pricingNewRender` too, so indexing it against
+the whole file gave an EMPTY slice - the negative checks passed vacuously
+while the positive ones failed. Sliced forward from `tgtPay` instead. The
+patch refused and wrote nothing, which is the guard working.
+
+### Still open
+- The conformity guard covers **1 of 28** uploaders.
+- `computeProductSeasonality` still has no upper bound on its window.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
 
 ## v11.48 - a brand with no rows is not a missing upload
 
