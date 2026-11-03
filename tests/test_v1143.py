@@ -304,7 +304,7 @@ _ra = nocomment(fn('routeApply'))
 ok("page === 'sales'" in _ra and 'salesSelectPending(filters.mid)' in _ra,
    'D5 routeApply arms the SAME selector for a bookmarked #sales?mid=')
 
-eq('D6 version chip', len(re.findall(r'>v11\.44 \u00b7 [\d-]+<', s)), 1)
+eq('D6 version chip', len(re.findall(r'>v11\.45 \u00b7 [\d-]+<', s)), 1)
 eq('D6b exactly one chip', len(re.findall(r'>v11\.\d+ \u00b7 [\d-]+<', s)), 1)
 
 print('\n%d passed, %d failed' % (passed, failed))

@@ -258,7 +258,14 @@ ok("replace(/&/g, '&amp;').replace(/\"/g, '&quot;')" in JS,
 # `if (`, `for (`, `catch (` all look like calls to a naive regex, and the
 # JS built-ins are never declared in this file.
 KEYWORDS = {'if', 'for', 'while', 'switch', 'catch', 'return', 'typeof', 'new',
-            'await', 'function', 'else', 'do', 'in', 'of', 'delete', 'void'}
+            'await', 'function', 'else', 'do', 'in', 'of', 'delete', 'void',
+            # v11.45 - `var` is a RESERVED WORD and can never be a function
+            # name, so a `var(` can only ever be CSS. The coverage grid colours
+            # its cells with `var(--sp-green)` inside a ${} expression, which
+            # the prose-stripper deliberately keeps, and the sweep read it as
+            # a call to an undefined function. Excluding a word that cannot be
+            # a function makes the guard MORE accurate, not slacker.
+            'var'}
 BUILTINS = {'isNaN', 'isFinite', 'parseInt', 'parseFloat', 'encodeURIComponent',
             'decodeURIComponent', 'Boolean', 'Error', 'RegExp', 'Symbol', 'BigInt'}
 LOCALS = {'f', 'g', 'r', 'v', 'd', 'n', 'c', 'e', 'it', 'cfg', 'sb', 'main', 'list',

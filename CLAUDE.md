@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.44** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.45** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,48 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.45 - a coverage grid on every upload card
+
+- **Jason:** *"on the upload panel, i should see the relevance uploads with checkmarks next to them, where applicable, by region and brand ... If any report is out of freshness zone, it should not show the checkmark and should instead show the most recent date of an upload"*
+
+### ⚠ NO NEW REGISTRY, because two already describe these sources
+`UH_SOURCES` declares each table's **date field, region field + options and brand field + options** - exactly the shape a region × brand grid needs - and `DZ_RECENT_SOURCES` already maps each card to its table. A third description of the same 22 sources is the divergence hard rule #1 forbids, so the grid reads both and declares nothing of its own except the freshness window.
+
+### THE THREE MARKS, because a blank cell is ambiguous
+| | |
+|---|---|
+| fresh | **{chr(0x2713)}** green |
+| out of the freshness zone | **the most recent date**, orange |
+| never uploaded at all | **a dash**, dimmed |
+
+A stale cell rendering blank would read as never-uploaded, which is the confusion the grid exists to remove. Three different facts, three different marks.
+
+### ⚠ Freshness is derived from the GRAIN
+A monthly feed is not late at 20 days and a daily one is. `uploadFreshDays` reads the source's own `dateField`: `month` {chr(0x2192)} 45, `year` {chr(0x2192)} 400, `week` {chr(0x2192)} 14, everything else 10 - overridable per source with a declared `freshDays`. One number, one place.
+
+### ⚠ ONE bounded scan, then a TARGETED probe per empty cell
+Ordered newest first, so the first time a combination appears IS its latest date. **A scan alone would leave a feed that stopped reporting in March looking like one that never reported at all** - and that distinction is the whole point of showing the date. The probes are capped at 12, so a cold table does not fire a query per cell on every repaint.
+
+### The axes are the ones the source ACTUALLY has
+A table with no region column gets one unlabelled cell rather than an invented region axis of permanently blank cells (the v10.19 shape). It still answers *is this fresh?*, which is the question the grid is for.
+
+### ⚠ THE FIRST CUT BROKE THE FILE, and a one-line `try` is why
+I inserted the render call beside all **seven** `renderAllDzRecentUploads()` call sites with a trailing `// comment`. One of those sites is `try { dzRecentInvalidate(); renderAllDzRecentUploads(); } catch (_) {}` **on a single line**, so the comment swallowed the closing brace and the catch with it: *"Missing catch or finally after try"*.
+
+The fix is also the better design: **hook it ONCE inside `renderAllDzRecentUploads`**, the function every one of those seven callers already uses. The lesson is narrower than "be careful" - **never blanket-insert a statement into seven unknown line contexts**, and never end an inserted line with a comment.
+
+### Verification
+- `node --check` clean - **105 suites green** - new `tests/test_v1145.py` (45 assertions) - div balance 2,875 / 2,875, comments 364 / 364.
+- **The real renderer driven**: two fresh cells render checkmarks, a 60-day-old one renders its DATE with no checkmark beside it, and a never-uploaded one renders a dash whose hover says so.
+- **The real fetch driven** against a recording PostgREST double: newest-per-combination off one scan, a missed cell probed with a query scoped to exactly that cell, a null date not treated as a date, a failing read returning `{}` without throwing, and a source with no date field issuing **zero** queries.
+
+### One guard re-pointed, and it was a false positive worth removing
+`test_v1086`'s called-but-undefined sweep read `var(--sp-green)` inside a `${}` expression as a call to an undefined `var`. **`var` is a reserved word and can never be a function name**, so a `var(` can only ever be CSS. Excluding it makes the sweep MORE accurate rather than slacker.
+
+### Still open
+- The conformity guard covers **1 of 28** uploaders, unchanged from v11.44.
+- `computeProductSeasonality` still has no upper bound on its window.
 
 ## v11.44 - the upload conformity guard
 
