@@ -269,7 +269,7 @@ ok(s.index('id="seo-tab-traffic"') < s.index('id="seo-tab-keywords"'),
    'D6d with Traffic first in the strip')
 
 ok("ga4_by_date:              { icon:" in js, 'D7 DATA_SOURCES declares the GA4 feed')
-eq('D8 version chip', s.count('>v11.43 \u00b7 2026-11-02<'), 1)
+eq('D8 version chip', len(re.findall(r'>v11\.44 \u00b7 [\d-]+<', s)), 1)
 
 print('\n%d passed, %d failed' % (passed, failed))
 sys.exit(1 if failed else 0)

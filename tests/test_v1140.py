@@ -288,7 +288,7 @@ ok('bandEndWeek' in nocomment(_plug), 'C6 the plugin honours a right edge')
 ok('bandEnd' in nocomment(_plug) and 'ca.right' in nocomment(_plug),
    'C6b defaulting to the plot edge')
 
-eq('C7 version chip', s.count('>v11.43 \u00b7 2026-11-02<'), 1)
+eq('C7 version chip', len(re.findall(r'>v11\.44 \u00b7 [\d-]+<', s)), 1)
 eq('C7b exactly one chip', len(re.findall(r'>v11\.\d+ \u00b7 [\d-]+<', s)), 1)
 
 print('\n%d passed, %d failed' % (passed, failed))

@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.43** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.44** (v11.36 is the GA4 schema + loader phase, whose SQL is written and not yet run)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,52 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.44 - the upload conformity guard
+
+- **Jason:** *"there should be validation check on all uploads to match conformity - if upload looks different than expected, prompted user with an 'are you sure' message"*
+
+### ⚠ THE ONE THAT MOTIVATED IT, measured before anything was built
+Jason: *"The on-hand numbers don't add up for Amazon. for 3 oz sprays, when all regions are selected, 11k units show available. when is swap to US only, the number drops to 5654."*
+
+11,308 is exactly 2 × 5,654, and the query said why. **On 2026-11-02 the US FBA inventory file was uploaded a second time with the region set to CA.** `fba_inventory_snapshots` upserts on `(asin, region, snapshot_date)`, so it OVERWROTE the real CA numbers:
+
+| | |
+|---|---|
+| ASINs with BOTH a US and a CA row | **112** |
+| of those, quantities IDENTICAL | **112 (100%)** |
+| genuinely different | **0** |
+| CA units that are copies of a US twin | 26,215 of 27,499 (**95%**) |
+
+The 3 oz spray's CA figure was **0** on 10-20 and **5,654** on 11-02, which is its US figure exactly; 39 others were visibly overwritten the same way. No previous snapshot was anything like this (19 of 62 coincidental matches on 10-20, 21 of 63 on 09-21), and the upload timestamps tell it too: US at 14:55, three CA uploads at 23:21-23:25.
+
+**The app was summing correctly. The data was wrong, and nothing on screen could have said so.**
+
+### Every check answers one question: does this look like the files before it?
+- **THE TWIN** - does this file match a DIFFERENT scope already loaded for the same period? That is the 2026-11-02 failure exactly, and it is the only check here that would have caught it.
+- **REPLACING** - this scope and period already hold rows; how many go.
+- **SIZE** - row count and total against the most recent EARLIER load **of the same scope**, which is the only comparison that holds the scope constant.
+
+### ⚠ A concern is a PROMPT, never a refusal
+Two regions really can hold the same stock and a catalogue really can halve. The dialog names what looks off and the operator confirms on purpose rather than by habit. **INFO alone proceeds silently** - replacing a load you just made is the ordinary path, and a prompt on the ordinary path is one nobody reads (the v11.31 lesson, which this release would otherwise have repeated).
+
+### ⚠ A guard that cannot run must not stop the upload
+And must not pretend it ran either. Every query is inside one try/catch that returns **no concerns** and warns. `test_v1144` D1 fails the first query and requires the check to return `[]` without throwing.
+
+### 0.9, not 1.0
+A genuine re-upload of the same pool differs in a row or two, and a check that only fires on a perfect match is a check that misses the ordinary case. Eight keys minimum, because below that "90% alike" is noise - A3 pins four matching rows as coincidence.
+
+### Verification
+- `node --check` clean - **104 suites green** - new `tests/test_v1144.py` (34 assertions).
+- **THE REAL FAILURE REPLAYED**: the real ASINs and the real quantities, stamped CA against their US twins. The twin check fires at HIGH, names 100%, names `"US"`, and says what uploading anyway would do. A2 feeds the same file with every quantity shifted and requires SILENCE.
+- The dialog's **backdrop click CANCELS**: the destructive choice is never what a stray click lands on.
+
+### ⚠ ONE uploader is wired. 27 are NOT.
+FBA Inventory, the one that caused this. The mechanism is generic - a source declares its table, key, scope, period and numeric column - but **each handler buries its write at a different depth**, several inside the parser rather than the handler, so there is no chokepoint to convert them all at once. A source not in `UPLOAD_GUARD_RULES` is simply unguarded, which is how the rest get converted one at a time **without the unconverted ones silently claiming to be checked**.
+
+### Still open
+- The other 27 uploaders.
+- `computeProductSeasonality` still has no upper bound on its window.
 
 ## v11.43 - Vel/day links to that product's Units Sold trend
 
