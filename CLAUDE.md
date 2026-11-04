@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.54** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.55** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,95 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.55 - the top of the graph was cut off, and it was the renderer
+
+- **Jason, on the SEO Traffic chart:** *"also the top of the graph is cut
+  off."*
+
+He is right, and it is not the SEO page. It is `pnlTrendRender`, which draws
+**eight** charts.
+
+### ⚠ CHART.JS SIZES A SCALE TO THE POINTS AND THEN DRAWS A CURVE THAT EXCEEDS THEM
+Measured on the real renderer before anything was changed, on a stacked series
+peaking at **7,983**:
+
+| | |
+|---|---|
+| scale max Chart.js chose | **8,000** |
+| headroom at the peak | **0.5px** |
+| headroom for the drawn CURVE | **0.0px** |
+| columns painted flat along the chart-area top | **9**, x 476-484 - dead centre of the spike |
+
+Every dataset on these charts carries `tension: .25`. A smoothed curve
+**overshoots above its own points**, Chart.js does not account for that when
+it picks the bounds, and the overshoot is then clipped at the chart area. A
+peak drawn with a flat top is not a peak, and nothing on screen said the shape
+was the renderer's rather than the data's.
+
+### One number, named once
+`PNL_SCALE_GRACE = '5%'`, read by the single-y scale and by **every declared
+axis** on the v11.33 multi-axis path - the same curves, the same problem.
+
+A **percentage of the range**, not an absolute amount, because these eight
+charts are variously dollars, counts, percentages and multiples. `test_v1155`
+A0 fails the build on an absolute value.
+
+**The CATEGORY axis deliberately gets none.** There is no room between buckets
+to give, and padding it would open space beside real data.
+
+### The same chart, grace toggled, nothing else moved
+| | scale max | data-point headroom | curve headroom |
+|---|---|---|---|
+| before | 8,000 | 0.5px | **0.0px - clipped** |
+| after | 9,000 | 26.6px | **26.0px** |
+
+### ⚠ AND MY OWN COMMENT WAS WRONG, WHICH THE MEASUREMENT CAUGHT
+I wrote that grace *"costs nothing on a chart that already has room"* and then
+drove five shapes through the real renderer to check it:
+
+| shape | before | after |
+|---|---|---|
+| typical, max 7,197 | 8,000 | **8,000 - unchanged** |
+| crowds the tick, max 7,983 | 8,000 | 9,000 |
+| flat line at 1,000 | 1,000 | 1,200 |
+| small counts, max 9 | 9 | 10 |
+| **percentages, max 62.4** | max 65, **min 20** | max 65, **min 15** |
+
+The claim holds for the ceiling on a zero-based axis and **not** for the floor
+on one that is not. The comment now says so: on a percentage axis grace moves
+the floor too, which is the same fix mirrored - a trough sitting on the bottom
+edge was being clipped exactly as a peak on the top edge was.
+
+Writing the claim and then measuring it is the only reason this is in the
+source rather than shipped as a wrong explanation.
+
+### Verification
+- `node --check` clean · **112 suites green** · new `tests/test_v1155.py` (20
+  assertions).
+- **The real `pnlTrendRender` driven** with Chart stubbed to capture the
+  config, across single-y, percentage, stacked and three-axis calls: the
+  headroom lands on every y scale and on **no** x scale, `beginAtZero` and
+  `stacked` are untouched, and the scale set is still exactly `x, y`.
+- **In a browser against the shipped build** (chip `v11.55`), on the REAL
+  renderer with the REAL spike: the A/B above is one chart with `grace`
+  toggled and re-laid-out, so nothing but that option differs.
+- The before-state was read off **drawn pixels**, not geometry - 9 consecutive
+  columns at alpha above the gridlines, centred on the spike - because the
+  geometry read mid-layout is stale (the v11.35 legend reserves padding and
+  re-updates, so a read between the two passes reports the pre-padding
+  positions). Worth knowing before trusting `meta.data[i].y` on these charts.
+
+### Still open
+- The conformity guard covers **1 of 28** uploaders.
+- `computeProductSeasonality` still has no upper bound on its window.
+- **One of the June / July Walmart keyword files is a duplicate of the other**
+  (v11.52) - Jason's call which to re-pull.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- The charts NOT on `pnlTrendRender` (Inventory, Forecast, Seasonality, Chewy
+  Revision, Digital Sales, Units Sold) build their own scale configs and have
+  the same exposure. Not swept here - Jason pointed at one chart and this fixes
+  the renderer behind eight of them; converting the rest is his call.
 
 ## v11.54 - the busy bar is taller, brighter, and sweeps while it works
 

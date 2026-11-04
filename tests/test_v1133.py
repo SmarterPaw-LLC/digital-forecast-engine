@@ -250,8 +250,13 @@ main();
 # than lifted: this suite is about the CONFIG pnlTrendRender builds, and the
 # plugin's own behaviour has its own suite (test_v1135). A stub keeps the
 # dependency visible without this harness growing a DOM.
+# v11.55 — the slice now reads PNL_SCALE_GRACE, so the harness carries it.
+# LIFTED from the shipped source, not typed, so this suite cannot drift from
+# the value the app uses. (Its own guarantees live in test_v1155.)
+_GRACE = re.search(r"const PNL_SCALE_GRACE = '[^']+';", js).group(0)
 A = run_node(os.path.join(SP, '_v1133_a.js'),
              'const CHART_HTML_LEGEND = { id: "htmlLegend" };\n'
+             + _GRACE + '\n'
              + A_SRC.replace('__FN__', fn('pnlTrendRender')))
 
 print('-- A1 no axes: the v11.32 chart, unchanged (REGRESSION GUARD) --')
