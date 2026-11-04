@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.61** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.62** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,89 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.62 - the landing page opens
+
+- **Jason, on the GA4 landing-page table:** *"give me a click to open link
+  here."*
+
+### ⚠ A LANDING PAGE IS A GA4 STRING, AND THIS ONE GOES IN AN `href`
+Everywhere else in this app an untrusted value is addressed by **INDEX** for
+exactly that reason - the Ads checkbox (v11.23), the uploader's unmatched
+chips (v11.34), the SEO breakdown rows (v11.57). A link cannot do that: it has
+to carry a real URL.
+
+So the value is **VALIDATED** instead. `seoTrPageUrl` resolves the path
+against this site's own origin and returns a URL **only if it lands back on
+that origin**:
+
+| input | result |
+|---|---|
+| `/products/catnip-and-honeysuckle-bubbles` | links |
+| `/collections/all?sort_by=best-selling` | links, query intact |
+| `/pages/my page` {D} `/blogs/news/café` | links, encoded |
+| `(not set)` {D} blank {D} null | **plain text** |
+| `https://evil.example/x` | **plain text** |
+| `//evil.example/x` | **plain text** |
+| `/\evil.example/x` | **plain text** - the backslash form the URL parser normalises to `//` |
+| `javascript:` {D} `data:` | **plain text** |
+
+It is an **origin check, not a blocklist**, which is why `/@evil.example` and a
+path containing a newline both link correctly - they are ordinary paths on our
+own site, and the newline is encoded rather than injected. A blocklist would
+have had to guess at those; the origin check does not have to.
+
+Then `esc2` on top, so a path carrying `" onmouseover="alert(1)` renders as
+text inside one well-formed anchor. Driven, with the markup read back.
+
+### A REAL `<a href>`, not an onclick
+v11.37's rule: ctrl / cmd-click, middle-click and open-in-new-tab work for
+free. It carries `target="_blank"` with `rel="noopener"` - and unlike v11.38,
+where a new tab was the WRONG call because the destination was this same 4MB
+app, here the destination is the storefront, so a new tab costs nothing and
+leaves the dashboard where it was.
+
+### The property and its origin, declared together
+`SEO_TR_SITE = { property: 'smarterpaw', origin: 'https://smarterpaw.com' }`.
+The loader used a bare `PROP` string and **nothing in the app knew the
+hostname**, which is why there was no link to begin with.
+
+smarterpaw.com is not a guess: this tab's own sub-tab tooltip has said *"GA4
+... for smarterpaw.com"* since v11.41, and KK has no GA4 property. The origin
+is spelled **exactly once** (`test_v1162` A4), and a second property would need
+its own entry here - with `seoTrPageUrl` refusing anything that does not
+resolve onto this origin, that failure is a **missing link rather than a link
+to the wrong site.**
+
+### Verification
+- `node --check` clean · **118 suites green** · new `tests/test_v1162.py` (41
+  assertions).
+- **The real `seoTrPageUrl` driven** over all 17 inputs above.
+- **The real cell markup driven** with the app's own `esc2`.
+- **In a browser against the shipped build**, the real table rendered from real-
+  shaped GA4 rows: `/`, `/products/...`, `/pages/meowijuana` and
+  `/collections/...` all carry `https://smarterpaw.com/...` with
+  `target="_blank" rel="noopener"`, while `(not set)`, `https://evil.example/x`
+  and `//evil.example/x` render as plain text with **no href at all**. No
+  console errors.
+
+### One of my own assertions was wrong, the same way as in v11.57
+`pg.count("<th")` read **7** for six columns, because `<th` also matches
+`<thead>`. I wrote that mistake up in v11.57 and made it again.
+
+### Still open
+- The landing-page table has **no prior-year comparison**:
+  `ga4_by_date_landing_page` is not fetched for last year. Nothing on screen is
+  wrong - there is simply no chip - but it is the one breakdown v11.61 did not
+  reach, and a fifth fetch would close it.
+- The CSV exports the landing PATH, not the URL. Jason asked for a link in the
+  table; adding a column changes the export's shape, so that is his call.
+- **⚠ Chewy's ad break-even is still 1.0 and that is wrong** (v11.59).
+- The six non-`pnlTrendRender` charts have no scale grace (v11.60).
+- The selected-row tint is spelled at six sites with three alphas.
+- The conformity guard covers **1 of 28** uploaders.
+- **One of the June / July Walmart keyword files is a duplicate of the other.**
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
 
 ## v11.61 - the prior year is the prior year OF WHAT YOU DRILLED INTO
 

@@ -16343,7 +16343,7 @@ async function loadSeoTraffic(force) {
   const w = seoTrWindow();
   const shift = (d, n) => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() - n);
     return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; };
-  const PROP = 'smarterpaw';
+  const PROP = SEO_TR_SITE.property;
   try {
     const [days, chan, dev, pages, prev, prevChan, prevDev] = await Promise.all([
       seoFetchAll('ga4_by_date', [['property', PROP], ['day','gte',w.from], ['day','lte',w.to]],
@@ -16778,6 +16778,33 @@ function seoTrPrevRows() {
   return seoTr.prev || [];
 }
 
+// v11.62 - the GA4 property and the site it describes, in ONE place. The
+// loader used a bare `PROP` string and nothing anywhere knew the hostname, so
+// a landing path could not be turned into a URL.
+//
+// /!\ smarterpaw.com is not a guess: this tab's own sub-tab tooltip has said
+// "GA4 ... for smarterpaw.com" since v11.41, and KK has no GA4 property. A
+// SECOND property would need its own origin here - and `seoTrPageUrl` refuses
+// anything that does not resolve onto this one, so the failure would be a
+// missing link rather than a link to the wrong site.
+const SEO_TR_SITE = { property: 'smarterpaw', origin: 'https://smarterpaw.com' };
+
+// /!\ A LANDING PAGE IS A GA4 STRING, AND THIS ONE GOES IN AN href.
+// Everywhere else in this app an untrusted value is addressed by INDEX for
+// exactly this reason (v11.23, v11.34) - but a link has to carry a real URL,
+// so the value is VALIDATED instead: it must resolve, against this site's own
+// origin, back onto that same origin. '(not set)', a blank, an absolute
+// `https://evil.example`, a protocol-relative `//evil.example` and the
+// backslash form `/\evil.example` all return '' and render as plain text.
+function seoTrPageUrl(path) {
+  const p = String(path == null ? '' : path);
+  if (!p.startsWith('/') || p.startsWith('//')) return '';
+  try {
+    const u = new URL(p, SEO_TR_SITE.origin);
+    return u.origin === SEO_TR_SITE.origin ? u.href : '';
+  } catch (_) { return ''; }
+}
+
 // THE SEO TABLE: which page earns the visit. Landing-page sessions run about
 // 7% above sitewide and 18% of them sit in GA4's own (not set) bucket, so this
 // RANKS pages and must never be read as a session total - which is why the
@@ -16816,7 +16843,13 @@ function seoTrRenderPages(chanPick, q) {
     + (shown.length ? shown.map(([k, o]) => {
         const label = k === '' ? '(blank)' : k;
         const dim = (k === '' || k === '(not set)') ? ';color:var(--text3);font-style:italic' : '';
-        return `<tr><td style="text-align:left${dim}" title="${esc2(label)}">${esc2(label)}</td>`
+        const href = (k === '' || k === '(not set)') ? '' : seoTrPageUrl(k);
+        const cell = href
+          ? `<a href="${esc2(href)}" target="_blank" rel="noopener"`
+            + ` style="color:var(--blue);text-decoration:none"`
+            + ` title="${esc2(href)}">${esc2(label)}</a>`
+          : `<span title="${esc2(label)}">${esc2(label)}</span>`;
+        return `<tr><td style="text-align:left${dim}">${cell}</td>`
           + `<td class="num">${Math.round(o.s).toLocaleString()}</td>`
           + `<td class="num" style="color:var(--text3)">${Math.round(o.nu).toLocaleString()}</td>`
           + `<td class="num" style="color:var(--text3)">${o.s > 0 ? (o.e / o.s * 100).toFixed(0) + '%' : '&#8212;'}</td>`
