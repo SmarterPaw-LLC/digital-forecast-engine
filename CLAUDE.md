@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.56** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.57** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,109 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.57 - tick a breakdown row, get a series on the chart
+
+- **Jason, on the SEO Traffic page's Channel group and Device tables:** *"like
+  other charts, i need to be able to click a checkbox next to the listed items
+  here to select them."*
+
+*Like other charts* is the whole specification, so nothing here is new: the
+contract is the Ads table's (v11.23) and the P&L ones'. Ticking rows draws
+**one series per row** on the chart above, and does **not** re-scope the
+cards, the dropdowns or the landing-page table. A selection is a view of the
+chart everywhere else in this app, and it is here too.
+
+Same leading checkbox column, same header select-all, same *all-on clears*
+rule, same ``rgba(127,211,42,0.10)`` selected-row tint - lifted from the Ads
+table rather than picked again.
+
+### ⚠ ONE SELECTION, ONE DIMENSION
+GA4 reports channel and device as **two independent breakdowns with no
+(channel x device) table** - which is why the dropdowns above already REFUSE
+both at once (v11.41). So ticking in one table **replaces** a selection in the
+other rather than intersecting two populations that were never crossed.
+`test_v1157` B3 drives exactly that.
+
+Emptying the set drops the dimension with it, so the next tick in the other
+table reads as a fresh pick rather than a switch.
+
+### Both modes, because the toggle already means something
+Stacked gives filled bands drawn smallest-first (biggest on top, as the ranked
+path does); Line gives lines at the line weight. **There is no "Other" band** -
+the unticked rows are not a remainder, they are excluded.
+
+The ranked top-N path is untouched and sits behind the selection branch, so
+with nothing ticked the chart and its subtitle are **byte-identical** to
+v11.56 - `test_v1157` C1b and C2 pin both, which is the only form in which
+*"nothing changed for anyone not using this"* is checkable rather than read
+off a diff.
+
+### ⚠ A dropdown pick wins, and BOTH HALVES say so
+A Channel or Device pick already scopes the whole page to one series, so there
+is nothing to select between. The checkboxes render **disabled** with the
+reason on the header tooltip, **and** `seoTrToggleRow` / `seoTrToggleAll`
+refuse when called directly - a disabled control is bypassable from the
+console and a silent refusal is the v10.19 defect. The row loses its click
+and its pointer cursor with it, and the selection is **kept**, not dropped, so
+clearing the filter brings it back.
+
+### ⚠ Nothing out of GA4 reaches an attribute
+A channel group is an arbitrary string. The checkbox addresses its row by
+**INDEX** into a cache the renderer publishes, and the key is resolved back
+inside the handler - the v11.23 rule the Ads table already follows. Driven
+with `O'Brien "x" <b>bold</b>` as a channel name: it renders escaped, leaves
+**zero** `<b>` in the markup, and the onclick carries only `('channel',2)`.
+
+### The comparison line stays
+v11.56's rule, one release old, applies unchanged: narrowing which bands are
+drawn is not a reason to drop the thing they are being compared against.
+`test_v1157` C6 asserts the `_prev` overlay survives a selection.
+
+### Verification
+- `node --check` clean · **114 suites green** · new `tests/test_v1157.py` (66
+  assertions).
+- **The real `seoTrRenderBreakdowns` driven** on real-shaped GA4 rows: six
+  header cells, one box per row, index addressing, the tint, the Clear count,
+  the disabled path, and a `colspan` that grew with the table.
+- **The real state machine driven**: tick, untick, empty, switch dimension,
+  select-all, clear, an out-of-range index as a no-op, and the locked refusal.
+- **The real `seoTrRenderChart` driven** with `pnlTrendRender` stubbed: the
+  no-selection output pinned byte-for-byte, then bands, then lines, then a
+  device selection, then a dropdown pick overriding a live selection.
+- **In a browser against the shipped build** (chip `v11.57`) the whole page
+  ran **end to end on the real pipeline** - `seoFetchAll` is one top-level
+  function, so swapping it feeds synthetic rows through the real
+  `loadSeoTraffic`, the real `renderSeoTraffic` and the real renderers without
+  any credentials. Ticking Organic Search drew it alone with the prior-year
+  line beside it; a second tick made two; ticking a device **cleared the
+  channels**; the header box took all four devices and cleared them; the
+  subtitle tracked each state; and a Channel pick disabled every box
+  (`cursor: not-allowed`) while `seoTrToggleRow` called directly changed
+  nothing. **A real mouse click** on a row checkbox ticked it. No console
+  errors.
+
+### Two of my own expectations were wrong, and one of them found a defect
+- The header-cell count read **7** instead of 6, because `<th` also matches
+  `<thead>`. My regex, not the markup.
+- The locked table still rendered `cursor: pointer` on four **disabled**
+  checkboxes - a control saying *click me* while refusing to be clicked.
+  Caught by an assertion I wrote about the row, not the box. Now
+  `not-allowed`, verified in the browser.
+
+### Still open
+- The selected-row tint ``rgba(127,211,42,0.10)`` is spelled at **six**
+  call sites with **three** different alphas (.06 / .08 / .10), plus bulk bars
+  and a spinner on the same hue. One concept, several spellings - but
+  converging them changes pixels on six surfaces, so it is Jason's call rather
+  than a silent cleanup.
+- **The isolated bands are still compared against a SITEWIDE prior year**
+  (v11.56), unchanged.
+- The conformity guard covers **1 of 28** uploaders.
+- `computeProductSeasonality` still has no upper bound on its window.
+- **One of the June / July Walmart keyword files is a duplicate of the other**
+  (v11.52) - Jason's call which to re-pull.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
 
 ## v11.56 - a reference line is not a band
 
