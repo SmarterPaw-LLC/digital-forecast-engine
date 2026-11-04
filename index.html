@@ -1369,7 +1369,7 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
       <label class="fl" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;margin-left:6px" title="COMPONENT VIEW: (1) Fold bundle-component demand into each component's Need columns — including the per-channel slices (Shopify, Walmart, Amazon Reorder, Chewy Reorder) so channel counts INCLUDE bundle-driven demand (+B green badge shows the attributed portion). (2) Auto-checks 'Hide bundles' below so bundle parent rows don't show their demand duplicated at the component level. Uncheck 'Hide bundles' manually if you still want bundles visible. Default on, mirrors the Demand page.">
         <input type="checkbox" id="ip-bundle-attr" checked onchange="ipOnBundleAttrChange()" style="cursor:pointer"> + bundle components
       </label>
-      <label class="fl" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;margin-left:6px" title="Hide bundle PARENT rows from the table. Their component demand is still attributed to the component rows (when '+ bundle components' is on), so hiding bundles declutters the planning view without losing the bundle-driven warehouse Need on each component. Auto-checked when '+ bundle components' is on (v8.31); uncheck to override.">
+      <label class="fl" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;margin-left:6px" title="Hide bundle PARENT rows from the table. Their component demand is still attributed to the component rows (when '+ bundle components' is on), so hiding bundles declutters the planning view without losing the bundle-driven warehouse Need on each component. Auto-checked when '+ bundle components' is on; uncheck to override.">
         <input type="checkbox" id="ip-hide-bundles" checked onchange="renderInventoryTbl()" style="cursor:pointer"> Hide bundles
       </label>
       <label class="fl" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;margin-left:6px" title="Hide products flagged inactive (deprecated / discontinued) on the Products page. On by default — inactive SKUs shouldn't drive PO planning. Uncheck to see them.">
@@ -1768,7 +1768,7 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
                    one contradicted its own tooltip directly below it, which has said
                    'Sponsored Products + Sponsored Brands + ...' since v8.17. -->
               <div class="up-grp-title">Amazon Ads — Unified Report</div>
-              <div data-prose="1" title="Amazon Ads → Reports → Create report. Every ad product per ASIN per day — Sponsored Products + Sponsored Brands + Sponsored Display + Sponsored TV + Amazon DSP. SP was previously skipped on the assumption it was covered by SKU Economics; v8.17 keeps it because Amazon Ads is the ONLY source of per-ASIN ad-attributed sales (SKU Economics has SP spend but no attribution). Required dimensions: Date · Country · Advertised product ID · Ad product · Advertiser account name. Required metrics: Total cost · Impressions · Clicks · Purchases · Sales. Stored in amazon_ad_spend . Aggregator prefers sku_economics.sponsored_products_total for SP SPEND (matches P&L) and takes SP ATTRIBUTED SALES from this file (real ROAS)." style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:6px;cursor:help">Amazon Ads → Reports → Create report <span style="opacity:.6">ⓘ</span></div></div>
+              <div data-prose="1" title="Amazon Ads → Reports → Create report. Every ad product per ASIN per day — Sponsored Products + Sponsored Brands + Sponsored Display + Sponsored TV + Amazon DSP. SP is kept because Amazon Ads is the ONLY source of per-ASIN ad-attributed sales (SKU Economics has SP spend but no attribution). Required dimensions: Date · Country · Advertised product ID · Ad product · Advertiser account name. Required metrics: Total cost · Impressions · Clicks · Purchases · Sales. Stored in amazon_ad_spend . Aggregator prefers sku_economics.sponsored_products_total for SP SPEND (matches P&L) and takes SP ATTRIBUTED SALES from this file (real ROAS)." style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:6px;cursor:help">Amazon Ads → Reports → Create report <span style="opacity:.6">ⓘ</span></div></div>
             <div class="up-grp-last"><span class="lbl">Latest Data</span><span id="last-amazon-ads-grp">—</span></div>
             <span></span>
           </div>
@@ -1778,7 +1778,7 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
                 <input type="file" id="f-amazon-ads" accept=".csv,.txt" onchange="handleAmazonAdsUpload(this)">
                 <div class="dz-ico">📢</div>
                 <div class="dz-title">Amazon Ads — Unified Report</div>
-                <div data-prose="1" title="Daily · per ASIN · every ad product (SP + SB + SD + DSP + TV) v8.17 — SP is now KEPT (was skipped) so the SP Sales column populates attributed_sales for real ROAS. SP SPEND is still sourced from SKU Economics (no double-count). Auto-resolves brand from Advertiser account name and region from marketplace." style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:6px;cursor:help">Daily · per ASIN · every ad product (SP + SB + SD + DSP + TV) v8.17 <span style="opacity:.6">ⓘ</span></div><!-- v7.50 — deep link to Amazon Ads reporting console (separate from Seller Central).
+                <div data-prose="1" title="Daily · per ASIN · every ad product (SP + SB + SD + DSP + TV). SP is KEPT so the SP Sales column populates attributed_sales for real ROAS. SP SPEND is still sourced from SKU Economics (no double-count). Auto-resolves brand from Advertiser account name and region from marketplace." style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:6px;cursor:help">Daily · per ASIN · every ad product (SP + SB + SD + DSP + TV) v8.17 <span style="opacity:.6">ⓘ</span></div><!-- v7.50 — deep link to Amazon Ads reporting console (separate from Seller Central).
                      Matches the pattern used by the SKU Economics + FBA Shipments cards. -->
                 <!-- v7.97 — was missing `position:relative;z-index:2` so the
                      hidden .dz `<input type="file">` (absolute-positioned to
@@ -2719,7 +2719,7 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
            AND bundle rows show their own sales — same double-count trade-off the
            Forecast + Inventory pages have (each row's number is correct in isolation;
            totals across rows may double-count). -->
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer" title="Hide bundle SKUs (is_bundle=true) from the table. Default off — bundles show alongside single products. Pre-v7.52 bundles were always hidden here.">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer" title="Hide bundle SKUs (is_bundle=true) from the table. Default off — bundles show alongside single products.">
         <input type="checkbox" id="salesHideBundles" onchange="renderSalesTbl()" style="cursor:pointer">
         Hide bundles
       </label>
@@ -2881,12 +2881,12 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
     <!-- Summary / Page Performance / Diagnostics sub-tab strip. v7.86: added Page Performance. -->
     <div class="subtab-strip">
       <button class="subtab on" id="pnl-amzn-tab-summary" onclick="switchPnlAmazonView('summary')">📊 Summary</button>
-      <button class="subtab" id="pnl-amzn-tab-perf" onclick="switchPnlAmazonView('performance')" title="Session-starved high converters (invest more) + high-traffic low-converters bleeding ad spend (fix PDP before more spend). Data comes from Sales & Traffic uploads (v7.83).">📈 Page Performance</button>
+      <button class="subtab" id="pnl-amzn-tab-perf" onclick="switchPnlAmazonView('performance')" title="Session-starved high converters (invest more) + high-traffic low-converters bleeding ad spend (fix PDP before more spend). Data comes from Sales & Traffic uploads.">📈 Page Performance</button>
       <button class="subtab" id="pnl-amzn-tab-diag" onclick="switchPnlAmazonView('diagnostics')" title="Surface ASIN-level breakdowns, unmatched ASINs hiding fees/ads, and possible duplicate/off-week rows that explain Looker-vs-app discrepancies.">🔍 Diagnostics</button>
       <button class="subtab" id="pnl-amzn-tab-changelog" onclick="switchPnlAmazonView('changelog')" title="Persistent tracker of ad-spend + PDP + creative decisions flagged from Page Performance. Baseline metrics captured at flag time so impact can be measured post-change. Export to CSV for agency handoff.">📋 Change Log</button>
-      <button class="subtab" id="pnl-amzn-tab-opps" onclick="switchPnlAmazonView('opportunities')" title="v8.71 — Cross-panel synthesis. Reads SKU Economics + Sales & Traffic + Ad Spend + Growth Model signals and generates a ranked action-item list. Answers: 'given everything the app knows, what should I do this week?'">💡 Opportunities</button>
+      <button class="subtab" id="pnl-amzn-tab-opps" onclick="switchPnlAmazonView('opportunities')" title="Cross-panel synthesis. Reads SKU Economics + Sales & Traffic + Ad Spend + Growth Model signals and generates a ranked action-item list. Answers: 'given everything the app knows, what should I do this week?'">💡 Opportunities</button>
       <button class="subtab" id="pnl-amzn-tab-breakeven" onclick="switchPnlAmazonView('breakeven')" title="Blake's monthly financial-controls table: the all-in per-unit cost stack (FBA + referral + storage + inbound + removal + AWD − reimbursement + COGS/shipping) down to Break Even ACOS % and Break Even ROAS, next to what ads actually cost. US only, trailing window.">🎯 Break-Even</button>
-      <button class="subtab" id="pnl-amzn-tab-ads" onclick="switchPnlAmazonView('ads')" title="Every Amazon Ads campaign in the window with its metrics - impressions, clicks, CTR, CPC, spend, orders, CPA, attributed sales, ROAS and ACOS. Scoped by the Region / Period / Brand bar above. ⚠ Spend uploaded before v11.15 carries no campaign name and rolls up under (no campaign) rather than being dropped; re-upload the window from Amazon Ads with Campaign name as a dimension to break it out.">📢 Ads</button>
+      <button class="subtab" id="pnl-amzn-tab-ads" onclick="switchPnlAmazonView('ads')" title="Every Amazon Ads campaign in the window with its metrics - impressions, clicks, CTR, CPC, spend, orders, CPA, attributed sales, ROAS and ACOS. Scoped by the Region / Period / Brand bar above. ⚠ Spend uploaded without a campaign-name dimension rolls up under (no campaign); re-upload the window from Amazon Ads with Campaign name as a dimension to break it out.">📢 Ads</button>
     </div>
 
     <!-- Controls bar. v10.19 — id'd so the Break-Even tab can hide it: that
@@ -3330,7 +3330,7 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:12px;flex-wrap:wrap">
           <div>
             <div style="font-family:var(--display);font-size:13px;font-weight:700;color:var(--text)">📅 Week-start hygiene</div>
-            <div data-prose="1" title="Amazon SKU Economics rows where week_start isn't a Monday. Past versions (v4.91, v4.92) had timezone-poisoned parsers that produced shifted dates — leftover rows from those uploads would show up here. Should be empty in current data." style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:6px;cursor:help">Amazon SKU Economics rows where week_start isn't a Monday <span style="opacity:.6">ⓘ</span></div></div>
+            <div data-prose="1" title="Amazon SKU Economics rows where week_start isn't a Monday. Leftover rows from an earlier timezone-poisoned parser would show up here. Should be empty in current data." style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:6px;cursor:help">Amazon SKU Economics rows where week_start isn't a Monday <span style="opacity:.6">ⓘ</span></div></div>
           <div id="pnl-diag-weeks-summary" style="font-family:var(--mono);font-size:11px;color:var(--text2);white-space:nowrap"></div>
         </div>
         <div class="tbl-wrap" style="max-height:200px;overflow:auto">
@@ -3495,8 +3495,8 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
         <button class="subtab on" id="pnl-amzn-ads-tab-campaigns" onclick="switchPnlAdsView('campaigns')" title="Every Amazon Ads campaign in the window with its metrics. Scoped by the Region / Period / Brand bar above.">📡 Campaigns</button>
         <button class="subtab" id="pnl-amzn-ads-tab-keywords" onclick="switchPnlAdsView('keywords')" title="Customer search terms from the weekly SP Search Term report - what shoppers actually typed, what it cost and what it returned. ⚠ SPONSORED PRODUCTS ONLY and MONTHLY grain: Amazon does not report search terms for Brands, Display, TV or DSP, and the report has no per-day rows, so the period control resolves to whole months here.">🔑 Keywords</button>
         <button class="subtab" id="pnl-amzn-ads-tab-growth" onclick="switchPnlAdsView('growth')" title="Model unit growth for a product. Uses Search Query Performance (impression share vs query volume) plus SP Search Term (actual CPCs) to allocate ad spend to the keywords that yield the most incremental units per dollar." >🚀 Growth Model</button>
-        <button class="subtab" id="pnl-amzn-ads-tab-activity" onclick="switchPnlAdsView('activity')" title="v8.95 - Inferred ad-account activity from amazon_ad_spend daily data. Detects new ASINs entering ads, ASINs going dark and significant spend changes across 12+ months and 100+ campaigns. Substitute for Amazon's per-campaign History tab, which caps at 90 days and makes you click each campaign individually.">🛠 Ad Activity</button>
-        <button class="subtab" id="pnl-amzn-ads-tab-uploads" onclick="switchPnlAdsView('uploads')" title="Every ad report this page reads, in one place: the Growth Model's SQP and SP Campaign Snapshot, and the Bulk Sheet the Ad Activity timeline diffs. The two WEEKLY Amazon Ads reports stay on Data → Uploads - the v10.39 rule sends scheduled reports there and occasional ones to the page that reads them.">📥 Uploads</button>
+        <button class="subtab" id="pnl-amzn-ads-tab-activity" onclick="switchPnlAdsView('activity')" title="Inferred ad-account activity from amazon_ad_spend daily data. Detects new ASINs entering ads, ASINs going dark and significant spend changes across 12+ months and 100+ campaigns. Substitute for Amazon's per-campaign History tab, which caps at 90 days and makes you click each campaign individually.">🛠 Ad Activity</button>
+        <button class="subtab" id="pnl-amzn-ads-tab-uploads" onclick="switchPnlAdsView('uploads')" title="Every ad report this page reads, in one place: the Growth Model's SQP and SP Campaign Snapshot, and the Bulk Sheet the Ad Activity timeline diffs. The two WEEKLY Amazon Ads reports stay on Data → Uploads.">📥 Uploads</button>
       </div>
       <div id="pnl-amzn-ads-view-campaigns">
         <div id="amzads-host"></div>
@@ -16435,7 +16435,7 @@ function renderSeoTraffic() {
       sub: div(cur.engaged_sessions, cur.sessions) != null
         ? (div(cur.engaged_sessions, cur.sessions) * 100).toFixed(1) + '% of sessions' : '',
       delta: yoy('engaged_sessions'), src: 'ga4_by_date',
-      tip: 'Engagement rate is engaged sessions divided by sessions, derived here rather than stored - GA4 reports exactly that ratio (checked to zero drift).' },
+      tip: 'Engaged sessions divided by sessions.' },
     { label: 'Revenue', val: money(cur.revenue), sub: scopeNote, delta: yoy('revenue'),
       src: 'ga4_by_date',
       tip: 'GA4 purchase revenue. Sums EXACTLY at every window.' },
@@ -32739,7 +32739,7 @@ function pnlGrowthRender() {
         </select>
         <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div>
-            <label style="display:block;font-family:var(--display);font-weight:700;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px" title="v9.23 — CTR decay as share push grows. Marginal impressions at higher share convert worse because you're capturing lower-quality placements. 0 = no decay (pre-v9.23). 0.5 = mild (recommended). 1.0 = moderate. 1.5 = steep. Fixes the 'contribution % rises as ad spend rises' issue.">CTR decay</label>
+            <label style="display:block;font-family:var(--display);font-weight:700;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px" title="CTR decay as share push grows. Marginal impressions at higher share convert worse because you're capturing lower-quality placements. 0 = no decay. 0.5 = mild (recommended). 1.0 = moderate. 1.5 = steep. Fixes the 'contribution % rises as ad spend rises' issue.">CTR decay</label>
             <select onchange="pnlGrowthState.ctrDecayExp = parseFloat(this.value); pnlGrowthReRunIfDirty()" style="width:100%;padding:5px 8px;font-family:var(--mono);font-size:10.5px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:5px">
               <option value="0" ${s.ctrDecayExp === 0 ? 'selected' : ''}>None (0)</option>
               <option value="0.5" ${s.ctrDecayExp === 0.5 ? 'selected' : ''}>Mild (0.5)</option>
@@ -32748,7 +32748,7 @@ function pnlGrowthRender() {
             </select>
           </div>
           <div>
-            <label style="display:block;font-family:var(--display);font-weight:700;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px" title="v9.23 — CVR decay as share push grows. Marginal purchases at higher share convert worse because clicks come from less-qualified users. Same scale as CTR decay.">CVR decay</label>
+            <label style="display:block;font-family:var(--display);font-weight:700;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px" title="CVR decay as share push grows. Marginal purchases at higher share convert worse because clicks come from less-qualified users. Same scale as CTR decay.">CVR decay</label>
             <select onchange="pnlGrowthState.cvrDecayExp = parseFloat(this.value); pnlGrowthReRunIfDirty()" style="width:100%;padding:5px 8px;font-family:var(--mono);font-size:10.5px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:5px">
               <option value="0" ${s.cvrDecayExp === 0 ? 'selected' : ''}>None (0)</option>
               <option value="0.5" ${s.cvrDecayExp === 0.5 ? 'selected' : ''}>Mild (0.5)</option>
@@ -32802,7 +32802,7 @@ function pnlGrowthRender() {
         <div id="pnl-growth-monthly-hint" style="margin-top:4px;font-family:var(--mono);font-size:9px;color:var(--text3)" title="Monthly equivalent — the model applies this to the baseline every month.">≈ ${((Math.pow(1 + s.annualMarketGrowthPct / 100, 1 / 12) - 1) * 100).toFixed(2)}%/mo</div>
       </div>
       <div>
-        <label style="display:block;font-family:var(--display);font-weight:700;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px" title="v9.21 — Aggregate contribution % floor. Reachability's profitability check gates on THIS (not per-keyword $/unit). Some keywords can be share-growth loss leaders as long as the plan's TOTAL contribution % stays above this floor. Formula: monthContrib ÷ monthSales × 100. SmarterPaw viability threshold is 15%; 20%+ is healthy. Lower this if you want the model to accept more per-keyword losses in exchange for share growth.">Min contribution % floor</label>
+        <label style="display:block;font-family:var(--display);font-weight:700;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px" title="Aggregate contribution % floor. Reachability's profitability check gates on THIS (not per-keyword $/unit). Some keywords can be share-growth loss leaders as long as the plan's TOTAL contribution % stays above this floor. Formula: monthContrib ÷ monthSales × 100. SmarterPaw viability threshold is 15%; 20%+ is healthy. Lower this if you want the model to accept more per-keyword losses in exchange for share growth.">Min contribution % floor</label>
         <input type="number" min="0" max="100" step="1" value="${s.minContribPct}" oninput="pnlGrowthState.minContribPct = Math.max(0, parseFloat(this.value) || 0); pnlGrowthReRunIfDirty()" style="width:100%;padding:6px 10px;font-family:var(--mono);font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:5px">
         <div style="margin-top:4px;font-family:var(--mono);font-size:9px;color:var(--text3)" title="15% = SmarterPaw viability; 20%+ = healthy; 10% = aggressive share push accepting thinner margins">viability 15% · healthy 20%+</div>
       </div>
@@ -34487,7 +34487,7 @@ Use THIS panel to size the keyword-level opportunity. Use the TRAJECTORY to plan
           'Use the Verdict column: push 🎯 Bid up + 🏆 Winner keywords; pause ⚠ Loses money; redirect budget away from 🔥 Hot auction. This IS the campaign action list for this month. Switch months with the picker to see how bids ramp across the horizon.'
         )}</div>
         <div style="display:flex;align-items:center;gap:5px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end;max-width:100%">
-          <span style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px" title="v9.29 — Bids RAMP across the horizon. cpc_this_month = base_CPC × (1 + cumulative_share_gain)^${pnlGrowthState.cpcInflationExp}, and share gain grows every month. Switch months to see the full bid schedule — M1's recommendation is only the first step.">Month</span>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px" title="Bids RAMP across the horizon. cpc_this_month = base_CPC × (1 + cumulative_share_gain)^${pnlGrowthState.cpcInflationExp}, and share gain grows every month. Switch months to see the full bid schedule — M1's recommendation is only the first step.">Month</span>
           ${result.months.map(mm => `<button onclick="pnlGrowthSetExecMonth(${mm.month_idx})" title="View the keyword allocation + execution plan for Month ${mm.month_idx} (target share ${mm.target_share_pct.toFixed(1)}%)" style="padding:3px 9px;font-family:var(--mono);font-size:10.5px;font-weight:${mm.month_idx === selMonthIdx ? '700' : '400'};background:${mm.month_idx === selMonthIdx ? 'var(--sp-green)' : 'var(--surface)'};color:${mm.month_idx === selMonthIdx ? '#fff' : 'var(--text2)'};border:1px solid ${mm.month_idx === selMonthIdx ? 'var(--sp-green)' : 'var(--border2)'};border-radius:4px;cursor:pointer">M${mm.month_idx}</button>`).join('')}
         </div>
       </div>
@@ -35325,7 +35325,7 @@ Use THIS panel to size the keyword-level opportunity. Use the TRAJECTORY to plan
             'Walk this list top-to-bottom with your consultant or Amazon Ads console. Every row is a specific campaign action. Use the M1–M' + result.horizonMonths + ' picker to the right to see how bids ramp in later months — this plan is only the first step of a schedule.'
           )}</div>
           <div style="display:flex;align-items:center;gap:5px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end;max-width:100%">
-            <span style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px" title="v9.29 — Bids RAMP across the horizon. cpc_this_month = base_CPC × (1 + cumulative_share_gain)^${pnlGrowthState.cpcInflationExp}, and share gain grows every month. Switch months to see the full bid schedule — M1's recommendation is only the first step.">Month</span>
+            <span style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px" title="Bids RAMP across the horizon. cpc_this_month = base_CPC × (1 + cumulative_share_gain)^${pnlGrowthState.cpcInflationExp}, and share gain grows every month. Switch months to see the full bid schedule — M1's recommendation is only the first step.">Month</span>
             ${result.months.map(mm => `<button onclick="pnlGrowthSetExecMonth(${mm.month_idx})" title="View the execution plan for Month ${mm.month_idx} (target share ${mm.target_share_pct.toFixed(1)}%)" style="padding:3px 9px;font-family:var(--mono);font-size:10.5px;font-weight:${mm.month_idx === selMonthIdx ? '700' : '400'};background:${mm.month_idx === selMonthIdx ? 'var(--sp-green)' : 'var(--surface)'};color:${mm.month_idx === selMonthIdx ? '#fff' : 'var(--text2)'};border:1px solid ${mm.month_idx === selMonthIdx ? 'var(--sp-green)' : 'var(--border2)'};border-radius:4px;cursor:pointer">M${mm.month_idx}</button>`).join('')}
           </div>
         </div>
@@ -35340,7 +35340,7 @@ Use THIS panel to size the keyword-level opportunity. Use the TRAJECTORY to plan
           ${counts.budget ? `<span style="padding:3px 9px;background:rgba(232,96,26,.10);border:1px solid var(--sp-orange);border-radius:4px;font-family:var(--mono);font-size:10.5px;color:var(--sp-orange)">💰 ${counts.budget} raise budget</span>` : ''}
           ${counts.bid_down ? `<span style="padding:3px 9px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;font-family:var(--mono);font-size:10.5px;color:var(--text2)">📉 ${counts.bid_down} bid down</span>` : ''}
           ${counts.hold_marginal ? `<span style="padding:3px 9px;background:rgba(232,96,26,.08);border:1px solid var(--sp-orange);border-radius:4px;font-family:var(--mono);font-size:10.5px;color:var(--sp-orange)">⚠ ${counts.hold_marginal} hold (marginal)</span>` : ''}
-          ${counts.bid_up_loss_leader ? `<span style="padding:3px 9px;background:rgba(232,96,26,.08);border:1px solid var(--sp-orange);border-radius:4px;font-family:var(--mono);font-size:10.5px;color:var(--sp-orange)" title="These keywords are per-keyword loss leaders (\$/unit > contribution/unit) but aggregate M1 contribution % clears your floor, so the plan can afford them for share growth. v9.22.">🔥 ${counts.bid_up_loss_leader} bid up (loss-leader)</span>` : ''}
+          ${counts.bid_up_loss_leader ? `<span style="padding:3px 9px;background:rgba(232,96,26,.08);border:1px solid var(--sp-orange);border-radius:4px;font-family:var(--mono);font-size:10.5px;color:var(--sp-orange)" title="These keywords are per-keyword loss leaders (\$/unit > contribution/unit) but aggregate M1 contribution % clears your floor, so the plan can afford them for share growth.">🔥 ${counts.bid_up_loss_leader} bid up (loss-leader)</span>` : ''}
           ${counts.sustain ? `<span style="padding:3px 9px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;font-family:var(--mono);font-size:10.5px;color:var(--text3)">✓ ${counts.sustain} sustain</span>` : ''}
           ${counts.skip ? `<span style="padding:3px 9px;background:rgba(214,63,42,.10);border:1px solid var(--sp-red);border-radius:4px;font-family:var(--mono);font-size:10.5px;color:var(--sp-red)">⚠ ${counts.skip} skip</span>` : ''}
         </div>
@@ -42841,6 +42841,37 @@ const ADS_CHANNELS = {
 // always said "no data" would be a live-looking control that can never do
 // anything - the v10.19 rule. ADS_VIEWS is keyed by channel, and a channel
 // with no entry simply has no extra tab.
+// v11.58 - ONE TEXT PER COLUMN. The Walmart ad columns are declared twice,
+// once for the keyword table and once for the campaign table, and NINE of the
+// fifteen shared columns had drifted to different wording - which is how In-Store $
+// ended up with two tips and only one of them carrying the design commentary
+// Jason objected to. Both registries read this now.
+//
+// /!\ A TOOLTIP EXPLAINS THE VALUE, NOT THE DESIGN DECISION. Jason: "explaining
+// how the value is derived = good ... but the meta commentary is not". So these
+// say what the number is, how it is derived and what is excluded from it, and
+// never why the column exists or what it is not folded into. That reasoning
+// belongs in a comment like this one.
+//
+// `campaign` is deliberately NOT here: on the keyword table it names the campaign
+// a keyword spent under, on the campaign table it names the row itself.
+const WM_ADS_TIP = {
+  impressions:  'Impressions over the window.',
+  clicks:       'Clicks over the window.',
+  ctr:          'Clicks / Impressions.',
+  cpc:          'Spend / Clicks.',
+  spend:        'Ad Spend over the window.',
+  orders:       'Ad-attributed ONLINE orders.',
+  units:        'Ad-attributed ONLINE units.',
+  cpa:          'Spend / Orders - what an attributed order cost.',
+  cvr:          'Orders / Clicks.\n\nDerived from the window totals, never averaged across the per-row Conversion Rate the export carries - an average would weight a 3-click row the same as a 3,000-click one.',
+  sales:        'Total Attributed Sales, ONLINE only (Walmart RETAIL dollars, not our revenue).',
+  roas:         'Ad Sales / Spend. Online only - the same basis as Walmart\u2019s own RoAS column.',
+  inStoreSales: 'In-Store Attributed Sales: physical-store purchases Walmart attributed back to an online ad click.',
+  omniRoas:     '(Ad Sales + In-Store $) / Spend.\n\nA SECOND BASIS, not a better ROAS - a wider sales figure over the same spend. Derived from the window totals, never averaged across rows.',
+  acos:         'Spend / Ad Sales. Online only.',
+};
+
 const ADS_VIEWS = {
   amazon: {
     keywords: {
@@ -42985,20 +43016,20 @@ const ADS_VIEWS = {
         { k: 'term',         label: 'Keyword',     align: 'left',  w: 260, tip: 'The keyword we bid on, from the Walmart Connect keyword export.\n\nThis is TARGETING, not the customer query - Walmart reports search terms separately. Amazon\u2019s equivalent tab shows the query side.' },
         { k: 'match',        label: 'Match',       align: 'left',  w: 84,  tip: 'EXACT / PHRASE / BROAD. Several when one keyword is targeted more than one way in the window.' },
         { k: 'campaign',     label: 'Campaign',    align: 'left',  w: 200, tip: 'The campaign the keyword spent under. Several when one keyword runs in more than one.' },
-        { k: 'impressions',  label: 'Impressions', align: 'right', w: 104, tip: 'Impressions over the window.' },
-        { k: 'clicks',       label: 'Clicks',      align: 'right', w: 80,  tip: 'Clicks over the window.' },
-        { k: 'ctr',          label: 'CTR %',       align: 'right', w: 72,  tip: 'Clicks / Impressions.' },
-        { k: 'cpc',          label: 'CPC',         align: 'right', w: 72,  tip: 'Spend / Clicks.' },
-        { k: 'spend',        label: 'Spend',       align: 'right', w: 96,  tip: 'Ad spend over the window.' },
-        { k: 'orders',       label: 'Orders',      align: 'right', w: 76,  tip: 'Ad-attributed online orders.' },
-        { k: 'units',        label: 'Units',       align: 'right', w: 72,  tip: 'Ad-attributed online units.' },
-        { k: 'cvr',          label: 'CVR %',       align: 'right', w: 76,  tip: 'Orders / Clicks.\n\nDerived from the window totals, never averaged across the per-row conversion rate the export carries - an average would weight a 2-click keyword the same as a 950-click one.' },
-        { k: 'cpa',          label: 'CPA',         align: 'right', w: 76,  tip: 'Spend / Orders - what an attributed order cost.' },
-        { k: 'sales',        label: 'Ad Sales',    align: 'right', w: 104, tip: 'Total Attributed Sales, ONLINE only (Walmart RETAIL dollars, not our revenue).' },
-        { k: 'roas',         label: 'ROAS',        align: 'right', w: 76,  tip: 'Ad Sales / Spend. Online only, which is what Walmart\u2019s own RoAS column reports.' },
-        { k: 'inStoreSales', label: 'In-Store $',  align: 'right', w: 96,  fmt: '$',  tip: 'In-Store Attributed Sales: physical-store purchases Walmart attributed back to an online ad click. Neither Amazon nor Chewy report anything like it.' },
-        { k: 'omniRoas',     label: 'Omni ROAS',   align: 'right', w: 88,  fmt: 'x',  tip: '(Ad Sales + In-Store $) / Spend.\n\nA SECOND BASIS, not a better ROAS - it divides a wider sales figure by the same spend. Walmart\u2019s own word for it, kept verbatim. Derived from the window totals, never averaged across rows.' },
-        { k: 'acos',         label: 'ACOS %',      align: 'right', w: 80,  tip: 'Spend / Ad Sales. Online only, to match ROAS beside it.' },
+        { k: 'impressions',  label: 'Impressions', align: 'right', w: 104, tip: WM_ADS_TIP.impressions },
+        { k: 'clicks',       label: 'Clicks',      align: 'right', w: 80,  tip: WM_ADS_TIP.clicks },
+        { k: 'ctr',          label: 'CTR %',       align: 'right', w: 72,  tip: WM_ADS_TIP.ctr },
+        { k: 'cpc',          label: 'CPC',         align: 'right', w: 72,  tip: WM_ADS_TIP.cpc },
+        { k: 'spend',        label: 'Spend',       align: 'right', w: 96,  tip: WM_ADS_TIP.spend },
+        { k: 'orders',       label: 'Orders',      align: 'right', w: 76,  tip: WM_ADS_TIP.orders },
+        { k: 'units',        label: 'Units',       align: 'right', w: 72,  tip: WM_ADS_TIP.units },
+        { k: 'cvr',          label: 'CVR %',       align: 'right', w: 76,  tip: WM_ADS_TIP.cvr },
+        { k: 'cpa',          label: 'CPA',         align: 'right', w: 76,  tip: WM_ADS_TIP.cpa },
+        { k: 'sales',        label: 'Ad Sales',    align: 'right', w: 104, tip: WM_ADS_TIP.sales },
+        { k: 'roas',         label: 'ROAS',        align: 'right', w: 76,  tip: WM_ADS_TIP.roas },
+        { k: 'inStoreSales', label: 'In-Store $',  align: 'right', w: 96,  fmt: '$',  tip: WM_ADS_TIP.inStoreSales },
+        { k: 'omniRoas',     label: 'Omni ROAS',   align: 'right', w: 88,  fmt: 'x',  tip: WM_ADS_TIP.omniRoas },
+        { k: 'acos',         label: 'ACOS %',      align: 'right', w: 80,  tip: WM_ADS_TIP.acos },
       ],
     },
   },
@@ -43018,7 +43049,7 @@ function adsViewCfg(channel, view) {
 
 const ADS_COLUMNS = {
   amazon: [
-    { k: 'campaign',    label: 'Campaign',    align: 'left',  w: 260, tip: 'Amazon Ads campaign name, from the unified report\'s Campaign name dimension.\n\n"(no campaign)" is spend uploaded before v11.15 added the column — Amazon cannot retrofit the dimension onto a past pull, so re-upload the window to fill it in.' },
+    { k: 'campaign',    label: 'Campaign',    align: 'left',  w: 260, tip: 'Amazon Ads campaign name, from the unified report\'s Campaign name dimension.\n\n"(no campaign)" is spend uploaded without the Campaign name dimension. Amazon cannot retrofit it onto a past pull, so re-upload the window to fill it in.' },
     { k: 'type',        label: 'Type',        align: 'left',  w: 150, tip: 'Ad product: Sponsored Products / Brands / Display / TV / DSP. Several when one campaign name carries more than one.' },
     { k: 'skus',        label: 'SKUs',        align: 'right', w: 62,  tip: 'Distinct advertised products in the campaign over the window.' },
     { k: 'impressions', label: 'Impressions', align: 'right', w: 104, tip: 'Impressions over the window.' },
@@ -43057,22 +43088,22 @@ const ADS_COLUMNS = {
     { k: 'campaign',     label: 'Campaign',    align: 'left',  w: 240, tip: 'Walmart Connect campaign name, from the Campaigns export.' },
     { k: 'type',         label: 'Type',        align: 'left',  w: 180, tip: 'Sponsored Products (Auto) / Sponsored Products (Manual) / Sponsored Video, as Walmart names them.' },
     { k: 'status',       label: 'Status',      align: 'left',  w: 92,  tip: 'Live / Paused / Completed / Proposal.\n\n\u26a0 This is the status WHEN THE FILE WAS DOWNLOADED, not during the month it reports. The feed carries one row per campaign per month and no status history.' },
-    { k: 'impressions',  label: 'Impressions', align: 'right', w: 104, tip: 'Impressions over the window.' },
-    { k: 'clicks',       label: 'Clicks',      align: 'right', w: 80,  tip: 'Clicks over the window.' },
-    { k: 'ctr',          label: 'CTR %',       align: 'right', w: 72,  tip: 'Clicks / Impressions.' },
-    { k: 'cpc',          label: 'CPC',         align: 'right', w: 72,  tip: 'Spend / Clicks.' },
-    { k: 'spend',        label: 'Spend',       align: 'right', w: 96,  tip: 'Ad Spend over the window.' },
+    { k: 'impressions',  label: 'Impressions', align: 'right', w: 104, tip: WM_ADS_TIP.impressions },
+    { k: 'clicks',       label: 'Clicks',      align: 'right', w: 80,  tip: WM_ADS_TIP.clicks },
+    { k: 'ctr',          label: 'CTR %',       align: 'right', w: 72,  tip: WM_ADS_TIP.ctr },
+    { k: 'cpc',          label: 'CPC',         align: 'right', w: 72,  tip: WM_ADS_TIP.cpc },
+    { k: 'spend',        label: 'Spend',       align: 'right', w: 96,  tip: WM_ADS_TIP.spend },
     { k: 'dpv',          label: 'Page Views',  align: 'right', w: 92,  tip: 'Total Product Detail Page Views driven by the ad. Walmart reports this at campaign level; Amazon does not.' },
     { k: 'atc',          label: 'Add to Cart', align: 'right', w: 96,  tip: 'Total Add To Cart events driven by the ad.\n\nWith Page Views beside it this puts the whole funnel on one row: Impressions \u2192 Clicks \u2192 Page Views \u2192 Add to Cart \u2192 Orders.' },
-    { k: 'orders',       label: 'Orders',      align: 'right', w: 76,  tip: 'Ad-attributed ONLINE orders.' },
-    { k: 'units',        label: 'Units',       align: 'right', w: 72,  tip: 'Ad-attributed ONLINE units.' },
-    { k: 'cvr',          label: 'CVR %',       align: 'right', w: 76,  tip: 'Orders / Clicks.\n\nDerived from the window totals, never averaged across the per-row Conversion Rate the export carries - an average would weight a 137-click campaign the same as a 3,110-click one.' },
-    { k: 'cpa',          label: 'CPA',         align: 'right', w: 76,  tip: 'Spend / Orders - what an attributed order cost.' },
-    { k: 'sales',        label: 'Ad Sales',    align: 'right', w: 104, tip: 'Total Attributed Sales, ONLINE only (Walmart RETAIL dollars, not our revenue).' },
-    { k: 'roas',         label: 'ROAS',        align: 'right', w: 76,  tip: 'Ad Sales / Spend. Online only - the same basis as Walmart\u2019s own RoAS column.' },
-    { k: 'inStoreSales', label: 'In-Store $',  align: 'right', w: 96,  fmt: '$',  tip: 'In-Store Attributed Sales: physical-store purchases Walmart attributed back to an online ad click.\n\nNeither Amazon nor Chewy report anything like it, so it keeps its own column rather than being folded into Ad Sales.' },
-    { k: 'omniRoas',     label: 'Omni ROAS',   align: 'right', w: 88,  fmt: 'x',  tip: '(Ad Sales + In-Store $) / Spend.\n\n\u26a0 A SECOND BASIS, not a better ROAS - a wider sales figure over the same spend. Walmart\u2019s own word for it, reused rather than coined. Derived from the window totals, never averaged across campaigns.' },
-    { k: 'acos',         label: 'ACOS %',      align: 'right', w: 80,  tip: 'Spend / Ad Sales. Online only, so it reads against the ROAS column beside it rather than against Omni.' },
+    { k: 'orders',       label: 'Orders',      align: 'right', w: 76,  tip: WM_ADS_TIP.orders },
+    { k: 'units',        label: 'Units',       align: 'right', w: 72,  tip: WM_ADS_TIP.units },
+    { k: 'cvr',          label: 'CVR %',       align: 'right', w: 76,  tip: WM_ADS_TIP.cvr },
+    { k: 'cpa',          label: 'CPA',         align: 'right', w: 76,  tip: WM_ADS_TIP.cpa },
+    { k: 'sales',        label: 'Ad Sales',    align: 'right', w: 104, tip: WM_ADS_TIP.sales },
+    { k: 'roas',         label: 'ROAS',        align: 'right', w: 76,  tip: WM_ADS_TIP.roas },
+    { k: 'inStoreSales', label: 'In-Store $',  align: 'right', w: 96,  fmt: '$',  tip: WM_ADS_TIP.inStoreSales },
+    { k: 'omniRoas',     label: 'Omni ROAS',   align: 'right', w: 88,  fmt: 'x',  tip: WM_ADS_TIP.omniRoas },
+    { k: 'acos',         label: 'ACOS %',      align: 'right', w: 80,  tip: WM_ADS_TIP.acos },
   ],
 };
 
@@ -43712,7 +43743,7 @@ function adsEnsureShell(channel, view) {
     +   `<input type="text" id="${ch.host}-search" placeholder="Search…" title="Matches any text column on this table." oninput="adsSearchChanged('${channel}','${view || ''}')" autocomplete="off" style="font-family:var(--mono);font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:5px;padding:5px 10px;width:260px">`
     +   brandPicker
     +   filterPickers
-    +   `<label style="font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer" title="Campaigns with no spend in this window. Hidden by default because a long tail of paused campaigns buries the ones actually running.">`
+    +   `<label style="font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer" title="Campaigns with no spend in this window.">`
     +     `<input type="checkbox" id="${ch.host}-zero" onchange="renderAdsCampaigns('${channel}','${view || ''}')"> show zero-spend</label>`
     +   `<button onclick="downloadAdsCampaignsCSV('${channel}','${view || ''}')" style="font-family:var(--mono);font-size:11px;background:var(--surface2);color:var(--text2);border:1px solid var(--border2);border-radius:6px;padding:5px 12px;cursor:pointer">↓ CSV</button>`
     + `</div>`
@@ -44294,7 +44325,7 @@ const CHEWY_PROGRAM_COLUMNS = [
   { k: 'month',            label: 'Month',          align: 'left',  w: 78,  tip: 'Calendar month. Only months present in both feeds appear.' },
   { k: 'totalUnits',       label: 'Units',          align: 'right', w: 82,  tip: 'Chewy sell-through units in the month - every unit, click or not.' },
   { k: 'adUnits',          label: 'Ad Units',       align: 'right', w: 82,  tip: 'Units Chewy attributed to an ad click (direct units).' },
-  { k: 'organicUnits',     label: 'Organic Units',  align: 'right', w: 100, tip: 'Units less ad-attributed units.\n\nCan read negative when Chewy attributes more units to clicks than the sell-through feed recorded for the month - the two feeds are stamped on different dates. Shown as-is rather than clamped, because a clamp would hide a feed disagreement worth knowing about.' },
+  { k: 'organicUnits',     label: 'Organic Units',  align: 'right', w: 100, tip: 'Units less ad-attributed units.\n\nCan read negative when Chewy attributes more units to clicks than the sell-through feed recorded for the month - the two feeds are stamped on different dates. Not clamped.' },
   { k: 'adSharePct',       label: 'Ad Share %',     align: 'right', w: 88,  tip: 'Ad Units / Units.' },
   { k: 'autoshipSharePct', label: 'Autoship %',     align: 'right', w: 88,  tip: 'Share of sell-through UNITS on an Autoship subscription.' },
   { k: 'retail',           label: 'Merch Sales',    align: 'right', w: 104, tip: "Chewy RETAIL revenue - what the customer paid Chewy, not money that reaches us." },
@@ -50387,7 +50418,7 @@ const IP_COLUMNS = [
   // earlier one. All default:false per the usual convention; a one-time
   // migration below surfaces Vel Trend + Δ Vel % for existing users.
   { key:'vel_now_cmp', label:'Vel Now', group:'vel-trend', groupHdr:'VELOCITY TREND', w:'70px', align:'right', default:false, num:true,
-    tip:'Current velocity window on the SAME basis as the Vel/day column — seasonally adjusted (raw units/day × seasonal multiplier), so this ties out against Vel/day rather than measuring a different quantity. Covers the channels in the "Need by" filter (default Amazon + Shopify + Walmart, matching Vel/day; tick Chewy to fold in Chewy sell-through). A channel reporting on a lag is measured against its own latest data, marked ⏳. Hover any cell for the exact windows and for the demand-vs-seasonality split.',
+    tip:'Current velocity window on the SAME basis as the Vel/day column — seasonally adjusted (raw units/day × seasonal multiplier). Covers the channels in the "Need by" filter (default Amazon + Shopify + Walmart, matching Vel/day; tick Chewy to fold in Chewy sell-through). A channel reporting on a lag is measured against its own latest data, marked ⏳. Hover any cell for the exact windows and for the demand-vs-seasonality split.',
     sortVal: r => ipVelTrendFor(r).now,
     csv:     r => ipVelTrendFor(r).now.toFixed(3),
     render: r => { const t = ipVelTrendFor(r);
@@ -50809,7 +50840,7 @@ const IP_COLUMNS = [
     render: (r, pre) => { const v = pre.nb120.chewy.reorder - pre.nb90.chewy.reorder; return `<td class="num">${v > 0 ? v.toLocaleString() : '—'}</td>`; } },
   // ── Inventory ──
   { key:'fba_available', label:'FBA Avail', group:'inventory', groupHdr:'INVENTORY', w:'72px', align:'right', default:true, num:true,
-    tip:'FBA available units (afn-fulfillable from latest snapshot). v7.21 — a confirmed zero shows dim "0"; "—" now means no FBA snapshot has ever been uploaded for this ASIN.',
+    tip:'FBA available units (afn-fulfillable from latest snapshot). A confirmed zero shows dim "0"; "—" now means no FBA snapshot has ever been uploaded for this ASIN.',
     sortVal: r => r.fba_available || 0,
     render: r => {
       // v7.21 — disambiguate "confirmed 0" vs "no snapshot". Records-build
@@ -50871,7 +50902,7 @@ const IP_COLUMNS = [
       return `<td class="num" style="color:var(--text3);cursor:help${hasSnap ? ';opacity:.75' : ''}" title="${t}">${hasSnap ? '0' : '\u2014'}</td>`;
     } },
   { key:'warehouse', label:'Warehouse', group:'inventory', groupHdr:'INVENTORY', w:'72px', align:'right', default:true, num:true,
-    tip:'Own warehouse / 3PL stock — Shopify + Chewy fulfillment + Amazon reserves. v7.21 — "—" means no warehouse-stock source is wired yet (the model treats it as 0 for math). See CLAUDE.md note on v4.169.',
+    tip:'Own warehouse / 3PL stock — Shopify + Chewy fulfillment + Amazon reserves. "—" means no warehouse-stock source is wired yet (the model treats it as 0 for math).',
     sortVal: r => r.warehouse || 0,
     render: r => r.warehouse > 0
       ? `<td class="num">${r.warehouse.toLocaleString()}</td>`
@@ -50884,7 +50915,7 @@ const IP_COLUMNS = [
   // answers for the pool the Status column is scoring (FBA pool in Amazon
   // mode, warehouse in Warehouse / In-house, total on-hand in Combined).
   { key:'cover_days', label:'Cover (d)', group:'inventory', groupHdr:'INVENTORY', w:'84px', align:'right', default:true, num:true,
-    tip:'Days of inventory left, burned down through this product\u2019s own SEASONAL curve \u2014 not a flat stock \u00f7 velocity.\n\nAmazon FBA mode: the FBA pool (available + the higher of Amazon\u2019s inbound / your open shipments) walked day-by-day against the seasonal demand series. Worst region shown when pooled.\nWarehouse / In-house / Combined: stock \u00f7 (90-day need \u00f7 90) \u2014 that need is already curve-integrated, so the rate is a seasonal 90-day average.\n\nColoured against the same threshold the Status column uses, so the two always agree. Hover a cell for the stock, the rate, and what a FLAT calculation would have said.',
+    tip:'Days of inventory left, burned down through this product\u2019s own SEASONAL curve \u2014 not a flat stock \u00f7 velocity.\n\nAmazon FBA mode: the FBA pool (available + the higher of Amazon\u2019s inbound / your open shipments) walked day-by-day against the seasonal demand series. Worst region shown when pooled.\nWarehouse / In-house / Combined: stock \u00f7 (90-day need \u00f7 90) \u2014 that need is already curve-integrated, so the rate is a seasonal 90-day average.\n\nColoured against the same threshold as the Status column. Hover a cell for the stock, the rate, and what a FLAT calculation would have said.',
     sortVal: r => { const c = getCoverDays(r, getStatusMode()); if (!c) return -1; return isFinite(c.days) ? c.days : 1e9; },
     render: r => {
       const mode = getStatusMode();
@@ -51000,12 +51031,12 @@ const IP_COLUMNS = [
   // TOTAL columns) but is named for the production team's context — it's
   // the same number the in-house Status mode is planning against.
   { key:'case_qty', label:'Case Qty', group:'po', groupHdr:'PO PLANNING', w:'68px', align:'right', default:true, num:true,
-    tip:'Units per case (products.case_qty). Set in the product edit modal. Drives the Cases Needed column + in-house production CSV weekly breakdown. v7.33 — defaulted ON since v7.27; small master-level number that always applies.',
+    tip:'Units per case (products.case_qty). Set in the product edit modal. Drives the Cases Needed column + in-house production CSV weekly breakdown. A small master-level number that always applies.',
     sortVal: r => r.case_qty || 0,
     render: r => `<td class="num">${r.case_qty > 0 ? r.case_qty.toLocaleString() : '<span style="color:var(--text3)" title="Case qty not set — open the product modal to configure.">—</span>'}</td>`,
     csv: r => r.case_qty || '' },
   { key:'units_needed', label:'Units Needed', group:'po', groupHdr:'PO PLANNING', w:'96px', align:'right', default:false, num:true,
-    tip:'Units the production team needs to make over the ACTIVE horizon (30/60/90/120d dropdown). Same math as the Need TOTAL columns — surfaced separately here so it can be selected in the CSV export without pulling every Need column. v7.38 — hover any cell for a per-channel breakdown (Amazon reorder events, Shopify base, Chewy forecast, etc.).',
+    tip:'Units the production team needs to make over the ACTIVE horizon (30/60/90/120d dropdown). Same math as the Need TOTAL columns — surfaced separately here so it can be selected in the CSV export without pulling every Need column. Hover any cell for a per-channel breakdown (Amazon reorder events, Shopify base, Chewy forecast, etc.).',
     sortVal: r => { const h = parseInt(document.getElementById('ip-horizon')?.value) || 90; return inventoryNeed(r, h); },
     render: r => {
       const h = parseInt(document.getElementById('ip-horizon')?.value) || 90;
@@ -51018,7 +51049,7 @@ const IP_COLUMNS = [
       return inventoryNeed(r, h);
     } },
   { key:'cases_needed', label:'Cases Needed', group:'po', groupHdr:'PO PLANNING', w:'100px', align:'right', default:false, num:true,
-    tip:'ceil(Units Needed ÷ Case Qty) — cases the production team needs to pack over the ACTIVE horizon. Requires case_qty to be set on the product; shows "—" when not. v7.38 — hover any cell for a per-channel breakdown.',
+    tip:'ceil(Units Needed ÷ Case Qty) — cases the production team needs to pack over the ACTIVE horizon. Requires case_qty to be set on the product; shows "—" when not. Hover any cell for a per-channel breakdown.',
     sortVal: r => {
       const cq = r.case_qty || 0;
       if (!cq) return 0;
@@ -51088,7 +51119,7 @@ const IP_COLUMNS = [
   //   • pooled view              → both populate, drilled from _byRegion
   // New (Amz)
   { key:'new_product_amazon_us', label:'New (US)', group:'amz-settings', groupHdr:'AMAZON SETTINGS', w:'68px', align:'right', default:false,
-    tip:'🆕 Launch override flag for US marketplace. Per-region (v5.1) — set independently from CA.',
+    tip:'🆕 Launch override flag for US marketplace. Per-region — set independently from CA.',
     sortVal: r => regionViewOf(r, 'US')?.new_product_amazon === true ? 1 : 0,
     render: r => {
       const v = regionViewOf(r, 'US');
@@ -51098,7 +51129,7 @@ const IP_COLUMNS = [
         : `<td class="num"><span style="color:var(--text3)">—</span></td>`;
     } },
   { key:'new_product_amazon_ca', label:'New (CA)', group:'amz-settings', groupHdr:'AMAZON SETTINGS', w:'68px', align:'right', default:false,
-    tip:'🆕 Launch override flag for CA marketplace. Per-region (v5.1).',
+    tip:'🆕 Launch override flag for CA marketplace. Per-region.',
     sortVal: r => regionViewOf(r, 'CA')?.new_product_amazon === true ? 1 : 0,
     render: r => {
       const v = regionViewOf(r, 'CA');
@@ -51124,7 +51155,7 @@ const IP_COLUMNS = [
     } },
   // Deprecated (Amz)
   { key:'deprecated_product_amazon_us', label:'Dep (US)', group:'amz-settings', groupHdr:'AMAZON SETTINGS', w:'72px', align:'right', default:false,
-    tip:'⛔ Deprecated flag for US marketplace. Suppresses US Amazon reorder events. Per-region (v5.1).',
+    tip:'⛔ Deprecated flag for US marketplace. Suppresses US Amazon reorder events. Per-region.',
     sortVal: r => regionViewOf(r, 'US')?.deprecated_product_amazon === true ? 1 : 0,
     render: r => {
       const v = regionViewOf(r, 'US');
@@ -51134,7 +51165,7 @@ const IP_COLUMNS = [
         : `<td class="num"><span style="color:var(--text3)">—</span></td>`;
     } },
   { key:'deprecated_product_amazon_ca', label:'Dep (CA)', group:'amz-settings', groupHdr:'AMAZON SETTINGS', w:'72px', align:'right', default:false,
-    tip:'⛔ Deprecated flag for CA marketplace. Per-region (v5.1).',
+    tip:'⛔ Deprecated flag for CA marketplace. Per-region.',
     sortVal: r => regionViewOf(r, 'CA')?.deprecated_product_amazon === true ? 1 : 0,
     render: r => {
       const v = regionViewOf(r, 'CA');
@@ -51178,7 +51209,7 @@ const IP_COLUMNS = [
   // 'EU/UK' (matches the FBA Inventory Snapshot upload convention). Click an
   // EU/UK inventory row → the Edit modal saves to inventory.region='EU/UK'.
   { key:'new_product_amazon_uk', label:'New (UK)', group:'amz-settings', groupHdr:'AMAZON SETTINGS', w:'68px', align:'right', default:false,
-    tip:'🆕 Launch override flag for UK / EU pool. Per-region (v5.60) — set independently from US + CA. Pairs with New Rate/d (UK) to drive flat-math velocity when set.',
+    tip:'🆕 Launch override flag for UK / EU pool. Per-region — set independently from US + CA. Pairs with New Rate/d (UK) to drive flat-math velocity when set.',
     sortVal: r => regionViewOf(r, 'EU/UK')?.new_product_amazon === true ? 1 : 0,
     render: r => {
       const v = regionViewOf(r, 'EU/UK');
@@ -51195,7 +51226,7 @@ const IP_COLUMNS = [
       return (v > 0) ? `<td class="num"><span style="font-family:var(--mono)">${v}</span></td>` : `<td class="num"><span style="color:var(--text3)">—</span></td>`;
     } },
   { key:'deprecated_product_amazon_uk', label:'Dep (UK)', group:'amz-settings', groupHdr:'AMAZON SETTINGS', w:'72px', align:'right', default:false,
-    tip:'⛔ Deprecated flag for UK / EU pool. Suppresses Amazon reorder events on the UK record. Per-region (v5.60).',
+    tip:'⛔ Deprecated flag for UK / EU pool. Suppresses Amazon reorder events on the UK record. Per-region.',
     sortVal: r => regionViewOf(r, 'EU/UK')?.deprecated_product_amazon === true ? 1 : 0,
     render: r => {
       const v = regionViewOf(r, 'EU/UK');
