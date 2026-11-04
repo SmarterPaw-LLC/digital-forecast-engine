@@ -235,7 +235,12 @@ function mkCanvas(id, parentPos) {
 }
 """
 
+# v11.56 — chartLegendOnly and the plugin's chip both read the shared
+# "soloed" definition now, so the harness slices it with them. The dependency
+# is real and this follows it (the v10.43 / v10.45 / v10.97 pattern); the
+# overlay rule's own guarantees live in test_v1156.
 CORE = DOM + '\n' + fn('chartLegendHost') + '\n' + fn('chartLegendToggle') + '\n' \
+     + fn('chartLegendIsOverlay') + '\n' + fn('chartLegendSoloed') + '\n' \
      + fn('chartLegendOnly') + '\n' + const_obj('CHART_HTML_LEGEND') + '\n'
 
 

@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.55** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.56** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,99 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.56 - a reference line is not a band
+
+- **Jason, on a stacked chart where `only` had crossed the prior-year line
+  out:** *"when i click to view a stacked option, the comparison period line
+  should appear for all charts on all views."*
+
+`chartLegendOnly` hid **every** other series, and the prior-year line is a
+series. So isolating one channel also crossed out the thing you were
+comparing it against.
+
+### The rule the data already carried
+Two datasets in this app sit in their **own stack group**: the SEO prior-year
+line (`_prev`) and the Units Sold sales goal (`_goal`). They were given one
+because they must not join the stack - which is the same statement as *they
+are references, not bands*. `chartLegendIsOverlay` reads that, so nothing new
+had to be declared and the rule reaches **both charts** rather than the one
+Jason was looking at.
+
+`test_v1156` D5 fails the build if a third `stack: '_...'` appears, because
+that is the day this needs revisiting.
+
+### ⚠ "Soloed" is ASYMMETRIC, and the tidy version was wrong
+Isolating a BAND leaves the references up, so only the other bands count
+towards *everything else is hidden*. Isolating a REFERENCE hides the bands, so
+there everything counts.
+
+Treating the two as mutually exclusive peer groups is tidier and breaks: a
+chart carries exactly **one** reference, so it would have no peers, would read
+as soloed from the all-visible state, and its chip would say **"all" forever
+while clicking it did nothing** - the v10.19 case. Caught by a test
+expectation, before the browser.
+
+### One definition, two readers
+The action and the **chip that names it** both ask `chartLegendSoloed`. The
+chip used to count visible datasets (`live === 1`), which would have read
+"only" forever the moment a reference stayed up beside an isolated band - so
+the way back would have vanished in the same change that created the state.
+
+A reference hidden **by hand** stays hidden: `only` must not force back on
+something switched off on purpose. `all` then brings everything back,
+references included.
+
+### ⚠ AND THE STACKED TOTAL HAS BEEN ADDING LAST YEAR TO THIS YEAR
+Found by driving the chart and **reading the tooltip**, not by an assertion.
+Jason's own screenshot:
+
+    Other 11 + Referral 30 + Organic Social 139 + Unassigned 26
+      + Paid Search 2 + Paid Social 397 + Cross-network 396
+      + Direct 435 + Organic Search 1,970   =  3,406
+    Sessions (prior year)                             =  1,512
+    Total:                                               4,918
+
+The footer summed **every tooltip item**, and the prior-year line is one. So a
+chart titled *Sessions* reported a weekly total that was this year plus last
+year, under the word **Total**. It is the stack now, and only the stack -
+`test_v1156` E1 reproduces the old rule and pins **4,918** against **3,406**.
+
+A LINE chart still has no total footer at all.
+
+### Verification
+- `node --check` clean · **113 suites green** · new `tests/test_v1156.py` (42
+  assertions) · `test_v1135` re-pointed to slice its new dependency.
+- **The real functions driven** on SEO's own shape (three bands + `_prev`) and
+  Units Sold's (two lines + `_goal`): isolating a band keeps the reference,
+  the chip flips to `all`, one repaint not one per series, the round trip
+  restores everything, a hand-hidden reference stays hidden, and a chart with
+  **no** reference behaves exactly as it did in v11.55.
+- **In a browser against the shipped build** (chip `v11.56`), through the REAL
+  delegated listener on the REAL rendered legend: `only` on Organic Search
+  leaves `[visible, hidden, hidden, visible]` with the two other bands struck
+  through and the dashed prior-year line still drawn across the top. The
+  reference isolates and round-trips on its own chip. The real footer callback
+  returns **Total: 3,406** with the prior-year item present. No console errors.
+
+### ⚠ A real mouse click could NOT reach the chip, and that is a test note
+`.ch-lg-only` is `visibility: hidden` until its item is hovered, and a
+`visibility: hidden` element takes no hit test - `elementFromPoint` over it
+returns the ITEM. So a scripted hover-then-click lands on the label, not the
+chip. The delegated listener was driven through the chip element instead,
+which is the same listener; only the pixel hit-test is unverified here.
+
+### Still open
+- **The isolated band is compared against a SITEWIDE prior year.** `seoTr.prev`
+  is not fetched per channel (the v11.41 comment says so, and it is why a
+  channel pick suppresses the line entirely). So with one band isolated the
+  dashed line is still the whole site. Making it like-for-like needs a
+  prior-year breakdown fetch - Jason's call, not a silent change.
+- The conformity guard covers **1 of 28** uploaders.
+- `computeProductSeasonality` still has no upper bound on its window.
+- **One of the June / July Walmart keyword files is a duplicate of the other**
+  (v11.52) - Jason's call which to re-pull.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
 
 ## v11.55 - the top of the graph was cut off, and it was the renderer
 
