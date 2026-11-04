@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.53** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.54** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,96 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.54 - the busy bar is taller, brighter, and sweeps while it works
+
+- **Jason:** *"can you make the loading bar a little taller and more visible?
+  maybe with a glint or something?"*
+
+3px of gradient at the very top of the window, and it has been there since
+v6.55 under a comment calling it *"the unmistakable 'something is happening'
+cue."* It was not unmistakable.
+
+### ⚠ THE GLINT IS NOT DECORATION
+The bar parks at **85% and waits** for however long the work takes. A stalled
+request and a working one therefore draw **exactly the same rectangle** - the
+width says nothing about progress because there is no progress to report, only
+in-flight or not. The sweep is the only thing on screen that tells those two
+apart, which is why it is worth having rather than being a flourish.
+
+| | before | now |
+|---|---|---|
+| height | 3px | **5px** |
+| gradient | green → orange | green → green2 → orange |
+| glow | `0 0 8px` at .55 | `0 0 12px` at .75, plus a drop shadow |
+| in flight | a static bar | a glint sweeping it, 1.1s, looping |
+
+### The look moved to a CLASS, because it had to
+`ensureBusyBar` wrote the whole look as a `cssText` string. **A pseudo-element
+cannot be declared inline**, and the glint is a `::after` - so this is not a
+tidy-up, it is the only place the glint can live. `.gbb` owns the look;
+`width` and `opacity` stay inline, because those are what
+`renderLoadingIndicator` drives and nothing about that changed.
+
+The retired inline string is **gone rather than overridden**, asserted both
+ways, so there is one description of this bar and not two.
+
+### ⚠ It sweeps only while BUSY
+`.gbb-on`, added with the work and removed **before** the completion run to
+100%. A bar still sweeping as it fills and fades reads as one more request
+starting rather than as this one finishing, and the order is asserted off an
+ops log rather than by reading: `C6b` fails if the class is dropped after the
+width is set.
+
+`overflow: hidden` on the bar, because the glint is 24% wide and translates to
+420% - unclipped it would paint across the page.
+
+### Reduced motion turns it off
+The first animation in this file to carry a `prefers-reduced-motion` guard.
+Everything the bar communicates is still there without it: the colour, the
+width and the pill all say the same thing.
+
+### Verification
+- `node --check` clean · **111 suites green** · new `tests/test_v1154.py` (39
+  assertions).
+- **The real `renderLoadingIndicator` driven** through busy → saving → idle →
+  busy again on a recording DOM: created cold with the class and nothing
+  inline, lit at 85% with the glint on, debounced rather than completing
+  immediately, the glint removed before the run to 100%, faded back to zero,
+  and relit on the next request. **The pill is pinned unchanged** on both
+  labels and both colours.
+- **In a browser against the shipped build** (chip `v11.54`), driven through
+  the REAL fetch wrapper rather than by setting the DOM: a `supabase.co`
+  request puts the bar at `gbb gbb-on`, 85% of 1024px, 5px tall, glow
+  `rgba(232,96,26,.75) 0 0 12px`, and `getAnimations()` reports **exactly one**
+  animation - `gbbGlint` on `::after`, `running`, advancing **551ms in 550ms**
+  of wall clock, so it is genuinely sweeping and not throttled flat. When the
+  request settles the class goes back to `gbb` and the animation list is empty.
+  Zoomed at the top edge the sweep is visible as a pale band over the gradient.
+  No console errors.
+
+### And my own guard tripped on my own comment, a FIFTH time
+The *"no `cssText` here any more"* assertion read the word inside **the comment
+explaining why cssText is gone**. The fix this file has recorded since v11.18:
+assert against comment-stripped source **and** require the comment to survive,
+so grepping the old mechanism still lands on the explanation.
+
+Two other expectations of mine were wrong: the created-cold state was read
+**after** the first render had already lit it, and the ops log named each
+element by an id captured at construction - `ensureBusyBar` assigns the id a
+line **after** `createElement`, so every one of the bar's writes logged under
+an empty name.
+
+### Still open
+- The conformity guard covers **1 of 28** uploaders.
+- `computeProductSeasonality` still has no upper bound on its window.
+- **One of the June / July Walmart keyword files is a duplicate of the other**
+  (v11.52) - Jason's call which to re-pull.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- Three identical `to {{ transform: rotate(360deg) }}` keyframes live in this
+  file under three names (`rot`, `ipColSpin`, `salesCueSpin`), two of them
+  injected at runtime. Noted, not converted - a rule #1 divergence that is
+  Jason's call rather than a silent cleanup.
 
 ## v11.53 - the SEO Traffic period control converges on every other page's
 
