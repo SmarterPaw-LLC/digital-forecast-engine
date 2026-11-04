@@ -42560,6 +42560,35 @@ function adsRoasFloor(channel, brand) {
   return (row && row.roas > 0) ? row.roas : 1;
 }
 
+// /!\ A FLOOR OF 1.0 IS THE FALLBACK, NOT AN ANSWER. adsLoadBreakEven fails
+// to 1.0 on purpose, so that a derivation that could not run colours nothing.
+// A `vs Break-Even` column therefore has to tell the two apart: without this
+// it would report a confident gap measured against a line nobody computed,
+// which is the one wrong answer here that looks like a real one.
+function adsRoasFloorKnown(channel, brand) {
+  const be = _adsBreakEven[channel];
+  if (!be || be.pending) return false;
+  const row = (brand && be.byBrand && be.byBrand[brand]) || be.overall;
+  return !!(row && row.roas > 0);
+}
+
+// Stamp the gap onto already-derived rows. It cannot live in adsDeriveRow:
+// that function has neither the channel nor the brand filter, and the floor
+// depends on both.
+//
+// /!\ ONE NUMBER, EVERY CONSUMER. Stamped on `res` itself - which the export
+// snapshot already holds by reference - so the table, the sort, the TOTAL row
+// and the CSV cannot disagree about it (the v8.00 rule).
+function adsStampBreakEven(rows, channel, brand) {
+  const known = adsRoasFloorKnown(channel, brand);
+  const floor = adsRoasFloor(channel, brand);
+  for (const c of (rows || [])) {
+    if (!c) continue;
+    c.beRoas   = known ? floor : null;
+    c.roasVsBe = (known && c.roas != null) ? c.roas - floor : null;
+  }
+}
+
 function adsBreakEvenNote(channel, brand) {
   const be = _adsBreakEven[channel];
   if (!be || be.pending) return '';
@@ -42622,6 +42651,9 @@ function adsFmtNum(v, fmt) {
   if (fmt === '$2') return '$' + v.toFixed(2);
   if (fmt === '%')  return v.toFixed(1) + '%';
   if (fmt === 'x')  return v.toFixed(2) + 'x';
+  // v11.59 - a SIGNED multiple. The sign is the whole message on a gap
+  // column, and a bare "0.35x" beside a "2.50x" ROAS reads as another ratio.
+  if (fmt === 'xs') return (v >= 0 ? '+' : '\u2212') + Math.abs(v).toFixed(2) + 'x';
   return Math.round(v).toLocaleString();
 }
 
@@ -42870,6 +42902,7 @@ const WM_ADS_TIP = {
   inStoreSales: 'In-Store Attributed Sales: physical-store purchases Walmart attributed back to an online ad click.',
   omniRoas:     '(Ad Sales + In-Store $) / Spend.\n\nA SECOND BASIS, not a better ROAS - a wider sales figure over the same spend. Derived from the window totals, never averaged across rows.',
   acos:         'Spend / Ad Sales. Online only.',
+  roasVsBe:     'ROAS minus break-even ROAS, in ROAS points. Below zero the row spent more than the unit could pay back.\n\nBreak-even = 1 / (our share of Walmart retail \u00d7 our GM on that wholesale), derived per brand from walmart_sales_weekly, walmart_cost_per_each and product_cogs. Online basis, matching the ROAS column. Blank when the break-even could not be derived.',
 };
 
 const ADS_VIEWS = {
@@ -43030,6 +43063,7 @@ const ADS_VIEWS = {
         { k: 'inStoreSales', label: 'In-Store $',  align: 'right', w: 96,  fmt: '$',  tip: WM_ADS_TIP.inStoreSales },
         { k: 'omniRoas',     label: 'Omni ROAS',   align: 'right', w: 88,  fmt: 'x',  tip: WM_ADS_TIP.omniRoas },
         { k: 'acos',         label: 'ACOS %',      align: 'right', w: 80,  tip: WM_ADS_TIP.acos },
+        { k: 'roasVsBe',     label: 'vs Break-Even', align: 'right', w: 116, fmt: 'xs',  tip: WM_ADS_TIP.roasVsBe },
       ],
     },
   },
@@ -43104,6 +43138,7 @@ const ADS_COLUMNS = {
     { k: 'inStoreSales', label: 'In-Store $',  align: 'right', w: 96,  fmt: '$',  tip: WM_ADS_TIP.inStoreSales },
     { k: 'omniRoas',     label: 'Omni ROAS',   align: 'right', w: 88,  fmt: 'x',  tip: WM_ADS_TIP.omniRoas },
     { k: 'acos',         label: 'ACOS %',      align: 'right', w: 80,  tip: WM_ADS_TIP.acos },
+    { k: 'roasVsBe',     label: 'vs Break-Even', align: 'right', w: 116, fmt: 'xs',  tip: WM_ADS_TIP.roasVsBe },
   ],
 };
 
@@ -43865,6 +43900,12 @@ function renderAdsCampaigns(channel, view) {
   _adsExport[_adsKey(channel, view)] = { res, win, brand, channel, view,
     sel: [...adsState(channel, view).sel] };
 
+  // v11.59 - resolved against adsBrandFilterValue(ch), the SAME expression
+  // the sub-floor red colour uses, so the column and the colour can never
+  // disagree about which break-even applies.
+  adsStampBreakEven(res.campaigns, channel, adsBrandFilterValue(ch));
+  if (res.totals) adsStampBreakEven([res.totals], channel, adsBrandFilterValue(ch));
+
   const t = res.totals;
   const $0 = (n) => '$' + Math.round(Number(n) || 0).toLocaleString();
   const n0 = (n) => Math.round(Number(n) || 0).toLocaleString();
@@ -44069,7 +44110,10 @@ function renderAdsCampaigns(channel, view) {
     // v11.52 - against the CHANNEL'S break-even, not a flat 1.0. On Amazon
     // and Chewy the floor is still 1.0 and this is a no-op; on Walmart 1P a
     // 2.50x is a loss and now reads as one.
-    const warn = (F === 'x' && v < adsRoasFloor(channel, adsBrandFilterValue(ch)))
+    // v11.59 - a gap column IS the comparison, so its own threshold is zero.
+    // Reusing the 'x' rule would test the gap against the break-even itself.
+    const warn = (F === 'xs' && v < 0)
+      || (F === 'x' && v < adsRoasFloor(channel, adsBrandFilterValue(ch)))
       || (F === '%' && col.k === 'acos' && v > 100);
     return `<td style="${pad}${warn ? ';color:' + RED : ''}">${out}</td>`;
   };
@@ -44212,13 +44256,18 @@ function downloadAdsCampaignsCSV(channel, view) {
   // row of that export carried the literal string NaN in Search term and
   // Match. The table was fixed in v11.22b and this second renderer of the
   // same data was not.
-  const val = (c, k) => {
-    const v = c[k];
+  // v11.59 - the DECIMAL rule now comes from adsColFmt, the same resolver the
+  // table uses, rather than from a hardcoded key list. That list was missing
+  // `omniRoas`, so Walmart's Omni ROAS exported as a rounded integer - 2.08x
+  // written as "2" - while the table rendered it right. Exactly the defect the
+  // comment above describes, one column over.
+  const val = (c, col) => {
+    const k = col.k, v = c[k];
     if (typeof v === 'string') return v;
     if (v == null) return '';
-    if (k === 'spend' || k === 'sales' || k === 'cpc' || k === 'cpa'
-        || k === 'ctr' || k === 'acos' || k === 'roas') return f2(v);
-    return i0(v);
+    const F = adsColFmt(col);
+    return (F === '$' || F === '$2' || F === '%' || F === 'x' || F === 'xs')
+      ? f2(v) : i0(v);
   };
   const lines = [];
   // A file with no stated scope is unreadable three weeks later (v10.79).
@@ -44250,8 +44299,8 @@ function downloadAdsCampaignsCSV(channel, view) {
       + 'before the Campaign name column existed. Included in the TOTAL, not dropped.');
   }
   lines.push(COLS.map(c => c.label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')).join(','));
-  for (const c of res.campaigns) lines.push(COLS.map(col => esc(val(c, col.k))).join(','));
-  lines.push(COLS.map((col, i) => i === 0 ? 'TOTAL' : esc(val(res.totals, col.k))).join(','));
+  for (const c of res.campaigns) lines.push(COLS.map(col => esc(val(c, col))).join(','));
+  lines.push(COLS.map((col, i) => i === 0 ? 'TOTAL' : esc(val(res.totals, col))).join(','));
 
   const name = promptCsvName('smarterpaw-ads-' + channel + '-' + (view || 'campaigns') + '-'
     + new Date().toISOString().slice(0, 10) + '.csv');

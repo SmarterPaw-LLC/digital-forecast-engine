@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.58** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.59** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,112 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.59 - `vs Break-Even`, a judged ROAS on the Walmart ads tables
+
+- **Jason:** *"I need a break-even roas dimension."*
+
+v11.52 already DERIVES the Walmart break-even - 3.21x for Kitty Ka-Zoom, from
+retail share × wholesale GM - and then used it for exactly one thing: turning
+the ROAS text red. The number every Walmart ad decision rests on was computed,
+used as a threshold, and never shown.
+
+`vs Break-Even` is that gap as a column: **ROAS minus break-even, in ROAS
+points**, signed, sortable, exportable. Sort by it and every campaign that is
+under water surfaces in one click instead of being read a cell at a time.
+
+| ROAS | break-even | column |
+|---|---|---|
+| 2.50x | 3.21x | **−0.71x**, red |
+| 4.00x | 3.21x | **+0.79x** |
+
+### ⚠ WALMART ONLY - and the reason matters
+Jason: *"why are you stating that reported sales are our revenue for chewy?
+you KNOW this isn't true."* He is right, and **v11.52 shipped that claim.**
+Chewy is 1P wholesale exactly like Walmart, so its reported ad sales are retail
+dollars we never receive and its break-even is nowhere near 1.00x either -
+worse, because Chewy's GM deducts allowances on top.
+
+*"just do it for walmart for now."* So this is Walmart only, and the Chewy
+defect is **written into this file** rather than quietly folded in.
+`test_v1159` A6 fails the build if that note is ever removed without the fix.
+
+Amazon genuinely is the exception: FBA/DTC sales are our revenue, so 1.0 holds.
+
+### ⚠ A FLOOR OF 1.0 IS THE FALLBACK, NOT AN ANSWER
+`adsLoadBreakEven` fails to 1.0 on purpose (v11.52), so that a derivation that
+could not run colours nothing. A gap column reading that as a real line would
+print a confident **−1.50x against a break-even nobody computed** - the one
+wrong answer here that looks like a real one.
+
+`adsRoasFloorKnown` tells the two apart. A failed or still-loading derivation
+yields **blank, never zero**, and `test_v1159` B6/B7 drive both.
+
+### One number, every consumer
+Stamped on `res` itself - which the export snapshot already holds by reference
+- so the table, the sort, the TOTAL row and the CSV read one figure. It is
+resolved against **`adsBrandFilterValue(ch)`, the same expression the red
+colour uses**, so the column and the colour cannot disagree about which
+break-even applies (D4).
+
+It could not live in `adsDeriveRow`: that function has neither the channel nor
+the brand filter, and the floor depends on both.
+
+### `'xs'` - a SIGNED multiple, because the sign is the whole message
+A bare `0.71x` beside a `2.50x` ROAS reads as another ratio. And the red
+threshold for a gap column is **zero**, not the break-even - reusing the `'x'`
+rule would have tested the gap against the break-even itself. Every pre-v11.59
+format is byte-identical (`test_v1159` C4-C6).
+
+### ⚠ AND THE CSV HAS BEEN ROUNDING OMNI ROAS TO AN INTEGER
+Found on the way past, not looked for. The exporter listed its decimal columns
+**by key** - `spend, sales, cpc, cpa, ctr, acos, roas` - and `omniRoas` was
+never added, so Walmart's Omni ROAS has exported as **"2" for 2.08x** while the
+table rendered it correctly. That is precisely the defect the comment four
+lines above it describes (v11.22b, text detected by value rather than by a
+hand-kept list of names), one column over.
+
+The formatter asks **`adsColFmt`, the same resolver the table uses**, now.
+`test_v1159` E5/E5b pin the new output against the old rule's, so *"this was
+wrong"* is a measurement rather than a claim.
+
+### Verification
+- `node --check` clean · **116 suites green** · new `tests/test_v1159.py` (45
+  assertions) · `test_v1158` re-pointed 14 → 15 shared columns.
+- **The real `adsStampBreakEven` driven**: a brand with its own break-even uses
+  it rather than the blend, an unknown brand falls back to the blend rather
+  than to 1.0, a row with no ROAS has no gap, a failed derivation and a pending
+  one both report blank, Amazon reports nothing at all, and null / holey input
+  does not throw.
+- **In a browser against the shipped build**: the column is on both Walmart
+  tables with one shared tip, absent from Amazon and Chewy, `adsFmtNum` renders
+  `−0.71x` / `+0.79x` off the live module, and with nothing loaded
+  `adsRoasFloorKnown` is false and the stamp yields blanks - the fail-safe path
+  confirmed live. No uncaught errors.
+
+### ⚠ Two escape traps in one release, both mine
+- A patch anchor for the campaign registry was written with **4 leading
+  spaces, which is a SUFFIX of the keyword registry's 8-space line** - so it
+  matched twice and the guard refused before writing. Anchors on these two
+  registries have to be pinned to a line start.
+- A test re-point written through `python -c` inside a double-quoted shell
+  string turned `\b` into **a literal backspace character (0x08)**, and the
+  regex then matched nothing while looking perfectly correct in the file.
+  CLAUDE.md has warned about heredocs since v9.77; `python -c` is the same trap
+  from a new direction. **Anything containing escapes goes through the Write
+  tool, in a file.**
+
+### Still open
+- **⚠ CHEWY'S BREAK-EVEN IS STILL 1.0 AND THAT IS WRONG** (above). The next
+  thing to fix on this surface, and it needs Jason's go-ahead on scope.
+- Whether the gap should be measured against **Omni ROAS** instead of online
+  ROAS. It is on the online basis here, matching the ROAS column beside it;
+  an omni-basis variant is a second column and Jason's call.
+- The selected-row tint is spelled at six sites with three alphas.
+- The isolated SEO bands are still compared against a SITEWIDE prior year.
+- The conformity guard covers **1 of 28** uploaders.
+- **One of the June / July Walmart keyword files is a duplicate of the other.**
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
 
 ## v11.58 - a tooltip explains the VALUE, not the design decision behind it
 

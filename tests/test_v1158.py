@@ -48,8 +48,10 @@ def nocomment(t):
 
 JS = nocomment(js)
 
+# v11.59 added roasVsBe to both tables, so this is 15.
 SHARED = ['impressions', 'clicks', 'ctr', 'cpc', 'spend', 'orders', 'units',
-          'cpa', 'cvr', 'sales', 'roas', 'inStoreSales', 'omniRoas', 'acos']
+          'cpa', 'cvr', 'sales', 'roas', 'inStoreSales', 'omniRoas', 'acos',
+          'roasVsBe']
 
 # ===========================================================================
 print("\nA. ONE TEXT PER COLUMN - the shared table exists and is the only source")
@@ -59,7 +61,7 @@ eq("A1  WM_ADS_TIP declared exactly once", JS.count("const WM_ADS_TIP = {"), 1)
 decl = JS[JS.index("const WM_ADS_TIP = {"):]
 decl = decl[:decl.index("\n};") + 3]
 keys = re.findall(r"^\s{2}([A-Za-z0-9_]+):\s", decl, re.M)
-eq("A2  it carries exactly the 14 shared columns", sorted(keys), sorted(SHARED))
+eq("A2  it carries exactly the %d shared columns" % len(SHARED), sorted(keys), sorted(SHARED))
 
 # /!\ `campaign` means two different things on the two tables - the campaign a
 # KEYWORD spent under, vs the campaign the ROW is. Folding it in would be the
@@ -84,11 +86,14 @@ for blk, name in ((kw, "keyword"), (cp, "campaign")):
     missing = [k for k in SHARED if ("tip: WM_ADS_TIP." + k) not in blk]
     eq("B1  %-8s table reads the shared tip for all 14" % name, missing, [])
 
-eq("B2  28 references in all (14 x 2)", JS.count("tip: WM_ADS_TIP."), 28)
+eq("B2  %d references in all (%d x 2)" % (len(SHARED)*2, len(SHARED)), JS.count("tip: WM_ADS_TIP."), len(SHARED)*2)
 
 # No entry in the shared table is dead weight.
 for k in SHARED:
-    eq("B3  %-12s referenced exactly twice" % k, JS.count("tip: WM_ADS_TIP." + k), 2)
+    eq("B3  %-12s referenced exactly twice" % k,
+       # /!\ `WM_ADS_TIP.roas` is a PREFIX of `WM_ADS_TIP.roasVsBe`, so a
+       # substring count reads 4 for roas. Match the whole identifier.
+       len(re.findall(r"tip: WM_ADS_TIP\." + k + r"\b(?!VsBe)", JS)), 2)
 
 # /!\ The whole failure mode: a literal tip surviving beside a shared one, so
 # the two tables can drift apart again one edit later.
