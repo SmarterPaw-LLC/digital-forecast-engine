@@ -76,6 +76,10 @@ const SEO_TR = {
   dev:   DAYS.flatMap(d => DEVS.map((v, i) => row(d, { device: v }, 60 - i * 20))),
   pages: [],
   prev:  DAYS.map(d => row(d, {}, 80)),
+  // v11.61 - last year, BY BREAKDOWN, so a drill-in can be compared
+  // against itself instead of against the whole site.
+  prevChan: DAYS.flatMap(d => CHANS.map((c, i) => row(d, { channel: c }, 40 - i * 8))),
+  prevDev:  DAYS.flatMap(d => DEVS.map((v, i) => row(d, { device: v }, 48 - i * 16))),
 };
 """
 
@@ -279,7 +283,7 @@ const pnlTrendRender = async (cfg) => { CFG = cfg; return { destroy() {} }; };
 const seoTrWindow = () => ({ from: '2026-10-01', to: '2026-10-28', label: 'x' });
 const EL = {};
 globalThis.document = { getElementById: (id) => (EL[id] || (EL[id] = { id, textContent: '', innerHTML: '' })) };
-""" + fn("seoTrSelNoun") + "\n" + fn("seoTrRenderChart") + r"""
+""" + fn("seoTrSelNoun") + "\n" + fn("seoTrPrevRows") + "\n" + fn("seoTrRenderChart") + r"""
 const shot = () => ({ labels: CFG.datasets.map(d => d.label),
                       fills: CFG.datasets.map(d => !!d.fill),
                       widths: CFG.datasets.map(d => d.borderWidth),
@@ -322,7 +326,8 @@ ok("stacked by channel group" in C["stackedNoSel"]["sub"],
    "C2b and the ranked subtitle survives", C["stackedNoSel"]["sub"])
 
 eq("C3 a selection draws ONE BAND PER TICKED ROW, biggest on top",
-   C["stackedSel"]["labels"], ["Direct", "Organic Search", "Sessions (prior year)"])
+   C["stackedSel"]["labels"],
+   ["Direct", "Organic Search", "2 channel groups (prior year)"])
 eq("C3b filled, because this is the stacked view",
    C["stackedSel"]["fills"], [True, True, False])
 eq("C3c and the subtitle names it",
@@ -339,15 +344,29 @@ eq("C4c and says line rather than stacked",
    " · prior year shifted 364d (52 whole weeks)")
 
 eq("C5 a DEVICE selection draws devices", C["deviceSel"]["labels"],
-   ["mobile", "Sessions (prior year)"])
+   ["mobile", "mobile (prior year)"])
 ok("1 device selected" in C["deviceSel"]["sub"],
    "C5b singular, not '1 devices'", C["deviceSel"]["sub"])
 
+# /!\\ v11.61 - it survives AND it is now the prior year of the SELECTED
+# channels rather than of the whole site, which is what Jason reported:
+# "it's showing the previous period total, not the previous period for the
+# same drill in". The label is the assertion that it is scoped.
 eq("C6 /!\\ the comparison line survives a selection (v11.56's rule)",
    C["stackedSel"]["stacks"][-1], "_prev")
+eq("C6b ...and it is the SELECTION's prior year, not the site's",
+   C["stackedSel"]["labels"][-1], "2 channel groups (prior year)")
+eq("C6c a single pick names itself", C["deviceSel"]["labels"][-1],
+   "mobile (prior year)")
 
+# /!\ v11.61 - the scoped view now carries a prior-year line of its OWN
+# population. v11.41 suppressed it entirely, with the comment saying why:
+# the breakdowns were not fetched for last year, so the only line
+# available was the sitewide one. They are fetched now.
 eq("C7 a dropdown pick wins: the selection does not reach the chart",
-   C["scoped"]["labels"], ["Sessions"])
+   [l for l in C["scoped"]["labels"] if "prior year" not in l], ["Sessions"])
+eq("C7a ...and the scoped view gets its OWN prior year, not the site's",
+   C["scoped"]["labels"][-1], "Direct (prior year)")
 ok("selected" not in C["scoped"]["sub"],
    "C7b and is not named in the subtitle", C["scoped"]["sub"])
 
@@ -361,7 +380,9 @@ eq("D2 one selection state", code.count("let seoTrSel ="), 1)
 eq("D2b one rendered cache", code.count("const _seoTrRendered ="), 1)
 ok("_seoTrRendered[dim] = list.map" in code,
    "D3 the cache is published by the renderer that produced the order")
-eq("D4 the noun has one definition and two readers", code.count("seoTrSelNoun("), 3)
+# v11.61 added a third reader: the prior-year line's own label, which has
+# to name the same population in the same words as the subtitle does.
+eq("D4 the noun has one definition and three readers", code.count("seoTrSelNoun("), 4)
 eq("D5 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
 for phrase in ("ONE SELECTION, ONE DIMENSION", "they are excluded",
                "a selection is a view of"):

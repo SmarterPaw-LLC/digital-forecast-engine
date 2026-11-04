@@ -16196,7 +16196,7 @@ let seoView = 'traffic';
 let seoTrLoaded = false;
 let seoTrErr = null;
 let seoTrChart = null;
-let seoTr = { days: [], chan: [], dev: [], pages: [], prev: [] };
+let seoTr = { days: [], chan: [], dev: [], pages: [], prev: [], prevChan: [], prevDev: [] };
 
 function switchSeoView(view) {
   const TABS = [
@@ -16345,7 +16345,7 @@ async function loadSeoTraffic(force) {
     return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; };
   const PROP = 'smarterpaw';
   try {
-    const [days, chan, dev, pages, prev] = await Promise.all([
+    const [days, chan, dev, pages, prev, prevChan, prevDev] = await Promise.all([
       seoFetchAll('ga4_by_date', [['property', PROP], ['day','gte',w.from], ['day','lte',w.to]],
         'day,sessions,total_users,new_users,engaged_sessions,revenue,transactions,purchasers'),
       seoFetchAll('ga4_by_date_channel', [['property', PROP], ['day','gte',w.from], ['day','lte',w.to]],
@@ -16356,8 +16356,15 @@ async function loadSeoTraffic(force) {
         'day,landing_page,channel,sessions,new_users,engaged_sessions,revenue,transactions'),
       seoFetchAll('ga4_by_date', [['property', PROP], ['day','gte',shift(w.from,364)], ['day','lte',shift(w.to,364)]],
         'day,sessions,new_users,engaged_sessions,revenue,transactions'),
+      // v11.61 - LAST YEAR'S BREAKDOWNS, so a drill-in can be compared against
+      // itself. Without these the dashed line on an isolated channel was the
+      // whole site, which is the thing it was being compared against.
+      seoFetchAll('ga4_by_date_channel', [['property', PROP], ['day','gte',shift(w.from,364)], ['day','lte',shift(w.to,364)]],
+        'day,channel,sessions,new_users,engaged_sessions,revenue,transactions'),
+      seoFetchAll('ga4_by_date_device', [['property', PROP], ['day','gte',shift(w.from,364)], ['day','lte',shift(w.to,364)]],
+        'day,device,sessions,new_users,engaged_sessions,revenue,transactions'),
     ]);
-    seoTr = { days, chan, dev, pages, prev };
+    seoTr = { days, chan, dev, pages, prev, prevChan, prevDev };
     seoTrErr = null;
   } catch (e) {
     const msg = String(e && e.message || e);
@@ -16366,7 +16373,7 @@ async function loadSeoTraffic(force) {
     // anything else must keep its own reason rather than be guessed at.
     seoTrErr = /ga4_/i.test(msg) && /(does not exist|schema cache|not find)/i.test(msg)
       ? 'MISSING_TABLES' : msg;
-    seoTr = { days: [], chan: [], dev: [], pages: [], prev: [] };
+    seoTr = { days: [], chan: [], dev: [], pages: [], prev: [], prevChan: [], prevDev: [] };
   }
   seoTrLoaded = true;
   renderSeoTraffic();
@@ -16430,15 +16437,17 @@ function renderSeoTraffic() {
     scopeNote = devPick;
   }
   const cur = seoTrSum(scopeRows);
-  const prv = seoTrSum(seoTr.prev);
+  const prv = seoTrSum(seoTrPrevRows());
   const div = (a, b) => (b > 0 ? a / b : null);
   const num = (v) => Math.round(v).toLocaleString();
   const money = (v) => '$' + Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 });
 
-  // Only the sitewide scope has a prior-year series to compare against; the
-  // breakdowns were not fetched for last year, so a chip there would compare a
-  // channel against the whole site. No chip beats a wrong one.
-  const yoy = (k, good) => (!chanPick && !devPick && prv[k] > 0)
+  // v11.61 - last year's BREAKDOWNS are fetched now, so a scoped card is
+  // compared against the SAME breakdown a year ago rather than against the
+  // whole site. The v11.41 rule it replaces ("no chip beats a wrong one")
+  // still holds and is now carried by `prv[k] > 0` alone: a window with no
+  // prior-year rows for this scope renders no chip rather than a wrong one.
+  const yoy = (k, good) => (prv[k] > 0)
     ? pnlDeltaChip(cur[k], prv[k], good !== false, false, 'vs last year') : '';
 
   cards.innerHTML = bothPicked ? '' : pnlCardStrip([
@@ -16531,6 +16540,7 @@ async function seoTrRenderChart(rows, scoped) {
   // and there is no "Other" band, since the unticked rows are not an
   // remainder, they are excluded.
   const hasSel = !scoped && seoTrSel.dim && seoTrSel.keys.size > 0;
+  let selKeys = [];
   if (hasSel) {
     const dim = seoTrSel.dim;
     const by = rollBy(dim === 'channel' ? seoTr.chan : seoTr.dev, dim);
@@ -16548,6 +16558,7 @@ async function seoTrRenderChart(rows, scoped) {
                       borderWidth: mode === 'stacked' ? 1 : 2, pointRadius: 0,
                       tension: .25, fill: mode === 'stacked' });
     });
+    selKeys = keep;
     selNote = `${keep.length} ${seoTrSelNoun(dim, keep.length)} selected`;
   } else if (mode === 'stacked') {
     // Rank channels over the WHOLE window, then take the top N; the rest roll
@@ -16590,13 +16601,23 @@ async function seoTrRenderChart(rows, scoped) {
   // \u26a0 `stack: '_prev'` puts it in its OWN stack group. Without that Chart.js
   // folds it into the stack and the top of the chart reads as this year PLUS
   // last year - the same trap the sales-goal overlay documents at `_goal`.
-  if (!scoped && seoTr.prev.length) {
+  //
+  // v11.61 - AND IT IS THE PRIOR YEAR OF WHAT IS DRAWN. It used to be the
+  // sitewide total always, and to be suppressed entirely on a dropdown pick,
+  // so isolating Organic Search compared one channel against the whole site.
+  // The population comes from the SAME resolver the scorecards read.
+  const prevRows = seoTrPrevRows();
+  const prevLabel = selKeys.length
+    ? (selKeys.length === 1 ? selKeys[0]
+       : `${selKeys.length} ${seoTrSelNoun(seoTrSel.dim, selKeys.length)}`) + ' (prior year)'
+    : (scoped ? `${scoped} (prior year)` : 'Sessions (prior year)');
+  if (prevRows.length) {
     const fwd = (k) => { const x = new Date(k + 'T00:00:00'); x.setDate(x.getDate() + 364);
       return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; };
-    const pm = rollBy(seoTr.prev, null).get('_') || new Map();
+    const pm = rollBy(prevRows, null).get('_') || new Map();
     const shifted = new Map();
     for (const [k, v] of pm) shifted.set(fwd(k), v);
-    datasets.push({ label: 'Sessions (prior year)', data: buckets.map(b => shifted.has(b) ? shifted.get(b) : null),
+    datasets.push({ label: prevLabel, data: buckets.map(b => shifted.has(b) ? shifted.get(b) : null),
                     borderColor: 'rgba(160,160,160,.75)', backgroundColor: 'transparent',
                     borderWidth: 1, borderDash: [5,4], pointRadius: 0, tension: .25,
                     spanGaps: false, fill: false, stack: '_prev' });
@@ -16606,7 +16627,8 @@ async function seoTrRenderChart(rows, scoped) {
   if (sub) sub.textContent = `${weekly ? 'weekly' : 'daily'} \u00b7 ${buckets.length} buckets`
     + (selNote ? ` \u00b7 ${mode === 'stacked' ? 'stacked \u00b7 ' : ''}${selNote}` : '')
     + (!selNote && mode === 'stacked' ? ` \u00b7 stacked by channel group${bandNote}` : '')
-    + (scoped ? ` \u00b7 ${scoped}` : ' \u00b7 prior year shifted 364d (52 whole weeks)');
+    + (scoped ? ` \u00b7 ${scoped}` : '')
+    + (prevRows.length ? ' \u00b7 prior year shifted 364d (52 whole weeks)' : '');
   // v11.53 - now that this bar carries the same four controls as the P&L
   // ones, the chart opts into v11.28's click-a-point-to-scope through the
   // same parameter. Declaring the host is the whole of it.
@@ -16728,6 +16750,32 @@ function seoTrRenderBreakdowns(cur) {
   if (clr) clr.innerHTML = (!locked && seoTrSel.dim && seoTrSel.keys.size)
     ? `<button class="btn-ghost btn-sm" onclick="seoTrClearSel()" title="Draw every ${seoTrSelNoun(seoTrSel.dim, 2)} again.">&#10005; Clear ${seoTrSel.keys.size}</button>`
     : '';
+}
+
+// v11.61 - WHICH PRIOR-YEAR POPULATION MATCHES THIS VIEW.
+//
+// One resolver, read by the scorecard chips AND by the chart's dashed line,
+// so the two can never describe different populations. The order matters: a
+// ROW SELECTION is the narrowest statement of what is on screen, then a
+// dropdown pick, then the sitewide default.
+//
+// /!\ A key is resolved with the SAME `|| '(not set)'` fallback the current
+// rollup uses. GA4 writes nulls into both feeds, and matching a selected
+// '(not set)' against a null row would silently return no prior year at all -
+// a blank line reading as "no data last year" rather than as a key mismatch.
+function seoTrPrevRows() {
+  const sel = (typeof seoTrSel === 'object' && seoTrSel) || { dim: '', keys: new Set() };
+  const chanPick = document.getElementById('seo-tr-chan')?.value || '';
+  const devPick  = document.getElementById('seo-tr-dev')?.value || '';
+  if (!chanPick && !devPick && sel.dim && sel.keys.size) {
+    const fld = sel.dim === 'channel' ? 'channel' : 'device';
+    const src = sel.dim === 'channel' ? seoTr.prevChan : seoTr.prevDev;
+    return (src || []).filter(r => sel.keys.has(r[fld] || '(not set)'));
+  }
+  if (chanPick && devPick) return [];
+  if (chanPick) return (seoTr.prevChan || []).filter(r => (r.channel || '(not set)') === chanPick);
+  if (devPick)  return (seoTr.prevDev  || []).filter(r => (r.device  || '(not set)') === devPick);
+  return seoTr.prev || [];
 }
 
 // THE SEO TABLE: which page earns the visit. Landing-page sessions run about

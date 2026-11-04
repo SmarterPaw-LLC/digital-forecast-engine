@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.60** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.61** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,84 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.61 - the prior year is the prior year OF WHAT YOU DRILLED INTO
+
+- **Jason:** *"when i drill in, it's showing the previous period total, not the
+  previous period for the same drill in."*
+
+Right, and this file has been saying so since v11.56 under **Still open**:
+*"the isolated band is compared against a SITEWIDE prior year."* It was
+declared, not fixed. Two fetches close it.
+
+### What it took was DATA, not logic
+`loadSeoTraffic` pulled four tables for this window and **one** for last year -
+`ga4_by_date`, sitewide. So there was no per-channel history to compare
+against, which is why v11.41 suppressed the chip on a dropdown pick entirely
+(*"no chip beats a wrong one"* - the right call given what was loaded) and why
+v11.57's row selection left the dashed line describing the whole site.
+
+Last year's `ga4_by_date_channel` and `ga4_by_date_device` are fetched now, on
+the **same 364-day shift** (52 whole weeks, so a Monday still lands on a
+Monday - v11.41's rule, asserted here as *no `365` anywhere in the loader*).
+
+### One resolver, two readers
+`seoTrPrevRows()` answers *which prior-year population matches this view*, and
+the scorecard chips and the chart's dashed line both ask it - so the two can
+never describe different populations. The order is narrowest-first:
+
+| on screen | compared against |
+|---|---|
+| Organic Search ticked | Organic Search, last year |
+| two channels ticked | those two, summed, last year |
+| a Channel dropdown pick | that channel, last year (**the chip comes back**) |
+| channel AND device picked | nothing - refused, as v11.41 refuses it |
+| nothing picked | the site, last year - **unchanged** |
+
+### ⚠ '(not set)' HAS TO RESOLVE THE SAME WAY ON BOTH SIDES
+GA4 writes nulls into these feeds and the current rollup renders them as
+`(not set)`. Matching a ticked `(not set)` against a *null* prior-year row
+would return no rows at all - **a blank line reading as "no traffic last year"
+rather than as a key mismatch.** Both sides use `|| '(not set)'`;
+`test_v1161` B5 drives a null row and requires it to match.
+
+### ⚠ A missing breakdown draws NOTHING, not the site's
+v11.41's rule survives the change rather than being replaced by it: a window
+with no prior-year rows for this scope renders no chip and no line. B9 and B10
+drive an empty feed and an **absent** one, and neither throws.
+
+### The line says which population it is
+`Organic Search (prior year)` / `2 channel groups (prior year)` /
+`Sessions (prior year)`. A multi-key label **reuses `seoTrSelNoun`**, the
+subtitle's own noun, rather than coining a second word for one thing (rule #3,
+and D3 asserts it).
+
+### Verification
+- `node --check` clean · **117 suites green** · new `tests/test_v1161.py` (28
+  assertions) · `test_v1157` re-pointed, **66 → 69**.
+- **The real `seoTrPrevRows` driven** over all ten shapes above.
+- **In a browser against the shipped build**, end to end on the real pipeline
+  through the **real `seoTrToggleRow`**: sitewide the dashed line totals
+  **28,293**; tick Organic Search and the label becomes
+  **`Organic Search (prior year)`** and the total drops to **4,945** - that
+  channel's own history, not the site's. No console errors.
+
+### `test_v1157` was re-pointed, not silenced
+Three of its assertions pinned the OLD behaviour: the line's label on a
+selection, and C7's *"a dropdown pick draws only Sessions"*. The guarantee each
+was protecting is intact and now asserted more precisely - the selection still
+does not reach the chart, and the line it sits beside is now the right one.
+
+### Still open
+- **⚠ Chewy's ad break-even is still 1.0 and that is wrong** (v11.59).
+- The six non-`pnlTrendRender` charts have no scale grace (v11.60).
+- The landing-page table's prior year is still unscoped: `ga4_by_date_landing_page`
+  is not fetched for last year, so a page-level comparison has no history. No
+  chip is shown there, so nothing is wrong on screen - it is simply absent.
+- The selected-row tint is spelled at six sites with three alphas.
+- The conformity guard covers **1 of 28** uploaders.
+- **One of the June / July Walmart keyword files is a duplicate of the other.**
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
 
 ## v11.60 - the chart was STILL cut off, because `grace` is half what I wrote
 
