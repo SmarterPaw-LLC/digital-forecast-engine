@@ -14954,17 +14954,34 @@ const CHART_HTML_LEGEND = {
 // A peak drawn with a flat top is not a peak, and nothing on screen said the
 // shape was the renderer's rather than the data's.
 //
-// Grace is a percentage of the RANGE, applied before the nice-tick rounding,
-// so it costs nothing on a chart that already has room: a max of 7,200 under
-// a tick of 8,000 keeps the same 8,000. It only bites when the data crowds
-// the ceiling, which is exactly the case being fixed.
+// /!\ GRACE IS A PERCENTAGE OF HALF THE RANGE, NOT OF THE RANGE. Chart.js
+// computes it as toDimension(grace, (max - min) / 2), so '5%' bought 2.5% of
+// headroom, not 5%. v11.55 said "a percentage of the RANGE" and sized this
+// number against that belief - which is why Jason reported the SEO chart
+// STILL cut off one release later: a stacked peak of 4,878 under a tick of
+// 5,000 kept 2.44%, about 6px, and a band drawn to the gridline reads as
+// clipped whether or not a pixel is actually lost.
+//
+// Measured on six real shapes, '5%' → '10%':
+//
+//   SEO stack, max 4,878      0..5,000  →  0..6,000    2.4% → 18.7% headroom
+//   crowds a tick, max 7,983  0..9,000  →  0..9,000    UNCHANGED
+//   typical, max 7,197        0..8,000  →  0..8,000    UNCHANGED
+//   flat line at 1,000        0..1,200  →  0..1,200    UNCHANGED
+//   small counts, max 9       0..10     →  0..10       UNCHANGED
+//   percentages, max 62.4     20..65    →  20..65      UNCHANGED
+//
+// FIVE OF SIX ARE BYTE-IDENTICAL and the one that moves is the one that was
+// clipping - because the nice-tick rounding already supplies most charts with
+// more than this asks for. It only bites when the data crowds the ceiling,
+// which is exactly the case being fixed.
 //
 // /!\ MEASURED, not assumed, and it is not quite "no change anywhere": on an
 // axis NOT pinned to zero - the percentage metrics - grace also moves the
 // FLOOR down (62.4% max kept its 65 tick, but the min went 20 -> 15). That is
 // the same fix mirrored: a trough sitting on the bottom edge was being
 // clipped exactly as a peak on the top edge was.
-const PNL_SCALE_GRACE = '5%';
+const PNL_SCALE_GRACE = '10%';
 
 async function pnlTrendRender(cfg) {
   const { canvasId, buckets, datasets, mode, isPct, unit, axes } = cfg;

@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.59** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.60** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,86 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.60 - the chart was STILL cut off, because `grace` is half what I wrote
+
+- **Jason, on the SEO stacked chart, one release after v11.55 "fixed" it:**
+  *"the chart is still getting cut off."*
+
+v11.55's diagnosis was right, its mechanism was right, and **its number was
+half the size it claimed.**
+
+### ⚠ CHART.JS GRACE IS A PERCENTAGE OF *HALF* THE RANGE
+`_addGrace` computes `toDimension(grace, (max - min) / 2)`. So `'5%'` buys
+**2.5%** of headroom, not 5%. v11.55's own comment says *"a percentage of the
+RANGE"* - I wrote that, sized the constant against it, and never measured the
+one thing the release was about.
+
+Driven on a bare scale to isolate it:
+
+| grace | peak 2,000 | scale max |
+|---|---|---|
+| `'0%'` | 2,000 | **2,000 - zero headroom** |
+| `'5%'` | 2,000 | 2,500 |
+
+...and at the case that matters, a peak sitting just under a tick boundary:
+
+| grace | stacked peak | scale max | headroom |
+|---|---|---|---|
+| `'5%'`  | 4,878 | 5,000 | **2.44% {D} 6.1px** |
+| `'10%'` | 4,878 | 6,000 | **18.7% {D} 29.4px** |
+
+6px under a band drawn with a 1px border reads as clipped whether or not a
+pixel is actually lost - which is why v11.55's *"is it CLIPPED"* check kept
+coming back false while Jason kept looking at a flat-topped peak.
+
+### ⚠ AND FIVE OF SIX SHAPES DO NOT MOVE AT ALL
+The thing worth measuring before doubling a constant that feeds eight charts:
+
+| shape | `'5%'` | `'10%'` | |
+|---|---|---|---|
+| SEO stack, max 4,878 | 0..5,000 | **0..6,000** | the one that was clipping |
+| crowds a tick, max 7,983 | 0..9,000 | 0..9,000 | unchanged |
+| typical, max 7,197 | 0..8,000 | 0..8,000 | unchanged |
+| flat line at 1,000 | 0..1,200 | 0..1,200 | unchanged |
+| small counts, max 9 | 0..10 | 0..10 | unchanged |
+| percentages, max 62.4 | 20..65 | 20..65 | unchanged |
+
+The nice-tick rounding already hands most charts more headroom than this asks
+for, so raising it only bites where the data crowds the ceiling. **The floor
+caveat v11.55 found still holds and did not get worse** - the percentage axis
+keeps its 20..65.
+
+### Verification
+- `node --check` clean · **116 suites green**.
+- **Driven on the REAL `seoTrRenderChart`**, fixtured so the stacked peak lands
+  on the measured worst case: 4,878 under a 6,000 ceiling, **29.4px** of
+  headroom, and the drawn curve clear of the chart area by 15.6px on the
+  general fixture.
+- `test_v1155` extended rather than duplicated (three new assertions, 20 → 23):
+  the measured floor of 10%, the corrected explanation, and **the wrong claim
+  asserted GONE** rather than left standing beside the right one.
+
+### ⚠ No test_v1160, on purpose
+Two overlapping suites for one subject is hard rule #1 applied to tests - the
+reason `test_v1145` was retired in v11.47. `test_v1155` owns this constant, so
+it is the suite that grew.
+
+### What this does NOT change
+The charts that are not on `pnlTrendRender` - Inventory, Forecast, Seasonality,
+Chewy Revision, Digital Sales, Units Sold - still build their own scale configs
+with **no grace at all**, so a peak on any of them sits exactly on the ceiling
+(the `'0%'` row above). v11.55 flagged this and it is unchanged: Jason pointed
+at one chart and this fixes the renderer behind eight of them.
+
+### Still open
+- **⚠ Chewy's ad break-even is still 1.0 and that is wrong** (v11.59).
+- The six non-`pnlTrendRender` charts have no grace (above).
+- The selected-row tint is spelled at six sites with three alphas.
+- The isolated SEO bands are still compared against a SITEWIDE prior year.
+- The conformity guard covers **1 of 28** uploaders.
+- **One of the June / July Walmart keyword files is a duplicate of the other.**
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
 
 ## v11.59 - `vs Break-Even`, a judged ROAS on the Walmart ads tables
 

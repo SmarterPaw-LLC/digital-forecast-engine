@@ -164,10 +164,36 @@ ok(code.index("const PNL_SCALE_GRACE") < code.index("async function pnlTrendRend
 # ---------------------------------------------------------------------------
 # C. The reasoning, and the measurement that produced the number.
 # ---------------------------------------------------------------------------
+# /!\ v11.60 REWORDED one of these because it was WRONG. "A percentage of the
+# RANGE" is not what Chart.js does - it is a percentage of HALF the range - and
+# sizing the constant against that belief is why Jason reported the chart still
+# cut off. The phrase this pinned is gone on purpose; what it was really
+# protecting (most charts do not move) is pinned as a MEASUREMENT below.
 for phrase in ("A peak drawn with a flat top is not a peak",
-               "it costs nothing on a chart that already has room",
+               "GRACE IS A PERCENTAGE OF HALF THE RANGE",
                "FLOOR down (62.4% max kept its 65 tick"):
     ok(phrase in js, "C1 the reasoning survives: %s" % phrase[:42])
+
+ok("FIVE OF SIX ARE BYTE-IDENTICAL" in js,
+   "C1b and the no-change claim is a measurement, not an assertion")
+ok("it costs nothing on a chart that already has room" not in js,
+   "C1c the WRONG claim is gone rather than left beside the right one")
+
+# ---------------------------------------------------------------------------
+# v11.60 - THE VALUE HAS A MEASURED FLOOR, and it is not a matter of taste.
+#
+# /!\ Chart.js computes grace as toDimension(grace, (max - min) / 2), so the
+# declared percentage buys HALF that much headroom. v11.55 declared '5%'
+# believing it was a percentage of the range; it bought 2.5%, and at the worst
+# case - a peak just under a tick boundary - that is 2.44%, about 6px, which
+# is what Jason was still looking at one release later.
+#
+# Measured on the REAL seoTrRenderChart with a stacked peak of 4,878:
+#     '5%'  -> scale max 5,000, 6.1px of headroom
+#     '10%' -> scale max 6,000, 29.4px
+# and five of six other chart shapes are byte-identical between the two.
+_pct = int(re.search(r"const PNL_SCALE_GRACE = '(\d+)%';", js).group(1))
+ok(_pct >= 10, "C3 grace is at least the measured 10%% (halved by Chart.js to 5%%)", _pct)
 
 eq("C2 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
 
