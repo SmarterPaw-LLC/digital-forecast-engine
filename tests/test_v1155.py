@@ -63,6 +63,11 @@ print("=" * 62)
 # The SHIPPED declaration, lifted rather than retyped, so this suite cannot
 # pass against a value the app does not use.
 GRACE_DECL = re.search(r"const PNL_SCALE_GRACE = '[^']+';", js).group(0)
+# v11.63 - pnlTrendRender now asks pnlScaleCeiling for a suggestedMax, so the
+# harness slices it too. The dependency is real and the harness follows it
+# (the v10.43 / v10.45 / v10.97 pattern).
+HEAD_DECL = re.search(r"const PNL_SCALE_HEADROOM = [0-9.]+;", js).group(0)
+CEILING = HEAD_DECL + "\n" + fn("pnlScaleCeiling")
 
 # ---------------------------------------------------------------------------
 # A. The real pnlTrendRender driven, Chart stubbed to capture the config.
@@ -82,7 +87,7 @@ const CHART_HTML_LEGEND = { id: 'htmlLegend' };
 const CANVAS = { title: '', style: {}, getContext() { return { __canvas: CANVAS }; } };
 global.document = { getElementById: () => CANVAS };
 
-""" + GRACE_DECL + "\n" + fn("pnlTrendRender") + r"""
+""" + GRACE_DECL + "\n" + CEILING + "\n" + fn("pnlTrendRender") + r"""
 
 const B = ['2026-10-01', '2026-10-02', '2026-10-03'];
 (async () => {
@@ -192,10 +197,97 @@ ok("it costs nothing on a chart that already has room" not in js,
 #     '5%'  -> scale max 5,000, 6.1px of headroom
 #     '10%' -> scale max 6,000, 29.4px
 # and five of six other chart shapes are byte-identical between the two.
+#
+# /!\ v11.63: THAT MEASUREMENT WAS TRUE AND IT DID NOT GENERALISE. Grace is
+# applied BEFORE the nice-tick rounding, so how much of it survives depends on
+# where the graced max falls against the next tick. 4,878 is the LUCKIEST peak
+# in the range - measured over twelve peaks on Chart.js 4.6.1, grace '10%'
+# alone delivers between 6.0% and 18.7%, and Jason's own chart (peak 4,660)
+# got 6.8% and still read as cut off. So grace is KEPT - it is what moves the
+# FLOOR on a non-zero axis, which A3b pins - but it is no longer the thing
+# that guarantees the top. Section D is.
 _pct = int(re.search(r"const PNL_SCALE_GRACE = '(\d+)%';", js).group(1))
 ok(_pct >= 10, "C3 grace is at least the measured 10%% (halved by Chart.js to 5%%)", _pct)
+ok("A LOTTERY" in js or "lottery" in js,
+   "C3b the source says why grace ALONE is not a guarantee")
+ok("4,660" in js, "C3c and cites the peak that disproved the v11.60 claim")
 
 eq("C2 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
+
+# ---------------------------------------------------------------------------
+# D. v11.63 - THE REAL pnlScaleCeiling, driven.
+#
+# A suggestedMax is a FLOOR the data max is raised to before the ticks are
+# built, so the snapped tick is always >= it: snapping can then only ADD
+# headroom, never remove it.
+# ---------------------------------------------------------------------------
+D = run_node(os.path.join(SP, "d.js"), CEILING + r"""
+const bands = [{ label:'a', data:[1865, 900] },
+               { label:'b', data:[840, 400] },
+               { label:'c', data:[1955, 700] }];
+const withPrev = bands.concat([{ label:'prev', stack:'_prev', data:[3635, 1800] }]);
+const out = {
+  stacked:        pnlScaleCeiling(bands, true),
+  stackedOverlay: pnlScaleCeiling(withPrev, true),
+  unstacked:      pnlScaleCeiling(withPrev, false),
+  empty:          pnlScaleCeiling([], true),
+  noDatasets:     pnlScaleCeiling(null, true),
+  allNull:        pnlScaleCeiling([{ data:[null, undefined] }], true),
+  allNegative:    pnlScaleCeiling([{ data:[-5, -9] }], false),
+  zeroes:         pnlScaleCeiling([{ data:[0, 0] }], true),
+  objectPoints:   pnlScaleCeiling([{ data:[{x:1,y:200},{x:2,y:400}] }], false),
+  missingData:    pnlScaleCeiling([{ label:'no data' }, { data:[50] }], false),
+  perAxis:        pnlScaleCeiling(
+      [{ data:[10,20], yAxisID:'ySpend' }, { data:[9000,9500], yAxisID:'ySales' }],
+      false, 'ySpend'),
+  raggedRows:     pnlScaleCeiling([{ data:[1,2,3] }, { data:[10] }], true),
+};
+console.log(JSON.stringify(out));
+""")
+
+PEAK = 1865 + 840 + 1955          # 4,660 - Jason's own peak
+eq("D1 a stacked chart is sized to the SUM of its bands",
+   D["stacked"]["suggestedMax"], PEAK * 1.15)
+# /!\ The v11.56 defect, one level down: an overlay is a REFERENCE, not a
+# band. Summing the prior-year line into the stack would size the axis to this
+# year PLUS last year.
+eq("D2 /!\\ an overlay is NOT summed into the bands",
+   D["stackedOverlay"]["suggestedMax"], PEAK * 1.15)
+eq("D3 unstacked takes the largest single value",
+   D["unstacked"]["suggestedMax"], 3635 * 1.15)
+eq("D4 a declared axis reads only ITS OWN datasets",
+   D["perAxis"]["suggestedMax"], 20 * 1.15)
+eq("D5 {x,y} points are read too", D["objectPoints"]["suggestedMax"], 400 * 1.15)
+# Ragged rows: the loop runs to the LONGEST series in the group, so the short
+# one stacks where it has a value (1 + 10 at index 0) and the long one's later
+# buckets are still considered rather than being cut off with it.
+eq("D6 ragged rows iterate to the LONGEST series",
+   D["raggedRows"]["suggestedMax"], (1 + 10) * 1.15)
+eq("D7 a dataset with no data array is skipped, not thrown on",
+   D["missingData"]["suggestedMax"], 50 * 1.15)
+
+# /!\ NO CEILING IS AN ANSWER. An empty, all-null, all-zero or all-negative
+# series has no top edge to clip against, and raising its max would stretch
+# the axis away from the data - a chart emptier than the one it replaced
+# (v10.19). Each must return {} so Chart.js keeps its own sizing.
+for key, why in [("empty", "no datasets"), ("noDatasets", "a null datasets list"),
+                 ("allNull", "every value null"), ("allNegative", "an all-negative series"),
+                 ("zeroes", "an all-zero series")]:
+    eq("D8 no suggestedMax for %s" % why, D[key], {})
+
+# One definition, both scale paths - and never a literal beside it.
+eq("D9 declared exactly once", code.count("function pnlScaleCeiling("), 1)
+eq("D9b read by BOTH scale paths", code.count("...pnlScaleCeiling("), 2)
+eq("D9c the headroom constant is named once",
+   code.count("const PNL_SCALE_HEADROOM"), 1)
+ok(re.search(r"suggestedMax:\s*[0-9]", code) is None,
+   "D10 no hardcoded suggestedMax anywhere")
+eq("D10b suggestedMax is spelled in exactly one place", code.count("suggestedMax"), 1)
+ok(code.index("function pnlScaleCeiling(") < code.index("async function pnlTrendRender("),
+   "D11 declared before its readers")
+_head = float(re.search(r"const PNL_SCALE_HEADROOM = ([0-9.]+);", js).group(1))
+ok(0.10 <= _head <= 0.30,
+   "D12 the headroom is a sane fraction, not a rescale", _head)
 
 print("\n" + "=" * 62)
 print("  v11.55  PASS %d   FAIL %d" % (passed, failed))

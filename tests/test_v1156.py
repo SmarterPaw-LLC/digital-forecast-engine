@@ -258,6 +258,8 @@ const CHART_HTML_LEGEND = { id: 'htmlLegend' };
 const CANVAS = { title: '', style: {}, getContext() { return { __canvas: CANVAS }; } };
 global.document = { getElementById: () => CANVAS };
 """ + re.search(r"const PNL_SCALE_GRACE = '[^']+';", js).group(0) + "\n"
+      + re.search(r"const PNL_SCALE_HEADROOM = [0-9.]+;", js).group(0) + "\n"
+      + fn("pnlScaleCeiling") + "\n"
       + fn("chartLegendIsOverlay") + "\n" + fn("pnlTrendRender") + r"""
 
 // Jason's own screenshot, verbatim.

@@ -254,9 +254,13 @@ main();
 # LIFTED from the shipped source, not typed, so this suite cannot drift from
 # the value the app uses. (Its own guarantees live in test_v1155.)
 _GRACE = re.search(r"const PNL_SCALE_GRACE = '[^']+';", js).group(0)
+# v11.63 - pnlTrendRender now asks pnlScaleCeiling for a suggestedMax,
+# so the harness slices it too. The dependency is real.
+_CEIL = (re.search(r"const PNL_SCALE_HEADROOM = [0-9.]+;", js).group(0)
+         + '\n' + fn('pnlScaleCeiling'))
 A = run_node(os.path.join(SP, '_v1133_a.js'),
              'const CHART_HTML_LEGEND = { id: "htmlLegend" };\n'
-             + _GRACE + '\n'
+             + _GRACE + '\n' + _CEIL + '\n'
              + A_SRC.replace('__FN__', fn('pnlTrendRender')))
 
 print('-- A1 no axes: the v11.32 chart, unchanged (REGRESSION GUARD) --')

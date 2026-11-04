@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.62** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.63** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,155 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.63 - the chip was lying, and the chart really was cut off
+
+Three messages in one sitting, and **two of the three were one cause.**
+
+- *"this can't be the current version"*
+- *"the comparison period still doesn't filter"*
+- *"the chart is still getting cut off. will you PLEASE FIX this. i've asked
+  three times"*
+
+### ⚠ THE VERSION CHIP HAD READ v11.57 FOR FIVE RELEASES
+v11.58, v11.59, v11.60, v11.61 and v11.62 all shipped without bumping it. The
+chip is **the only thing on screen that answers "did my push land"**, so from
+where Jason sat nothing had shipped since the morning - and I could not tell
+him otherwise, because the deployed file said v11.57 too.
+
+The deploy was fine. Measured: the live GitHub Pages file was **byte-identical
+to HEAD** (`sha256 7d758b30...`, all three of live / committed / working copy)
+with a `Last-Modified` **61 seconds after** the v11.62 commit, and it carried
+`seoTrPageUrl`, `SEO_TR_SITE`, `WM_ADS_TIP` x31, `roasVsBe` and
+`PNL_SCALE_GRACE = '10%'`.
+
+**So "the comparison period still doesn't filter" was a CACHE.** Driven against
+the live build: sitewide the prior-year line totals **27,011**; pick Organic
+Search and it becomes **10,808**, labelled `Organic Search (prior year)`. v11.61
+works. index.html is 5MB served with `max-age=600`, and a tab left open all day
+never re-fetches it - so a hard reload was the whole fix, and a truthful chip is
+how either of us would have known that in one glance.
+
+### ⚠ NINETEEN ASSERTIONS WERE WATCHING THAT CHIP. ALL NINETEEN WERE GREEN.
+Fifteen suites assert it, every one of them as
+
+    len(re.findall(r">v11\.\d+ · [\d-]+<", s)) == 1
+
+which proves the chip has **SOME** version, never the **RIGHT** one. **I built
+that hole myself in v11.39**, converting a literal pin to the shape check so it
+would "stop being a two-line edit every release." The convenience WAS the bug.
+And v11.58-v11.62 added five new suites, not one of which asserted the chip at
+all - the habit died with the literal.
+
+`tests/README.md` is still right that a PAST suite must not pin a literal
+version. There is a third form it did not consider: **assert that the chip and
+CLAUDE.md's own `current version` line AGREE.** That needs no edit on a bump and
+goes red exactly when they drift. `tests/test_v1163.py` owns it, and **C1/C2
+reproduce the old guard passing on a chip reading `v11.00 · 1999-01-01`** - so
+"the old check was vacuous" is a measurement rather than a claim.
+
+### ⚠ AND THE CHART WAS GENUINELY STILL CLIPPING - GRACE IS A LOTTERY
+This is the part that was not a cache, and v11.60 did not fix it.
+
+Chart.js applies `grace` to the data max and **then snaps the axis to a
+generated tick**. How much headroom survives depends entirely on where the
+graced max lands against the next tick. Measured on Chart.js 4.6.1, grace
+`'10%'` alone, twelve peaks:
+
+| peak | axis max | headroom |
+|---|---|---|
+| 9,400 | 10,000 | **6.0%** - worst |
+| 4,200 | 4,500 | 6.7% |
+| **4,660** | **5,000** | **6.8%** - Jason's own chart |
+| 7,983 | 9,000 | 11.3% |
+| **4,878** | **6,000** | **18.7%** - best |
+
+**v11.60 raised the constant and verified it on 4,878, which is the single
+LUCKIEST value in that range.** The release was real, the measurement was real,
+and it changed nothing he could see - his data sits on the other side of a tick
+boundary. Twice now I have shipped a constant and verified it against one
+fixture instead of a range.
+
+### The fix removes the lottery rather than re-rolling it
+`pnlScaleCeiling` computes the chart's visual ceiling and passes
+`suggestedMax = peak → 1.15`. A suggestedMax is a **floor the data max is
+raised to BEFORE the ticks are built**, so the snapped tick is always >= it:
+snapping can then only **add** headroom, never remove it. Over those same
+twelve peaks the worst case goes **6.0% → 18.7%**.
+
+Measured A/B on the real renderer, same fixture, Jason's own shape (14 weekly
+buckets, 8 channels + Other, stacked, prior-year line):
+
+| | axis | peak | headroom |
+|---|---|---|---|
+| v11.62 live | 0..5,000 | 4,660 | **6.8%** |
+| v11.63 | 0..6,000 | 4,660 | **22.3%** |
+
+### ⚠ AN OVERLAY IS NOT A BAND - the v11.56 defect, one level down
+The SEO prior-year line (`stack: '_prev'`) and the Units Sold goal
+(`stack: '_goal'`) are **references**, not bands. Summing them into the stack
+would size the axis to this year PLUS last year, which is exactly the total
+v11.56 had to fix in the tooltip. Each stack group is measured as its own
+column; `test_v1155` D2 drives it.
+
+**Grace is KEPT.** It is what moves the FLOOR on an axis not pinned to zero
+(v11.55's mirrored fix, pinned by A3b) - it is simply no longer the thing that
+guarantees the top.
+
+### ⚠ NO CEILING IS AN ANSWER
+An empty, all-null, all-zero or all-negative series has no top edge to clip
+against, and raising its max would stretch the axis away from the data - a
+chart emptier than the one it replaced (v10.19). All five return `{}` and
+Chart.js keeps its own sizing. D8 drives each.
+
+### Verification
+- `node --check` clean · **119 suites green** · new `tests/test_v1163.py` (12
+  assertions) · `test_v1155` extended **23 → 44**.
+- **The real `pnlScaleCeiling` driven** over twelve shapes.
+- **In a browser, A/B on the real pipeline**: the live v11.62 build and the
+  patched build, same fixture, through the real `loadSeoTraffic` →
+  `renderSeoTraffic` → `pnlTrendRender` via the `seoFetchAll` seam. The axis
+  moves 5,000 → 6,000 and the chip reads **v11.63**. No console errors.
+
+### ⚠ No test_v1160-style duplicate: `test_v1155` OWNS chart headroom
+It grew section D rather than a second suite for one subject - v11.60's rule,
+and hard rule #1 applied to tests. Its harness slices `pnlScaleCeiling` with
+`pnlTrendRender`, because the dependency is real (v10.43 / v10.45 / v10.97).
+
+### Two guards of mine were wrong, and one found a NEW trap
+- **Stripping BLOCK comments from index.html eats 824,674 characters.** Once
+  the `//` lines are gone, a `/*` inside a string or regex literal pairs with a
+  distant `*/`. My guard reported `suggestedMax` **0 times** - the helper had
+  been swallowed whole. Every explanation here is a `//` line comment, so
+  line-stripping alone is both sufficient and safe. **This is a new variant of
+  the v11.18 trap: the comment stripper itself is unsafe on this file.**
+- A guard required `"a REFERENCE, not a band"`, which **spans a line break** in
+  the comment it was checking. Refused and wrote nothing, which is the guard
+  working.
+- `test_v1155` D6 asserted a ragged stacked pair came to `10 x 1.15`; stacking
+  index 0 sums `1 + 10`. My expectation, not the code.
+
+### ⚠ And the geometry read is STILL not trustworthy on these charts
+v11.55 said so and I drifted away from it. Mid-layout, `chartArea.top` reported
+**41** while the drawn points were positioned against a plot starting at **9** -
+so a pixel headroom computed from `meta.data[i].y` disagreed with the scale by
+25px. The **scale-space** A/B above is the defensible measurement; the
+pixel-level A/B was inconclusive because of canvas staleness, and is reported
+that way rather than dressed up as confirmation.
+
+### Still open
+- **⚠ Chewy's ad break-even is still 1.0 and that is wrong** (v11.59).
+- The six non-`pnlTrendRender` charts (Inventory, Forecast, Seasonality, Chewy
+  Revision, Digital Sales, Units Sold) build their own scale configs and get
+  **neither grace nor a ceiling**. Unchanged from v11.60, and now a wider gap.
+- A percentage axis gains more room than it strictly needs (40..65 → 35..75 on
+  the measured shape). Correct, but worth a look if a chart reads sparse.
+- The landing-page table has **no prior-year comparison**.
+- The CSV exports the landing PATH, not the URL.
+- The selected-row tint is spelled at six sites with three alphas.
+- The conformity guard covers **1 of 28** uploaders.
+- **One of the June / July Walmart keyword files is a duplicate of the other.**
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
 
 ## v11.62 - the landing page opens
 
