@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.66** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.67** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,174 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.67 - the Walmart ad tables show the LEVERS, and a campaign opens its keywords
+
+- **Jason:** *"did we finish the work on the walmart ads? i need to be able to
+  make adjustments weekly."*
+
+No. And the gap was wider than the one drill-in I owed him, which is why the
+first move was to query the live tables rather than re-read my own notes.
+
+### ⚠ EVERY CONTROL YOU WOULD CHANGE WAS LOADED AND NOT RENDERED
+Measured on `walmart_ad_keyword` and `walmart_ad_campaign`, all eight loaded
+months:
+
+| | in the database | on the screen |
+|---|---|---|
+| keyword `bid` | **189/189 rows, every month** | missing |
+| keyword `suggested_bid` | **189/189** | missing |
+| keyword `status` · `ad_group` | **189/189** | missing |
+| campaign `daily_budget` | $50 on all five | missing |
+| campaign `bidding_strategy` | Fixed on all five | missing |
+
+The tables reported what an ad **did** and showed nothing you could change
+about it. Six columns and one derived gap close that.
+
+`vs Suggested` is the scan affordance, on the v11.59 argument: bid minus
+Walmart's own suggestion, signed, sortable. Reading two columns against each
+other works on one row; **sorting** by the gap is what makes 189 keywords
+actionable in one click.
+
+### ⚠ A BID IS A STATE, NOT A FLOW
+This is the part that would have been wrong if it had been built carelessly.
+Every other number on these tables is something that HAPPENED over the window
+and therefore sums. A bid, a suggested bid and a daily budget are what the
+setting **is**.
+
+Three months of a bid at 0.50 / 0.65 / 0.80:
+
+| | |
+|---|---|
+| summed | **$1.95** - a number nobody ever bid |
+| averaged | **$0.65** - a number nobody can act on |
+| v11.67 | **$0.80** - the newest, and the only one still standing |
+
+`stateFields` is declared per view and the accumulator is five lines in
+`adsCampaignRollup`. **A view that declares none is byte-identical**, which is
+the only form in which "Amazon and Chewy are untouched" is checkable rather
+than read off a diff (`test_v1167` B7).
+
+And the flows beside it still sum - B3 pins spend at 60 over the same three
+rows that report a single bid.
+
+**The gap is null unless BOTH sides are known.** A keyword with no suggested
+bid rendering `$0.00` would read as *exactly on Walmart's number*, which is
+the one wrong answer here that looks like a real one.
+
+**The TOTAL row carries no bid at all.** `adsSumRows` sums flows, and a bid on
+the total row is a number for something that is not a keyword.
+
+### The drill-in, finally
+- **Jason, earlier:** *"when i click on a campaign name, can that open to the
+  keywords and products view? ... currently it just selects the row - but that
+  is what the checkbox is for."*
+
+Keywords yes. **Products no, and it is a missing FEED rather than a missing
+screen**: Walmart has exactly two ad tables and neither carries an item
+dimension - Walmart reports items in a separate export we do not load.
+
+`ADS_DRILL` is **declared per channel**, never inferred, because the journey
+needs four things at once: a view below campaign level, a `campaign` filter to
+receive the pick, the raw column that filter reads (`campaign` on Walmart,
+`campaign_name` on Amazon - they differ), and the channel's own sub-tab
+switcher. **Chewy has no entry**: its feed goes campaign → SKU → day
+with no keyword dimension at all, so there is nothing to open.
+
+### ⚠ AND THE BIGGEST SPENDER GETS NO LINK, WHICH IS THE POINT
+`SP - AUTO - CATCH ALL - Kitty` is Walmart's largest line at **$1,903 in
+October** and has **no keyword rows at all** - an auto campaign targets by
+relevance. Linking it would land you on an empty table having told you
+nothing, which is the v10.19 defect.
+
+`adsDrillNames` answers *what can the destination honour*, scoped to the
+**same window and brand** the Campaigns table is showing - so the link can
+never be offered for a campaign the destination would then filter away, which
+would leave the control saying one thing and the table another. A campaign
+with nothing behind it renders as plain text **with the reason on its
+tooltip**, not as silence.
+
+### ⚠ The pick is carried in STATE, because the control has no options yet
+They are built by the very render the drill triggers, and that loop **resets a
+value it does not recognise** (v11.02). So `_adsPendingFilter` is applied to
+the rollup and written onto the control in the same pass - one render, no
+re-entry - and **cleared whether or not it landed**, since a pick that
+outlived its render would re-apply itself and the filter could never be
+cleared. Both refusals inside `adsDrillOpen` disarm it too.
+
+The name is resolved **by INDEX** (v11.23). A campaign name is an arbitrary
+string; `O'Brien "x" & co` in an onclick attribute breaks on the apostrophe.
+
+### Verification
+- `node --check` clean · **123 suites green** · new `tests/test_v1167.py` (69
+  assertions).
+- **The real `adsCampaignRollup` driven** over three months: the newest bid
+  wins, the arrival order does not matter, spend still sums, a missing
+  suggested bid yields no gap, the TOTAL row carries none, and a view with no
+  `stateFields` never gains the keys.
+- **The real `cellOf` sliced and driven**: a drillable name carries
+  `stopPropagation` and an index, a campaign with no rows carries neither and
+  says why, the footer never drills, and `O'Brien <b>x</b>` renders as text.
+- **In a browser on the real renderers** (chip `v11.67`): the campaign table
+  shows Bidding and **Daily Budget $50.00 - the newest month, not the $135
+  sum**; `SP - AUTO - CATCH ALL` renders as plain text with its reason while
+  `KKZ Manual` carries `adsDrillOpen('walmart',1)`; **a real click event on it
+  switches to Keywords, sets the campaign filter, leaves the row selection
+  EMPTY** (so the row did not also toggle - his actual complaint), and the
+  keyword table reads `catnip spray · $0.80 · $0.75 · +$0.05` with spend
+  summed to $1,751 beside it.
+
+### Three of my own mistakes, two of them rules this file already records
+- **The heredoc, again.** `"\\n"` arrived halved and put a literal newline
+  inside a Python string literal. The Write/Edit rule has been here since
+  v9.77 and this is the third session it has bitten.
+- **A patch anchor carried `\u2192` where index.html holds a real arrow** -
+  the v11.41 / v11.47 trap. The guard refused and wrote nothing; that one edit
+  went through the Edit tool instead.
+- **Two anchors matched twice**, because Chewy's campaign map and Amazon's
+  keyword filters are textually identical to Walmart's in the lines I chose.
+  Disambiguated with a Walmart-only neighbouring line.
+- And a slicer bug worth keeping: `arrow()` took the head **including** the
+  opening brace and then brace-matched **from** that brace, so the slice
+  opened two scopes and closed one. Node reported it sixty lines later as
+  "Unexpected end of input".
+- **D6 required a quote that WRAPS in the source.** The v11.63 trap: a guard
+  spanning a line break fails on a comment that is perfectly correct.
+
+### ⚠ STILL OPEN - and this is the one that blocks "weekly"
+**The grain is MONTHLY, and the data cannot answer a weekly question yet.**
+Neither Walmart Connect export carries a reporting date - the campaign file's
+Start/End dates are the CAMPAIGN's schedule and the keyword file has no date
+column at all - so the uploader asks which month the file covers and stamps it
+on every row. Latest loaded is **2026-10, pulled 2026-10-30**, so October is a
+**partial month charted as a whole one**, and the freshest this convention can
+ever be is "last completed month".
+
+**Jason has chosen the weekly file** (asked and answered, 2026-11-05): he will
+set the Walmart Connect range to a week instead of a month. That is the next
+release - the uploader's period stamp, the upsert key, `inWindow` / `monthOf`,
+the period control, the freshness window, and the standing merge audit. The
+Mar-Oct monthly history stays, and **nothing may ever sum a week row and a
+month row together.**
+
+Also still open:
+- **⚠ Chewy's ad break-even is still 1.0 and that is wrong** (v11.59).
+- **June and July keyword files are still the same file** - re-measured today,
+  28 rows identical on keyword × match × campaign × spend × clicks ×
+  sales, and both months total $749.94 spend / $650.40 sales. Jason's call
+  which to re-pull.
+- **March, April and May keyword rows carry NO spend or sales at all** -
+  189 rows each, every metric null. Found on the way past, not looked for.
+- All five October campaigns are **below the 3.21x break-even** (2.79 / 2.43 /
+  2.03 / 1.81 / 1.55, blended 2.50 on $4,447).
+- Whether `vs Break-Even` should measure against Omni ROAS instead.
+- The landing-page prior year (v11.65); the SEO scorecards do not follow a
+  legend isolation (v11.66).
+- Status by has never persisted across a reload (v11.64).
+- The upload conformity guard covers **1 of 28** uploaders.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- `computeProductSeasonality` still has no upper bound on its window.
+- Walmart's allowance agreement, still the only missing input to that margin.
 
 ## v11.66 - the prior year of WHAT IS DRAWN, including what the legend drew
 
