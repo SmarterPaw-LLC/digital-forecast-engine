@@ -80,7 +80,9 @@ STRIPS = {
     'Amazon Ads':         ['pnl-amzn-ads-tab-campaigns', 'pnl-amzn-ads-tab-keywords',
                            'pnl-amzn-ads-tab-growth',
                            'pnl-amzn-ads-tab-activity', 'pnl-amzn-ads-tab-uploads'],
-    'Inventory Planning': ['ipv-planning', 'ipv-reorder'],
+    # v11.64 - In-House Production left the Status-by dropdown and became a
+    # tab. Census 35 -> 36; this going red is the test doing its job.
+    'Inventory Planning': ['ipv-planning', 'ipv-inhouse', 'ipv-reorder'],
     'Pricing Scenarios':  ['pricing-mode-new', 'pricing-mode-existing', 'pricing-mode-chewy'],
     # v11.41 - the SEO page's first strip. GSC keywords (organic only, what
     # Google reports about queries) and GA4 traffic (every channel, what the

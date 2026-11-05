@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.63** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.64** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,180 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.64 - In-House Production is a TAB, and it keeps its own columns
+
+- **Jason:** *"for consistency, would you make In-House Production a tab like on
+  other pages? it makes more sense to do it this way since it is a unique view.
+  the column view should be based on the saved settings. make sure exports works
+  the same way."*
+
+He is right, and the tell is in the control's own tooltip. **Status by** asks
+*which inventory pool drives the badge* and its three other options answer it:
+warehouse stock, Amazon FBA stock, combined. `🏭 In-house production` never
+answered that question - it **narrowed the grid** to SKUs flagged in-house,
+**opened the weekly production panel**, and **changed what the export carries**.
+A view wearing an option's clothes.
+
+### ⚠ THE TAB REPLACED THE OPTION. IT DID NOT JOIN IT.
+A tab beside a dropdown entry that does the same thing is hard rule #1's
+divergence, built on purpose - and it is the thing Jason has flagged twice
+("please, please be consistent with design patterns"). So `in_house` is **gone
+from the Status-by select**, which now offers exactly `warehouse / amazon /
+combined`.
+
+The strip reads **📦 Planning · 🏭 In-House Production ·
+⚙ Reorder Setup**. `🏭` is the glyph the rest of the app already
+uses for in-house production and it was free in that strip, so rule #2 is
+satisfied without coining one.
+
+### ONE line is what makes the tab mean anything
+`getStatusMode()` reads the view **before** the dropdown. That is the whole
+mechanism, and it is why all ~15 of its callers follow the tab for free:
+
+| reader | follows the tab |
+|---|---|
+| the Status badge + its verbs | 🏭 Produce Now / Plan Production |
+| the three grid filters | scoped to `in_house_production` |
+| the weekly production panel | opens |
+| `downloadInventoryCSV` | weekly breakdown columns appended |
+| the export dialog | the weekly-breakdown section appears |
+| the CSV / xlsx filename | `...-in-house-production-90d-...` |
+
+A per-caller check would have been fifteen copies of one rule.
+
+### ⚠ `ipView` IS DECLARED 2,500 LINES BELOW `getStatusMode`
+So the read is guarded. An unguarded one lands in that `let`'s **temporal dead
+zone** during module evaluation and throws a `ReferenceError` rather than
+answering 'warehouse'. `test_v1164` B8 **reproduces the throw**, so the
+try/catch is a measurement rather than a habit.
+
+### Columns are PER VIEW - *"based on the saved settings"*
+Planning and In-House Production ask two different questions of one table (what
+to **order** vs what to **produce**), so they keep two column sets instead of
+one the operator re-picks on every switch. Jason's own saved view - *In-House
+Production · 6 cols · sort: ↓30d Need* - is now what that tab
+remembers rather than something to re-apply by hand.
+
+**A first visit changes nothing visible.** `ipLoadVisibleFor` returns null when
+a view has nothing stored, and the set already on screen is seeded into it - so
+the tab opens looking exactly like Planning did a moment earlier, with no column
+set of my invention.
+
+**⚠ Reorder Setup deliberately shares PLANNING's key.** It has no IP_COLUMNS
+table of its own, and sharing the key is also what stops a switch *through* it
+writing In-House's columns over Planning's. Driven: `inhouse → reorder
+→ planning` leaves both sets intact (C5).
+
+### ⚠ AND THAT ORDERING BUG IS REAL: THE VIEW FIRST, THEN THE COLUMNS
+`ipApplyView` applied columns and *then* restored the mode. With a per-view
+store that writes the saved columns under the tab you are **leaving**, and the
+switch then loads the other tab's set straight over them.
+
+Reproduced rather than claimed (D4): applying a 2-column In-House view from
+Planning, with In-House already holding a set -
+
+| order | what you end up looking at | what Planning's set becomes |
+|---|---|---|
+| columns, then view | **In-House's old set** | **overwritten with the view's** |
+| view, then columns | the view's columns | untouched |
+
+Two harms from one line of ordering. The switch runs first now.
+
+**Every pre-v11.64 saved view keeps working with no migration**, because
+`in_house` was already captured as `statusMode` - `setStatusMode` routes it to
+the tab, and `ipApplyView` switches in **both** directions.
+
+### ⚠ The two controls the view takes over, and BOTH HALVES REFUSE
+On that tab the Status-by dropdown and the production-origin filter have
+nothing left to do: the view fixes the mode, and everything shown is in-house
+already, so *External only* could only ever produce an empty table.
+
+Each is **disabled with the reason on its tooltip** AND **refused at its
+reader** - `setStatusMode` and `ipInHousePick`. A disabled control is bypassable
+from the console, which is the v10.19 / v11.57 rule. Verified live:
+`setStatusMode('amazon')` on the tab changes nothing.
+
+The enabled tooltip is **the markup's own**, stashed once on the first pass, so
+this does not become a second copy of two texts that live in the markup. C9
+drives the tab twice and requires the real tip back.
+
+### Two divergences found on the way, both in the export path
+- **The production-origin filter was read at FOUR sites**, each spelling the
+  same `getElementById(...)?.value` - and the comment above one of them already
+  read *"Now all four filter sites agree."* They agree through `ipInHousePick`
+  now. One reader, four callers, asserted.
+- **The CSV filename slug was spelled TWICE inside one function** - once for the
+  xlsx branch and once for the csv one - so the two writers could have
+  disagreed about which report they had produced. `ipStatusModeSlug` is the one
+  definition, and F3 drives it against the retired ternary over seven inputs
+  for byte-identical output.
+
+### ⚠ A stale mode would have BLANKED the dropdown
+Removing an option opens a trap: assigning a value no option carries sets a
+select to `''`, and `getStatusMode` would then fall through to that same stale
+`localStorage` entry - **the in-house scope running on the Planning tab, with an
+empty dropdown as the only clue.** The restore falls back to warehouse instead,
+and G2 reproduces the old line blanking.
+
+### ⚠ AND THAT RESTORE HAS NEVER RUN, WHICH THE BROWSER SAID
+Measured, not reasoned: the v4.178 block is guarded `if (srcSel && !srcSel.value)`,
+and a select with options **always** has a value - `srcSel.value` reads
+`warehouse` on load, so the block is unreachable. **Status by has therefore
+never persisted across a reload**, despite the comment above it saying it does,
+and the `ipStatusMode` write has been vestigial since v4.178.
+
+Which settles a design question rather than opening one: the tab does **not**
+persist either, so nothing regresses and the strip stays consistent with Reorder
+Setup, which has never persisted. Left as found and reported rather than
+silently changed.
+
+### Verification
+- `node --check` clean · **120 suites green** · new `tests/test_v1164.py` (73
+  assertions) · `test_v1017`'s sub-tab census re-pointed **35 → 36**.
+- **The real `getStatusMode` / `setStatusMode` driven** over seven states
+  including no select in the DOM at all, plus the TDZ throw.
+- **The real column store and the real `setIpView` driven** through
+  planning → inhouse → planning → reorder → inhouse, with the
+  clobber case and the tooltip round trip.
+- **In a browser against the patched build** (chip `v11.64`), on the real page:
+  the strip renders three tabs, `getStatusMode()` moves `warehouse →
+  in_house`, the slug moves `warehouse → in-house-production`, the weekly
+  production panel opens, both controls go disabled with their reasons,
+  `setStatusMode('amazon')` is refused, columns narrow to 6 and round-trip
+  against Planning's 25 **through Reorder Setup**, and the export dialog shows
+  the weekly-breakdown section **only** on the tab (export column count 5 there
+  vs 24 on Planning). Only the expected unauthenticated 401s in console.
+
+### Three of my own assertions were wrong
+- **D4 reproduced the old ordering against an EMPTY store**, where the seed path
+  preserves the columns and nothing is lost. The defect needs the target view to
+  **already have** a set - which is the real case, and the fixture says so now.
+- D1 counted a raw substring where it claimed a guarantee, and F2c required
+  **zero** of a spelling the helper itself has to carry.
+
+### ⚠ And the heredoc ate the backslashes, again
+`\?` and `\\` arrived halved in a test re-point and two of five edits matched
+nothing - the script refused and wrote nothing, which is the guard working.
+CLAUDE.md has said this since v9.77: **the Write or Edit tool, never a heredoc,
+for anything containing escapes.**
+
+### Still open
+- **⚠ Chewy's ad break-even is still 1.0 and that is wrong** (v11.59).
+- **Status by has never persisted across a reload** (above). Fixing it is a
+  behaviour change nobody asked for, so it is Jason's call.
+- The six non-`pnlTrendRender` charts still get neither grace nor a ceiling.
+- A percentage axis gains more room than it strictly needs.
+- The landing-page table has no prior-year comparison; the CSV exports the
+  landing PATH, not the URL.
+- The selected-row tint is spelled at six sites with three alphas.
+- The upload conformity guard covers **1 of 28** uploaders.
+- **One of the June / July Walmart keyword files is a duplicate of the other.**
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- `computeProductSeasonality` still has no upper bound on its window.
+- Walmart's allowance agreement, still the only missing input to that margin.
+- Whether Bulk-Pack should get the same wholesale input v11.51 added to New
+  Product Launch.
 
 ## v11.63 - the chip was lying, and the chart really was cut off
 
