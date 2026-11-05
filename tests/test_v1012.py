@@ -336,8 +336,12 @@ for _caller in ('updateChewyProgramChart', 'updateChewyPnlChart', 'adsUpdateChar
             'adsUpdateChart branches on the declared reading, not on page state')
 # v11.42 - the SEO Traffic chart is the sixth surface. Census drift; the
 # GUARANTEE is that every surface goes through the ONE shared toggle.
-sok(js.count('pnlInjectChartModeToggle(') == 7,
-    'toggle injected on all six chart surfaces (+1 definition)')
+# v11.68 - the Ads METRIC reading now injects too: it never did, so it sat
+# showing whatever the campaign reading last wrote. Seven surfaces + the
+# definition. The GUARANTEE is unchanged - every surface goes through the
+# ONE shared toggle.
+sok(js.count('pnlInjectChartModeToggle(') == 8,
+    'toggle injected on all seven chart surfaces (+1 definition)')
 
 # Every page has a mode-toggle host and a canvas.
 for pid in ('pnl', 'spnl', 'wmpnl', 'chpnl'):

@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.67** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.68** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,136 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.68 - a previous-period comparison you can toggle, on every chart
+
+- **Jason:** *"allow me to toggle comparison over previous period on all
+  graphs."*
+
+The scorecards above these charts have read **"+34.3% vs prev"** since v10.13.
+The chart underneath them never drew it.
+
+### It costs no fetch, which is why it could be built at all
+Checked before designing anything: on all four P&L charts the window was
+already a **FILTER over rows held in memory** (`getPnlSource()`,
+`shopifyPnlData`, `walmartPnlData`, `chewyPnlSalesData`), and the Ads charts
+already roll up a prior block for the delta chips. So the previous period is
+one more pass over the same array.
+
+### ⚠ ONE ACCUMULATION, RUN OVER TWO WINDOWS
+Each chart's row loop became a local `bucketize(lo, hi)` called twice. A second
+loop would have been a second spelling of the arithmetic, and the comparison
+line would stop being the same measure as the thing it is drawn against
+(rule 3a). Asserted per chart: **exactly two calls, one definition.**
+
+The prior window comes from **`getPnlPrevDateRange`, the resolver the
+scorecards already use** - so the dashed line and the chip above it can never
+describe different periods (rule #3).
+
+### ⚠ IT ALIGNS BY POSITION, NOT BY DATE
+The prior window is a different stretch of calendar, so **not one of its
+bucket keys matches this window's** - a date join would draw an empty line.
+Paired from the START, bucket 1 to bucket 1.
+
+That is the opposite of the SEO chart's prior-YEAR line, which aligns by a
+**364-day shift** so a Monday still meets a Monday (v11.41). Two different
+comparisons, two different alignments - which is exactly why they are two
+things and not one control carrying two meanings.
+
+### ⚠ AND THE LABEL NAMES WHAT IT DREW, not what it asked for
+Caught in a browser, not by a test I had written: a window running to today is
+truncated by where the DATA stops, while the block before it is complete. The
+first cut drew **three** buckets and labelled them with the predecessor's full
+**twelve-week** range.
+
+The label is derived **inside `pnlPrevOverlay`** now, from the buckets that
+were actually paired - which also removed the five hand-built label strings at
+the call sites. One definition, and it cannot drift from the data beside it.
+
+| | drawn | label |
+|---|---|---|
+| before | 3 buckets | `2026-03-09 → 2026-05-31` **(the whole window)** |
+| after | 3 buckets | `2026-03-09 → 2026-05-25` **(the three)** |
+
+### ⚠ A tail with no partner is NULL, never zero
+A current window with more buckets than its predecessor leaves the extra
+unpaired. Zero would draw the comparison collapsing to the floor; null draws
+nothing, and `spanGaps: false` keeps a hole inside the prior period a hole.
+
+### The control
+**OFF by default** - eight charts growing a second line for everyone who did
+not ask is not a default, it is a surprise. **One stored state**, read by every
+chart, so switching tabs does not change what you are looking at.
+
+It is appended inside `pnlInjectChartModeToggle`, the toggle every chart
+already injects, rather than becoming a second control row (hard rule #1).
+
+**A chart that passes no `cmp` gets NO control at all**, and `{ok:false, why}`
+renders it **disabled with the reason** - both halves, since a disabled control
+that kept its handler is bypassable from the console (v10.19 / v11.57):
+
+| | |
+|---|---|
+| **"All time"** | *has no previous period* - read from `_pnlSuppressDeltas`, the same flag that already suppresses the chips there (v10.13) |
+| **Walmart / Chewy with no window** | *no start and end to measure back from* |
+| **Ads, metric reading** | *each metric is on its own axis, so one line could not say which it belongs to* |
+| **SEO Traffic** | *compares against the PRIOR YEAR instead, and the previous period is not fetched for GA4* |
+
+That last one matters: the one chart that **does** compare should not be the
+one chart that looks like it cannot.
+
+### ⚠ A SURFACE THAT NEVER INJECTED AT ALL
+Found on the way: the Ads **metric** reading never re-injected the toggle, so
+it sat showing whatever the **campaign** reading had last written. Harmless
+while the only control was View; with a Compare button beside it that is a
+live control doing nothing. It injects now - always Line, because each metric
+has its own axis and there is nothing to stack.
+
+### Verification
+- `node --check` clean · **124 suites green** · new `tests/test_v1168.py` (69
+  assertions) · `test_v1012`, `test_v1077`, `test_v1123` re-pointed.
+- **The real helpers driven**: the control through store → render →
+  back off, a throwing `localStorage` leaving it OFF rather than throwing, and
+  the overlay over nine shapes including both truncations and the derived
+  label.
+- **`pnlPrevVals` driven on the percentage trap**: two products at 60% and 80%
+  report **75%** (the pair's real margin from the summed slots), not the 70% an
+  average across products would give - the v10.12 rule the bands already follow.
+- **In a browser on the REAL `updatePnlChart`**: with the toggle off, two
+  series and no `_prev`; on, a third dataset in its own stack group pushed
+  LAST, `Previous period (2026-03-09 → 2026-05-25)`, 12 prior values
+  against 12 current buckets, the prior window resolving to exactly the 84 days
+  before an 84-day window. With **All time** the control renders
+  `not-allowed` and **no series is added at all**.
+
+### ⚠ Three escape traps in one release, all three already in this file
+The heredoc halved `\\n` into a literal newline inside a Python string; a
+patch anchor carried `\u00b7` where index.html holds a real middle dot; and a
+third anchor carried `\u2192` against a real arrow. Each refused and wrote
+nothing, which is the guard working - and each cost a round. **The Write or
+Edit tool, never a heredoc and never a patch-script escape, for anything
+non-ASCII.** This is the fourth session that rule has been broken.
+
+### Still open
+- **⚠ The Chewy Program chart has its OWN comparison control** (`vs last
+  year` / `vs prev period`, v9.x) and was deliberately left alone. That is the
+  rule #1 divergence this release otherwise removes - converging it means
+  teaching the shared control a second basis, which is a real design question
+  rather than a cleanup.
+- **⚠ The Walmart ad grain is still MONTHLY**, and Jason has chosen the
+  weekly file (v11.67). That is the next release.
+- **⚠ Chewy's ad break-even is still 1.0 and that is wrong** (v11.59).
+- June and July Walmart keyword files are still the same file; March-May
+  keyword rows carry no spend at all (v11.67).
+- The SEO scorecards do not follow a legend isolation (v11.66); the
+  landing-page prior year is still unfetched (v11.65).
+- Status by has never persisted across a reload (v11.64).
+- The six non-`pnlTrendRender` charts still get neither grace nor a ceiling.
+- The selected-row tint is spelled at seven sites with three alphas.
+- The upload conformity guard covers **1 of 28** uploaders.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- `computeProductSeasonality` still has no upper bound on its window.
+- Walmart's allowance agreement, still the only missing input to that margin.
 
 ## v11.67 - the Walmart ad tables show the LEVERS, and a campaign opens its keywords
 

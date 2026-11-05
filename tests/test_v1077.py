@@ -573,9 +573,15 @@ t('C8  isPct omitted -> behaves exactly as before (no accidental blocking)',
 
 console.log(JSON.stringify(out));
 '''
+# v11.68 - the toggle appends the compare control, so the harness slices it
+# and the state it reads. Every assertion in this suite passes `cmp` as
+# undefined, which renders NO compare control at all - so what is measured
+# here is still exactly the v10.77 toggle.
 harness = (harness
     .replace('__CHARTMODE__', fn('pnlChartMode'))
-    .replace('__TOGGLE__',    fn('pnlInjectChartModeToggle')))
+    .replace('__TOGGLE__',    fn('pnlChartCompare') + '\n'
+                              + fn('pnlCompareToggleHtml') + '\n'
+                              + fn('pnlInjectChartModeToggle')))
 
 hp = os.path.join(SP, 'test_v1077_toggle.js')
 io.open(hp, 'w', encoding='utf-8', newline='').write(harness)
@@ -707,14 +713,18 @@ calls = [c for c in re.findall(r'pnlInjectChartModeToggle\([^)]*\)', js)
 # v11.23 re-point: the shared Ads trend is the fifth surface. It is ONE
 # call serving three tabs, so the number is surfaces, not tabs.
 # v11.42 re-point: the SEO Traffic chart is the sixth.
-ok(len(calls) == 6, 'E1  six chart surfaces inject the toggle', len(calls))
+# v11.68 re-point: the Ads METRIC reading is the seventh. It never injected
+# at all before, which left a stale toggle on screen.
+ok(len(calls) == 7, 'E1  seven chart surfaces inject the toggle', len(calls))
 
 missing = [c for c in calls if c.count(',') < 2]
 ok(not missing, 'E2  every call site passes isPct', missing)
 
 # The Amazon page has TWO percentage metrics and already declares isPct per
 # metric in metricLabels. The call must read from there, not re-derive it.
-ok("pnlInjectChartModeToggle('pnl-chart-mode-host', 'updatePnlChart', m.isPct)" in js,
+# v11.68 - matched on the ARGUMENT rather than on the whole call, which now
+# carries a fifth. The guarantee was never about the arity.
+ok("pnlInjectChartModeToggle('pnl-chart-mode-host', 'updatePnlChart', m.isPct" in js,
    'E3  Amazon reads isPct from metricLabels (one source, no second copy)')
 
 # And the injection must happen AFTER the metric resolves, or isPct is stale.
@@ -743,7 +753,9 @@ ok('const noStack = cfg.noStack != null ? !!cfg.noStack : !!isPct;' in js,
 
 # Chewy P&L has no percentage metric today; the explicit false keeps the
 # signature uniform and makes a future % metric a one-word edit.
-ok("'updateChewyPnlChart', false)" in js,
+# v11.68 - same re-point as E3: the trailing `)` moved, the explicit `false`
+# did not.
+ok("'updateChewyPnlChart', false," in js or "'updateChewyPnlChart', false)" in js,
    'E7  Chewy passes false explicitly rather than relying on undefined')
 
 

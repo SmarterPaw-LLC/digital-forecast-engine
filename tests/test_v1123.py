@@ -198,6 +198,11 @@ out.unfiltSpend = unfilt.totals.spend;
 function prevFor(view, win, res) {
   const ch = adsViewCfg('amazon', view);
   const channel = 'amazon', brand = '', picked = {};
+  // v11.68 - the block now asks for the same bucket grain the chart resolved,
+  // so the prior rollup carries a SERIES and not just totals. Supplied here
+  // the way every other local this slice reads is (the v11.51 pattern); what
+  // D asserts is still the monthly prior WINDOW, which the grain cannot move.
+  const grain = adsGrain(win, ch);
   let __out = null;
   (function () {
 __PREV__
@@ -368,9 +373,14 @@ eq('C2b than the unfiltered one',         R['unfiltSpend'], 2060)
 ok(R['filtSpend'] != R['unfiltSpend'],
    'C2c so dropping the filters from the prev call made every chip read as a '
    'collapse the moment an ad type was picked')
-ok("prev = adsCampaignRollup({ channel, view, from: adsYmd(pFrom), to: adsYmd(pTo), brand, filters: picked });"
+# v11.68 added a bucket grain so the prior rollup carries a SERIES for
+# the comparison line. The guarantee here is the two arguments v11.22
+# added - brand and filters - so it is matched on those, not on arity.
+ok("prev = adsCampaignRollup({ channel, view, from: adsYmd(pFrom), to: adsYmd(pTo), brand, filters: picked"
    in PREV_BLOCK,
    'C3  the shipped prev call now passes BOTH')
+ok('bucket: grain' in PREV_BLOCK,
+   'C3b and the prior block is bucketed, so the comparison line exists at all')
 ok('toISOString' not in PREV_BLOCK,
    'C4  and formats its dates locally - toISOString over a LOCAL-midnight date '
    'rolls back a day east of Greenwich')
@@ -530,7 +540,9 @@ for f in ('adsDeriveRow', 'adsSumRows', 'adsYmd', 'adsBucketFn', 'adsGrain',
 
 eq('J2a the renderer hands the chart ONE context, once',
    RENDER.count('adsUpdateChart('), 1)
-ok('adsUpdateChart({ ch, channel, view, COLS, res, win, list, sel, grain, totals: t })' in RENDER,
+# v11.68 - the chart receives the prior rollup too, so its comparison line
+# and the delta chips above it read the SAME prev.
+ok('adsUpdateChart({ ch, channel, view, COLS, res, win, list, sel, grain, totals: t, prev })' in RENDER,
    'J2b built from the same res / win / list the table just rendered, so the '
    'two cannot describe different slices')
 
@@ -572,7 +584,9 @@ ok('selAllEl.indeterminate = onCount > 0 && onCount < list.length;' in RENDER,
 
 ok("window['_adsRe_' + ch.host] = () => renderAdsCampaigns(channel, view);" in js,
    'J8a the shared Line/Stacked toggle can re-render an ads view')
-ok("pnlInjectChartModeToggle(ch.host + '-chart-mode-host', '_adsRe_' + ch.host, !!m.noStack)" in js,
+# v11.68 - the call grew a `cmp` argument, so the trailing `)` moved. The
+# guarantee was always the noStack argument.
+ok("pnlInjectChartModeToggle(ch.host + '-chart-mode-host', '_adsRe_' + ch.host, !!m.noStack," in js,
    'J8b and is told whether THIS metric can be stacked')
 
 ok("lines.push('# ' + ch.label + ' \u00b7 ' + (ch.noun || 'campaign') + ' level');" in js,
