@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.64** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.65** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,156 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.65 - landing pages select, and they COMPOSE with channel groups
+
+- **Jason:** *"on seo, i should have checkmarks next to the pages so i can
+  select and see the graph update. this should work in combination with the
+  channel group filters"*
+
+The first half is v11.57's contract, one table lower: tick rows, get one series
+per row. The second half is the interesting one, because v11.57's rule is
+**ONE SELECTION, ONE DIMENSION** and this release breaks it on purpose.
+
+### ⚠ THE EXCEPTION IS IN THE SCHEMA, NOT IN AN OPINION
+v11.57 refuses to cross channel with device because GA4 reports them as two
+independent breakdowns and there is no table joining them. Landing pages are
+different, and the migration says so in its own section heading:
+
+```sql
+-- 6. Landing page x channel. THE SEO TABLE - and a ranking, not a total.
+primary key (property, day, landing_page, channel)
+-- The SEO access pattern: one channel (Organic Search) across the window.
+create index ga4_lp_channel_idx on ga4_by_date_landing_page (property, channel, day);
+```
+
+So a page measured within a set of channels is **one table's own count**, not
+two estimates intersected. `test_v1165` section A asserts that against
+`supabase_v11_36_ga4.sql` rather than against this paragraph - if the schema
+ever loses that column, the release's premise fails the build.
+
+| | crosses? | |
+|---|---|---|
+| landing page × channel group | **yes** | keyed together, indexed for it |
+| channel × device | no | no table at all (v11.41) |
+| landing page × device | no | **no device column** on that table |
+
+### What each combination draws
+| ticked | series | measured within |
+|---|---|---|
+| channel groups only | one per channel | - *(unchanged from v11.57)* |
+| landing pages only | one per page | every channel |
+| **both** | **one per PAGE** | **the ticked channel groups** |
+| pages + a Channel dropdown pick | one per page | that channel |
+| pages + a Device pick | - | the page selection is ignored |
+
+The finer dimension is the series and the coarser one is its scope: *"these
+pages, within these channels."* Drawing the N × M cross instead would turn
+three ticks and two ticks into six lines nobody asked for. The subtitle says
+which, so it is never inferred: `2 landing pages selected within 1 channel
+group`.
+
+Measured on the real renderer: `/` draws **550 / 580** with no channel ticked
+and **300 / 320** within Organic Search - that channel's own rows, not a share
+of the total.
+
+### ⚠ THE LOCK IS PER DIMENSION, because the crossings are
+v11.57 disables the breakdown checkboxes whenever **either** dropdown is
+picked. Applying that to pages would have refused the exact question this
+release exists to answer, since a Channel pick IS the combination.
+
+- channel / device rows - locked by either pick, as before.
+- landing pages - locked **only** by a **Device** pick.
+
+And both halves refuse: the control is disabled with the reason on its tooltip
+**and** `seoTrToggleRow` refuses when called directly, because a disabled
+control is bypassable from the console (v10.19 / v11.57).
+
+### ⚠ A PAGE SELECTION DRAWS NO PRIOR-YEAR LINE
+`ga4_by_date_landing_page` is not fetched for last year - it is this page's
+heaviest feed, 7,834 pages × channel × day - so there is no like-for-like
+history to draw. Drawing the SITE's would reproduce the v11.61 defect exactly:
+a narrow population compared against everything.
+
+v11.61's rule carries it unchanged: **a missing breakdown draws NOTHING, not
+the site's.** `seoTrPrevRows` returns `[]` for any page selection, and it is
+the FIRST check, because it holds under a dropdown pick too - that pick's own
+prior year is not the selected pages'. D9 drives all four shapes.
+
+### ⚠ '' AND '(not set)' ARE DIFFERENT STATES, and the chart had to agree
+The table keys a landing page `r.landing_page || ''` and renders a blank as
+**(blank)**; the migration is explicit that GA4's own `(not set)` and an empty
+string are never merged. The chart's generic rollup keys with
+`|| '(not set)'`, so a ticked **(blank)** row would have addressed a series
+filed under the other name and drawn nothing.
+
+`seoTrPageKey` is now the one definition and the table, the chart and the CSV
+all read it - asserted, with **zero** second spellings left.
+
+### ⚠ THE LINK WINS ITS OWN CLICK
+v11.62 made the landing page a real `<a href>` so ctrl / cmd / middle-click
+work. The row around it is clickable now, so without `event.stopPropagation()`
+on the anchor **one click would both open the storefront and change the
+chart.**
+
+### Verification
+- `node --check` clean · **121 suites green** · new `tests/test_v1165.py` (75
+  assertions) · `test_v1157` **72 → 73**, `test_v1161` **28 → 29**,
+  `test_v1162` **41 → 43**.
+- **The real `seoTrRenderPages` driven** on GA4-shaped rows including a blank,
+  a `(not set)` and `/x"><b>bad</b>`: seven header cells, index addressing,
+  **zero** raw `<b>`, the shared tint, the Device lock, and a Channel pick
+  leaving every box live.
+- **The real state machine driven**: compose, device-clears-pages,
+  page-clears-device, select-all over the rows ON SCREEN, both locks refused
+  from the console, an out-of-range index as a no-op.
+- **The real `seoTrRenderChart` driven** over eight combinations, with the
+  numbers checked against the channel-filtered sums.
+
+### Five of my own expectations were wrong, and one guard of mine was lazy
+- **B6** counted one anchor per row. `(not set)` and the blank carry **no
+  anchor at all** - v11.62 excludes them before a URL is even built.
+- **B9** counted eight checkboxes where there are seven: six rows and a header.
+- **B9c** required **zero** `seoTrToggleRow` in a locked table. The ROW handler
+  is correctly dropped; the CHECKBOX keeps its handler and is `disabled`,
+  exactly as the v11.57 tables ship. The guarantee is about the row, so that is
+  what is measured now.
+- **D5** forgot that stacked draws smallest-first, so the series came back
+  reversed. Asserted as a mapping, with the draw order as its own line.
+- **And I dropped a gate without noticing**: the Clear control used to HIDE
+  while a dropdown pick made the selection inert, and I replaced it with "show
+  it whenever something is selected". `test_v1157` A8d caught it. The right
+  rule was neither: it counts what is **LIVE**, through the **same predicate
+  that locks each table**, so the button and the checkboxes cannot disagree -
+  and a page selection stays live under a Channel pick, which is the new case.
+
+**And the re-pointed `test_v1162` C5 started as an allowlist of two exact
+expressions, and missed a third on its first run.** It asks what an
+interpolation **emits** now (a conditional may read `k` freely; its branches
+are what reach the markup), and carries a probe proving the rule still rejects
+a bare `${label}`. A guard that goes stale is a guard that will.
+
+### ⚠ The heredoc, twice more
+`python -c` inside a double-quoted shell string halved the escapes in two
+separate re-points, and both refused and wrote nothing. The rule has been in
+this file since v9.77 and I broke it twice in one session: **the Write or Edit
+tool, never a heredoc and never `python -c`, for anything containing escapes.**
+
+### Still open
+- **⚠ Chewy's ad break-even is still 1.0 and that is wrong** (v11.59).
+- **The landing-page prior year** (above). One fetch away if Jason wants it,
+  and the cost is doubling this page's heaviest query.
+- The CSV exports the full ranking rather than the selection, which is
+  v11.57's rule (a selection is a view of the CHART) applied unchanged.
+- Status by has never persisted across a reload (v11.64).
+- The six non-`pnlTrendRender` charts still get neither grace nor a ceiling.
+- The selected-row tint is spelled at six sites with three alphas - and this
+  release makes it seven.
+- The upload conformity guard covers **1 of 28** uploaders.
+- **One of the June / July Walmart keyword files is a duplicate of the other.**
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- `computeProductSeasonality` still has no upper bound on its window.
+- Walmart's allowance agreement, still the only missing input to that margin.
 
 ## v11.64 - In-House Production is a TAB, and it keeps its own columns
 

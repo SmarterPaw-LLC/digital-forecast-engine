@@ -89,12 +89,13 @@ const SEO_TR = {
 A = run_node(os.path.join(SP, "a.js"), ROWS + r"""
 let PICKED = false;
 function seoTrScopePicked() { return PICKED; }
-let seoTrSel = { dim: '', keys: new Set() };
-const _seoTrRendered = { channel: [], device: [] };
+let seoTrSel = { dim: '', keys: new Set(), pages: new Set() };
+const _seoTrRendered = { channel: [], device: [], page: [] };
 const seoTr = SEO_TR;
 const EL = {};
 globalThis.document = { getElementById: (id) => (EL[id] || (EL[id] = { id, innerHTML: '' })) };
-""" + fn("esc2") + "\n" + fn("seoTrSelNoun") + "\n" + fn("seoTrRenderBreakdowns") + r"""
+""" + fn("esc2") + "\n" + fn("seoTrSelNoun") + "\n" + fn("seoTrRowsLocked") + "\n"
+   + fn("seoTrRenderBreakdowns") + r"""
 const out = {};
 const html = (id) => EL[id] ? EL[id].innerHTML : null;
 const count = (h, re) => (h.match(re) || []).length;
@@ -123,7 +124,7 @@ out.nasty = {
 };
 
 // With a selection.
-seoTrSel = { dim: 'channel', keys: new Set(['Direct']) };
+seoTrSel = { dim: 'channel', keys: new Set(['Direct']), pages: new Set() };
 seoTrRenderBreakdowns({ sessions: 1 });
 h = html('seo-tr-chan-tbl');
 out.selected = {
@@ -135,7 +136,7 @@ out.selected = {
 };
 
 // Every row ticked -> the header box is checked too.
-seoTrSel = { dim: 'channel', keys: new Set(_seoTrRendered.channel) };
+seoTrSel = { dim: 'channel', keys: new Set(_seoTrRendered.channel), pages: new Set() };
 seoTrRenderBreakdowns({ sessions: 1 });
 h = html('seo-tr-chan-tbl');
 out.allChecked = { header: h.slice(0, h.indexOf('</thead>')).includes(' checked'),
@@ -156,7 +157,7 @@ PICKED = false;
 // EMPTY breakdown: the message must span the NEW column count.
 const keep = seoTr.dev;
 seoTr.dev = [];
-seoTrSel = { dim: '', keys: new Set() };
+seoTrSel = { dim: '', keys: new Set(), pages: new Set() };
 seoTrRenderBreakdowns({ sessions: 1 });
 out.empty = { colspan: (html('seo-tr-dev-tbl').match(/colspan="(\d+)"/) || [])[1] };
 seoTr.dev = keep;
@@ -216,12 +217,17 @@ eq("A9 the empty state spans the new column count", A["empty"]["colspan"], "6")
 # ---------------------------------------------------------------------------
 B = run_node(os.path.join(SP, "b.js"), r"""
 let PICKED = false;
+let DEVPICK = '';
 function seoTrScopePicked() { return PICKED; }
-let seoTrSel = { dim: '', keys: new Set() };
-const _seoTrRendered = { channel: ['Organic Search', 'Direct', 'Email'], device: ['mobile', 'desktop'] };
+const EL0 = { 'seo-tr-dev': { get value() { return DEVPICK; } }, 'seo-tr-chan': { value: '' } };
+globalThis.document = { getElementById: (id) => EL0[id] || null };
+let seoTrSel = { dim: '', keys: new Set(), pages: new Set() };
+const _seoTrRendered = { channel: ['Organic Search', 'Direct', 'Email'], device: ['mobile', 'desktop'],
+                         page: ['/', '/collections/toys', '/pages/meowijuana'] };
 let RENDERS = 0;
 function renderSeoTraffic() { RENDERS++; }
-""" + fn("seoTrToggleRow") + "\n" + fn("seoTrToggleAll") + "\n" + fn("seoTrClearSel") + r"""
+""" + fn("seoTrSelNew") + "\n" + fn("seoTrRowsLocked") + "\n" + fn("seoTrSelApply") + "\n"
+   + fn("seoTrToggleRow") + "\n" + fn("seoTrToggleAll") + "\n" + fn("seoTrClearSel") + r"""
 const snap = () => ({ dim: seoTrSel.dim, keys: [...seoTrSel.keys], renders: RENDERS });
 const out = {};
 seoTrToggleRow('channel', 0); out.one = snap();
@@ -272,7 +278,7 @@ eq("B7 /!\\ while a dropdown pick is active the handlers REFUSE",
 # ---------------------------------------------------------------------------
 C = run_node(os.path.join(SP, "c.js"), ROWS + r"""
 let MODE = 'line';
-let seoTrSel = { dim: '', keys: new Set() };
+let seoTrSel = { dim: '', keys: new Set(), pages: new Set() };
 let seoTrChart = null;
 const seoTr = SEO_TR;
 let CFG = null;
@@ -283,7 +289,8 @@ const pnlTrendRender = async (cfg) => { CFG = cfg; return { destroy() {} }; };
 const seoTrWindow = () => ({ from: '2026-10-01', to: '2026-10-28', label: 'x' });
 const EL = {};
 globalThis.document = { getElementById: (id) => (EL[id] || (EL[id] = { id, textContent: '', innerHTML: '' })) };
-""" + fn("seoTrSelNoun") + "\n" + fn("seoTrPrevRows") + "\n" + fn("seoTrRenderChart") + r"""
+""" + fn("seoTrSelNoun") + "\n" + fn("seoTrPageKey") + "\n"
+   + fn("seoTrPrevRows") + "\n" + fn("seoTrRenderChart") + r"""
 const shot = () => ({ labels: CFG.datasets.map(d => d.label),
                       fills: CFG.datasets.map(d => !!d.fill),
                       widths: CFG.datasets.map(d => d.borderWidth),
@@ -296,16 +303,16 @@ const shot = () => ({ labels: CFG.datasets.map(d => d.label),
   MODE = 'stacked';
   await seoTrRenderChart(seoTr.days, '');        out.stackedNoSel = shot();
 
-  seoTrSel = { dim: 'channel', keys: new Set(['Direct', 'Organic Search']) };
+  seoTrSel = { dim: 'channel', keys: new Set(['Direct', 'Organic Search']), pages: new Set() };
   await seoTrRenderChart(seoTr.days, '');        out.stackedSel = shot();
   MODE = 'line';
   await seoTrRenderChart(seoTr.days, '');        out.lineSel = shot();
 
-  seoTrSel = { dim: 'device', keys: new Set(['mobile']) };
+  seoTrSel = { dim: 'device', keys: new Set(['mobile']), pages: new Set() };
   await seoTrRenderChart(seoTr.days, '');        out.deviceSel = shot();
 
   // A DROPDOWN pick wins: the selection must not reach the chart.
-  seoTrSel = { dim: 'channel', keys: new Set(['Direct']) };
+  seoTrSel = { dim: 'channel', keys: new Set(['Direct']), pages: new Set() };
   await seoTrRenderChart(seoTr.chan.filter(r => r.channel === 'Direct'), 'Direct');
   out.scoped = shot();
   console.log(JSON.stringify(out));
@@ -374,7 +381,12 @@ ok("selected" not in C["scoped"]["sub"],
 # D. Static.
 # ---------------------------------------------------------------------------
 code = nocomment(js)
-for f in ("seoTrToggleRow", "seoTrToggleAll", "seoTrClearSel", "seoTrScopePicked", "seoTrSelNoun"):
+# v11.65 - the selection state carries a third set (landing pages,
+# which CROSS with channel groups), so the harness fixtures the real
+# shape. A literal missing `pages` would throw on `.size` rather than
+# read as nothing selected.
+for f in ("seoTrToggleRow", "seoTrToggleAll", "seoTrClearSel", "seoTrScopePicked", "seoTrSelNoun",
+          "seoTrSelNew", "seoTrRowsLocked", "seoTrSelApply", "seoTrPageKey"):
     eq("D1 %s defined once" % f, code.count("function %s(" % f), 1)
 eq("D2 one selection state", code.count("let seoTrSel ="), 1)
 eq("D2b one rendered cache", code.count("const _seoTrRendered ="), 1)
@@ -382,7 +394,9 @@ ok("_seoTrRendered[dim] = list.map" in code,
    "D3 the cache is published by the renderer that produced the order")
 # v11.61 added a third reader: the prior-year line's own label, which has
 # to name the same population in the same words as the subtitle does.
-eq("D4 the noun has one definition and three readers", code.count("seoTrSelNoun("), 4)
+# v11.65 added three more - the landing-page series' own note, the channel
+# scope it states, and both halves of the Clear control. Still ONE definition.
+eq("D4 the noun has one definition and six readers", code.count("seoTrSelNoun("), 7)
 eq("D5 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
 for phrase in ("ONE SELECTION, ONE DIMENSION", "they are excluded",
                "a selection is a view of"):

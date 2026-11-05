@@ -138,11 +138,46 @@ cell = cell[:cell.index("</tr>")]
 ok("<a href=" in cell, "C1  a real <a href>, not an onclick")
 # /!\ v11.37's rule: a real href means ctrl/cmd-click, middle-click and
 # open-in-new-tab work for free. An onclick would break all three.
-ok("onclick" not in cell, "C2  no onclick on the cell")
+#
+# v11.65 - the ROW around this cell toggles the page onto the chart, so "no
+# onclick in this region" stopped being the guarantee. The one that matters is
+# asserted directly instead, and more precisely than before: the anchor
+# navigates through its HREF and never through script, and its only handler is
+# the one that stops the row from also toggling.
+anchor = cell[cell.index("<a href="):cell.index("</a>")]
+ok(re.search(r'onclick="(?!event\.stopPropagation\(\)")', anchor) is None,
+   "C2  the anchor carries no handler but the row-toggle guard", anchor)
+ok(re.search(r"\b(location|window\.open|showPage|routeApply)\b", anchor) is None,
+   "C2b and it never navigates by script")
+ok("event.stopPropagation()" in anchor,
+   "C2c the link wins its own click, so one click cannot both open and toggle")
 ok('target="_blank"' in cell, "C3  opens in a new tab (the storefront, not this app)")
 ok('rel="noopener"' in cell, "C4  with rel=noopener")
-ok(re.search(r"\$\{(?!esc2\()[^}]*\b(href|label|k)\b", cell) is None,
-   "C5  every interpolated value goes through esc2")
+# v11.65 - the row's markup READS `k` several times to choose a tint, a
+# checked attribute and a data flag, and each time it emits a LITERAL rather
+# than the value. So the question is not whether an interpolation mentions an
+# untrusted name - it is what the interpolation EMITS. A conditional's test may
+# read k freely; its branches are what reach the markup.
+#
+# (An allowlist of the exact expressions was the first cut, and it missed one
+# of the three on the first run - a guard that goes stale is a guard that will.)
+_risky = []
+for _x in re.findall(r"\$\{([^}]*)\}", cell):
+    _x = _x.strip()
+    if _x.startswith("esc2("):
+        continue
+    _emits = _x.split("?", 1)[1] if "?" in _x else _x
+    if re.search(r"\b(href|label|k)\b", _emits):
+        _risky.append(_x)
+ok(not _risky, "C5  every interpolated VALUE goes through esc2", _risky)
+
+# ...and the guard is not vacuous: an unescaped `${label}` has to fail it.
+_probe = []
+for _x in ["esc2(label)", "pOn(k) ? ' checked' : ''", "label", "href ? a : k"]:
+    _emits = _x.split("?", 1)[1] if "?" in _x else _x
+    if not _x.startswith("esc2(") and re.search(r"\b(href|label|k)\b", _emits):
+        _probe.append(_x)
+eq("C5b the same rule REJECTS an unescaped value", _probe, ["label", "href ? a : k"])
 ok("(not set)" in cell and "k === ''" in cell,
    "C6  the two non-page buckets are excluded before a URL is even built")
 
@@ -183,8 +218,11 @@ pg = pg[:pg.index("\n}")]
 ok("a ranking, not a total" in pg, "D1  the ranking caution survives")
 ok("have no landing page on record" in pg, "D2  the (not set) count line survives")
 # /! `<th` also matches `<thead>` - the v11.57 mistake, made again.
-eq("D3  still six columns", len(re.findall(r"<th[ >]", pg)), 6)
-ok('colspan="6"' in pg, "D4  the empty state still spans them")
+# v11.65 - the selection checkbox is the seventh. Census going red on a column
+# change is the test doing its job.
+eq("D3  seven columns, the leading checkbox included",
+   len(re.findall(r"<th[ >]", pg)), 7)
+ok('colspan="7"' in pg, "D4  the empty state spans them")
 
 p = os.path.join(SP, "app.js")
 io.open(p, "w", encoding="utf-8", newline="").write(js)

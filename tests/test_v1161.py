@@ -95,7 +95,7 @@ const seoTr = {
              mk(30, { channel: 'Paid Social' }),    mk(40, { channel: null })],
   prevDev:  [mk(50, { device: 'mobile' }), mk(60, { device: 'desktop' })],
 };
-let seoTrSel = { dim: '', keys: new Set() };
+let seoTrSel = { dim: '', keys: new Set(), pages: new Set() };
 const EL = { 'seo-tr-chan': { value: '' }, 'seo-tr-dev': { value: '' } };
 globalThis.document = { getElementById: (id) => EL[id] || null };
 """ + fn("seoTrPrevRows") + r"""
@@ -105,11 +105,11 @@ const snap = k => { out[k] = { n: seoTrPrevRows().length, total: sum(seoTrPrevRo
 
 snap('sitewide');
 
-seoTrSel = { dim: 'channel', keys: new Set(['Organic Search']) };
+seoTrSel = { dim: 'channel', keys: new Set(['Organic Search']), pages: new Set() };
 snap('oneChannel');
-seoTrSel = { dim: 'channel', keys: new Set(['Organic Search', 'Direct']) };
+seoTrSel = { dim: 'channel', keys: new Set(['Organic Search', 'Direct']), pages: new Set() };
 snap('twoChannels');
-seoTrSel = { dim: 'device', keys: new Set(['mobile']) };
+seoTrSel = { dim: 'device', keys: new Set(['mobile']), pages: new Set() };
 snap('oneDevice');
 
 // A GA4 null renders as '(not set)' in the CURRENT rollup, so the prior-year
@@ -118,7 +118,7 @@ seoTrSel = { dim: 'channel', keys: new Set(['(not set)']) };
 snap('notSet');
 
 // A DROPDOWN PICK WINS over a row selection, exactly as the chart does.
-seoTrSel = { dim: 'channel', keys: new Set(['Organic Search']) };
+seoTrSel = { dim: 'channel', keys: new Set(['Organic Search']), pages: new Set() };
 EL['seo-tr-chan'].value = 'Paid Social';
 snap('dropdownBeatsSelection');
 EL['seo-tr-chan'].value = '';
@@ -128,15 +128,15 @@ snap('devicePick');
 EL['seo-tr-chan'].value = 'Direct';
 snap('bothPicked');
 EL['seo-tr-chan'].value = ''; EL['seo-tr-dev'].value = '';
-seoTrSel = { dim: '', keys: new Set() };
+seoTrSel = { dim: '', keys: new Set(), pages: new Set() };
 
 // A load that predates v11.61 has no breakdowns: no line beats a wrong one.
 seoTr.prevChan = [];
-seoTrSel = { dim: 'channel', keys: new Set(['Direct']) };
+seoTrSel = { dim: 'channel', keys: new Set(['Direct']), pages: new Set() };
 snap('noPriorBreakdown');
 // ...and a MISSING key (undefined, not []) must not throw either.
 delete seoTr.prevDev;
-seoTrSel = { dim: 'device', keys: new Set(['mobile']) };
+seoTrSel = { dim: 'device', keys: new Set(['mobile']), pages: new Set() };
 snap('prevDevUndefined');
 console.log(JSON.stringify(out));
 """
@@ -186,8 +186,13 @@ for frag in ["selKeys.length === 1 ? selKeys[0]",
              "'Sessions (prior year)'"]:
     ok(frag in js, "D2  names the %s case" % frag[:28])
 # Rule 3a: the label and the subtitle use the SAME noun for the same thing.
-ok("seoTrSelNoun(seoTrSel.dim, selKeys.length)" in js,
+# v11.65 - the dimension is resolved into `selDim` first, because a page
+# selection draws pages and `seoTrSel.dim` names the channel/device pick beside
+# it. The guarantee is unchanged: ONE noun function, never a second word.
+ok("seoTrSelNoun(selDim, selKeys.length)" in js,
    "D3  a multi-key label reuses the subtitle's noun rather than coining one")
+ok("const selDim = hasPages ? 'page' : seoTrSel.dim;" in js,
+   "D3b and it names what is DRAWN, not the pick beside it")
 
 # ===========================================================================
 print("\nE. The file still parses")
