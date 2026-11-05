@@ -69,9 +69,19 @@ _early = rp.index('No SKU Economics data loaded for')
 ok(rp.index("renderAdsCampaigns('amazon')") < _early,
    'A1b the Ads sync runs ABOVE the empty-data early return, so the period '
    'control still drives the tab when sku_economics is empty for the region')
-ok(rp.index("renderPnlOpportunities();") > _early,
-   'A1c while Opportunities correctly stays below it - it is built from '
-   'aggregates that do not exist in that branch')
+# v11.71 - re-pointed, not silenced. renderPnl no longer names the
+# Opportunities renderer at all: PNL_AMZN_LIVE_VIEWS does, and it declares
+# `onEmpty: false` for exactly the reason this assertion was written. The
+# empty branch passes { empty: true }, which is what refuses it.
+_reg = js[js.index('const PNL_AMZN_LIVE_VIEWS'):]
+_reg = _reg[:_reg.index('};') + 2]
+ok("opportunities: { render: () => renderPnlOpportunities(), onEmpty: false }" in _reg,
+   'A1c while Opportunities is still refused in the empty-data branch - it is '
+   'built from aggregates that do not exist there')
+ok("pnlRenderAmazonView(pnlAmazonView, { empty: true })" in rp,
+   'A1c2 and the empty branch is the caller that says so')
+ok("if (opts && opts.empty && !cfg.onEmpty) return false;" in js,
+   'A1c3 and the flag is actually READ, not merely declared')
 # EVERY Amazon filter routes through renderPnl, so one hook covers all of them.
 for ctl in ['id="pnl-from" onchange="renderPnl()"',
             'id="pnl-to" onchange="renderPnl()"',

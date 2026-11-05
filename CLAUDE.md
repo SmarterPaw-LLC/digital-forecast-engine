@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.70** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.71** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,152 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.71 - the Fees tab joins the render pipeline, and ranks by the fee you pick
+
+- **Jason:** *"this page does nothing... what is the point? i wanted a way to
+  view high fee items and look for savings from storage costs and other fees."*
+
+He is right twice over, and the first half is the worse of the two.
+
+### ⚠ IT RENDERED ONCE, AT TAB ENTRY, AND NEVER AGAIN
+`renderAmazonFees()` had exactly one caller outside its own two inputs:
+`switchPnlAmazonView`. So the Period, Region, Brand, Category and product
+controls sitting directly above it drove **nothing**, and a tab opened before
+`sku_economics` finished loading showed $0 for ever. His screenshot is a
+window holding **259 US SKUs and $9,262.81 of FBA fulfilment**, reading zero.
+
+**The mechanism to prevent this has existed since v8.84**, and that
+release’s own comment describes this bug:
+
+> *"previously the Opportunities view rendered once and then never refreshed,
+> so it stayed showing stale window/data when the user changed filters."*
+
+It was spelled **three ways in `renderPnl`’s tail** - two bare ifs and a
+try/catch - and **a fourth time in `switchPnlAmazonView`**. Four spellings of
+one rule, and the new tab joined none of them. Measured, rather than claimed:
+the old tail is run beside the shipped one over the same four views.
+
+| view | v11.70 tail | v11.71 |
+|---|---|---|
+| diagnostics | rendered | rendered |
+| performance | rendered | rendered |
+| opportunities | rendered | rendered |
+| **fees** | **nothing** | **rendered** |
+
+`PNL_AMZN_LIVE_VIEWS` is the one registry, read by the tail **and** by
+`switchPnlAmazonView`, so a view cannot be wired for tab entry and missed for
+filter changes.
+
+### ⚠ AND NOT EVERY VIEW SURVIVES AN EMPTY SOURCE - `test_v1117` CAUGHT IT
+My first cut refreshed the open sub-view from the empty-data branch too. That
+branch **returns before computing any aggregates**, and Diagnostics,
+Performance and Opportunities are built FROM those aggregates - which is
+exactly what `test_v1117` A1c was written to protect, by asserting
+Opportunities sat BELOW that return.
+
+Fees is different: `amzFeeAgg` reads `getPnlSource()` itself, so with no rows
+it renders the honest empty state rather than the last region’s numbers.
+
+That distinction used to be carried by **a line’s position in a function**. It
+is `onEmpty` now, and A1c is re-pointed at the flag rather than silenced.
+
+### ⚠ "NO FEES" AND "NO DATA" ARE DIFFERENT SENTENCES
+The empty table said *"No fees in this window"* whether the window was empty
+or the app had not loaded yet. **That sentence is what sent Jason looking for
+a bug in the window.** It says `No SKU Economics data loaded.` now when
+nothing was scanned.
+
+### ⚠ A FEE THAT BILLS MONTHLY IS NOT A FEE OF ZERO
+The second half of his ask - *"savings from storage costs"* - could not be
+answered at all, and not only because there was no storage column. Measured
+on the live table, US, 13 weeks:
+
+| | charged in |
+|---|---|
+| FBA Fulfilment · Referral | **13 of 13 weeks** |
+| Removal | 10 of 13 |
+| Inbound Placement | 8 of 13 |
+| Low Inventory | 5 of 13 |
+| Aged Inventory | 3 of 13 |
+| **FBA Storage** | **1 of 13** |
+
+**Storage is billed monthly and stamped onto ONE week.** The composition table
+drops any line totalling zero, so on a weekly window the line he came to
+analyse was simply **absent** - which reads as *we pay no storage*. That is
+the v10.19 defect in its worst form: a confident wrong answer about the exact
+thing he asked for.
+
+A line that is zero in the window but **has history** now renders dimmed, as
+`— · not in window · 2026-08-31`, with the cadence on its tooltip. A line
+never charged at all is still never surfaced - an invented row would be the
+same defect pointing the other way.
+
+**Derived, never typed**: counted off the rows already in memory, in the same
+pass, so it stays right if Amazon changes how it bills.
+
+### The per-SKU table finally carries the fees
+It had Fees, Fee %, FBA $/u, FBA % and one rolled-up Avoidable - and **no
+storage column at all**. Now: **FBA Storage plus every avoidable line**, one
+column each, so the Avoidable column is exactly the sum of the columns beside
+it and the table ties out on its own face.
+
+The columns are **derived from `AMZ_FEE_LINES` through a new `sku` field**,
+which carries the short header AND declares that the line gets a column - so a
+line cannot appear on the account-level table and be missing from the per-SKU
+one. The short form sits beside its long form, which is what rule 3a asks of
+an abbreviation, and the tooltip spells it out.
+
+**And every column sorts**, which is the point: "which SKU is bleeding
+aged-inventory fees" is a RANKING question, and a table frozen on total fees
+answers a different one - the biggest fee payers are the biggest sellers.
+
+### ⚠ ONE COMPARATOR, because this would have been the second
+`tableSortCmp` is extracted from the Ads tables, where the null rule was
+written, and **that caller is converted in the same commit** (rule #5).
+`test_v1171` D1 pins the new comparator against the retired inline one over
+four sorts - which is the only form in which *"no Ads table moved"* is
+checkable rather than read off a diff. `tableSortArrow` goes with it, so the
+sorted-column marker is one glyph app-wide (rule #2).
+
+### Verification
+- `node --check` clean · **126 suites green** · new `tests/test_v1171.py`
+  (**114 assertions**) · `test_v1117` A1c re-pointed, `test_v1170` E2d
+  re-pointed.
+- **THE DEFECT REPRODUCED**: the pre-v11.71 tail run beside the shipped one,
+  three views against four.
+- **The real `amzFeeAgg` driven** on the cadence: storage charged in 1 of 4
+  loaded weeks, another region’s weeks excluded from the count, the window
+  reporting $0 while the cadence still names 2026-10-05, and a wider window
+  reporting the full $476.
+- **In a browser on the REAL pipeline** (chip `v11.71`), with **real
+  `sku_economics` rows** pushed into `pnlData` and driven through the **real
+  `renderPnl`**: Jason’s own window reads
+  `2026-10-25 → 2026-10-31 · 30 products · US` and
+  **`Amazon Fees $13,157`, matching the SQL total to the cent**; changing the
+  period moves it to `2026-10-18 → 2026-10-31` and back; the composition
+  ranks six lines and lists **Aged Inventory, Removal and FBA Storage as *not
+  in window*** with their last billing weeks; an August window reports
+  **FBA Storage $320.27** in full; the per-SKU table renders 14 columns; and
+  **a real mouse click on the Storage header** sorts it descending
+  (`Storage ▼`, top $91.32), reverses on a second click, and the
+  sub-line tracks it. Only the expected unauthenticated 401s in console.
+
+### Still open
+- **⚠ NO SETTLEMENT FEED** (v11.70). The largest Amazon cost blind spot, and
+  it needs an uploader rather than a screen.
+- **⚠ Reimbursement is netted off on Break-Even and not on Fees** (v11.70).
+- **⚠ The Walmart ad grain is still MONTHLY**, and Jason has chosen the
+  weekly file (v11.67). Still the next release.
+- **⚠ Chewy’s ad break-even is still 1.0 and that is wrong** (v11.59).
+- The Fees tab still has no chart and no column picker. Both additive.
+- The Chewy Program chart still has its own comparison control (v11.68).
+- June and July Walmart keyword files are still the same file (v11.67).
+- `sku_economics_eu` fx is CAD-only in one helper (`fxMul`), unlike `pnlRowFx`.
+- The upload conformity guard covers **1 of 28** uploaders.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- `computeProductSeasonality` has no upper bound on its window.
+- Walmart’s allowance agreement, still the only missing input to that margin.
 
 ## v11.70 - a Fees tab: per SKU, at the account level, and what it leaves out
 

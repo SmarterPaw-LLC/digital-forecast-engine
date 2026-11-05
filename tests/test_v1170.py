@@ -343,7 +343,12 @@ ok("'fees'" in NC[NC.index("function switchPnlAmazonView("):][:2000],
 ok("['pnl-amzn-tab-fees',       'fees']" in js,
    "E2b and the shared sub-tab strip knows it (v10.17)")
 ok("if (feeWrap)  feeWrap.style.display" in js, "E2c the wrap is shown and hidden")
-ok("if (view === 'fees') renderAmazonFees();" in js, "E2d and the renderer runs on entry")
+# v11.71 - entry now goes through the shared registry, which is what made
+# the tab follow the filter bar as well. The guarantee is unchanged: opening
+# the tab renders it.
+ok("pnlRenderAmazonView(view);" in js
+   and "fees:          { render: () => renderAmazonFees()" in js,
+   "E2d and the renderer runs on entry, through PNL_AMZN_LIVE_VIEWS")
 # /!\ v10.3: an unmapped sub-view search leaves the top bar reading "No search
 # on this page" while a live box sits below it.
 ok("pnl_amazon_fees: { id: 'amzfee-search' }" in js,
