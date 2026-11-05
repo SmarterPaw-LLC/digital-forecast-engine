@@ -63,7 +63,11 @@ print("\n" + "=" * 62)
 print("  v11.56  a reference line is not a band, and only must not hide it")
 print("=" * 62)
 
-CORE = (fn("chartLegendIsOverlay") + "\n" + fn("chartLegendSoloed") + "\n"
+# v11.66 — the handlers re-scope the chart's overlay before repainting now.
+# A chart that does not publish a resolver (every chart in this suite) is
+# byte-identical, which test_v1166 C3 asserts directly.
+CORE = (fn("chartLegendIsOverlay") + "\n" + fn("chartLegendSyncOverlay") + "\n"
+        + fn("chartLegendSoloed") + "\n"
         + fn("chartLegendOnly") + "\n" + fn("chartLegendToggle") + "\n")
 
 A = run_node(os.path.join(SP, "a.js"), CORE + r"""

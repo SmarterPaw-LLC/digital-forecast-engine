@@ -396,7 +396,10 @@ ok("_seoTrRendered[dim] = list.map" in code,
 # to name the same population in the same words as the subtitle does.
 # v11.65 added three more - the landing-page series' own note, the channel
 # scope it states, and both halves of the Clear control. Still ONE definition.
-eq("D4 the noun has one definition and six readers", code.count("seoTrSelNoun("), 7)
+# v11.66 added a seventh: the prior-year line renames itself as the legend
+# narrows the bands, and it has to say "2 channel groups" in the same words
+# the subtitle would. Still ONE definition.
+eq("D4 the noun has one definition and seven readers", code.count("seoTrSelNoun("), 8)
 eq("D5 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
 for phrase in ("ONE SELECTION, ONE DIMENSION", "they are excluded",
                "a selection is a view of"):

@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.65** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.66** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,142 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.66 - the prior year of WHAT IS DRAWN, including what the legend drew
+
+- **Jason:** *"when i filter to a channel it is still showing the prior period
+  TOTAL FOR ALL CHANNELS, not the prior period for the filtered channel."*
+
+v11.61 is the release that fixed this, and it fixed it twice - for the
+dropdown pick and for the ticked rows. **The LEGEND was never on that list**,
+and the legend is how Jason was filtering.
+
+### ⚠ VISIBILITY IS NOT SCOPE, AND THE OVERLAY ONLY KNEW ABOUT SCOPE
+`only` and a plain toggle call `setDatasetVisibility`. They do not re-render,
+so the `_prev` dataset's **data** stayed whatever the last full render
+computed - the sitewide total, because no dropdown was picked and no row was
+ticked. On his own screenshot:
+
+| 5/11/26 | |
+|---|---|
+| Organic Search | **546** |
+| Sessions (prior year) | **6,559** |
+
+A single channel against the whole site, drawn as a comparison. That is the
+v11.61 defect exactly, one surface over, reached by a gesture v11.61 never
+looked at.
+
+**v11.56 is where it came from, and it was my sentence that missed it.** That
+release stopped `only` from crossing the comparison line out - the right fix
+for what Jason asked - and never asked *the reference of WHAT*. The line
+survived the isolation and went on describing everyone.
+
+### A chart OPTS IN, and nothing else moves
+`chartLegendSyncOverlay(chart)` runs an `$overlaySync` the chart publishes,
+and does nothing at all when there is none. **Eight charts share this legend;
+exactly one publishes a resolver.** The Units Sold goal line is an overlay
+too - and a goal is not a population, so it must not narrow with the bands.
+`test_v1166` C3 pins that chart as byte-identical through both gestures.
+
+**BOTH gestures sync.** Fixing `only` alone would have left a seven-click
+route to the same wrong line: hide the other bands one at a time and the
+comparison is sitewide again.
+
+### What each band resolves to
+Each band hands over a predicate against last year's feed at render time.
+
+| visible | the line becomes |
+|---|---|
+| Organic Search | **that channel's own prior year** |
+| Organic Search + Direct | those two, summed · `2 channel groups (prior year)` |
+| **Other** | **the COMPLEMENT of the ranked set** |
+| everything | the site, unchanged |
+| **nothing** (the reference soloed) | **the site** |
+
+**Other is a negation, not a list**, so it keeps meaning the same thing when
+the ranking moves. And *everything* and *nothing* both resolve to the base:
+`all` has to round-trip byte for byte, and soloing the reference itself must
+not leave it describing no one.
+
+### ⚠ v11.61's RULE CARRIES, UNCHANGED
+**A missing breakdown draws NOTHING, not the site's.** Isolate a band with no
+rows in last year's feed and the line goes to nulls rather than falling back
+to the total. So does a band this chart cannot place at all - the honest
+answer there is the base, never a partial sum reported as if it were whole.
+
+### ONE rollup, two readers
+The 364-day shift and the prior-year rollup were spelled inside the
+`if (prevRows.length)` block, where only the initial draw could reach them.
+`prevShift` / `prevData` are lifted out and **the initial draw and the legend
+sync now build that line with the same arithmetic** - a second walk over the
+same curve is a second answer waiting to drift (hard rule #1). Asserted at one
+spelling each.
+
+### ⚠ AND THE LEGEND'S REBUILD GUARD HAD TO MOVE
+v11.35 keys the item rebuild on a signature of **every label and colour**,
+because rebuilding replaces the node under the pointer and the `only` chip you
+just clicked would vanish until the mouse moved.
+
+The overlay **renames itself on every legend click** now - it names the
+population it is comparing against - so that signature would fire a rebuild on
+exactly the click whose node has to survive. The key is the series **count**,
+and the label and swatch are refreshed **in place** instead. Strictly fewer
+rebuilds, and the label is written with `textContent`, so a GA4 channel name
+no longer reaches innerHTML by a second route.
+
+`test_v1135` grew A4c-A4e for it: a changed label keeps the same nodes and
+updates their text.
+
+### Verification
+- `node --check` clean · **122 suites green** · new `tests/test_v1166.py` (50
+  assertions) · `test_v1135` **83 → 87**, `test_v1157` **73 → 73**
+  (re-pointed 7 → 8 readers).
+- **THE DEFECT REPRODUCED**: the pre-v11.66 `chartLegendOnly` is run beside the
+  shipped one on the same chart and the same feed. The old one isolates the
+  band and leaves the line at **950 / 1,000** (every channel); the new one
+  draws **500 / 520** (that channel) and renames itself. *"It was showing the
+  site's"* is a measurement, not a reading.
+- **The real `seoTrOverlaySync` driven** over ten states: one band, two bands,
+  Other as a complement, a band with no prior-year rows, no band at all, an
+  unplaceable band, a device noun, a chart with no overlay, and the round trip
+  compared byte for byte.
+- **The real `chartLegendOnly` / `chartLegendToggle` driven**: the sync runs
+  **before** the repaint (one repaint, read off an ops log), a chart that did
+  not opt in is byte-identical, and a throwing resolver is caught so the
+  isolation the operator asked for is still drawn.
+- **The real `seoTrRenderChart` driven** over seven views for who publishes a
+  resolver and who publishes null - including the end-to-end isolation, and
+  the reassignment that stops a stacked view's resolver outliving it.
+
+### Four of my own expectations were wrong
+- **B7** could not test the thing it claimed. The fixture hides datasets by
+  label, so a label that is not a dataset is never *visible* - the chart has to
+  carry an unplaceable band for the fallback to run at all.
+- **D7** asserted "never inherited" against a stub that handed back a **fresh
+  chart object every render**, where inheritance cannot happen either way. It
+  reuses `instance` the way `pnlTrendRender` does now, so the same object
+  really does carry from a stacked view into a line one.
+- **E2** counted a call pattern that the **declaration line** also matches.
+- **E6** required a phrase that was in my patch notes rather than in the
+  source.
+
+### Still open
+- **⚠ Chewy's ad break-even is still 1.0 and that is wrong** (v11.59).
+- **The landing-page prior year** - still one fetch away, and still the cost of
+  doubling this page's heaviest query. A page selection therefore has no line
+  for the legend to narrow either.
+- The scorecards do **not** follow a legend isolation, which is v11.57's rule
+  (a selection is a view of the CHART) applied unchanged - and the same is true
+  of the subtitle, which describes what was RANKED rather than what is drawn.
+- The CSV exports the full ranking rather than the selection.
+- Status by has never persisted across a reload (v11.64).
+- The six non-`pnlTrendRender` charts still get neither grace nor a ceiling.
+- The selected-row tint is spelled at seven sites with three alphas.
+- The upload conformity guard covers **1 of 28** uploaders.
+- **One of the June / July Walmart keyword files is a duplicate of the other.**
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- `computeProductSeasonality` still has no upper bound on its window.
+- Walmart's allowance agreement, still the only missing input to that margin.
 
 ## v11.65 - landing pages select, and they COMPOSE with channel groups
 

@@ -165,12 +165,26 @@ function mkEl(tag) {
         chip.className = 'ch-lg-only';
         item._chip = chip;
         chip.parentElement = item;
+        // v11.66 — the label and the swatch are refreshed in place, so they
+        // have to be real nodes for that refresh to be observable.
+        const txt = mkEl('span');
+        txt.className = 'ch-lg-t';
+        const mt = /<span class="ch-lg-t">([\s\S]*?)<\/span>/.exec(m[2]);
+        txt.textContent = mt ? mt[1] : '';
+        item._t = txt; txt.parentElement = item;
+        const sw = mkEl('span');
+        sw.className = 'ch-lg-sw';
+        const ms = /<span class="ch-lg-sw" style="background:([^"]*)">/.exec(m[2]);
+        sw.style.background = ms ? ms[1] : '';
+        item._sw = sw; sw.parentElement = item;
         item.parentElement = el;
         el._kids.push(item);
       }
     },
     getAttribute(k) { return (el._attrs || {})[k] || null; },
-    querySelector(sel) { return sel === '.ch-lg-only' ? (el._chip || null) : null; },
+    querySelector(sel) { return sel === '.ch-lg-only' ? (el._chip || null)
+                              : sel === '.ch-lg-t' ? (el._t || null)
+                              : sel === '.ch-lg-sw' ? (el._sw || null) : null; },
     closest(sel) {
       let n = el;
       while (n) {
@@ -239,8 +253,13 @@ function mkCanvas(id, parentPos) {
 # "soloed" definition now, so the harness slices it with them. The dependency
 # is real and this follows it (the v10.43 / v10.45 / v10.97 pattern); the
 # overlay rule's own guarantees live in test_v1156.
+# v11.66 — both handlers now ask the chart to re-scope its overlay before
+# repainting, so the harness slices that too. The guarantees the sync itself
+# makes live in test_v1166; what this suite owns is that the legend is
+# unchanged in every other respect.
 CORE = DOM + '\n' + fn('chartLegendHost') + '\n' + fn('chartLegendToggle') + '\n' \
-     + fn('chartLegendIsOverlay') + '\n' + fn('chartLegendSoloed') + '\n' \
+     + fn('chartLegendIsOverlay') + '\n' + fn('chartLegendSyncOverlay') + '\n' \
+     + fn('chartLegendSoloed') + '\n' \
      + fn('chartLegendOnly') + '\n' + const_obj('CHART_HTML_LEGEND') + '\n'
 
 
@@ -300,6 +319,18 @@ P.afterUpdate(chart, {}, { show: true });
 out.a6b_chips = host.children.map(n => n.querySelector('.ch-lg-only').textContent);
 out.a6b_titles = host.children.map(n => n.querySelector('.ch-lg-only').title);
 
+// A4c v11.66 - a LABEL that changes is refreshed IN PLACE. The SEO overlay
+// renames itself on every legend click (it names the population it compares
+// against), so keying the rebuild on the text would replace the node under
+// the pointer on exactly the click that needs it to stay.
+const nodesPre = host.children.slice();
+chart.data.datasets[2].label = 'Other \u00b7 7 channels';
+chart.data.datasets[2].borderColor = '#123456';
+P.afterUpdate(chart, {}, { show: true });
+out.a4c_sameNodes = host.children.every((n, k) => n === nodesPre[k]);
+out.a4c_text = host.children.map(n => n.querySelector('.ch-lg-t').textContent);
+out.a4c_sw = host.children.map(n => n.querySelector('.ch-lg-sw').style.background);
+
 // A4b changing the SERIES does rebuild
 chart.data.datasets = [{ label: 'Totally different', borderColor: '#000' }, { label: 'Second', borderColor: '#111' }];
 P.afterUpdate(chart, {}, { show: true });
@@ -343,6 +374,9 @@ eq('A3b and a single series renders nothing, the canvas legend\'s own rule',
 eq('A4a THE REBUILD GUARD: a visibility change does NOT rebuild the nodes, so '
    'the chip cannot vanish from under the pointer', A['a4_sameNodes'], True)
 eq('A4b but a change of SERIES does', A['a4b_rebuilt'], True)
+eq('A4c v11.66 a changed LABEL does NOT rebuild', A['a4c_sameNodes'], True)
+eq('A4d it is refreshed in place instead', A['a4c_text'][2], 'Other \u00b7 7 channels')
+eq('A4e and so is the swatch', A['a4c_sw'][2], '#123456')
 
 eq('A5a the hidden series gains the off class', A['a5_classes'],
    ['ch-lg-i', 'ch-lg-i off', 'ch-lg-i'])
