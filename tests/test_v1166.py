@@ -89,6 +89,11 @@ print("=" * 68)
 
 NC = nocomment(js)
 
+# v11.69 - seoTrOverlaySync asks the SHARED "which bands are still drawn"
+# read now, because the P&L charts grew the same question and a second
+# copy of the narrowing rule is how the two would drift apart. The
+# harness slices it; what this suite owns is unchanged.
+
 # A stub chart with the four methods the legend uses, and an ops log, so the
 # ORDER of sync-then-repaint is read off the log rather than off the source.
 CHART = r"""
@@ -148,7 +153,7 @@ print("\nA. /!\\ THE DEFECT, REPRODUCED - the legend never reached the line")
 A = run_node(os.path.join(SP, "_v1166_a.js"), CHART + FEED
    + fn("chartLegendIsOverlay") + "\n" + fn("chartLegendSoloed") + "\n"
    + fn("chartLegendSyncOverlay") + "\n" + fn("chartLegendOnly") + "\n"
-   + fn("seoTrSelNoun") + "\n" + fn("seoTrOverlaySync") + r"""
+   + fn("seoTrSelNoun") + "\n" + fn("chartLegendVisibleBands") + chr(10) + fn("seoTrOverlaySync") + r"""
 // The pre-v11.66 chartLegendOnly, character for character minus the one line
 // this release adds. Visibility only - which is the defect.
 function chartLegendOnlyOLD(chart, i) {
@@ -199,7 +204,7 @@ print("\nB. the real seoTrOverlaySync, over every shape the legend can reach")
 # ===========================================================================
 B = run_node(os.path.join(SP, "_v1166_b.js"), CHART + FEED
    + fn("chartLegendIsOverlay") + "\n" + fn("seoTrSelNoun") + "\n"
-   + fn("seoTrOverlaySync") + r"""
+   + fn("chartLegendVisibleBands") + chr(10) + fn("seoTrOverlaySync") + r"""
 const out = {};
 const run = (labels, ctx) => {
   const c = mkChart(bands());
@@ -291,7 +296,7 @@ C = run_node(os.path.join(SP, "_v1166_c.js"), CHART + FEED
    + fn("chartLegendIsOverlay") + "\n" + fn("chartLegendSoloed") + "\n"
    + fn("chartLegendSyncOverlay") + "\n" + fn("chartLegendToggle") + "\n"
    + fn("chartLegendOnly") + "\n" + fn("seoTrSelNoun") + "\n"
-   + fn("seoTrOverlaySync") + r"""
+   + fn("chartLegendVisibleBands") + chr(10) + fn("seoTrOverlaySync") + r"""
 const out = {};
 // C1 `only` syncs, and it syncs BEFORE the repaint - one update, not two.
 const c1 = mkChart(bands());
@@ -381,7 +386,7 @@ const pnlTrendRender = async (cfg) => { CFG = cfg;
 const seoTrWindow = () => ({ from: '2026-10-01', to: '2026-10-02', label: 'x' });
 """ + fn("chartLegendIsOverlay") + "\n" + fn("seoTrSelNew") + "\n"
    + fn("seoTrPageKey") + "\n" + fn("seoTrSelNoun") + "\n"
-   + fn("seoTrPrevRows") + "\n" + fn("seoTrOverlaySync") + "\n"
+   + fn("seoTrPrevRows") + "\n" + fn("chartLegendVisibleBands") + chr(10) + fn("seoTrOverlaySync") + "\n"
    + fn("seoTrRenderChart") + r"""
 let seoTrSel = seoTrSelNew();
 const out = {};
@@ -468,9 +473,19 @@ eq("E2  /!\\ BOTH legend gestures sync",
    NC.count("chartLegendSyncOverlay(chart);"), 2)
 ok(re.search(r"function chartLegendToggle[\s\S]{0,260}chartLegendSyncOverlay", NC),
    "E2b the plain toggle included")
-# One publisher, so a second chart cannot grow its own resolver quietly.
-eq("E3  exactly one chart publishes a resolver", NC.count("$overlaySync ="), 1)
+# v11.69 - SIX charts publish one now: v11.68 shipped this overlay onto four
+# more charts and the Ads one WITHOUT wiring them to this mechanism, so
+# isolating a band left the line describing everything. The guarantee this
+# assertion was protecting is not "only one chart", it is "every chart that
+# draws an overlay can re-scope it" - which is what the count measures now.
+eq("E3  every chart that draws an overlay publishes a resolver",
+   NC.count("$overlaySync ="), 6)
 eq("E3b and exactly one reader runs it", NC.count("chart.$overlaySync"), 1)
+# /!\ And the narrowing rule has ONE spelling, shared by both syncs.
+eq("E3c one definition of which bands are still drawn",
+   NC.count("function chartLegendVisibleBands("), 1)
+ok("chartLegendVisibleBands(chart)" in NC[NC.index("function seoTrOverlaySync("):],
+   "E3d which the SEO sync reads rather than spelling its own")
 # /!\ ONE rollup, read by the initial draw AND by the sync, so a narrowed line
 # cannot be built by different arithmetic from the one it replaces.
 eq("E4  /!\\ the 364-day shift is spelled once", NC.count("x.getDate() + 364"), 1)

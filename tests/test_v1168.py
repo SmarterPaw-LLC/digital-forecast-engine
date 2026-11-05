@@ -292,5 +292,88 @@ r = subprocess.run(["node", "--check", os.path.join(SP, "_v1168_a.js")],
                    capture_output=True, text=True)
 ok(r.returncode == 0, "D8  the sliced source parses", r.stderr[-300:])
 
+
+# ===========================================================================
+print("E. /!\\ v11.69 - the legend narrows what is COMPARED, not just what is drawn")
+# ===========================================================================
+# Jason: "amazon is not filtering the previous period when a product is
+# selected. it is comparing against the total."
+#
+# A CHECKBOX selection was always scoped - the overlay reads chartMids, which
+# IS the selection. The LEGEND was not: v11.66 built that mechanism for the
+# SEO chart and v11.68 shipped this overlay onto five more charts without it.
+E = run_node(os.path.join(SP, "_v1168_e.js"),
+    chr(10).join([fn("chartLegendIsOverlay"), fn("chartLegendVisibleBands"),
+                  fn("pnlSlotAdd"), fn("pnlPrevVals"), fn("pnlPrevOverlay"),
+                  fn("pnlMakeOverlaySync")]) + r"""
+const PREV = { A: { p1: { v: 10 }, p2: { v: 20 } },
+               B: { p1: { v: 100 }, p2: { v: 200 } },
+               C: { p1: { v: 1000 }, p2: { v: 2000 } },
+               D: { p1: { v: 7 }, p2: { v: 9 } } };
+const CTX = { bandMids: [['A'], ['B'], ['C', 'D']],
+              prevPerProd: PREV, prevBuckets: ['p1', 'p2'],
+              curBuckets: ['c1', 'c2'], metricOf: (s) => s.v || 0,
+              baseMids: ['A', 'B', 'C', 'D'] };
+const sync = pnlMakeOverlaySync(CTX);
+function mk() {
+  const hidden = new Set();
+  return { data: { datasets: [
+             { label: 'A' }, { label: 'B' }, { label: 'Other' },
+             { label: 'Previous period (p1 -> p2)', stack: '_prev', data: [1117, 2229] }] },
+           isDatasetVisible: j => !hidden.has(j),
+           hide: (...js) => js.forEach(j => hidden.add(j)) };
+}
+const run = (...hide) => { const c = mk(); c.hide(...hide); sync(c);
+  const d = c.data.datasets[3]; return { data: d.data, label: d.label }; };
+const out = {};
+out.all      = run();               // nothing hidden
+out.soloA    = run(1, 2);           // the case in the screenshot
+out.soloB    = run(0, 2);
+out.soloOther= run(0, 1);           // the remainder band
+out.twoBands = run(2);
+out.none     = run(0, 1, 2);        // every band hidden
+// A chart with no overlay must not be touched at all.
+const noOv = { data: { datasets: [{ label: 'A', data: [1] }] },
+               isDatasetVisible: () => true };
+const before = JSON.stringify(noOv.data.datasets);
+sync(noOv);
+out.noOverlay = before === JSON.stringify(noOv.data.datasets);
+console.log(JSON.stringify(out));
+""")
+
+# 10+100+1000+7 = 1117, and 20+200+2000+9 = 2229.
+eq("E1  nothing hidden is the whole population", E["all"]["data"], [1117, 2229])
+# /!\ THE DEFECT. Isolating one product left this reading 1117 / 2229.
+eq("E2  /!\\ isolating one band compares against THAT band",
+   E["soloA"]["data"], [10, 20])
+eq("E2b and a different band, a different comparison", E["soloB"]["data"], [100, 200])
+# Other is a remainder of several products, and all of them count.
+eq("E3  /!\\ the Other band compares against everything inside it",
+   E["soloOther"]["data"], [1007, 2009])
+eq("E4  two bands visible sum the two", E["twoBands"]["data"], [110, 220])
+# Everything and nothing both mean the base: "all" has to round-trip, and
+# soloing the reference itself must not leave it describing no one.
+eq("E5  /!\\ with every band hidden it is the base again", E["none"]["data"], [1117, 2229])
+# /!\ The LABEL names the prior WINDOW, which narrowing does not move. Only
+# the SEO chart renames its line, because there the population IS the name.
+eq("E6  /!\\ and the label is left alone - the prior window did not move",
+   E["soloA"]["label"], "Previous period (p1 -> p2)")
+eq("E7  a chart with no overlay is untouched", E["noOverlay"], True)
+
+# The mapping is published by the renderer that decides the ranking, and is
+# addressed by INDEX: a band is named with a product title, and two products
+# can share a short_name.
+tsrc = fn("pnlTrendSeries")
+ok("bandMids:" in tsrc, "E8  pnlTrendSeries publishes the band mapping")
+ok("otherMids.length ? [otherMids] : []" in tsrc,
+   "E8b with the Other remainder as its own entry, aligned 1:1 with datasets")
+ok("ctx.bandMids[j]" in fn("pnlMakeOverlaySync"),
+   "E8c and the sync addresses it by INDEX, never by label")
+# Every chart that draws an overlay can re-scope it.
+eq("E9  six charts publish a resolver", NC.count("$overlaySync ="), 6)
+eq("E9b through one shared factory", NC.count("pnlMakeOverlaySync("), 6)
+eq("E9c and one shared read of what is still drawn",
+   NC.count("function chartLegendVisibleBands("), 1)
+
 print("\n%d passed, %d failed" % (passed, failed))
 sys.exit(1 if failed else 0)

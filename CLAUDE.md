@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.68** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.69** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,100 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.69 - the previous period follows the bands, on every chart
+
+- **Jason:** *"amazon is not filtering the previous period when a product is
+  selected. it is comparing against the total."*
+
+**This is v11.66, one release later, and I shipped it.** That release fixed
+exactly this on the SEO chart and left behind a mechanism for it. v11.68 then
+put the same overlay on five more charts and **did not wire a single one of
+them to it** - so isolating one product in the legend left the dashed line
+describing all 273.
+
+### The checkbox was never the problem
+Worth separating, because his sentence says "selected": a **checkbox**
+selection was always scoped - the overlay reads `chartMids`, and that IS the
+selection. It is the **legend** that was not, and the screenshot shows the
+legend: eight bands struck through, one pink band left, and the comparison
+line running far above it.
+
+### ⚠ THE RENDERER KNOWS WHICH PRODUCTS ARE IN EACH BAND. NOTHING ASKED IT.
+`pnlTrendSeries` decides the ranking and rolls the tail into **Other**, so it
+is the only thing that can answer *what is still drawn*. It publishes
+`bandMids` now, aligned 1:1 with `datasets`, with the Other remainder as its
+own entry.
+
+The sync addresses it **by INDEX**, never by label: a band is named with a
+product title or a campaign name, and two products can share a `short_name`.
+
+### One narrowing rule, not two
+v11.66 spelled *"which bands are visible, and is this a strict subset"* inside
+`seoTrOverlaySync`. The moment a second caller needed it that became a copy
+waiting to drift, so it is `chartLegendVisibleBands` now and **both** syncs
+read it (hard rule #1, and rule #5's assertion with it).
+
+| visible | the line compares against |
+|---|---|
+| everything | the whole population, unchanged |
+| one band | **that product alone** |
+| two bands | those two, summed |
+| **Other** | **every product inside the remainder** |
+| nothing | the whole population again |
+
+*Everything* and *nothing* both mean the base: `all` has to round-trip, and
+soloing the reference itself must not leave it describing no one.
+
+### ⚠ AND THE LABEL IS LEFT ALONE
+Narrowing which products are drawn does **not** move the prior WINDOW, and the
+label names that window. Only the SEO chart renames its line, because there
+the population IS the name. Asserted, because renaming it would have been the
+easy symmetry and the wrong one.
+
+### Verification
+- `node --check` clean · **124 suites green** · `test_v1168` **69 → 81**
+  assertions (it OWNS this overlay, so it grew a section rather than spawning a
+  second suite - v11.60's rule) · `test_v1166` re-pointed.
+- **The real `pnlMakeOverlaySync` driven** over seven states, including the
+  Other remainder and a chart with no overlay at all.
+- **In a browser, through the REAL `chartLegendOnly` / `chartLegendToggle`**
+  on the real datasets and the real resolver: three bands at 1,000 / 400 / 50
+  a week compare against **1,450**; `only` on the first moves the line to
+  **1,000**; adding the second back makes it **1,400**; `all` restores 1,450.
+  The reference line stays visible throughout and the label never moves. No
+  console errors.
+
+### ⚠ `test_v1166` E3 was re-pointed, and it was right to go red
+It pinned *"exactly ONE chart publishes a resolver"*, which encoded v11.66's
+state as a rule. The guarantee it was protecting is not "only one chart" - it
+is **every chart that draws an overlay can re-scope it**, which is what the
+count measures now (six). A census that asserts the status quo goes red on the
+release that fixes the gap it was hiding.
+
+### ⚠ The heredoc, a FOURTH time in one session
+`"\\n"` arrived halved and put a literal newline inside a Python string
+literal, twice. The repair was written as a FILE and joins with `chr(10)`, so
+no escape is involved at all. **The rule is not "be careful with heredocs", it
+is: anything containing an escape goes through the Write or Edit tool.**
+
+### Still open
+- **⚠ The Chewy Program chart still has its OWN comparison control** (v11.68).
+- **⚠ The Walmart ad grain is still MONTHLY**, and Jason has chosen the
+  weekly file (v11.67). Still the next release.
+- **⚠ Chewy's ad break-even is still 1.0 and that is wrong** (v11.59).
+- June and July Walmart keyword files are still the same file; March-May
+  keyword rows carry no spend at all (v11.67).
+- The SEO scorecards do not follow a legend isolation (v11.66) - the CHARTS do
+  now, which makes the cards the remaining asymmetry.
+- The landing-page prior year is still unfetched (v11.65).
+- Status by has never persisted across a reload (v11.64).
+- The six non-`pnlTrendRender` charts still get neither grace nor a ceiling.
+- The selected-row tint is spelled at seven sites with three alphas.
+- The upload conformity guard covers **1 of 28** uploaders.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- `computeProductSeasonality` still has no upper bound on its window.
+- Walmart's allowance agreement, still the only missing input to that margin.
 
 ## v11.68 - a previous-period comparison you can toggle, on every chart
 
