@@ -55,7 +55,10 @@ ok('id="pnl-amzn-tab-growth"' not in s,
 for a in ['campaigns', 'growth', 'activity', 'uploads']:
     ok('id="pnl-amzn-ads-tab-%s"' % a in s, 'A2  the Ads strip has %s' % a)
 amz_tabs = re.findall(r'id="pnl-amzn-tab-([a-z]+)"', s)
-eq('A3  the Amazon strip is down to seven', len(set(amz_tabs)), 7)
+# v11.70 added the Fees tab. v11.21's guarantee was that Growth Model LEFT
+# this strip (A1 still pins that); the count is a census beside it.
+eq('A3  the Amazon strip is eight, Growth Model not among them',
+   len(set(amz_tabs)), 8)
 
 print('\n== B. the URL round-trips ==')
 rt = fnbody('pnlAmazonRouteView')

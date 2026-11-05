@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.69** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.70** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,154 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.70 - a Fees tab: per SKU, at the account level, and what it leaves out
+
+- **Jason:** *"i need a new section here around amazon fees - a new tab. i need
+  to reduce fees by 5% next year, so i need to analyze all of the amazon costs
+  per sku and at the account level."*
+- then, mid-build: *"Is there a cost area in amazon we aren’t capturing?"*
+
+🪙 **Fees** sits between Break-Even and Ads on the Amazon strip, reads the
+**same rows, window, region and brand the Summary tab reads**, and is therefore
+a DECOMPOSITION of the Amazon Fees scorecard rather than a second opinion about
+it. No SQL, no new feed: the window was always a filter over rows in memory.
+
+### ⚠ RANKED BY SIZE, THE TAB WOULD SEND HIM AT THE WRONG LINE
+Measured on the live tables, US, trailing 365 days - $1,318,476 net sales:
+
+| | | | |
+|---|---|---|---|
+| FBA Fulfilment | $381,879 | 45.8% of fees | a **rate** |
+| Referral | $181,457 | 21.8% | **fixed** |
+| Inbound Transport | $23,299 | 2.8% | a rate |
+| Inbound Placement | $15,893 | 1.9% | **avoidable** |
+| FBA Storage | $8,519 | 1.0% | a rate |
+| Aged Inventory | $7,646 | 0.9% | **avoidable** |
+| Low Inventory | $4,916 | 0.6% | **avoidable** |
+| Removal | $3,455 | 0.4% | **avoidable** |
+
+**Referral is the second-biggest line and nobody can move it** - it is a
+percentage of price set by the category, so "reducing" it means cutting price,
+which cuts revenue with it. A tab that ranks by size alone points straight at
+it.
+
+So every line carries a **`lever`**, and that is the tab's reason to exist:
+
+- **avoidable** - the fee exists because of an operational miss. Fix the
+  operation and it goes to zero.
+- **rate** - a real cost for a real service, priced off size, weight or time.
+  It moves when the product or the shipment moves.
+- **fixed** - a percentage of price. It moves only if the price moves.
+
+### ⚠ AND THE ANSWER TO THE 5% FALLS OUT OF THAT
+**5% of the trailing year’s fees is $31,375. The avoidable lines already
+total $32,143.** The whole target is reachable without touching a negotiated
+rate or a price - and the tab says so on a card (`Avoidable Now`, against a
+target percentage he types).
+
+Per SKU the concentration is sharp, and three products are paying more in
+avoidable fees than they earn: Avocado Toast $884 of aged-inventory fees on
+$1,841 of sales, Pupcorn $526 on $402, Tuffer Chewer Crunchy Taco Refill
+$1,130 on $4,174.
+
+### ⚠ ONE FEE REGISTRY, because FEE_FIELDS was declared TWICE
+Byte-identical, and naming nothing: every consumer could total the fees and
+none could say which of them was worth attacking. `AMZ_FEE_LINES` is the one
+definition, both old sites read it, and `test_v1170` A1 pins the derived list
+against the retired one as a SET - **a dropped key silently lowers every fee
+total in the app.**
+
+The multi-currency conversion was spelled twice as well; `pnlRowFx` is the one
+spelling now, so a fees table cannot report a different total from the
+scorecard it decomposes.
+
+### ⚠ "IS THERE A COST AREA WE AREN’T CAPTURING?" - YES, THREE KINDS
+Checked against `information_schema`, not from memory.
+
+**1. Stored, and deliberately outside the total** - named on the tab now,
+under *Not in this total*, because a total that omits things silently is worse
+than one that says so:
+
+| | trailing year, US |
+|---|---|
+| AWD Transport | $296 |
+| AWD Storage | $172 |
+| **FBA Reimbursement** | **-$2,808** |
+
+**⚠ And the reimbursement is a REAL DIVERGENCE.** The Break-Even tab’s
+cost stack nets it off ("less FBA reimbursement") and this total does not, so
+the two surfaces do not mean the same thing by *what Amazon costs us*. Named
+rather than folded in either direction - which of them is right is Jason’s
+call, and folding it in would move a scorecard nobody asked me to move.
+
+**2. Stored only on the EU table** - digital services fee, fuel/logistics
+surcharge, base fulfilment fee. EU-specific by nature and tiny (total EU FBA
+fulfilment is $592), so no US gap.
+
+**3. Not stored ANYWHERE, and this is the real answer.** All fourteen Amazon
+tables we hold are SKU, ad or traffic reports. **There is no settlement feed**,
+so every cost that only appears on the Payments report is invisible:
+
+- coupon redemption fees, Lightning Deal and Prime Exclusive Discount fees
+- the $39.99/month subscription
+- returns processing fees (distinct from refund admin)
+- disposal fees (we store removal, not disposal)
+- unplanned prep, labelling and polybag fees
+- Safe-T claims and chargebacks
+
+**Size unknown, and that is the point** - the way to size it is the Seller
+Central settlement report, which would be a new uploader. For a brand that
+runs promotions, coupon and deal fees are the likeliest material gap.
+
+### Verification
+- `node --check` clean · **125 suites green** · new `tests/test_v1170.py` (56
+  assertions) · `test_v1017` **36 → 37** sub-tabs, `test_v1121` **7
+  → 8**, `test_v103` re-pointed by WIRING rather than by excluding.
+- **The real `amzFeeAgg` driven**: a row outside the window and a row from
+  another region both excluded, a CAD row converted through the shared
+  `pnlRowFx`, the avoidable bucket, percentages derived from the SUMS, the
+  excluded costs totalled AND carried per product, an unmatched product named
+  by its id rather than blank, and an empty window reporting zero with a null
+  percentage rather than NaN.
+- **In a browser on the real renderer** (chip `v11.70`): cards read
+  `$7,665 · 61.3% of net sales`, `5% Target $383`, `Avoidable Now $1,475 ·
+  384.9% of the target`; the composition table ranks nine lines with their
+  levers; *Not in this total* reads AWD Transport $12, AWD Storage $7, FBA
+  Reimbursement -$80; typing in the search filters the product table; moving
+  the target to 10% moves the card to $767; and the CSV exports 23 columns
+  with every line, the excluded three per product, and a TOTAL row.
+
+### ⚠ THE SEEDING RAN AFTER THE LOOP THAT FILLS IT
+Caught in the browser, not by a test I had written. The excluded totals
+accumulate with `+=` inside the scan and I initialised them **afterwards**, so
+every one went NaN on the first row and was then wiped to zero - and the tab’s
+entire answer to *"what are we not capturing"* rendered as nothing at all.
+`test_v1170` C reproduces both orders rather than asserting the fixed one.
+
+### Two of my own test expectations were wrong
+- The fixture left the CAD product out of `pnlVisibleMids`, so the conversion
+  it existed to exercise was filtered away before it could run.
+- **My brace matcher could not read a regex literal containing a quote.** The
+  CSV escaper is `/[",\n]/`; read as a string start, the matcher swallowed the
+  rest of the function and reported "unbalanced" 40,000 characters later.
+
+### Still open
+- **⚠ NO SETTLEMENT FEED** (above). The single largest blind spot in Amazon
+  cost, and it needs an uploader rather than a screen.
+- **⚠ Reimbursement is netted off on Break-Even and not here.**
+- **⚠ The Walmart ad grain is still MONTHLY**, and Jason has chosen the
+  weekly file (v11.67). Still the next release.
+- **⚠ Chewy’s ad break-even is still 1.0 and that is wrong** (v11.59).
+- The Fees tab has no chart and no column picker: it is a table and a
+  composition, which is what the question needed. Both are additive.
+- The Chewy Program chart still has its own comparison control (v11.68).
+- June and July Walmart keyword files are still the same file (v11.67).
+- `sku_economics_eu` fx is CAD-only in one helper (`fxMul`), unlike `pnlRowFx`.
+- The upload conformity guard covers **1 of 28** uploaders.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- `computeProductSeasonality` still has no upper bound on its window.
+- Walmart’s allowance agreement, still the only missing input to that margin.
 
 ## v11.69 - the previous period follows the bands, on every chart
 

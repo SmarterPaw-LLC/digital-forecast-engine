@@ -70,7 +70,7 @@ STRIPS = {
     'Amazon P&L':         ['pnl-amzn-tab-summary', 'pnl-amzn-tab-perf', 'pnl-amzn-tab-diag',
                            'pnl-amzn-tab-changelog',
                            'pnl-amzn-tab-opps', 'pnl-amzn-tab-ads',
-                           'pnl-amzn-tab-breakeven'],
+                           'pnl-amzn-tab-breakeven', 'pnl-amzn-tab-fees'],
     # v11.21 - Growth Model LEFT the Amazon strip for the Ads one, which also
     # grew an Uploads area. Census 28 -> 29.
     # v11.17 - Jason: "ads activity tab on amazon p&L should be a sub area
@@ -84,6 +84,8 @@ STRIPS = {
     # tab. Census 35 -> 36; this going red is the test doing its job.
     'Inventory Planning': ['ipv-planning', 'ipv-inhouse', 'ipv-reorder'],
     'Pricing Scenarios':  ['pricing-mode-new', 'pricing-mode-existing', 'pricing-mode-chewy'],
+    # v11.70 - the Amazon Fees tab. Census 36 -> 37; this going red is the
+    # test doing its job, same as v11.64's 35 -> 36.
     # v11.41 - the SEO page's first strip. GSC keywords (organic only, what
     # Google reports about queries) and GA4 traffic (every channel, what the
     # site reports about visits) are different questions, so they are tabs
