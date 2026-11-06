@@ -355,6 +355,8 @@ const esc2 = v => String(v == null ? '' : v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const pnlCard = c => '<card>' + c.label + '</card>';
 const pnlRegion = 'US';
+let amzCuFtByMid = {}, _amzCuFtLoading = false;
+const amzLoadCuFt = () => {};
 const DOM = {};
 const mk = id => (DOM[id] = { id, innerHTML: '', textContent: '', value: '' });
 ['amzfee-cards','amzfee-note','amzfee-composition','amzfee-comp-sub',
@@ -377,6 +379,11 @@ function build(prods, scanned) {
   for (const l of AMZ_FEE_LINES) tot[l.k] = 0;
   for (const o of AMZ_FEE_OUTSIDE) tot[o.k] = 0;
   tot.fba_fulfillment_fee_total = 200; tot.referral_fee_total = 150;
+  // v11.72 - a window that CHARGED these, so their columns render. Storage
+  // and Surcharge are deliberately left at zero: a line this window did not
+  // charge must NOT take a column (E2b).
+  tot.aged_inventory_fee_total = 984; tot.removal_fee_total = 426;
+  tot.inbound_placement_fee_total = 228; tot.low_inventory_fee_total = 12;
   // Storage billed once in thirteen weeks and NOT in this window - the live
   // shape, measured: 1 of 13 US weeks.
   const cadence = {};
@@ -453,16 +460,28 @@ console.log(JSON.stringify(out));
        fn("amzFeeCadenceNote"), fn("amzFeeSortBy"), fn("renderAmazonFees")))
 
 SHORTS = [sh for _, sh in SKUC]
-ok("Storage" in E["headers"],
-   "E1  A STORAGE COLUMN AT LAST - the line he named by name")
-for sh in SHORTS:
-    ok(sh in E["headers"], "E2  '%s' has its own column" % sh)
+CHARGED = ['Aged', 'Removal', 'Placement', 'Low Inv']
+for sh in CHARGED:
+    ok(sh in E["headers"], "E2  '%s' was charged, so it has a column" % sh)
+# v11.72 - and the other half, which is the release: a line this window did
+# not charge takes NO column. 93 products x 6 columns of dashes is what made
+# the page unreadable.
+for sh in ['Storage', 'Surcharge']:
+    ok(sh not in [h.split(" ▼")[0].split(" ▲")[0] for h in E["headers"]],
+       "E2b '%s' was NOT charged, so it takes no column" % sh, E["headers"])
+# the active column carries the sort arrow, so match on the stem
+_bare = [h.split(" ▼")[0].split(" ▲")[0] for h in E["headers"]]
+ok("Held" in _bare and "Cu Ft" in _bare,
+   "E1  WHAT WE ARE HOLDING is on the table", E["headers"])
 for k in AVOID:
-    ok(k in [kk for kk, _ in SKUC], "E3  avoidable line %s has a column" % k)
+    ok(k in [kk for kk, _ in SKUC], "E3  avoidable line %s can have a column" % k)
 eq("E4  every header is sortable", E["thHasSort"], len(E["headers"]))
-eq("E5  the default sort is still fees, biggest first",
-   E["order"], ["Zoom Sticks", "Avocado Toast", "Pupcorn"])
-ok(E["sub"].endswith("sorted by Fees"), "E6  the sub-line names the sorted column", E["sub"])
+# v11.72 - the default ranks what we are STORING. Sorted by Fees the table
+# ranked by product shape and sales volume, which is a list of the biggest
+# sellers - "this page tells me literally nothing".
+ok(E["sub"].endswith("sorted by Cu Ft"),
+   "E5  the default ranks cubic feet held", E["sub"])
+ok(E["sub"].endswith("sorted by Cu Ft"), "E6  the sub-line names the sorted column", E["sub"])
 eq("E7  sorting by Aged ranks the aged-inventory payers",
    E["aged"]["order"], ["Avocado Toast", "Pupcorn", "Zoom Sticks"])
 ok(E["aged"]["sub"].endswith("sorted by Aged"),
@@ -473,7 +492,8 @@ eq("E10 ...and nulls/zeroes do not float to the top",
 eq("E11 a NAME column defaults to ascending", E["byName"]["dir"], 1)
 eq("E12 ...alphabetically", E["byName"]["order"],
    ["Avocado Toast", "Pupcorn", "Zoom Sticks"])
-eq("E13 and it goes back", E["backToFees"], E["order"])
+eq("E13 and Fees still sorts, biggest first",
+   E["backToFees"], ["Zoom Sticks", "Avocado Toast", "Pupcorn"])
 eq("E14 no data loaded says so", E["noData"], "No SKU Economics data loaded.")
 eq("E15 rows scanned but none in the window says something ELSE",
    E["noFees"], "No fees in this window.")
@@ -484,13 +504,16 @@ hdr = E["headers"]
 r1  = E["row1"]
 cell = dict(zip(hdr, r1))
 money = lambda v: 0.0 if v in ("", chr(0x2014)) else float(v.replace("$", "").replace(",", ""))
-avoid_cols = [sh for k, sh in SKUC if k in AVOID]
+avoid_cols = [sh for k, sh in SKUC if k in AVOID and sh in hdr]
 ok("not in window" in E["comp"],
    "E17 a monthly line this window cannot see is LISTED, not dropped")
 ok("Last charged 2026-08-31" in E["storageTip"] and "1 of 13 weeks" in E["storageTip"],
    "E18 ...with the cadence and the last billing week on its tooltip", E["storageTip"])
-ok("1 of 13 weeks" in E["skuStorageTip"],
-   "E19 and the per-SKU Storage header says the same", E["skuStorageTip"])
+# v11.72 - Storage takes no column in this window, so there is no header to
+# carry the note. The composition row above it does (E17/E18), which is where
+# the fact belongs when the column is absent.
+ok(E["skuStorageTip"] == "",
+   "E19 ...and with no Storage column there is no header to repeat it on")
 ok("Refund Admin" not in E["comp"],
    "E20 a line never charged at all is still never surfaced")
 
@@ -507,8 +530,8 @@ ok(all(sh and sh.strip() for _, sh in SKUC),
    "F2  ...and none of them is blank")
 eq("F3  the per-SKU columns are FBA Storage + every avoidable line",
    sorted(k for k, _ in SKUC), sorted(AVOID + ["fba_storage_fee_total"]))
-ok("const SKU_LINES = AMZ_FEE_LINES.filter(l => l.sku);" in js,
-   "F4  the columns are DERIVED from the registry, not listed again")
+ok("const SKU_LINES = AMZ_FEE_LINES.filter(l => l.sku &&" in js,
+   "F4  the columns are DERIVED from the registry, and gated on this window")
 eq("F5  the short form is never spelled a second time",
    sum(NC.count("h: '%s'" % sh) for _, sh in SKUC), 0)
 
@@ -541,6 +564,19 @@ print("\nG. /!\\ a fee that bills MONTHLY is not a fee of zero")
 G = run_node(os.path.join(SP, "_v1171_g.js"),
     const_arr("AMZ_FEE_LINES") + "\n" + const_arr("AMZ_FEE_OUTSIDE") + "\n" + r"""
 let pnlCurrencyMode = 'usd', pnlFxRate = 1.35, pnlFxGbp = 1.25, pnlFxEur = 1.1;
+let amzCuFtByMid = {}, _amzCuFtLoading = false;
+const pnlRegion = 'US';
+const records = [];
+const amzLoadCuFt = () => {};
+function amzUnitsHeld(mid, region) {
+  let held = null;
+  for (const r of records) {
+    if (r.master_id !== mid) continue;
+    if (region && r.region !== region) continue;
+    held = (held || 0) + (r.fba_available || 0) + (r.fba_inbound || 0);
+  }
+  return held;
+}
 const allProducts = [];
 let pnlVisibleMids = [];
 const mk = (mid, wk, o) => Object.assign({ master_id: mid, week_start: wk, region: 'US',

@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.71** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.72** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,135 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.72 - fee LOAD as the target, and a ranking by what we are storing
+
+- **Jason, twice:** *"this page does nothing... what is the point?"* then
+  *"this page tells me literally nothing."*
+- Asked what the cost actually is: *"the costs are likely unit storage costs
+  primarily."*
+- On the 5% goal: measure it as **fee % of net sales**.
+
+He is right on both counts, and measuring them changed what this tab is for.
+
+### ⚠ 7 OF 13 MONTHS REPORT ZERO STORAGE, WHICH IS IMPOSSIBLE
+Storage is a MONTHLY bill. US, by month:
+
+| | reported |
+|---|---|
+| 2026-05 · 07 · 09 · 10 | **$0.00** |
+| 2026-06 | $1,410.88 |
+| 2026-08 | $476.14 |
+
+Over May-Oct we report **$1,887** against **~$5,844** implied by the volume
+actually held - we capture about a **third**. And **October reports $0.00**,
+the month Amazon’s rate triples.
+
+So v11.70’s *"FBA Storage $8,519, 1.0% of fees"* was built on a feed with
+holes in it, and the real US figure is plausibly **$20-30k** - the same order
+as the whole 5% target, not a rounding error. Cause is the v11.70 blind spot:
+storage is billed on the settlement report and **there is no settlement feed**.
+
+### ⚠ AND FBA FULFILMENT - 65% OF FEES - HAS NO SLACK AT ALL
+Checked before redesigning anything, because the tab ranked by fee SIZE:
+
+- Amazon charges within **$254/year** of its own Fee Preview, across all 123
+  matched SKUs. We are not being overcharged.
+- **118 of 123 SKUs are already in one size tier** (UsLargeStandardSize,
+  $3.42/unit). Small Standard needs a shortest side under 0.75".
+- Trimming pack weight below a band edge is worth **$374/year** on 4 SKUs.
+
+**Ranked by fee size, the table ranks by product shape and sales volume** -
+it is a list of the biggest sellers. That is *"tells me literally nothing"*,
+exactly.
+
+### What the tab ranks now: CUBIC FEET HELD
+The charge cannot be ranked, because two thirds of it is missing. The
+**driver** can. `fba_fee_preview` carries Amazon’s own measured dimensions
+(v9.73) and `records` already holds units at Amazon, so this is **one fetch of
+379 rows** and no new pipeline.
+
+`Held` and `Cu Ft` are columns, and **Cu Ft is the default sort.**
+
+### ⚠ NO RATE CARD, which was Jason’s call
+Converting cubic feet to dollars needs Amazon’s storage rates, which change
+annually and would be stale in the file the day they move - the same reason
+v9.73 refuses to maintain a fee tier. Every SKU pays the same rate per cubic
+foot, so **the ranking is identical either way**, and the real dollars arrive
+with the storage report. `test_v1172` E1 fails the build on a rate literal.
+
+**And `Cover days` was NOT duplicated.** Inventory Planning owns that
+vocabulary and computes it off the seasonal burn-down; a second spelling on
+this tab is the rule 3a defect. `Cu Ft` beside `Held` and `Units` says the
+same thing with numbers that already exist. E3 pins zero rival spellings.
+
+### ⚠ A COLUMN WITH NO CHARGE IN THIS WINDOW IS NOT A COLUMN
+This is what his screenshot actually showed: **93 products x 6 columns of
+dashes**. Every avoidable line bills monthly, so on a weekly window all six
+are structurally empty - I gave the per-SKU table a column per avoidable line
+in v11.71 without checking that the window could ever populate one.
+
+The columns are gated on the window’s own total now. The composition table
+above already names them as *not in window* (v11.71), which is where that fact
+belongs; repeating it 558 times is what made the page unreadable.
+
+### The target is a RATIO
+*"fee % of net sales"*, his call, and the measurement backs it: FBA fulfilment
+and referral are **88% of fees and both are fixed** - one by the product’s
+shape, one by the category’s percentage. A dollar target can only be met by
+selling less. A ratio target can also be met by selling the same volume for
+more.
+
+`Fee % Target` reads **47.5% from 50.0% today**, with `Worth` giving what that
+is worth over the window’s sales. `Avoidable Now` is **retired**: with
+storage two-thirds missing it understated the one pool it existed to size.
+
+### Verification
+- `node --check` clean · **127 suites green** · new `tests/test_v1172.py`
+  (44 assertions) · `test_v1170` and `test_v1171` re-pointed.
+- **The real `amzLoadCuFt` driven**: 12x12x12 inches is exactly 1 cu ft, the
+  newest snapshot wins, a **centimetre row is SKIPPED rather than converted on
+  a guess**, a missing dimension yields no entry rather than zero, region is
+  part of the key, a second call does not refetch, and **a failure yields `{}`
+  so it cannot retry for ever**.
+- **The real `amzUnitsHeld` driven**: fulfillable + inbound, our own warehouse
+  excluded, a real zero kept as zero, a missing product NULL, and no `records`
+  at all answering null rather than throwing.
+- **In a browser on the REAL renderer** (chip `v11.72`) with real October rows,
+  real inventory and the real Fee Preview dimensions: the cards read
+  `Amazon Fees $59,581 · 50.0% of net sales`, `Fee % Target 47.5% · from 50.0%
+  today`, `Worth $2,979`; the table ranks **Pawty Mix 151 cu ft on 4,135 units
+  held**, then Meowi-Waui 86, Catnip Spray 3oz 64; and **Storage and Surcharge
+  take no column at all**, because October charged neither. Only the expected
+  unauthenticated 401 in console.
+
+### ⚠ I built the v11.71 columns without checking the window could fill them
+The cadence work in v11.71 MEASURED that storage bills in 1 of 13 weeks, and
+in the same release I gave every avoidable line a per-SKU column. Both facts
+were in front of me and I did not put them together. The guard is now
+structural rather than remembered: a line with no charge takes no column.
+
+### Still open
+- **⚠ THE STORAGE FEE REPORT IS NOT LOADED** - agreed with Jason as the next
+  release. Seller Central → Reports → Fulfilment → Monthly
+  Inventory Storage Fees, per SKU per month. It needs a migration, a dropzone,
+  a parser and a coverage-grid entry. **Until it lands, roughly two thirds of
+  storage cost is invisible and the Fees total is understated.**
+- **⚠ NO SETTLEMENT FEED** (v11.70) - coupons, deal fees, disposal, returns
+  processing, Safe-T. The storage report is one slice of this.
+- **⚠ Reimbursement is netted off on Break-Even and not on Fees** (v11.70).
+- **⚠ The Walmart ad grain is still MONTHLY** (v11.67).
+- **⚠ Chewy’s ad break-even is still 1.0 and that is wrong** (v11.59).
+- **Load times**: `loadAmazonAdSpend` pages 293,745 rows with `select(*)` in
+  SERIES - 294 round trips, measured at **~68 s**; `sku_economics` is 41 trips
+  (~8.7 s). Parallel paging measured **5.8-7.3x** and a named column list 37%
+  fewer bytes. `routeApply()` is also the last line of `init()`, so a deep link
+  waits on 4.4 MB of catalog first. Scoped and measured, not yet built.
+- `Cover days` (Inventory Planning) and `Stock Cover Months` (Break-Even) are
+  a pre-existing rule 3a divergence. Not added to, not resolved.
+- The upload conformity guard covers **1 of 28** uploaders.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- Walmart’s allowance agreement, still the only missing input to that margin.
 
 ## v11.71 - the Fees tab joins the render pipeline, and ranks by the fee you pick
 

@@ -199,6 +199,19 @@ print("\nB. the real amzFeeAgg, driven")
 AGG = run_node(os.path.join(SP, "_v1170_b.js"),
     const_arr("AMZ_FEE_LINES") + "\n" + const_arr("AMZ_FEE_OUTSIDE") + "\n" + r"""
 let pnlCurrencyMode = 'usd', pnlFxRate = 1.35, pnlFxGbp = 1.25, pnlFxEur = 1.1;
+let amzCuFtByMid = {}, _amzCuFtLoading = false;
+const pnlRegion = 'US';
+const records = [];
+const amzLoadCuFt = () => {};
+function amzUnitsHeld(mid, region) {
+  let held = null;
+  for (const r of records) {
+    if (r.master_id !== mid) continue;
+    if (region && r.region !== region) continue;
+    held = (held || 0) + (r.fba_available || 0) + (r.fba_inbound || 0);
+  }
+  return held;
+}
 const allProducts = [{ master_id: 'M1', short_name: 'Catnip Spray' }];
 // M4 is the CAD row - it has to be VISIBLE for the conversion to be exercised.
 let VIS = ['M1', 'M2', 'M3', 'M4'];
