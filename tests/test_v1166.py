@@ -387,7 +387,7 @@ const seoTrWindow = () => ({ from: '2026-10-01', to: '2026-10-02', label: 'x' })
 """ + fn("chartLegendIsOverlay") + "\n" + fn("seoTrSelNew") + "\n"
    + fn("seoTrPageKey") + "\n" + fn("seoTrSelNoun") + "\n"
    + fn("seoTrPrevRows") + "\n" + fn("chartLegendVisibleBands") + chr(10) + fn("seoTrOverlaySync") + "\n"
-   + fn("seoTrRenderChart") + r"""
+   + 'let seoTrSnap = null;' + chr(10) + fn('pnlBucketRange') + chr(10) + fn('pnlBucketGrain') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + fn('seoTrCoverage') + chr(10) + fn("seoTrRenderChart") + r"""
 let seoTrSel = seoTrSelNew();
 const out = {};
 // Draw, then ISOLATE in the way the legend does and read the line back.

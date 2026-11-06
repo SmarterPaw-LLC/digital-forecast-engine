@@ -261,7 +261,7 @@ _CEIL = (re.search(r"const PNL_SCALE_HEADROOM = [0-9.]+;", js).group(0)
 A = run_node(os.path.join(SP, '_v1133_a.js'),
              'const CHART_HTML_LEGEND = { id: "htmlLegend" };\n'
              + _GRACE + '\n' + _CEIL + '\n'
-             + A_SRC.replace('__FN__', fn('pnlTrendRender')))
+             + A_SRC.replace('__FN__', fn('pnlBucketRange') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + fn('pnlTrendRender')))
 
 print('-- A1 no axes: the v11.32 chart, unchanged (REGRESSION GUARD) --')
 eq('A1a single y scale', A['plainScaleKeys'], ['x', 'y'])

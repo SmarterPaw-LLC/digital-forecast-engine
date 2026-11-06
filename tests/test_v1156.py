@@ -264,7 +264,7 @@ global.document = { getElementById: () => CANVAS };
 """ + re.search(r"const PNL_SCALE_GRACE = '[^']+';", js).group(0) + "\n"
       + re.search(r"const PNL_SCALE_HEADROOM = [0-9.]+;", js).group(0) + "\n"
       + fn("pnlScaleCeiling") + "\n"
-      + fn("chartLegendIsOverlay") + "\n" + fn("pnlTrendRender") + r"""
+      + fn("chartLegendIsOverlay") + "\n" + fn('pnlBucketRange') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + fn("pnlTrendRender") + r"""
 
 // Jason's own screenshot, verbatim.
 const CHANNELS = [['Other',11],['Referral',30],['Organic Social',139],['Unassigned',26],

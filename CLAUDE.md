@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.72** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.73** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,147 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.73 - the Traffic tab says how current it is, and a partial bucket says so
+
+- **Jason:** *"this data doesn’t appear to refresh daily."*
+
+He is right, and understated. It does not refresh at all.
+
+### ⚠ ONE PULL HAD EVER BEEN LOADED
+`ga4_snapshots`, read rather than remembered, held **a single row**: a pull of
+**2026-11-02**, loaded 2026-11-02. Its newest day was 2026-11-02, so on
+2026-11-06 the window’s last four days were simply **absent** - which is
+exactly the *"176 days on record"* out of 180 in his screenshot.
+
+Both halves of this pipeline are run **by hand**: `smarterpaw-blog/ga4_pull.py`
+writes a snapshot folder and this repo’s `load_ga4.py` upserts it. Nothing
+schedules either one. **Pulled and loaded on 2026-11-06**: 17,220 rows, and the
+feed is current through today.
+
+### ⚠ AND THE NEWEST DAY IS ALWAYS PARTIAL, which no refresh fixes
+`ga4_pull.py` ends its window on **TODAY**, so the last day it writes is
+however much of today had happened when it ran. Measured on the same row,
+before and after:
+
+| 2026-11-02 | sessions | revenue |
+|---|---|---|
+| as loaded by the 11-02 pull (ran 18:20) | **190** | $81.82 |
+| after the 11-06 pull re-settled it | **667** | $349.60 |
+
+**3.5x, same day.** `load_ga4.py`’s own header states the rule it was
+written against: *GA4 settles a day within ~48h and does not restate.* So the
+trailing bucket on this chart collapses on **every** view of it, for ever, and
+nothing on the page said so.
+
+### ⚠ THE TRAFFIC TAB IS THE ONE SURFACE HERE WITH NO FRESHNESS LINE
+`seo-freshness` sits inside **`<div id="seo-view-keywords">`**. The Keywords tab
+beside it has carried a *"thru · N days ago"* strip since v10.73; the Traffic
+tab shipped in v11.41 and joined none of it. Hard rule #1 in its plainest form,
+and the same shape as v11.71 - a new tab that did not join an existing
+mechanism.
+
+So the only visible symptom of a four-day-old feed was a chart falling off a
+cliff, which reads as *traffic collapsed*, not as *nobody ran the loader*.
+
+### What the page says now
+`seoTrCoverage()` is **one definition**, read by the coverage line and by the
+chart, so the two cannot disagree about which day the data stops on:
+
+    Last 180 days · 2026-05-11 → 2026-11-06 · 176 days on record
+      · ⚠ through 2026-11-02, 4 days behind
+
+**Measured against the WINDOW’s end, not against today** - a window that
+closes in the past is not behind because the calendar moved on (B9).
+
+### ⚠ A BUCKET THAT CANNOT BE FILLED YET IS MARKED, not drawn short
+`pnlProvisionalBuckets(buckets, settled)` asks one question of each bucket:
+does the window it stands for run past the last settled day? `pnlBucketRange`
+is already the one definition of a bucket’s span (v11.28) and
+`pnlBucketGrain` of the grain (v11.03), so this adds **no second opinion about
+either**.
+
+| | |
+|---|---|
+| label | `11/2/26` → `11/2/26*` |
+| subtitle | `weekly · 26 buckets · 1 partial (*), settled through 2026-11-04` |
+| tooltip | `11/2/26* · partial, settled through 2026-11-04` |
+
+The marker is **declared beside what it means** rather than left as an
+asterisk needing a decoder - which is what rule 3a asks of an abbreviation.
+
+### ⚠ THE BUCKET KEY IS UNTOUCHED
+`buckets[i]` is what v11.28’s click-a-point-to-scope parses, and
+`pnlBucketRange` refuses anything that is not `YYYY-MM[-DD]`. A marker inside
+the key would have killed that journey silently. D3 drives the marked key
+through `pnlBucketRange` and requires **null** - the failure the separation
+prevents, asserted rather than described.
+
+### The settle cut is DERIVED, never typed
+From the pull’s own `pulled_at`, minus the 48h window, so it stays right if
+the pull moves. E8 fails the build on a date literal inside the derivation.
+**With no pull row the newest day stands as-is** - claiming a settle cut we
+cannot compute would be a guess, and that path is byte-identical to v11.72.
+
+### ⚠ OPT-IN, so no other chart moved
+`pnlTrendRender` draws **eight** charts. A caller passing no `settledThrough`
+gets an **empty set** and labels byte-identical to v11.72 - C4 pins that, and
+E3 pins that exactly **one** caller opts in. Same pattern as v11.28’s
+`periodHost`, which is the precedent this file already records.
+
+### Verification
+- `node --check` clean · **128 suites green** · new `tests/test_v1173.py`
+  (46 assertions) · six harnesses re-pointed onto the new dependency
+  (`test_v1133`, `test_v1155`, `test_v1156`, `test_v1157`, `test_v1165`,
+  `test_v1166`) - sliced, never stubbed, so each now also proves the opt-out.
+- **THE DEFECT REPRODUCED**: the pre-v11.73 label builder run beside the
+  shipped one on Jason’s own four-bucket shape - exactly one label moves,
+  and with no settled day the two arrays are byte-identical.
+- **The real `seoTrCoverage` driven on a pinned clock** (2026-11-06): the stale
+  feed reads `newest 2026-11-02, 4 days behind, settled 2026-10-31`; after the
+  new pull it reads `0 behind` with **2026-11-06 still provisional**; a window
+  closing in the past is not behind; an empty feed answers null rather than
+  throwing; a null `day` is skipped rather than read as newest.
+
+### Two of my own expectations were wrong
+- **A3 undercounted.** Settled through 2026-10-20 leaves **three** open weeks
+  provisional, not two - the week of 10-19 runs to 10-25. The code was right.
+- **A9 fixtured a SINGLE bucket**, and `pnlBucketGrain` says in its own comment
+  that *"one bucket cannot say which"* - it falls back to `day`, so the span
+  rule had nothing to bite on. Re-pointed onto a real series, and the lone-
+  bucket behaviour asserted as what it is (A10) rather than pretended away.
+
+### ⚠ AND exec_sql COLLAPSES A COLUMN ALIASED `t`
+Found on the way, in my own audit query rather than in the app. The function
+runs `select coalesce(json_agg(t), '[]') from (<query>) t`, so a SELECT whose
+first column is aliased **`t`** shadows the row alias and `json_agg` aggregates
+that **column** instead of the row - the result comes back as a list of bare
+strings with every other column gone, and nothing errors. Not changed:
+`exec_sql` is Jason’s to run. Worth knowing before writing an audit query.
+
+### Still open
+- **⚠ NOTHING SCHEDULES THE GA4 PULL.** Fixed for today by hand. A standing
+  fix is a scheduled task running `ga4_pull.py` then `load_ga4.py`, which is
+  Jason’s call - it would run unattended against his OAuth token.
+- **⚠ THE STORAGE FEE REPORT IS NOT LOADED** (v11.72) - agreed as the next
+  release. Until it lands, roughly two thirds of storage cost is invisible.
+- **⚠ NO SETTLEMENT FEED** (v11.70). **⚠ Reimbursement is netted off on
+  Break-Even and not on Fees** (v11.70).
+- **⚠ The Walmart ad grain is still MONTHLY** (v11.67), and that feed has the
+  same partial-period defect this release fixes for GA4: October is a partial
+  month charted as a whole one, and it takes **no** mark.
+- **⚠ Chewy’s ad break-even is still 1.0 and that is wrong** (v11.59).
+- The **Keywords** tab’s freshness strip is a second pattern beside
+  `renderPageFreshness` (v7.97). Pre-existing, and converging it moves a
+  surface nobody asked me to move.
+- The seven other `pnlTrendRender` charts take no `settledThrough`. Correct
+  today - their feeds are weekly-grain uploads, so a bucket is whole or absent
+  - but Shopify DTC is daily and would qualify.
+- **Load times** (v11.72): parallel paging measured **5.8-7.3x**, named columns
+  37% fewer bytes. Scoped and measured, not yet built.
+- The upload conformity guard covers **1 of 28** uploaders.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- Walmart’s allowance agreement, still the only missing input to that margin.
 
 ## v11.72 - fee LOAD as the target, and a ranking by what we are storing
 

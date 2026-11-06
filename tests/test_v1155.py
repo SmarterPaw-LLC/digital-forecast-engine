@@ -87,7 +87,7 @@ const CHART_HTML_LEGEND = { id: 'htmlLegend' };
 const CANVAS = { title: '', style: {}, getContext() { return { __canvas: CANVAS }; } };
 global.document = { getElementById: () => CANVAS };
 
-""" + GRACE_DECL + "\n" + CEILING + "\n" + fn("pnlTrendRender") + r"""
+""" + GRACE_DECL + "\n" + CEILING + "\n" + fn('pnlBucketRange') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + fn("pnlTrendRender") + r"""
 
 const B = ['2026-10-01', '2026-10-02', '2026-10-03'];
 (async () => {

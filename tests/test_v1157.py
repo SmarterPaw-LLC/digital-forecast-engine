@@ -290,7 +290,7 @@ const seoTrWindow = () => ({ from: '2026-10-01', to: '2026-10-28', label: 'x' })
 const EL = {};
 globalThis.document = { getElementById: (id) => (EL[id] || (EL[id] = { id, textContent: '', innerHTML: '' })) };
 """ + fn("seoTrSelNoun") + "\n" + fn("seoTrPageKey") + "\n"
-   + fn("seoTrPrevRows") + "\n" + fn("seoTrRenderChart") + r"""
+   + fn("seoTrPrevRows") + "\n" + 'let seoTrSnap = null;' + chr(10) + fn('pnlBucketRange') + chr(10) + fn('pnlBucketGrain') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + fn('seoTrCoverage') + chr(10) + fn("seoTrRenderChart") + r"""
 const shot = () => ({ labels: CFG.datasets.map(d => d.label),
                       fills: CFG.datasets.map(d => !!d.fill),
                       widths: CFG.datasets.map(d => d.borderWidth),

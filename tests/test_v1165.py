@@ -361,7 +361,7 @@ let CFG = null, seoTrChart = null;
 const pnlTrendRender = async (cfg) => { CFG = cfg; return { destroy() {} }; };
 const seoTrWindow = () => ({ from: '2026-10-01', to: '2026-10-02', label: 'x' });
 """ + fn("seoTrSelNew") + "\n" + fn("seoTrPageKey") + "\n" + fn("seoTrSelNoun") + "\n"
-   + fn("seoTrPrevRows") + "\n" + fn("seoTrRenderChart") + r"""
+   + fn("seoTrPrevRows") + "\n" + 'let seoTrSnap = null;' + chr(10) + fn('pnlBucketRange') + chr(10) + fn('pnlBucketGrain') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + fn('seoTrCoverage') + chr(10) + fn("seoTrRenderChart") + r"""
 let seoTrSel = seoTrSelNew();
 const shot = () => ({
   labels: CFG.datasets.map(d => d.label),
