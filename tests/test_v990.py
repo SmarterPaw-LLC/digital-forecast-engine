@@ -2,7 +2,7 @@
 import io, os, re, subprocess, sys
 
 P   = r'C:\Users\Jason\digital-forecast-engine\index.html'
-TMP = r'C:\Users\Jason\AppData\Local\Temp\claude\C--Users-Jason\74746540-4797-4eef-a801-df27808bdd42\scratchpad'
+TMP = os.path.dirname(os.path.abspath(__file__))
 js  = max(re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', io.open(P, encoding='utf-8').read(), re.S), key=len)
 
 chan   = js[js.index('const IP_CHANNEL_KEYS'):js.index('function ipChanSig')]

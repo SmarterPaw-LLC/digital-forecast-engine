@@ -78,6 +78,17 @@ def run_node(path, body):
     return json.loads(r.stdout.strip().splitlines()[-1])
 
 
+# v11.74 - the shared chart settings the controls and the series builder now
+# read. Lifted from the shipped file rather than stubbed, so a default that
+# moves fails this suite instead of being papered over.
+V1174 = (re.search(r"const PNL_GRAIN_ORDER = \[[^\]]*\];", js).group(0) + chr(10)
+         + re.search(r"const PNL_FILL_ALPHA = \{[^}]*\};", js).group(0) + chr(10)
+         + re.search(r"const PNL_FILL_LINE = '[^']*';", js).group(0) + chr(10)
+         + fn("pnlChartGrain") + chr(10) + fn("pnlGrainAuto") + chr(10)
+         + fn("pnlGrainResolve") + chr(10) + fn("pnlGrainKey") + chr(10)
+         + fn("pnlGrainAdv") + chr(10) + fn("pnlChartFill") + chr(10)
+         + fn("pnlStackAlpha") + chr(10))
+
 print("\n" + "=" * 68)
 print("  v11.65  landing pages select, and compose with channel groups")
 print("=" * 68)
@@ -361,7 +372,7 @@ let CFG = null, seoTrChart = null;
 const pnlTrendRender = async (cfg) => { CFG = cfg; return { destroy() {} }; };
 const seoTrWindow = () => ({ from: '2026-10-01', to: '2026-10-02', label: 'x' });
 """ + fn("seoTrSelNew") + "\n" + fn("seoTrPageKey") + "\n" + fn("seoTrSelNoun") + "\n"
-   + fn("seoTrPrevRows") + "\n" + 'let seoTrSnap = null;' + chr(10) + fn('pnlBucketRange') + chr(10) + fn('pnlBucketGrain') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + fn('seoTrCoverage') + chr(10) + fn("seoTrRenderChart") + r"""
+   + fn("seoTrPrevRows") + "\n" + 'let seoTrSnap = null;' + chr(10) + fn('pnlBucketRange') + chr(10) + fn('pnlBucketGrain') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + fn('seoTrCoverage') + chr(10) + V1174 + fn("seoTrRenderChart") + r"""
 let seoTrSel = seoTrSelNew();
 const shot = () => ({
   labels: CFG.datasets.map(d => d.label),

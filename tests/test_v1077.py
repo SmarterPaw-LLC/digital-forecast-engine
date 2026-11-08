@@ -150,6 +150,17 @@ def export_dlg_shell():
 # ===========================================================================
 # A. The export dialog picks COLUMNS, not just rows (v10.81)
 # ===========================================================================
+# v11.74 - the shared chart settings the controls and the series builder now
+# read. Lifted from the shipped file rather than stubbed, so a default that
+# moves fails this suite instead of being papered over.
+V1174 = (re.search(r"const PNL_GRAIN_ORDER = \[[^\]]*\];", js).group(0) + chr(10)
+         + re.search(r"const PNL_FILL_ALPHA = \{[^}]*\};", js).group(0) + chr(10)
+         + re.search(r"const PNL_FILL_LINE = '[^']*';", js).group(0) + chr(10)
+         + fn("pnlChartGrain") + chr(10) + fn("pnlGrainAuto") + chr(10)
+         + fn("pnlGrainResolve") + chr(10) + fn("pnlGrainKey") + chr(10)
+         + fn("pnlGrainAdv") + chr(10) + fn("pnlChartFill") + chr(10)
+         + fn("pnlStackAlpha") + chr(10))
+
 print('\nA. the export dialog picks COLUMNS, not just rows')
 
 # v10.81 - Jason, for the third time: "the csv export still exports
@@ -581,7 +592,7 @@ harness = (harness
     .replace('__CHARTMODE__', fn('pnlChartMode'))
     .replace('__TOGGLE__',    fn('pnlChartCompare') + '\n'
                               + fn('pnlCompareToggleHtml') + '\n'
-                              + fn('pnlInjectChartModeToggle')))
+                              + V1174 + fn("esc2") + chr(10) + fn("pnlGrainStepperHtml") + chr(10) + fn("pnlFillToggleHtml") + chr(10) + fn('pnlInjectChartModeToggle')))
 
 hp = os.path.join(SP, 'test_v1077_toggle.js')
 io.open(hp, 'w', encoding='utf-8', newline='').write(harness)

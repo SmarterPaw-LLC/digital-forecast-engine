@@ -69,6 +69,14 @@ m2 = re.search(r'\n(const PNL_CHART_BAND_STEPS = \[[^\]]*\];)', js)
 if not m2:
     raise SystemExit('FAIL: cannot find PNL_CHART_BAND_STEPS')
 
+V1174 = (re.search(r"const PNL_GRAIN_ORDER = \[[^\]]*\];", js).group(0) + chr(10)
+         + re.search(r"const PNL_FILL_ALPHA = \{[^}]*\};", js).group(0) + chr(10)
+         + re.search(r"const PNL_FILL_LINE = '[^']*';", js).group(0) + chr(10)
+         + fn("pnlChartGrain") + chr(10) + fn("pnlGrainAuto") + chr(10)
+         + fn("pnlGrainResolve") + chr(10) + fn("pnlGrainKey") + chr(10)
+         + fn("pnlGrainAdv") + chr(10) + fn("pnlChartFill") + chr(10)
+         + fn("pnlStackAlpha") + chr(10))
+
 SLICES = [
     m.group(1),
     m2.group(1),
@@ -77,7 +85,7 @@ SLICES = [
     fn('pnlBandFill'),
     fn('pnlChartMode'),
     fn('pnlSlotAdd'),
-    fn('pnlTrendSeries'),
+    V1174 + fn('pnlTrendSeries'),
     fn('pnlTrendSubtitle'),
 ]
 
@@ -159,8 +167,22 @@ for (let i = 0; i < W.length; i++) {
 // C5 — biggest product at the base so the stack has a stable foundation.
 ok(C.datasets[0].label === 'Product A', 'C5 largest product is the bottom band', C.datasets[0].label);
 ok(C.datasets[C.datasets.length-1].label === 'Product C', 'C5 smallest on top');
-// C6 — bands are near-opaque so they read as layers, not a haze.
-ok(C.datasets.every(d => /d9$/.test(d.backgroundColor)), 'C6 stacked bands are near-opaque');
+// C6 — v11.74: the band alpha is a SETTING, not a constant. v10.12 pinned
+// 'd9' because that was the only value; pinning it now would assert the
+// status quo of a control Jason asked for. The guarantee worth keeping is
+// that every band reads the SHARED setting, so the SEO chart and this engine
+// cannot drift apart again - and that both looks are actually reachable.
+ok(C.datasets.every(d => d.backgroundColor.endsWith(pnlStackAlpha())),
+   'C6 every stacked band reads the shared fill setting');
+_ls['pnlChartFill'] = 'solid';
+const C_SOLID = pnlTrendSeries(Object.assign({}, base, { metricOf: metricSales, mode: 'stacked', selectionActive: false }));
+ok(C_SOLID.datasets.every(d => /d9$/.test(d.backgroundColor)),
+   'C6b solid is still v10.12 near-opaque');
+_ls['pnlChartFill'] = 'sheer';
+const C_SHEER = pnlTrendSeries(Object.assign({}, base, { metricOf: metricSales, mode: 'stacked', selectionActive: false }));
+ok(C_SHEER.datasets.every(d => /55$/.test(d.backgroundColor)),
+   'C6c sheer is the SEO chart\'s alpha, now shared');
+delete _ls['pnlChartFill'];
 ok(A.datasets[0].backgroundColor.endsWith('22'), 'C6 line mode stays translucent');
 
 // ═════════ D. top-N + Other, so a 300-SKU page is still readable ════════════
@@ -268,6 +290,9 @@ tmpdir = tempfile.mkdtemp(prefix='v1012_')
 jsp = os.path.join(tmpdir, 'test_v1012.js')
 io.open(jsp, 'w', encoding='utf-8', newline='').write(harness)
 
+# v11.74 - the shared chart settings the controls and the series builder now
+# read. Lifted from the shipped file rather than stubbed, so a default that
+# moves fails this suite instead of being papered over.
 print('=== v10.12 behaviour tests ===')
 r = subprocess.run([os.environ.get('NODE', 'node'), jsp], capture_output=True, text=True)
 sys.stdout.write(r.stdout)

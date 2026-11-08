@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.73** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.74** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,165 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.74 - group by day / week / month, and the band fill as a setting
+
+- **Jason:** *"1. let me change the date grouping period so i can see down to
+  daily granularity and up to monthly. 2. the seo report has a transparency on
+  the stacked items, i like this but want it to be a toggle and available on
+  other reports as well"*
+
+Neither was a setting. Both were accidents, and one of them had two spellings.
+
+### ⚠ THE GRAIN RULE EXISTED TWICE AND NEITHER COPY COULD BE OVERRIDDEN
+`adsGrain` picked day / week / month off the window width. The SEO chart had
+its **own, cruder** version - `const weekly = span > 70` - which could not
+reach monthly **at all**, so a two-year SEO window drew 104 weekly buckets.
+The four P&L charts had no rule to override because they were hardcoded to
+`week_start`.
+
+`pnlGrainAuto` is the one width rule, lifted from `adsGrain` so the Ads charts
+resolve **exactly as they did** (C1 pins that window for window), and
+`pnlGrainResolve` layers the override on top. Default is `auto`, so a chart
+nobody touches is unchanged.
+
+| | |
+|---|---|
+| under 70 days | daily |
+| 70 - 400 | weekly |
+| beyond | monthly |
+
+### ⚠ A CHART CANNOT INVENT A GRAIN ITS ROWS DO NOT HAVE
+This is the half that would have been wrong if it had been built carelessly.
+
+| chart | source | offers |
+|---|---|---|
+| Amazon · Shopify · Walmart · Chewy P&L | one row per product per `week_start` | **week, month** |
+| SEO Traffic | `ga4_by_date`, day grain | day, week, month |
+| Amazon · Chewy Ads | day grain | day, week, month |
+| **Walmart Ads** | stamped per MONTH (v11.67) | **month only** |
+
+So **daily is not a setting on the P&L charts** - it is a number nobody has.
+The stored pick is a PREFERENCE, clamped per chart rather than refused at the
+setter: `day` has to stay settable on SEO even though Amazon cannot honour it.
+
+**Both halves refuse** (v10.19): the button renders disabled, **with its
+onclick removed**, carrying the chart’s own reason - and `pnlGrainResolve`
+clamps anyway, because a disabled control is bypassable from the console.
+
+And it **lights the EFFECTIVE grain, never the stored one** - v10.77’s rule,
+which this toggle already followed for Line / Stacked. A stored `day` on a
+weekly chart paints **W** green and greys out **D**, rather than claiming a
+grain the chart is not drawing (E4).
+
+### ⚠ NOTHING MOVED BY DEFAULT, and that is measurable
+`pnlGrainKey` is the one bucket key. **Every `week_start` in this database is
+already a Monday**, so `pnlGrainKey(week_start, 'week')` returns the same
+string - B1 drives four real week starts and requires byte-identical output.
+Together with `auto` resolving to the old rule (A6, C1), *"nothing changed for
+anyone who does not touch it"* is a measurement rather than a claim.
+
+### ⚠ A WEEK IS FILED UNDER THE MONTH IT STARTS IN
+A week straddling a month boundary belongs to one of them, and splitting it
+would invent daily numbers the rows do not carry. So **a monthly P&L chart is
+not the calendar month a scorecard reports**, and the subtitle says so rather
+than leaving the reader to assume otherwise.
+
+### ⚠ AND FOUR CHART TITLES HARDCODED THE GRAIN - TWO OF THEM WRONGLY
+Found while wiring this up, not looked for. **Shopify DTC has read
+*"· daily trend"* since it shipped**, over rows keyed by `week_start`, and
+its subtitle said `bucketNoun: 'day'` to match. Both were simply false.
+
+Every title and bucket noun is derived through `pnlGrainAdv` now - the helper
+the Ads titles have used since v11.33 - so the mislabel cannot come back. The
+helper was `adsGrainAdv`; the grain is a chart-wide concept, so an Ads prefix
+on a shared idea is the rule #3 defect and it was renamed, with both callers
+converted in the same commit.
+
+**One hardcoded grain word survives and it is correct**: the Digital Sales
+tracker is not on `pnlTrendRender` at all and its feed is monthly by
+construction. F14 pins it as the only one, and names it.
+
+### ⚠ THE FILL WAS TWO NUMBERS, THREE CALL SITES APART
+`pnlTrendSeries` painted stacked bands at **`d9`** (85% opaque). The SEO
+chart, which builds its own datasets, painted them at **`55`** (33%). One
+idea, two values, and **the one Jason likes was the accident.**
+
+`PNL_FILL_ALPHA` is the one definition and `pnlStackAlpha()` the one reader,
+so the two cannot drift apart again. F5 fails the build on a literal alpha in
+any `backgroundColor`.
+
+**Sheer is the default**, which is the request: the SEO chart is unchanged and
+the other seven gain the look he asked for. v9.99 / v4.135 chose near-opaque
+so bands read as distinct layers rather than a translucent haze - that
+reasoning is not wrong, it is a PREFERENCE, so it survives as `solid` instead
+of as a constant.
+
+**Stacked only.** In line mode the fill is a faint wash under a line, so the
+toggle would be a live control doing nothing - the same rule the BANDS stepper
+has followed since v10.67. The GROUP stepper renders in **both** modes,
+because it describes the X AXIS rather than the series.
+
+### The control row
+`VIEW · GROUP · BANDS · FILL · COMPARE`, all inside
+`pnlInjectChartModeToggle` - the one injector every chart already calls, not a
+second control row (hard rule #1).
+
+### Verification
+- `node --check` clean · **129 suites green** · new `tests/test_v1174.py`
+  (56 assertions) · **nine** harnesses re-pointed onto the new dependencies,
+  sliced rather than stubbed, so each also proves the defaults.
+- **THE DEFECT REPRODUCED**: both retired rules run beside the shared one. The
+  Ads rule is identical window for window; the SEO rule returns `week` where
+  the shared one returns `month`.
+- **The real `pnlGrainResolve` driven** over sixteen states: both width edges,
+  the override, the clamp in both directions, Walmart’s month-only feed,
+  junk in the store, and no allow-list at all.
+- **The real `pnlGrainStepperHtml` driven**: the effective grain lights, the
+  refused one loses its handler and carries the reason, Auto is always offered.
+- **The real fill setting driven**, including an hsl band (v10.67’s
+  golden-angle colours need `hsla`, not an appended hex pair) and a
+  **localStorage that throws**, which yields the default rather than taking
+  the chart down.
+
+### Three of my own expectations were wrong
+- **E2-E4 read the wrong substring.** My extractor took `[^>]*>` from the
+  green background, which swallowed the style tail rather than the label.
+- **F6 and F13 were count guesses.** `pnlStackAlpha()` is five call sites plus
+  the helper’s own declaration, not five.
+- **F14 assumed ZERO hardcoded grain words should remain**, and the Digital
+  Sales tracker’s is correct. Re-pointed to name the one survivor rather
+  than demanding a sweep that would have made a true title derived-but-no-
+  better.
+
+### ⚠ And the heredoc ate the escapes, twice more
+Once correcting a patch script and once correcting a test generator, both
+times silently producing a replacement that matched nothing. The rule has been
+in this file since v9.77 and the fix is not *"be careful"*: **anything with an
+escape goes through the Write or Edit tool.** A patch anchor also carried
+`\u00b7` where three of the four chart titles hold a **real middle dot** - the
+v11.41 / v11.47 / v11.68 trap, fourth sighting.
+
+### Still open
+- **⚠ NOTHING SCHEDULES THE GA4 PULL** (v11.73). Jason’s call.
+- **⚠ THE STORAGE FEE REPORT IS NOT LOADED** (v11.72).
+- **⚠ NO SETTLEMENT FEED** (v11.70). **⚠ Reimbursement is netted off on
+  Break-Even and not on Fees** (v11.70).
+- **⚠ The Walmart ad grain is still MONTHLY** (v11.67) - and this release
+  makes that visible rather than fixing it: its GROUP control offers month
+  alone, with the reason on the two it refuses.
+- **⚠ Chewy’s ad break-even is still 1.0 and that is wrong** (v11.59).
+- **A monthly P&L chart groups by the week’s START month**, so it will not
+  tie to a calendar-month scorecard. Stated on the subtitle; reconciling them
+  needs daily rows the feeds do not carry.
+- The six non-`pnlTrendRender` charts get no GROUP control, no grace and no
+  ceiling. Unchanged, and now a wider gap.
+- `test_v990` pointed at a **hardcoded scratchpad path from a dead session**
+  and could not run anywhere. Fixed on the way past; unrelated to this release.
+- **Load times** (v11.72): parallel paging measured **5.8-7.3x**. Not built.
+- The upload conformity guard covers **1 of 28** uploaders.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- Walmart’s allowance agreement, still the only missing input to that margin.
 
 ## v11.73 - the Traffic tab says how current it is, and a partial bucket says so
 

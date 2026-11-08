@@ -32,6 +32,17 @@ def fn(name):
             if d == 0: return js[i:k+1]
         k += 1
 
+# v11.74 - the shared chart settings the controls and the series builder now
+# read. Lifted from the shipped file rather than stubbed, so a default that
+# moves fails this suite instead of being papered over.
+V1174 = (re.search(r"const PNL_GRAIN_ORDER = \[[^\]]*\];", js).group(0) + chr(10)
+         + re.search(r"const PNL_FILL_ALPHA = \{[^}]*\};", js).group(0) + chr(10)
+         + re.search(r"const PNL_FILL_LINE = '[^']*';", js).group(0) + chr(10)
+         + fn("pnlChartGrain") + chr(10) + fn("pnlGrainAuto") + chr(10)
+         + fn("pnlGrainResolve") + chr(10) + fn("pnlGrainKey") + chr(10)
+         + fn("pnlGrainAdv") + chr(10) + fn("pnlChartFill") + chr(10)
+         + fn("pnlStackAlpha") + chr(10))
+
 print('\n== A. ONE rule, one place (hard rule #1) ==')
 
 ok(js.count('const PNL_CHART_BAND_STEPS') == 1, 'the band-step list is declared exactly once')
@@ -170,7 +181,7 @@ harness = (HARNESS
   .replace('__TOPN__', topn).replace('__STEPS__', steps)
   .replace('__BANDS__', fn('pnlChartBands')).replace('__SETB__', fn('pnlSetChartBands'))
   .replace('__COLOR__', fn('pnlBandColor')).replace('__FILL__', fn('pnlBandFill'))
-  .replace('__SLOTADD__', fn('pnlSlotAdd')).replace('__SERIES__', fn('pnlTrendSeries')))
+  .replace('__SLOTADD__', fn('pnlSlotAdd')).replace('__SERIES__', V1174 + fn('pnlTrendSeries')))
 
 p = os.path.join(SP, 'test_v1067.js')
 io.open(p, 'w', encoding='utf-8', newline='\n').write(harness)

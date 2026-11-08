@@ -62,7 +62,18 @@ def fnbody(name, kind='function'):
             if d == 0: return js[i:k + 1]
         k += 1
 
-CORE = js[js.index('const ADS_NO_CAMPAIGN'):js.index('const CHEWY_PROGRAM_COLUMNS')]
+# v11.74 - the shared chart settings the controls and the series builder now
+# read. Lifted from the shipped file rather than stubbed, so a default that
+# moves fails this suite instead of being papered over.
+V1174 = (re.search(r"const PNL_GRAIN_ORDER = \[[^\]]*\];", js).group(0) + chr(10)
+         + re.search(r"const PNL_FILL_ALPHA = \{[^}]*\};", js).group(0) + chr(10)
+         + re.search(r"const PNL_FILL_LINE = '[^']*';", js).group(0) + chr(10)
+         + fnbody("pnlChartGrain") + chr(10) + fnbody("pnlGrainAuto") + chr(10)
+         + fnbody("pnlGrainResolve") + chr(10) + fnbody("pnlGrainKey") + chr(10)
+         + fnbody("pnlGrainAdv") + chr(10) + fnbody("pnlChartFill") + chr(10)
+         + fnbody("pnlStackAlpha") + chr(10))
+
+CORE = V1174 + js[js.index('const ADS_NO_CAMPAIGN'):js.index('const CHEWY_PROGRAM_COLUMNS')]
 RENDER = fnbody('renderAdsCampaigns')
 
 # ⚠ The REAL prev block, lifted out of the renderer by its own boundaries so
@@ -403,6 +414,7 @@ print('\n== E. the shared trend engine, unchanged for products ==')
 SERIES = "\n".join([
     'var localStorage = { getItem: () => null, setItem: () => {} };',
     fnbody('pnlSlotAdd'), fnbody('pnlChartBands'), fnbody('pnlBandColor'),
+    V1174,
     fnbody('pnlBandFill'), fnbody('pnlChartMode'), fnbody('pnlTrendSeries'),
     fnbody('pnlTrendSubtitle'),
     'const PNL_CHART_TOPN = 8;',

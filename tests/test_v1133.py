@@ -142,6 +142,17 @@ def run_node(path, src):
 
 
 # ══════════════════════════════════════════════════════ A. pnlTrendRender
+# v11.74 - the shared chart settings the controls and the series builder now
+# read. Lifted from the shipped file rather than stubbed, so a default that
+# moves fails this suite instead of being papered over.
+V1174 = (re.search(r"const PNL_GRAIN_ORDER = \[[^\]]*\];", js).group(0) + chr(10)
+         + re.search(r"const PNL_FILL_ALPHA = \{[^}]*\};", js).group(0) + chr(10)
+         + re.search(r"const PNL_FILL_LINE = '[^']*';", js).group(0) + chr(10)
+         + fn("pnlChartGrain") + chr(10) + fn("pnlGrainAuto") + chr(10)
+         + fn("pnlGrainResolve") + chr(10) + fn("pnlGrainKey") + chr(10)
+         + fn("pnlGrainAdv") + chr(10) + fn("pnlChartFill") + chr(10)
+         + fn("pnlStackAlpha") + chr(10))
+
 print('== A. the real pnlTrendRender, Chart stubbed ==')
 
 A_SRC = r"""
@@ -372,13 +383,15 @@ ok('Four metrics is the most' in B['full'], 'B4d and the tooltip says why')
 print('\n== C. the real adsUpdateChart, driven in both readings ==')
 
 C_CORE = '\n\n'.join([
+    V1174,
     const_obj('ADS_METRIC_SPEC'),
     const_obj('ADS_METRIC_COLOR'),
     fn('adsChartMetrics'),
     fn('adsChartSel'), fn('adsChartBy'), fn('adsSetChartBy'),
     fn('adsToggleChartMetric'), fn('adsMetricColor'), fn('adsInjectChartBy'),
     fn('adsUpdateChart'),
-    fn('adsDiv'), fn('adsBucketEdges'), fn('adsGrainAdv'), fn('pnlTrendSubtitle'),
+    fn('adsDiv'), fn('adsBucketEdges'), fn('pnlGrainAdv'), fn('pnlTrendSubtitle'),
+    fn('adsGrainAllowed'), fn('_adsGrainWhy'), fn('adsGrain'),
 ])
 
 C_SRC = r"""
@@ -657,12 +670,28 @@ ok(not missing, 'D6 every plottable metric has a declared colour', missing)
 # test: `grain + 'ly'` gives weekly, monthly and **dayly**, which the Campaigns
 # reading has rendered since v11.23. One helper, both callers (hard rule #1) -
 # the alternative was shipping a second copy of the same typo.
+# v11.74 - renamed adsGrainAdv -> pnlGrainAdv when the grain became a
+# chart-wide concept. The guarantee is unchanged (ONE adverb helper, no raw
+# concatenation); only the name moved, and the old one must be gone rather
+# than left standing beside the new one.
 eq('D7a exactly one grain adverb helper',
-   len(re.findall(r'function\s+adsGrainAdv\s*\(', js)), 1)
+   len(re.findall(r'function\s+pnlGrainAdv\s*\(', js)), 1)
+# /!\ Against COMMENT-STRIPPED source, and the comment required to SURVIVE -
+# the v11.18 / v11.54 rule. The only remaining mention is the line explaining
+# the rename, which is exactly where someone grepping the old name should land.
+_D7NC = re.sub(r'(?m)^\s*//.*$', '', js)
+eq('D7a2 and the Ads-prefixed name is GONE from the code',
+   len(re.findall(r'\badsGrainAdv\b', _D7NC)), 0)
+ok('renamed from adsGrainAdv' in js,
+   'D7a3 and the rename is still explained where it will be grepped')
 ok("+ 'ly trend'" not in js, 'D7b no raw concatenation survives')
 # Counting the bare call would be 3 - the helper's own signature contains it.
-eq('D7c both chart titles go through it',
-   js.count("adsGrainAdv(grain) + ' trend'"), 2)
+eq('D7c both Ads chart titles go through it',
+   js.count("pnlGrainAdv(grain) + ' trend'"), 2)
+# v11.74 - and the four P&L titles joined it rather than keeping their own
+# hardcoded word. Two of them named the WRONG grain before this.
+eq('D7d the four P&L titles derive theirs too',
+   len(re.findall(r"\$\{pnlGrainAdv\(_\w+Grain\)\} trend", js)), 4)
 
 print('\n== %d passed, %d failed ==' % (passed, failed))
 for f in ('_v1133_a.js', '_v1133_b.js', '_v1133_c.js'):
