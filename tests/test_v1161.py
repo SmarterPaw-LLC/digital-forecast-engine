@@ -80,9 +80,19 @@ eq("A3  by_date_device likewise", ld.count("'ga4_by_date_device'"), 2)
 ok("365" not in nocomment(ld), "A4  no 365 anywhere in the loader")
 ok("prevChan, prevDev" in ld, "A5  both land on seoTr")
 
-for shape in ["seoTr = { days: [], chan: [], dev: [], pages: [], prev: [], prevChan: [], prevDev: [] };"]:
-    eq("A6  the EMPTY shape carries them too (both the initial and the failure"
-       " path), so no consumer reads undefined", js.count(shape), 2)
+# v11.82 - the shape was a LITERAL at two sites and the GA4 button would have
+# made it three. Three literals of one shape is how a field gets added to two
+# of them, which is the risk this assertion was written for - so it now pins
+# the shape to ONE declaration and checks every reset goes through it, rather
+# than counting copies.
+SHAPE = "{ days: [], chan: [], dev: [], pages: [], prev: [], prevChan: [], prevDev: [] }"
+eq("A6  /!\\ the EMPTY shape is declared exactly ONCE",
+   js.count("const SEO_TR_EMPTY = () => (" + SHAPE + ");"), 1)
+eq("A6b /!\\ ...and no site writes the literal out beside it",
+   js.count("seoTr = " + SHAPE + ";"), 0)
+ok(js.count("SEO_TR_EMPTY()") >= 3,
+   "A6c every reset goes through it - the initial, the failure path and the pull",
+   js.count("SEO_TR_EMPTY()"))
 
 # ===========================================================================
 print("\nB. The REAL seoTrPrevRows, driven")

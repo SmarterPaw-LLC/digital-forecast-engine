@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.81** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.82** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,83 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.82 - the GA4 pull is a button, and the port has a drift guard
+
+- **Jason:** *"this should be a button press"*.
+
+He is right, and the reason it was not one is worth stating: the dashboard
+is a static file on GitHub Pages with **no server**, so a button needs
+somewhere to run. `supabase/functions/ga4-pull/index.ts` is that somewhere.
+It does what `smarterpaw-blog/ga4_pull.py` and this repo’s `load_ga4.py` do
+between them - six reports from the GA4 Data API, upserted on
+`(property, period)`, plus a `ga4_snapshots` row - with nothing of his
+running.
+
+### ⚠ A SERVICE ACCOUNT, NOT THE EXISTING TOKEN
+`ga4_pull.py` authenticates **as Jason**, with an OAuth refresh token in
+`smarterpaw-blog/ga4_token.json`. That is a user credential tied to one
+machine’s file system and is not something to copy into a cloud secret. The
+service account is granted Viewer on the property explicitly rather than
+inheriting a person’s access.
+
+### ⚠ A PORT IS A SECOND COPY OF A SPEC, AND THIS ONE IS THE THIRD
+The metric list, the dimension map, the reports and their conflict keys are
+now declared in `ga4_pull.py`, in `load_ga4.py` **and** in `index.ts`. The
+drift would be silent: the function would write a different shape than the
+loader, into the same tables.
+
+`tests/test_v1182.py` **parses all three and fails the build when they
+disagree** - metrics, page metrics, the dimension map, every table, every
+conflict key. It is the only thing making the duplication safe, the function
+header says so, and B15 asserts the header still says so. If `ga4_pull.py`
+cannot be found, A10 **fails** rather than skipping: an unchecked copy is the
+reason the suite exists.
+
+### ⚠ THE WINDOW IS NOT A CONTROL
+The button asks for however many days it takes to catch up, floored at 30 and
+capped at 400, read from the feed’s own newest day. GA4 does not restate
+beyond ~48h (v11.73), so 30 days re-settles everything that could have moved.
+A picker would be a second thing to get right on a row whose entire point is
+that there is nothing to get right.
+
+### ⚠ AND THE TWO COMMAND ROWS ARE GONE
+They were the honest answer in v11.78, while the pull could only run on his
+machine. Beside a working button they are a second way to do the same thing,
+which is the divergence hard rule #1 exists to stop. The scripts survive as
+**provenance** in the header tooltip - what the function is a port of - not
+as an affordance.
+
+### Carried over from the Python, deliberately
+- **A short read is refused, not written.** `ga4_pull.py` raises rather than
+  write a truncated report, because a short read is invisible downstream:
+  every total built on it is low and nothing says so.
+- **`by_source_medium` is not loaded.** A period aggregate with no date
+  column would put a figure in the database whose window is whatever the last
+  pull happened to use (the v11.22 trap).
+- **The 20261030 / 202610 normalisation happens at the source**, so no
+  downstream reader has to know GA4 spells dates that way.
+
+### ⚠ AND IT STOPS ITSELF BEFORE THE PLATFORM DOES
+Edge Functions get 150s of wall clock. The loop checks a 115s budget between
+reports and returns `stoppedEarly` with what it did finish, rather than being
+killed mid-report with nothing said. The pull row is written either way,
+because it DID pull and that is the fact the page reads.
+
+### Verification
+- `deno check` clean · **136 suites green** · new `tests/test_v1182.py`.
+- **In a browser on the real page**: the button, the disabled state, and the
+  error path before the function is deployed.
+
+### Still open
+- **⚠ THE FUNCTION IS NOT DEPLOYED YET.** Jason pastes it into Supabase,
+  same as he runs the SQL. Until then the button reports a clean error.
+- **⚠ NOTHING SCHEDULES IT STILL** - but it is now one `cron.schedule` away
+  rather than needing a machine of his to be awake. His call.
+- **⚠ THE REAL STORAGE REPORT URL IS STILL UNKNOWN** (v11.80).
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
+- **⚠ FOUR TABLES CARRY `master_id` AND ARE NOT IN `runMerge`’S LIST** (v11.79).
+- Everything else on the v11.81 list.
 
 ## v11.81 - the Uploads page is grouped by channel, and says what to feed next
 

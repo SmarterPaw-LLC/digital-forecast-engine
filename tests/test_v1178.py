@@ -171,16 +171,25 @@ ok("input" not in GRP,
    "A17 /!\\ ...and no file input either, so there is nothing to look live")
 eq("A18 the freshness element exists once", s.count('id="last-ga4"'), 1)
 eq("A19 the rollup element exists once", s.count('id="last-ga4-grp"'), 1)
-ok("python ga4_pull.py" in GRP and "python load_ga4.py" in GRP,
-   "A20 both commands are on the row")
-eq("A21 ...each with a copy button through the shared helper",
-   GRP.count("copyTextToClipboard("), 2)
+# v11.82 - the two copy-a-command rows were this release's answer while the
+# pull could only run on Jason's machine. They are a button now, and a census
+# that asserts the status quo goes red on the release that changes it (the
+# v11.63 lesson). What v11.78 was actually FOR survives below: the row has no
+# dropzone, no dead input, and no interactive element buried in a title=.
+ok("ga4RunPull(this)" in GRP,
+   "A20 the row's one action is the Run button (v11.82 replaced the commands)")
+eq("A21 ...and no copy-a-command affordance survives beside it",
+   GRP.count("copyTextToClipboard("), 0)
 ok("<a " not in GRP,
    "A22 rule 1a: nothing INTERACTIVE was collapsed into a title= here")
 ok("toggleUploadGroup('grp-ga4')" in GRP,
    "A23 it expands through the same toggle as every other group")
-ok("RUN BY HAND" in GRP,
-   "A24 the badge names what it is, in the file's own vocabulary")
+# v11.82 - the badge said RUN BY HAND while it was. It is ONE CLICK now; what
+# this assertion is for is that the row carries a badge at all, because in the
+# collapsed list every other row means "drop a file here" and this one does not.
+ok("up-badge" in GRP,
+   "A24 the row still carries a badge - in the collapsed list every other row "
+   "means drop a file here, and this one does not")
 
 # Scope: the title names no property, so the query must not pick one.
 ok("property" not in BLOCK.split("ga4_snapshots")[0].replace("ga4_by_date", ""),
