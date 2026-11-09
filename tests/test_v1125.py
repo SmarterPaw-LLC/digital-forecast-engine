@@ -83,7 +83,7 @@ CORE = js[js.index('const ADS_NO_CAMPAIGN'):js.index('const CHEWY_PROGRAM_COLUMN
 # in explicitly - omitting it made every brand read null on the first run of
 # this suite, which looked exactly like a bug in the parser.
 PARSERS = '\n'.join([
-    fnbody('parseCSV'), fnbody('clean'), fnbody('adsAdvertiserToBrand'),
+    fnbody('parseDelimited'), fnbody('parseCSV'), fnbody('clean'), fnbody('adsAdvertiserToBrand'),
     fnbody('_wmcNum'), fnbody('_wmcInt'), fnbody('_wmcDate'),
     fnbody('_wmcLastDay'), fnbody('_wmcCi'), fnbody('_wmcTableErr'),
     fnbody('parseWalmartAdCampaign', 'async function'),

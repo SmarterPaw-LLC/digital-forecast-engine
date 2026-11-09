@@ -134,7 +134,7 @@ def fn(name, kind='function'):
             if d == 0: return js[i:k + 1]
         k += 1
 
-HARNESS = '\n'.join([fn('parseCSV'), fn('adsProductSlug'), fn('adsParseDate'),
+HARNESS = '\n'.join([fn('parseDelimited'), fn('parseCSV'), fn('adsProductSlug'), fn('adsParseDate'),
                      fn('adsStripExcel'), fn('adsMarketplaceToRegion'),
                      fn('adsAdvertiserToBrand'), fn('parseAmazonAdsUnified'), FIX])
 hpath = os.path.join(SP, 'test_v1124.js')

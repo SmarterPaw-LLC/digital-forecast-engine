@@ -207,7 +207,9 @@ eq("A5  walmart_calendar_week reads as a WEEK grain",
 ok(set(A["grains"].values()) <= {"day", "week", "month", "year"},
    "A6  every registered source resolves to one of four grains",
    sorted(set(A["grains"].values())))
-eq("A7  22 sources registered", len(A["grains"]), 22)
+# v11.79 - amazon_storage_fees joined the registry. The count is pinned so
+# a feed that lands WITHOUT a rail entry shows up here as a change.
+eq("A7  23 sources registered", len(A["grains"]), 23)
 
 eq("A8  Amazon SKU Economics declares Mon+5", A["offAmz"], 5)
 eq("A9  Amazon SKU Economics EU declares Mon+5", A["offAmzEu"], 5)

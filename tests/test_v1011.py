@@ -70,12 +70,14 @@ SLICES = [
     fn('chewyCatalogPricePerEach'),
     fn('chewyVendorUnitEcon'),
     fn('_chewyCatalogDecode'),
-    fn('parseChewyCatalog'),
+    fn('sniffDelimiter'), fn('parseDelimited'), fn('parseChewyCatalog'),
 ]
-# _chewyCatNorm is an arrow const, not a function declaration.
-m = re.search(r'\n(const _chewyCatNorm = [^\n]+)', src)
+# v11.79 - was _chewyCatNorm; the normaliser is shared with the Amazon
+# storage parser now and is named for what it does, not for Chewy.
+# hdrNorm is an arrow const, not a function declaration.
+m = re.search(r'\n(const hdrNorm = [^\n]+)', src)
 if not m:
-    raise SystemExit('FAIL: could not find _chewyCatNorm')
+    raise SystemExit('FAIL: could not find hdrNorm')
 SLICES.insert(2, m.group(1))
 
 real_b64 = ''

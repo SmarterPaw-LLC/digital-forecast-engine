@@ -106,7 +106,7 @@ const CSV_BARE = [HDR_BARE].concat(DATA.map(r => line(r, false))).join('\n');
 """
 
 HARNESS = "\n".join([
-    fn('parseCSV'),
+    fn('parseDelimited'), fn('parseCSV'),
     fn('adsProductSlug'),
     fn('adsParseDate'),
     fn('adsStripExcel'),

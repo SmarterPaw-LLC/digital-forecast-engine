@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.78** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.79** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,123 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.79 - the storage bill, from the report that actually carries it
+
+- **Jason, picking the next build:** *"3. Amazon storage fee uploader."*
+
+v11.72 measured the hole: **7 of 13 months report $0.00 storage**, which is
+impossible for a monthly bill. Over May-Oct we captured **$1,887 against
+~$5,844** implied by the volume held, and **October read $0.00** - the month
+Amazon’s rate triples. The real US figure is plausibly **$20-30k**, the same
+order as the whole 5% fee target.
+
+### ⚠ TWO FEEDS NOW CARRY A NUMBER CALLED STORAGE, AND THEY ARE NOT THE SAME
+This is the rule 3a trap arriving by construction, so it is written down
+before a consumer is wired:
+
+| | what it is |
+|---|---|
+| `sku_economics.fba_storage_fee_total` | what the WEEKLY econ report attributed to that week. Partial, and zero in most months. |
+| `amazon_storage_fees.estimated_monthly_storage_fee` | the monthly bill for that SKU. |
+
+**They must never be summed.** When the Fees tab reads this table for a
+month it has to stop reading the other one for that month, or the month
+double-counts. That wiring is the NEXT release, deliberately: this one
+lands the feed and says so on the migration, rather than changing a P&L
+number in the same commit that creates the data behind it.
+
+### ⚠ THE MONTH AND THE MARKET COME FROM THE FILE
+Unlike `walmart_ad_campaign` (v11.25) and `amazon_sp_search_term`, whose
+exports carry no period at all and need the operator to supply one, this
+report has `Month of Charge` and `Country Code` on every row. **So there is no
+upload prompt**, and no way to stamp the wrong month onto a file. Drop
+thirteen months at once and each lands under its own.
+
+### ⚠ AN UNRECOGNISED HEADER IS KEPT, NOT DROPPED
+Amazon has shipped this report hyphenated (`average-quantity-on-hand`) and
+underscored, and the column set has grown - the utilisation surcharge and
+the inventory-discount columns are recent. The parser normalises headers
+(lower case, every non-alphanumeric stripped, so three spellings are one
+key) and anything it still cannot place lands in `extra jsonb` **with the
+status line naming it**. A staging area, not a home: whatever turns up
+there gets a real column next release.
+
+I could not verify the exact header set against a real file - there is no
+sample on disk and Amazon’s own help pages do not publish the list - so the
+design is built to survive being wrong about it rather than to assume it is
+right. **The first upload is the verification.** The Seller Central deep
+link is inferred from the two `reportcentral/` links already in this file plus
+the SP-API report type `GET_FBA_STORAGE_FEE_CHARGES_DATA`; its tooltip names
+the navigation path as well, so the card still works if the link does not.
+
+### ⚠ A BLANK FEE CELL IS NULL, NOT ZERO
+`pNum()` returns **0** for an empty string. On a fee column that turns *"Amazon
+did not report this"* into *"Amazon charged nothing"* - which is the v11.72
+defect, the one this table exists to fix, reintroduced at the parser. `storageNum()`
+returns null for a blank and is used on every numeric column.
+
+### ⚠ THE UNIQUE KEY INCLUDES THE FULFILMENT CENTRE
+One SKU is charged separately per warehouse it sits in, and again per
+dangerous-goods type. `(month, region, sku)` is **not** unique, and an upsert
+on it would keep one row of several and under-report the bill - the v11.72
+defect in a new form. The write is a scoped delete of the `(region, month)`
+pairs the file covers, then insert, because the index is built on
+`coalesce()` expressions and PostgREST cannot use it as an `onConflict` target
+(the `amazon_sp_search_term` shape).
+
+### Three consolidations
+
+| what | was | now |
+|---|---|---|
+| the splitter | `parseCSV`, comma only | `parseDelimited(line, delim)`; `parseCSV` keeps its signature and all ~100 call sites |
+| the delimiter sniff | inline in `parseChewyCatalog` | `sniffDelimiter(line)`, called by both |
+| the header normaliser | `_chewyCatNorm` | `hdrNorm`, all three Chewy call sites converted |
+
+A header normaliser is not Chewy’s, and a second copy under another name is
+how the divergence starts.
+
+### ⚠ THE STANDING MERGE AUDIT BIT, AND IT WAS SUPPOSED TO
+`amazon_storage_fees` carries `master_id`, so `runMerge` has to reassign it or a
+product merge orphans every storage charge on the duplicate - **the exact
+fba_fee_preview defect the v9.75 comment in that same block describes**,
+found two versions after it shipped. Added in the release that creates the
+table, with the confirm dialog’s table list updated to match, because a
+dialog that under-states a destructive action is worse than none.
+`capturedIds` is keyed by table, so undo reverses it with no further change.
+
+### Verification
+- `node --check` clean · **134 suites green** · new `tests/test_v1179.py`.
+- The parser driven on **both delimiters, both header spellings**, a blank
+  fee cell, a multi-month file and an unknown column.
+- **In a browser on the real page and the real parser.**
+
+### Still open
+- **⚠ JASON HAS TO RUN `supabase_v11_79_storage_fees.sql`** before the first
+  upload. The uploader names the file if the table is missing.
+- **⚠ NOTHING READS THE TABLE YET.** The Fees tab still shows the weekly
+  econ column. Wiring it is the next release and carries the
+  do-not-double-count decision above.
+- **⚠ FOUR OTHER TABLES CARRY `master_id` AND ARE NOT IN `runMerge``S LIST**:
+  `amazon_sp_search_term`, `amazon_sales_traffic`,
+  `amazon_sales_traffic_snapshot`, `amazon_query_performance_asin`. Found while
+  doing this release’s audit. A merge orphans or cascades their rows the
+  same way. **Not fixed here** - it is a change to a destructive operation
+  on four feeds I was not asked to touch, and it wants its own release with
+  its own undo test.
+- **⚠ AN AMAZON CAMPAIGN CANNOT BE OPENED ON A NOVEMBER WINDOW** (v11.78).
+- **⚠ THE NEW KITTY KA-ZOOM SKU ECONOMICS FILE IS NOT UPLOADED** (v11.77).
+- **⚠ THE EU SKU ECONOMICS FEED IS A WEEK BEHIND** (v11.75).
+- **⚠ THE DIGITAL SALES TRACKER HAS NOT BEEN LOADED SINCE 2026-07-08** (v11.75).
+- **⚠ The coverage grid still marks from the NEWEST period alone** (v11.77).
+- The upload conformity guard covers **1 of 29** uploaders.
+- **⚠ NO SETTLEMENT FEED** (v11.70). **⚠ Reimbursement is netted off on
+  Break-Even and not on Fees** (v11.70).
+- **⚠ The Walmart ad grain is still MONTHLY** (v11.67).
+- **⚠ Chewy’s ad break-even is still 1.0 and that is wrong** (v11.59).
+- **Load times** (v11.72): parallel paging measured **5.8-7.3x**. Not built.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- Walmart’s allowance agreement, still the only missing input to that margin.
 
 ## v11.78 - the GA4 pull is a request on the Uploads page, not a reminder
 
