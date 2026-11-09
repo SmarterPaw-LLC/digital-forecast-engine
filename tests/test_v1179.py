@@ -199,8 +199,32 @@ ok("<a " in GRP and "reportcentral" in GRP,
 ok("pNum(" not in nocomment(PARSE),
    "A21 /!\\ the parser does NOT use pNum - it returns 0 for a blank (D1)")
 ok("storageNum(" in nocomment(PARSE), "A22 ...it uses storageNum")
-ok("if (t === '') return null;" in nocomment(fn("storageNum")),
+# v11.87 - the real export writes `--` for a blank too, so the guard covers
+# both. Pinned on BEHAVIOUR rather than on the literal, which is what went
+# stale here.
+_num = nocomment(fn("storageNum"))
+ok("return null" in _num and "t === ''" in _num,
    "A23 /!\\ and storageNum returns NULL for an empty cell")
+ok("'--'" in _num,
+   "A23b /!\\ ...and for `--`, which is how THIS report writes a blank")
+
+# The six columns a real September 2026 export (2,357 rows, US + CA) settled.
+_cols = const_obj("STORAGE_FEE_COLS")
+for _f in ("total_incentive_fee_amount", "breakdown_incentive_fee_amount",
+           "est_base_msf", "est_sus", "avg_qty_for_sus", "est_vol_for_sus"):
+    ok(_f + ":" in _cols, "A23c the real column %s is mapped" % _f)
+ok("total_incremental_fee:" not in _cols
+   and "breakdown_incentive_fee_discount:" not in _cols,
+   "A23d /!\\ ...and my two GUESSED names are gone, not left beside them")
+_numset = js[js.index("const STORAGE_FEE_NUMERIC"):]
+_numset = _numset[:_numset.index("]);") + 3]
+ok("breakdown_incentive_fee_amount" not in _numset,
+   "A23e /!\\ breakdown_incentive_fee_amount is NOT numeric - it reads "
+   "`COVID-19:0.0057`, and as a number it would be null on every row that has one")
+for _f in ("est_base_msf", "est_sus"):
+    ok(_f in _numset, "A23f %s IS numeric" % _f)
+ok("storageText(" in nocomment(fn("parseAmazonStorageFees")),
+   "A23g text cells go through storageText - the `--` and the Excel apostrophe")
 
 ok("estimated_monthly_storage_fee" in const_obj("STORAGE_FEE_COLS"),
    "A24 the fee column is in the map")
@@ -315,7 +339,7 @@ B = (B.replace("__DELIM__", fn("parseDelimited"))
       .replace("__NORM__", const_line("hdrNorm"))
       .replace("__COLS__", const_obj("STORAGE_FEE_COLS"))
       .replace("__NUMSET__", const_line("STORAGE_FEE_NUMERIC"))
-      .replace("__NUM__", fn("storageNum"))
+      .replace("__NUM__", fn("storageText") + chr(10) + fn("storageNum"))
       .replace("__MNAMES__", const_line("STORAGE_MONTH_NAMES"))
       .replace("__MONTH__", fn("storageMonth"))
       .replace("__MEND__", fn("storageMonthEnd"))
@@ -410,7 +434,7 @@ C = (C.replace("__DELIM__", fn("parseDelimited"))
       .replace("__NORM__", const_line("hdrNorm"))
       .replace("__COLS__", const_obj("STORAGE_FEE_COLS"))
       .replace("__NUMSET__", const_line("STORAGE_FEE_NUMERIC"))
-      .replace("__NUM__", fn("storageNum"))
+      .replace("__NUM__", fn("storageText") + chr(10) + fn("storageNum"))
       .replace("__MNAMES__", const_line("STORAGE_MONTH_NAMES"))
       .replace("__MONTH__", fn("storageMonth"))
       .replace("__MEND__", fn("storageMonthEnd"))
@@ -459,7 +483,7 @@ t('D6  junk is null rather than a silent 0', storageNum('n/a'), null);
 console.log(JSON.stringify(out));
 """
 PNUM = re.search(r"(?m)^function pNum\(s\)\{.*$", js).group(0)
-D = D.replace("__PNUM__", PNUM).replace("__NUM__", fn("storageNum"))
+D = D.replace("__PNUM__", PNUM).replace("__NUM__", fn("storageText") + chr(10) + fn("storageNum"))
 p = os.path.join(SP, "_v1179_d.js")
 io.open(p, "w", encoding="utf-8", newline="").write(D)
 r = subprocess.run(["node", p], capture_output=True, text=True, encoding="utf-8")

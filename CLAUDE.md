@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.86** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.87** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,86 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.87 - the storage parser meets a real file, and six columns were wrong
+
+- **Jason** supplied a real export: September 2026, **2,357 rows, US + CA**,
+  34 columns.
+
+v11.79 built this column list **without a sample**, said so, and put
+`extra jsonb` underneath to catch whatever it got wrong. **28 of 34 matched.**
+These are the six that did not.
+
+### ⚠ TWO WERE MY NAMES, NOT AMAZON’S
+
+| guessed | actual |
+|---|---|
+| `total_incremental_fee` | `total_incentive_fee_amount` |
+| `breakdown_incentive_fee_discount` | `breakdown_incentive_fee_amount` |
+
+**And the second one is not numeric.** It reads `COVID-19:0.0057` - a label
+and an amount in one field. Stored numeric it would have been NULL on every
+row that had one, silently, which is the exact class of defect this table
+was created to fix.
+
+### ⚠ AND FOUR SPLIT THE BILL IN A WAY WORTH HAVING
+`est_base_msf` · `est_sus` · `avg_qty_for_sus` · `est_vol_for_sus`.
+
+Checked on all 2,357 rows:
+
+    est_base_msf + est_sus = estimated_monthly_storage_fee,  0 mismatches
+
+That split is the point. The base fee is a **rate** on volume held; the
+surcharge is what you pay for holding too much too long, and that half is
+**avoidable**. A single total cannot tell them apart, which is exactly the
+distinction v11.70’s lever vocabulary ranks by.
+
+### ⚠ TWO VALUE QUIRKS THE FILE SETTLED
+- `fulfillment_center` reads `'ABE2'` - Excel’s text guard - and that column
+  is **part of the unique key**, so the apostrophes would key one warehouse
+  two ways the day Amazon stops adding them.
+- `--` is how this report writes a blank. Every `dangerous_goods_storage_type
+  in the file is one; stored verbatim it becomes a dangerous-goods type
+  called `--`.
+
+`storageText()` handles both, and `storageNum()` strips the guard too.
+
+### What the real file reports
+
+| September 2026 | rows | fee | base | surcharge |
+|---|---|---|---|---|
+| US | 2,330 | **$444.35** | $444.35 | $0.00 |
+| CA | 27 | **$8.46** | $8.46 | $0.00 |
+
+⚠ **THIS DOES NOT SUPPORT v11.72’S $20-30k/YEAR ESTIMATE**, and that
+estimate should not be repeated until more months are loaded. It was
+extrapolated from volume held against a rate card I declined to hardcode.
+One real month says $444 for US. It is also September - **before the Q4
+window**, which is why `est_sus` is 0.00 on every row - so October to
+December will be materially higher. **The annual figure is unknown until
+those months are loaded; do not guess it again.**
+
+Worth noting beside it: v11.72 measured the econ column at $1,410.88 for
+June and $476.14 for August. Those are the same order as $444.35, which
+suggests the econ feed’s problem is **coverage** - 7 of 13 months reporting
+$0.00 - rather than magnitude. An observation, not a conclusion.
+
+### Verification
+- **The shipped parser driven over the real 2,357-row export**: `unknown`
+  comes back **empty**, both (region, month) scopes resolve, the apostrophe
+  is stripped, `--` is null, `9.0E-4` parses, and the base + surcharge
+  split ties to the fee at row AND aggregate level.
+- **137 suites green** · `node --check` clean.
+- The file itself is **not committed** - it is business data and this repo
+  is served publicly. The suite asserts the column MAP, not the rows.
+
+### Still open
+- **⚠ JASON HAS TO RUN `supabase_v11_87_storage_fee_columns.sql`** before
+  uploading. It adds the four split columns, renames the two, and makes
+  `breakdown_incentive_fee_amount` text.
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
+- **⚠ FOUR TABLES CARRY `master_id` AND ARE NOT IN `runMerge`’S LIST** (v11.79).
+- Everything else on the v11.86 list.
 
 ## v11.86 - the storage report link, from the URL rather than from a pattern
 
