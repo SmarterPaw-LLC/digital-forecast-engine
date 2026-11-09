@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.79** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.80** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,32 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.80 - the storage report link was a guess, and the guess was wrong
+
+- **Jason:** *"the monthly inventory storage fees opens to this page"* - a
+  screenshot of `reportcentral/WelcomePage`, the Fulfilment Reports hub.
+
+v11.79 shipped `reportcentral/FBA_STORAGE_FEE_CHARGES/1`, inferred from the two
+`reportcentral/` links already in the file plus the SP-API report type. The
+v11.79 entry said it was inferred and unverified. It was wrong, and a link
+whose LABEL promises one destination while its HREF lands on another is the
+v10.19 dead control wearing a working coat.
+
+The link now points at the hub it actually reaches, is labelled **Open
+Fulfilment Reports (US) · then Payments**, and its tooltip says Amazon has
+no deep link we know of rather than offering the path as a fallback - that
+path is the operative instruction now, so it is on the button.
+
+### ⚠ THE LESSON IS THE ONE ALREADY IN THIS FILE
+*Verify before proposing; after one fail, fetch ground truth or stop.* The
+right fix is Jason pasting the real URL from his own session, not a second
+guess at a report id. **Asked; not guessed again.**
+
+### Still open
+- **⚠ THE REAL STORAGE REPORT URL IS STILL UNKNOWN.** Waiting on Jason to
+  paste it from Seller Central → Fulfilment Reports → Payments.
+- Everything on the v11.79 list.
 
 ## v11.79 - the storage bill, from the report that actually carries it
 
