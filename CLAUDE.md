@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.76** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.77** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,114 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.77 - a coverage cell marks on its OWN data when it has data
+
+- **Jason:** *"this is STILL not showing correct. i haven’t uploaded the new
+  kitty report yet."*
+
+Measured on `sku_economics` the moment he said it:
+
+| | latest week |
+|---|---|
+| US · CA · Doggijuana | 2026-11-02 |
+| US · CA · Meowijuana | 2026-11-02 |
+| **US · CA · Kitty Ka-Zoom** | **2026-10-26** |
+
+...and all six cells drew a **green check**, because v11.48 made the mark the
+REGION’s: `const d = res.byRegion[rk]`.
+
+### ⚠ THIS IS v11.76, ONE RELEASE LATER, AND I SHIPPED IT
+That release fixed exactly this class of error in the upload guard: these
+feeds are uploaded **ONE BRAND AT A TIME**, so a region’s newest load says
+nothing about a brand that was not in it. SKU Economics is the clearest case
+of all - **its dropzone prompts for the brand** - and I fixed the guard and
+did not sweep the renderer sitting on the same card.
+
+Hard rule #1 is usually about two copies of one thing. This is the other
+shape: one cause, two surfaces, and only one of them converted.
+
+### What a cell says now
+**Its own data, when it has any.** `res.cells[region|brand]` is the mark;
+`res.byRegion[region]` is what a cell falls back to.
+
+### ⚠ AND v11.48’S GUARANTEE IS INTACT, which is the half that could have broken
+Jason, v11.48: *"it’s one report for all regions and brands ... that doesn’t
+mean there is data missing."* He pointed at the **UK**, where only Meowijuana
+is listed, and the other two brands drew a **dash** that read as a missing
+file.
+
+A brand with **NO rows in a region** is a fact about the catalogue, so it
+still inherits the region’s mark and **can never draw a dash**. Section C
+drives his own UK shape and requires the two unsold brands to read as
+covered, with the tooltip still saying why.
+
+| cell | marks on |
+|---|---|
+| has rows of its own | **those rows** |
+| no rows in this region | the region’s load *(v11.48, unchanged)* |
+| region never uploaded | the dash *(v11.47, unchanged)* |
+
+### ⚠ A FEED THAT REALLY IS ONE FILE PER REGION DOES NOT MOVE
+Section D runs the retired rule beside the shipped one over a rollup where
+every brand shares the region’s newest load, and requires the two grids to
+be **identical** - a current region all green, a stale one dated for every
+brand alike. That is the only form in which *"nothing changed for the feeds
+this was aimed at"* is checkable rather than read off a diff.
+
+### The tooltip stopped saying the same thing twice
+The date used to be the region’s, with the brand’s own appended as
+`· Kitty Ka-Zoom: rows through 2026-10-26`. The brand’s date **is** the
+headline now, so that clause is gone rather than repeated - the headline
+names the scope the date belongs to instead:
+
+    Most recent week_start for CA · Kitty Ka-Zoom: 2026-10-26
+      · covers through 2026-10-31 (9 days ago) · late after 7 days
+
+A cell with no rows keeps the full v11.48 sentence, because there the brand
+is the thing that needs explaining rather than the date.
+
+### Verification
+- `node --check` clean · **132 suites green** · new `tests/test_v1177.py`
+  (36 assertions), driven on **the real sku_economics rollup** read off the
+  database on 2026-11-09, so the fixture is the card in his screenshot.
+- **THE DEFECT REPRODUCED**: v11.48’s cell rule run beside the shipped one on
+  those rows. The old one draws `CA | OK | OK | OK` and `US | OK | OK | OK`;
+  the new one draws `CA | OK | 2026-10-26 | OK`, in the not-fresh colour, in
+  both regions.
+- **In a browser on the real renderer and the real fetch path**, with the
+  real rollup rows.
+
+### ⚠ test_v1148 WENT RED AND IT WAS RIGHT TO
+Its A1c pinned **US Doggijuana as a check** although that brand’s rows stop
+on 2026-10-20, two weeks behind its region - the exact shape Jason came back
+on, asserted as correct. Re-pointed, with the reason beside it, and A1 / A1b
+/ A2 (**no dash, ever**) left untouched because that is the guarantee the
+suite exists for. This is v11.63’s lesson again: a census that asserts the
+status quo goes red on the release that fixes what it was hiding.
+
+### Still open
+- **⚠ THE NEW KITTY KA-ZOOM SKU ECONOMICS FILE IS NOT UPLOADED** - US and
+  CA both stop at the week of 2026-10-26. Which is now what the card says.
+- **⚠ THE CA ROWS FROM THE 2026-11-02 FBA INCIDENT ARE STILL IN THE TABLE**
+  (v11.76): 112 ASINs / 26,215 units that are a byte copy of that day’s US
+  load. Jason’s call; nothing was deleted.
+- **⚠ THE EU SKU ECONOMICS FEED IS A WEEK BEHIND** (v11.75).
+- **⚠ THE DIGITAL SALES TRACKER HAS NOT BEEN LOADED SINCE 2026-07-08**
+  (v11.75), and it reports a YEAR as its period.
+- **⚠ The coverage grid still marks from the NEWEST period alone**, so holes
+  behind it are invisible here - EU SKU Economics is missing 29 weeks since
+  March. The `⚠ N gaps` chip reports that for 3 of the 22 sources.
+- The upload conformity guard covers **1 of 28** uploaders (v11.76).
+- **⚠ NOTHING SCHEDULES THE GA4 PULL** (v11.73). Jason’s call.
+- **⚠ THE STORAGE FEE REPORT IS NOT LOADED** (v11.72).
+- **⚠ NO SETTLEMENT FEED** (v11.70). **⚠ Reimbursement is netted off on
+  Break-Even and not on Fees** (v11.70).
+- **⚠ The Walmart ad grain is still MONTHLY** (v11.67).
+- **⚠ Chewy’s ad break-even is still 1.0 and that is wrong** (v11.59).
+- **Load times** (v11.72): parallel paging measured **5.8-7.3x**. Not built.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- Walmart’s allowance agreement, still the only missing input to that margin.
 
 ## v11.76 - a file is measured against the file that came before IT
 

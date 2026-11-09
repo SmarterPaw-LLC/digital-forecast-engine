@@ -153,8 +153,18 @@ const tips = (h) => [...h.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].slice(1).map(m =>
 eq("A1 EU/UK is covered for every brand, because ONE file covers them all",
    R["texts"][2], ["EU/UK", "OK", "OK", "OK"])
 eq("A1b CA likewise", R["texts"][1], ["CA", "OK", "OK", "OK"])
-eq("A1c and US, where Doggijuana's rows stop on 2026-10-20",
-   R["texts"][3], ["US", "OK", "OK", "OK"])
+# v11.77 RE-POINTED, and it was right to go red. This pinned US Doggijuana
+# as OK although its rows stop on 2026-10-20, two weeks behind the region.
+# Jason, on exactly that shape one release later: "this is STILL not showing
+# correct. i haven't uploaded the new kitty report yet." Several of these
+# feeds are uploaded ONE BRAND AT A TIME, so a region's newest load says
+# nothing about a brand that was not in it. A cell with rows of its own marks
+# on those now. test_v1177 owns the rule.
+eq("A1c US Doggijuana marks on ITS OWN rows, which stop on 2026-10-20",
+   R["texts"][3], ["US", "2026-10-20", "OK", "OK"])
+# /!\ THE GUARANTEE v11.48 EXISTS FOR IS INTACT: a brand with no rows in a
+# region still inherits the region's mark, so it can never read as a missing
+# file. A1, A1b and A2 are unchanged.
 ok("--" not in json.dumps(R["texts"]),
    "A2 NO dash anywhere - a brand can never be a coverage gap", R["texts"])
 
@@ -165,14 +175,20 @@ _eu = R["tips"][1]
 ok("no rows here" in _eu[0] and "NOT a missing file" in _eu[0],
    "B1 the EU/UK Doggijuana tooltip says it is activity, not coverage", _eu[0])
 ok("Kitty Ka-Zoom: no rows here" in _eu[1], "B1b and Kitty Ka-Zoom the same")
-ok("Meowijuana: rows through 2026-11-02" in _eu[2],
-   "B1c while the brand that IS sold there reports its rows", _eu[2])
+# v11.77 RE-POINTED. The per-brand date used to be a trailing clause beside
+# the region's, because the region's was the headline. The cell's own date IS
+# the headline now, so repeating it would be the same fact twice.
+ok("for EU/UK " + chr(0x00b7) + " Meowijuana: 2026-11-02" in _eu[2],
+   "B1c while the brand that IS sold there is dated on its own rows", _eu[2])
 
 _us = R["tips"][2]
-ok("Doggijuana: rows through 2026-10-20" in _us[0],
-   "B2 a brand whose rows stopped early still SAYS so on the tooltip", _us[0])
-ok("for US" in _us[0] and "2026-11-02" in _us[0],
-   "B2b beside the region's own, newer, coverage date", _us[0])
+ok("for US " + chr(0x00b7) + " Doggijuana: 2026-10-20" in _us[0],
+   "B2 a brand whose rows stopped early is dated by them", _us[0])
+ok("2026-11-02" not in _us[0],
+   "B2b and the region's newer date is NOT what that cell reports", _us[0])
+ok("rows through" not in json.dumps(R["tips"]),
+   "B2c the retired trailing clause is gone, not left repeating the headline",
+   R["tips"])
 
 # ---------------------------------------------------------------------------
 # C. The mark comes from the region rollup.
@@ -186,8 +202,9 @@ eq("C2 the per-(region, brand) map is still built, for the tooltip",
    R["cells"]["US|Doggijuana"], "2026-10-20")
 
 _h = nocomment(fn("uploadCoverageHtml"))
-ok("const d = res.byRegion[rk];" in _h,
-   "C3 the MARK is drawn from the region rollup")
+# v11.77 RE-POINTED: the region rollup is the FALLBACK now, not the rule.
+ok("const d = (c && bd) ? bd : res.byRegion[rk];" in _h,
+   "C3 the mark is the cell's own, falling back to the region rollup")
 eq("C3b and res.cells is read exactly once in the renderer",
    _h.count("res.cells["), 1)
 ok("const bd = res.cells[k];" in _h,
