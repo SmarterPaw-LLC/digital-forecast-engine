@@ -308,10 +308,18 @@ function daysAgo(n: number): string {
 
 // ---------------------------------------------------------------------------
 Deno.serve(async (req: Request) => {
+  // /!\ ECHO THE REQUESTED HEADERS. supabase-js sends Content-Type, so the
+  // browser preflights for it; an Allow-Headers list that omits what was
+  // asked for fails CORS, fetch REJECTS, and the client reports "failed to
+  // send a request" with no status to debug from. Echoing cannot fall
+  // behind whatever the client decides to send next.
+  const asked = req.headers.get("access-control-request-headers");
   const cors = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Headers": asked ||
+      "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Max-Age": "86400",
   };
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
@@ -324,6 +332,30 @@ Deno.serve(async (req: Request) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+    // /!\ THIS FUNCTION AUTHENTICATES ITS OWN CALLER.
+    //
+    // With the platform's Verify JWT on, the gateway can reject the CORS
+    // preflight - which carries no Authorization header, by design - before
+    // any of this runs, and its rejection has no CORS headers on it. The
+    // browser then reports "failed to send a request", which is the same
+    // message as a missing function and debugs like neither.
+    //
+    // So: deploy with Verify JWT OFF, and check here. It writes with the
+    // service role, so it must not be open - and this check is correct
+    // whether the platform's one is on or off.
+    const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const bearer = req.headers.get("authorization") ?? "";
+    if (!bearer.toLowerCase().startsWith("bearer ")) {
+      return json({ ok: false, error: "Not signed in: no bearer token on the request." }, 401);
+    }
+    if (SUPABASE_URL && anon) {
+      const who = await fetch(SUPABASE_URL + "/auth/v1/user", {
+        headers: { apikey: anon, Authorization: bearer },
+      });
+      if (!who.ok) {
+        return json({ ok: false, error: "Not signed in: Supabase rejected the token (" + who.status + ")." }, 401);
+      }
+    }
     const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const propertyId = Deno.env.get("GA4_PROPERTY_ID") ?? "";
     const saRaw = Deno.env.get("GA4_SA_JSON") ?? "";
