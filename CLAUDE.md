@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.77** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.78** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,132 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.78 - the GA4 pull is a request on the Uploads page, not a reminder
+
+- **Jason, on how the GA4 feed should get refreshed:** *"add it to the
+  report upload section as a request."*
+
+He was offered a scheduled task and said no. The pull stays manual; what
+changes is that **the page now asks for it in the place he goes to feed the
+model**, instead of the fact living in this file as a Still-open bullet he
+would have to read to know.
+
+### ⚠ NO `.dz` CLASS ON THIS ROW, DELIBERATELY
+Every other row on that page takes a file. This feed does not: it arrives
+by running `ga4_pull.py` and then `load_ga4.py`. `initUploadDropTargets()`
+sweeps **every** `.dz` in the document and wires drag-and-drop to whatever
+`input[type=file]` it finds inside, so a `.dz` with no input would accept a
+drop, highlight, and do nothing - the v10.19 dead control, on the one page
+whose whole job is telling him what has been fed in. The row is built from
+`.up-grp` + `.up-prompt` instead, with the two commands and a copy button
+each.
+
+### What the row says
+
+    Site Traffic — GA4  [RUN BY HAND]        LATEST DATA
+    smarterpaw-blog/ga4_pull.py → load_ga4.py   2026-11-06 (3d ago) · pulled 2d ago  ⚠ 3 days behind
+
+Expanded: the two commands in order, each with the folder it runs in, and
+
+    📅 Data thru 2026-11-06 · settled thru 2026-11-04 · pulled 2d ago
+
+**Two facts, because v11.73 established they are different questions**: how
+far the DATA reaches and when it was last PULLED. A feed that stops on
+Monday because the loader last ran on Monday and one that stops there
+because GA4 had nothing are the same picture without both.
+
+**`settled thru` appears only when it DIFFERS** from the newest day. Equal,
+it reads as a second opinion about one date - the v11.75 tooltip lesson.
+
+### Three consolidations, not three new helpers
+
+| what | was | now |
+|---|---|---|
+| the settle rule | inline in `seoTrCoverage()`, one consumer | `GA4_SETTLE_DAYS` + `ga4SettledThrough()`, two |
+| the ⚠ pill | gap-counting baked into `appendGapChip` | `appendWarnChip(id, label, title)`; `appendGapChip` calls it |
+| the NOT WIRED badge | an inline style on one group | `.up-badge`, and Warehouse converted in the same edit |
+
+### ⚠ AND THE NEW SUITE FOUND A THIRD CHIP, 68 LINES AWAY
+A9 was written as *exactly one copy of the chip style* and failed on its
+first run: `refreshUploadDataRanges` held a **hand-rolled duplicate** for the
+EU gap chip - same `cssText`, same `⚠ N gaps` label, same tooltip shape -
+inside the function being edited. Converted in the same commit, with its
+class-based idempotence guard moved into `appendWarnChip` as an optional
+argument and its WORDING (by country, EU reports) left its own. **A
+consolidation that leaves copies behind is not a consolidation** (v10.60),
+and the only reason this one was caught is that the assertion was written
+before the file was believed.
+
+**One copy of that look is deliberately left standing**: the `BUNDLE` pill in
+the products table. `.up-badge` is declared inside the Uploads view’s own
+`<style>` and is not in scope there, and that pill carries `margin-left:4px`
+against this one’s `6px`, so a shared class would move one of them.
+Promoting it to the global sheet is a products-table change. **A29/A13b
+pins it at exactly one survivor**, so a fourth copy cannot appear quietly.
+
+### The standing merge audit
+`runMerge` / SP-TEMP promotion / `doRestore` all reassign rows by `master_id`.
+The `ga4_*` tables are keyed on `(property, day)` and carry no product key at
+all, so a product merge has nothing to reassign in them and this release
+adds no table and no field to any of the three. **Audited, no-op** - noted
+so the next reader does not re-derive it.
+
+The settle rule is the one that mattered: two copies of *"is the last day
+real yet"* is two answers to it, and GA4’s ~48h restatement window is the
+reason the trailing bucket on the Traffic chart collapses on every view.
+One definition, both consumers converted in this commit (rule #5).
+
+### ⚠ BEHIND IS MEASURED AGAINST TODAY HERE, and that is not v11.73
+contradicting itself. `seoTrCoverage()` measures against the **window’s**
+end, because a chart window that closes in the past is not behind just
+because the calendar moved on (v11.73 B9). This row has no window: it asks
+whether the two scripts have been run, and the calendar is exactly what they
+are behind. The chip stays quiet at `GA4_SETTLE_DAYS` or fewer, because
+below that the newest day is not final either way, and it says so in its own
+tooltip rather than needing this file.
+
+### Scope
+The query is **not** filtered to `property='smarterpaw'` and the title names
+no property, so the newest day in the feed is the answer whatever lands.
+Kitty Ka-Zoom has no GA4 property to pull (v11.41), which is in the row’s
+tooltip, not in its label.
+
+### Verification
+- `node --check` clean · **133 suites green** · new `tests/test_v1178.py`.
+- **In a browser on the real page**, on the real fetch path.
+
+### Still open
+- **⚠ THE GA4 PULL IS STILL MANUAL AND THAT IS NOW A DECISION, not a gap.**
+  Jason declined a scheduled task and asked for this row instead. It is off
+  the open list; do not re-offer the schedule.
+- **⚠ THE STORAGE FEE REPORT IS NOT LOADED** (v11.72). Jason’s pick for the
+  next build: needs a migration he runs himself, a dropzone, a parser, an
+  upsert, a freshness entry, a coverage-grid entry, and the standing merge
+  audit. Until it lands, roughly two thirds of Amazon storage cost is
+  invisible and 7 of 13 months report $0.00 - including October, when the
+  rate triples.
+- **⚠ AN AMAZON CAMPAIGN CANNOT BE OPENED ON A NOVEMBER WINDOW.** The
+  drill-in is built (`ADS_DRILL` carries Amazon, 140 of 173 names join), but
+  `amazon_sp_search_term` is MONTHLY and stops at **2026-10**, so `inWindow`
+  empties `drillNames` for 2026-11-01 → 07 and every campaign renders as
+  plain text. On an October window 130 of 152 campaigns link. **The only
+  statement of this is a per-row `title=`** - the v10.87 shape. Queued.
+- **⚠ THE NEW KITTY KA-ZOOM SKU ECONOMICS FILE IS NOT UPLOADED** (v11.77).
+- **⚠ THE EU SKU ECONOMICS FEED IS A WEEK BEHIND** (v11.75).
+- **⚠ THE DIGITAL SALES TRACKER HAS NOT BEEN LOADED SINCE 2026-07-08**
+  (v11.75), and it reports a YEAR as its period.
+- **⚠ The coverage grid still marks from the NEWEST period alone**, so holes
+  behind it are invisible here - EU SKU Economics is missing 29 weeks since
+  March. The `⚠ N gaps` chip reports that for 3 of the 22 sources.
+- The upload conformity guard covers **1 of 28** uploaders (v11.76).
+- **⚠ NO SETTLEMENT FEED** (v11.70). **⚠ Reimbursement is netted off on
+  Break-Even and not on Fees** (v11.70).
+- **⚠ The Walmart ad grain is still MONTHLY** (v11.67).
+- **⚠ Chewy’s ad break-even is still 1.0 and that is wrong** (v11.59).
+- **Load times** (v11.72): parallel paging measured **5.8-7.3x**. Not built.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- Walmart’s allowance agreement, still the only missing input to that margin.
 
 ## v11.77 - a coverage cell marks on its OWN data when it has data
 
@@ -128,10 +254,8 @@ status quo goes red on the release that fixes what it was hiding.
   CA both stop at the week of 2026-10-26. Which is now what the card says.
 - **RESOLVED 2026-11-09: the 2026-11-02 duplicate rows were deleted.** See
   the v11.76 entry.
-- **⚠ NINE CA `inventory` ROWS STILL CARRY THOSE NUMBERS** - 827 units of
-  Meowijuana bundle stock that CA has never held, on the table Inventory
-  Planning reads. The uploader writes `inventory` as well as the snapshot,
-  and deleting the snapshot does not unwind that. Jason’s call.
+- **RESOLVED 2026-11-09: the nine CA `inventory` rows are zeroed.** See the
+  v11.76 entry.
 - **⚠ THE EU SKU ECONOMICS FEED IS A WEEK BEHIND** (v11.75).
 - **⚠ THE DIGITAL SALES TRACKER HAS NOT BEEN LOADED SINCE 2026-07-08**
   (v11.75), and it reports a YEAR as its period.
@@ -299,8 +423,20 @@ bundle stock** that the newest CA snapshot puts at **0**, on the table
 Inventory Planning reads. Listed under Still open; it is an UPDATE to a
 different table and was not covered by the instruction to remove.
 
+### ⚠ RESOLVED 2026-11-09 - and the second copy is unwound too
+
+Jason: *"yes, set to 0. i can reupload the recent inventory reports if
+needed."* No re-upload was needed: those nine ASINs are Meowijuana bundles
+CA does not stock, and the newest CA snapshot covering each of them already
+read **0**.
+
+The script refused unless **every** row’s snapshot truth was 0, backed up
+all nine with every column to `inventory_CA_fba_available_backup.json`, then
+patched `fba_available` **alone**: 9 rows updated, 0 still disagreeing,
+and `lead_time_days` / `safety_stock` / `warehouse` printed after the write to
+show the hand-configured planning params were untouched.
+
 ### Still open
-- **⚠ NINE CA `inventory` ROWS STILL CARRY THE BAD NUMBERS** (above).
 - **The guard still covers 1 of 28 uploaders.** This release makes the one it
   covers trustworthy; it does not widen it.
 - **⚠ THE EU SKU ECONOMICS FEED IS A WEEK BEHIND** (v11.75).

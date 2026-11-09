@@ -205,7 +205,7 @@ globalThis.Date = class extends RealDate {
   static parse(x) { return RealDate.parse(x); }
 };
 let seoTr = { days: [] }, seoTrSnap = null;
-""" + fn("seoTrCoverage") + r"""
+""" + re.search(r"(?m)^const GA4_SETTLE_DAYS\s*=.*$", js).group(0) + chr(10) + fn("ga4SettledThrough") + chr(10) + fn("seoTrCoverage") + r"""
 const days = (hi) => { const out = []; const d = new RealDate(RealDate.parse('2026-05-11T00:00:00Z'));
   const end = RealDate.parse(hi + 'T00:00:00Z');
   while (d.getTime() <= end) { out.push({ day: d.toISOString().slice(0,10) }); d.setUTCDate(d.getUTCDate()+1); }
@@ -342,10 +342,19 @@ ok("seoFetchAll('ga4_snapshots'" in NC,
 ok("let seoTrSnap" in NC, "E6  seoTrSnap is declared at module scope")
 # The settle window is DERIVED from the pull's own timestamp. A typed date, or
 # a typed hour count, would be stale the day the pull moves.
-cov = fn("seoTrCoverage")
-ok("pulled_at" in cov and "setUTCDate" in cov,
-   "E7  /!\\ the cut is derived from pulled_at, not typed")
-ok(not re.search(r"\b202[0-9]-[0-9]{2}-[0-9]{2}\b", nocomment(cov)),
+#
+# v11.78 - the arithmetic moved into ga4SettledThrough so the Uploads page
+# could read the SAME rule instead of keeping a second copy of "is the last
+# day real yet". seoTrCoverage still sources pulled_at; the cut is derived one
+# function over. E7 follows it rather than pinning the old address, and E7b
+# holds the guarantee E7 was actually written for.
+cov    = fn("seoTrCoverage")
+settle = fn("ga4SettledThrough")
+ok("pulled_at" in cov and "ga4SettledThrough(" in cov,
+   "E7  /!\\ seoTrCoverage sources the cut from pulled_at, through the shared rule")
+ok("setUTCDate" in settle and "GA4_SETTLE_DAYS" in settle,
+   "E7b /!\\ the cut is derived, not typed")
+ok(not re.search(r"\b202[0-9]-[0-9]{2}-[0-9]{2}\b", nocomment(cov + settle)),
    "E8  /!\\ no cutoff DATE is typed into the derivation")
 ok("GA4 settles a day within" in js or "settles a day" in js,
    "E9  the 48h rule is written down where the next reader will find it")
