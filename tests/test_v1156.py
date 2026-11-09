@@ -68,7 +68,7 @@ print("=" * 62)
 # byte-identical, which test_v1166 C3 asserts directly.
 CORE = (fn("chartLegendIsOverlay") + "\n" + fn("chartLegendSyncOverlay") + "\n"
         + fn("chartLegendSoloed") + "\n"
-        + fn("chartLegendOnly") + "\n" + fn("chartLegendToggle") + "\n")
+        + fn("pnlScaleCeiling") + chr(10) + fn("pnlChartScaleLock") + chr(10) + fn("chartRescaleY") + chr(10) + fn("chartLegendOnly") + "\n" + fn("chartLegendToggle") + "\n")
 
 A = run_node(os.path.join(SP, "a.js"), CORE + r"""
 function mkChart(datasets) {

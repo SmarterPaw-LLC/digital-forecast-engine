@@ -163,7 +163,7 @@ print("\nA. /!\\ THE DEFECT, REPRODUCED - the legend never reached the line")
 # ===========================================================================
 A = run_node(os.path.join(SP, "_v1166_a.js"), CHART + FEED
    + fn("chartLegendIsOverlay") + "\n" + fn("chartLegendSoloed") + "\n"
-   + fn("chartLegendSyncOverlay") + "\n" + fn("chartLegendOnly") + "\n"
+   + fn("pnlScaleCeiling") + chr(10) + fn("pnlChartScaleLock") + chr(10) + fn("chartRescaleY") + chr(10) + fn("chartLegendSyncOverlay") + "\n" + fn("chartLegendOnly") + "\n"
    + fn("seoTrSelNoun") + "\n" + fn("chartLegendVisibleBands") + chr(10) + fn("seoTrOverlaySync") + r"""
 // The pre-v11.66 chartLegendOnly, character for character minus the one line
 // this release adds. Visibility only - which is the defect.
@@ -305,7 +305,7 @@ print("\nC. the real legend handlers, and what they must NOT change")
 # ===========================================================================
 C = run_node(os.path.join(SP, "_v1166_c.js"), CHART + FEED
    + fn("chartLegendIsOverlay") + "\n" + fn("chartLegendSoloed") + "\n"
-   + fn("chartLegendSyncOverlay") + "\n" + fn("chartLegendToggle") + "\n"
+   + fn("pnlScaleCeiling") + chr(10) + fn("pnlChartScaleLock") + chr(10) + fn("chartRescaleY") + chr(10) + fn("chartLegendSyncOverlay") + "\n" + fn("chartLegendToggle") + "\n"
    + fn("chartLegendOnly") + "\n" + fn("seoTrSelNoun") + "\n"
    + fn("chartLegendVisibleBands") + chr(10) + fn("seoTrOverlaySync") + r"""
 const out = {};

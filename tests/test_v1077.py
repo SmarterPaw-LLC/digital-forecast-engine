@@ -592,7 +592,7 @@ harness = (harness
     .replace('__CHARTMODE__', fn('pnlChartMode'))
     .replace('__TOGGLE__',    fn('pnlChartCompare') + '\n'
                               + fn('pnlCompareToggleHtml') + '\n'
-                              + V1174 + fn("esc2") + chr(10) + fn("pnlGrainStepperHtml") + chr(10) + fn("pnlFillToggleHtml") + chr(10) + fn('pnlInjectChartModeToggle')))
+                              + V1174 + fn("esc2") + chr(10) + fn("pnlGrainStepperHtml") + chr(10) + fn("pnlFillToggleHtml") + chr(10) + fn("pnlChartScaleLock") + chr(10) + fn("pnlScaleToggleHtml") + chr(10) + fn('pnlInjectChartModeToggle')))
 
 hp = os.path.join(SP, 'test_v1077_toggle.js')
 io.open(hp, 'w', encoding='utf-8', newline='').write(harness)

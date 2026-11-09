@@ -282,7 +282,19 @@ eq("D9c the headroom constant is named once",
    code.count("const PNL_SCALE_HEADROOM"), 1)
 ok(re.search(r"suggestedMax:\s*[0-9]", code) is None,
    "D10 no hardcoded suggestedMax anywhere")
-eq("D10b suggestedMax is spelled in exactly one place", code.count("suggestedMax"), 1)
+# v11.85 - this pinned the WORD to one spelling, as a guard against a
+# second ceiling opinion. chartRescaleY now reads and re-applies the same
+# value when the legend hides bands, so the word appears more than once
+# while there is still exactly one PRODUCER. That is what the guard was
+# for, so that is what it measures.
+eq("D10b only pnlScaleCeiling PRODUCES a ceiling",
+   code.count("{ suggestedMax:") + code.count("{suggestedMax:"), 1)
+resc = nocomment(fn("chartRescaleY"))
+ok("pnlScaleCeiling(" in resc,
+   "D10c /!\\ ...and the rescale ASKS it rather than computing its own")
+others = [m for m in re.finditer(r"suggestedMax", code)]
+ok(len(others) >= 2,
+   "D10d the word really does appear more than once now", len(others))
 ok(code.index("function pnlScaleCeiling(") < code.index("async function pnlTrendRender("),
    "D11 declared before its readers")
 _head = float(re.search(r"const PNL_SCALE_HEADROOM = ([0-9.]+);", js).group(1))

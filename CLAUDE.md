@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.84** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.85** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,79 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.85 - the axis follows what is drawn, and a Lock for when it must not
+
+- **Jason:** *"when i drill in, the chart doesn’t update granularity to adjust
+  for the smaller totals"* ... *"i would like options to lock it vs not too"*
+
+### ⚠ THIS IS MY BUG, FROM v11.63
+That release replaced Chart.js’s grace lottery with
+`suggestedMax = peak * 1.15`, computed **once at render from the full dataset
+array**. A `suggestedMax` is a FLOOR the axis max is raised to - which is
+exactly why it fixed the clipping - so hiding bands could never lower it.
+Chart.js would have rescaled on its own; v11.63 pinned it.
+
+Isolating three SKUs out of 260 left the axis at **$70,000** and the
+remaining band as a flat sliver on the floor.
+
+### ⚠ AND LOCK IS NOT THE WORKAROUND, IT IS THE OTHER QUESTION
+**Fit** answers *what shape is this product’s curve*. **Lock** answers *how big
+is it against the whole* - the axis holds still, so an isolated band keeps
+the height it had. Both are real, which is why this is a control rather than
+a fix with a default.
+
+Measured on the real renderer, one dominant band and two small ones:
+
+| | axis |
+|---|---|
+| everything | 90,000 |
+| isolate the smallest, **Fit** | **1,600** |
+| back to all | 90,000 |
+| isolate the smallest, **Lock** | 90,000 |
+
+**Fit is the default**: it is what the chart did before v11.63, and what he
+expected when he drilled in.
+
+### ⚠ THE BUTTON SAYS FIT, NOT AUTO
+The GROUP stepper two controls away already has an **Auto**. Two Autos in
+one strip meaning different things is rule #2, so the word had to be
+different rather than merely clear.
+
+### ⚠ AND IT RENDERS IN BOTH MODES, unlike FILL and BANDS
+Those two are about the SERIES, so they hide on a line chart. This is about
+the AXIS: hiding a line pins it exactly as hiding a band does.
+
+### Three things the rescale refuses to do
+- **An axis v11.63 gave no ceiling stays without one** - an empty or
+  all-negative series has no top edge, and raising its max would stretch the
+  axis away from the data.
+- **Nothing visible keeps the old ceiling** rather than dropping it and
+  letting the chart clip on the next repaint.
+- **Locked, it does nothing at all** rather than re-applying a stored
+  number. The render-time ceiling is already in the config, so leaving it
+  alone IS the lock and there is no second copy to drift.
+
+### ⚠ IT RUNS AFTER THE OVERLAY SYNC
+v11.69’s sync rewrites the comparison line’s DATA to the narrowed population.
+The axis has to fit what the chart ends up drawing, not what it was drawing
+a line ago - so the order is sync, rescale, one repaint.
+
+### Verification
+- `node --check` clean · **137 suites green** · new `tests/test_v1185.py`.
+- **In a browser on the real `pnlTrendRender` and the real `chartLegendOnly`**,
+  with the control row rendered from the real injector.
+- **THE DEFECT REPRODUCED**: the pre-v11.85 ceiling run beside the shipped
+  one on an isolated band - and required to AGREE when nothing is hidden, so
+  *no chart moved by default* is a measurement.
+
+### Still open
+- **⚠ THE REAL STORAGE REPORT URL IS STILL UNKNOWN** (v11.80).
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
+- **⚠ FOUR TABLES CARRY `master_id` AND ARE NOT IN `runMerge`’S LIST** (v11.79).
+- The six non-`pnlTrendRender` charts build their own scales and get neither
+  a ceiling nor this control. Unchanged from v11.63, and now a wider gap.
+- Everything else on the v11.84 list.
 
 ## v11.84 - the function writes as the caller, because nothing here is service_role
 

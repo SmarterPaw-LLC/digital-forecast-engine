@@ -257,7 +257,7 @@ function mkCanvas(id, parentPos) {
 # repainting, so the harness slices that too. The guarantees the sync itself
 # makes live in test_v1166; what this suite owns is that the legend is
 # unchanged in every other respect.
-CORE = DOM + '\n' + fn('chartLegendHost') + '\n' + fn('chartLegendToggle') + '\n' \
+CORE = DOM + '\n' + fn('pnlScaleCeiling') + chr(10) + fn('pnlChartScaleLock') + chr(10) + fn('chartRescaleY') + chr(10) + fn('chartLegendHost') + '\n' + fn('chartLegendToggle') + '\n' \
      + fn('chartLegendIsOverlay') + '\n' + fn('chartLegendSyncOverlay') + '\n' \
      + fn('chartLegendSoloed') + '\n' \
      + fn('chartLegendOnly') + '\n' + const_obj('CHART_HTML_LEGEND') + '\n'
