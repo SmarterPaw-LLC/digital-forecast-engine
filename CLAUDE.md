@@ -126,9 +126,12 @@ status quo goes red on the release that fixes what it was hiding.
 ### Still open
 - **⚠ THE NEW KITTY KA-ZOOM SKU ECONOMICS FILE IS NOT UPLOADED** - US and
   CA both stop at the week of 2026-10-26. Which is now what the card says.
-- **⚠ THE CA ROWS FROM THE 2026-11-02 FBA INCIDENT ARE STILL IN THE TABLE**
-  (v11.76): 112 ASINs / 26,215 units that are a byte copy of that day’s US
-  load. Jason’s call; nothing was deleted.
+- **RESOLVED 2026-11-09: the 2026-11-02 duplicate rows were deleted.** See
+  the v11.76 entry.
+- **⚠ NINE CA `inventory` ROWS STILL CARRY THOSE NUMBERS** - 827 units of
+  Meowijuana bundle stock that CA has never held, on the table Inventory
+  Planning reads. The uploader writes `inventory` as well as the snapshot,
+  and deleting the snapshot does not unwind that. Jason’s call.
 - **⚠ THE EU SKU ECONOMICS FEED IS A WEEK BEHIND** (v11.75).
 - **⚠ THE DIGITAL SALES TRACKER HAS NOT BEEN LOADED SINCE 2026-07-08**
   (v11.75), and it reports a YEAR as its period.
@@ -261,15 +264,43 @@ units-collapsed file beside it that does trip both (B9).
 And **A14’s tie fixture carried one key**, below `UPLOAD_GUARD_MIN_KEYS`, so
 the tie-break it existed to test could never run.
 
+### ⚠ RESOLVED 2026-11-09 - the duplicated CA rows were deleted
+
+Jason: *"if this is incorrect, remove"*. Proven first, row by row across
+all 13 stored measures, per upload session:
+
+| CA upload, 2026-11-02 | rows | also in US | byte-identical | CA-only |
+|---|---|---|---|---|
+| 23:21:09 Meowijuana | 90 | 90 | **90** | 0 |
+| 23:21:31 Kitty Ka-Zoom | 22 | 22 | **22** | 0 |
+| 23:25:29 **Doggijuana** | 21 | 0 | 0 | **21** |
+
+Corroborated on scale rather than on the row test alone: **CA Meowijuana
+has run 20-26 ASINs and 28-535 units across its entire 14-load history**,
+and the suspect load read 90 ASINs / 20,139 - which is US Meowijuana of
+that day, exactly. The Doggijuana load shares **no ASIN at all** with US
+and was kept.
+
+**112 rows deleted, 21 kept.** All 133 CA rows for the day were written to
+`fba_inventory_CA_2026-11-02_backup.json` in the repo root first, so this
+is reversible. CA 2026-11-02 now reads **21 ASINs / 1,284 units**.
+
+**And every other upload session was swept with the same test**: share of
+its non-zero rows identical to another region’s for the same day, across
+all 13 measures. **Zero other sessions are copies.** The CA Doggijuana
+sessions sit at 50-57%, which is a small catalogue where many ASINs
+genuinely carry the same small quantities in both markets - nowhere near
+the 100% a real duplicate produces.
+
+⚠ **A SECOND COPY OF THE BAD DATA SURVIVES.** The uploader also pushes
+the figures into the legacy `inventory` table, and deleting the snapshot
+does not unwind that: **9 CA rows still read 827 units of Meowijuana
+bundle stock** that the newest CA snapshot puts at **0**, on the table
+Inventory Planning reads. Listed under Still open; it is an UPDATE to a
+different table and was not covered by the instruction to remove.
+
 ### Still open
-- **⚠ THE CA ROWS FROM THE 2026-11-02 INCIDENT ARE STILL IN THE TABLE.**
-  v11.44 describes the US file being uploaded as CA that day; CA 2026-11-02
-  still holds **133 ASINs / 27,499 units**, of which **112 ASINs / 26,215
-  units are byte-identical to the US load of the same day** (Meowijuana
-  90 / 20,139 and Kitty Ka-Zoom 22 / 6,076, matching US exactly). The
-  corrected files were re-uploaded under **2026-11-03**, so the bad rows were
-  never removed. Deleting production rows is Jason’s call and nothing was
-  touched.
+- **⚠ NINE CA `inventory` ROWS STILL CARRY THE BAD NUMBERS** (above).
 - **The guard still covers 1 of 28 uploaders.** This release makes the one it
   covers trustworthy; it does not widen it.
 - **⚠ THE EU SKU ECONOMICS FEED IS A WEEK BEHIND** (v11.75).
