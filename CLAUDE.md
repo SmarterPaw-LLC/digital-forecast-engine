@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.75** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.76** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,147 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.76 - a file is measured against the file that came before IT
+
+- **Jason**, on the FBA Inventory uploader: *"the amazon fba inventory keeps
+  giving me this warning. i think it is showing all canada, or canada meow
+  instead of dog."*
+- And, on the coverage grid beside it: *"also wtf is this message? why can’t
+  we get this upload messaging correct?"*
+
+He is right about the cause, and the numbers say so exactly.
+
+### ⚠ THESE FILES ARRIVE ONE BRAND AT A TIME
+Measured on `fba_inventory_snapshots`, every load since August is a **single
+brand**, two or three of them per region per day. v11.44’s size check held
+only the **REGION** constant and then compared against *"the most recent
+earlier `snapshot_date` for this scope"* - which is whatever brands happened
+to be loaded that day:
+
+| | ASINs | units |
+|---|---|---|
+| uploading: **CA · Doggijuana** | **21** | **1,370** |
+| compared against CA 2026-11-03 | **43** | **5,322** |
+| ... which is Meowijuana (22) **+** Kitty Ka-Zoom (21) | | |
+| **that brand’s own last file**, CA Doggijuana 2026-11-02 | **21** | **1,284** |
+
+So the right answer was *no change at all*, and the guard said **"a drop of
+51%"**. It did that on every per-brand upload, which is how an operator
+learns to click through a warning without reading it - and a warning nobody
+reads is worse than none, because it also claims to be working.
+
+### The baseline is the previous UPLOAD, not the previous calendar day
+`uploadGuardBaseline` groups earlier rows into **upload sessions**
+(`snapshot_date` + `uploaded_at` to the second) and picks the one whose keys
+**most overlap this file’s**. That is the guard’s own stated question - *does
+this file look like the files that came before it* - asked of a FILE rather
+than of a date.
+
+**It needs no brand column, and that is the point.** Two brands share no
+ASINs, so the overlap finds the right predecessor by itself - and it also
+handles the **mixed** file (2026-10-20’s US load carried Doggijuana AND
+Meowijuana) without ever being told that brands can be mixed.
+
+The session column is **load-bearing, not a nicety**. A11 runs the same
+resolver with `sessionCol` removed: the unit becomes the period again and it
+reads **133 ASINs** - every brand loaded that day - which is the v11.44
+defect in a different costume.
+
+### ⚠ AN UNRELATED PREDECESSOR IS REFUSED, not measured against
+A file sharing almost nothing with anything loaded before is a **new**
+catalogue, not a shrunken one. Below `UPLOAD_GUARD_OVERLAP_PCT` of this
+file’s keys, the baseline is **null and the size check simply does not run**
+- saying nothing is the honest answer when there is nothing to compare
+(v10.19). A12 and A13 drive both refusals.
+
+### ⚠ AND "THIS UPLOAD REPLACES THEM" WAS ALSO COUNTING THE WHOLE DAY
+Found while fixing the first half. The conflict key is
+`(asin, region, snapshot_date)`, so an upload replaces **only the rows whose
+ASIN it carries**. The message counted every row loaded for that
+(region, date) - so uploading a second brand on a day that already held the
+first told the operator the first one was about to be wiped, when the upsert
+cannot touch it.
+
+| | |
+|---|---|
+| second brand, same day | `21 ASINs are already loaded for CA on 2026-11-03, none of them in this file. Nothing is replaced.` |
+| a real re-upload | `22 of this file’s 22 ASINs are already loaded for CA on 2026-11-03. This upload replaces those rows.` |
+| a partial overlap | `9 of this file’s 22 ...` |
+
+### ⚠ THE TWIN CHECK IS UNTOUCHED, which is the half that caught the real incident
+v11.44 exists because the US file was uploaded a second time stamped CA.
+That check compares against **other regions for the same period** on
+overlapping keys only, so it was never brand-confused. C5 and C6 drive it on
+Jason’s own rows and require it to still fire, and name `US`.
+
+### ⚠ "coverage unavailable" WAS A DEAD END
+His second message. The grid reported a failed read correctly (v11.47) and
+then had **no way back**: the host is built once and only repainted, so a
+single failure stood until the whole page was reloaded, with the reason
+buried in a `title=`.
+
+Measured before changing anything: **all 22 rollups complete in 13.3 s and
+none of them fail** - but `sku_economics` takes 2.1 s and `amazon_ad_spend`
+3.3 s, and they run back to back after every upload. A one-off statement
+timeout is not a permanent state and must not render as one.
+
+`uploadCoverageFetchRetry` makes **one** more attempt (E14 pins two, never a
+loop) and reports the **first** error if that also fails. Beside it,
+`uploadCoverageRetryHtml` renders a `retry` control - an affordance, not more
+prose in the tooltip, which is rule 1a and the v10.87 defect.
+
+### Verification
+- `node --check` clean · **131 suites green** · new `tests/test_v1176.py`
+  (57 assertions), driven on **the real 197 CA rows** read off
+  `fba_inventory_snapshots`, so the fixture cannot drift from the incident.
+- **THE DEFECT REPRODUCED**: v11.44’s size rule run beside the shipped one on
+  those rows. The old one emits **the exact two sentences in Jason’s
+  screenshot, byte for byte**; the new one emits nothing.
+- **The real `uploadGuardCheck` driven end to end** over a stand-in client:
+  his upload raises **zero** concerns, a file truncated to 10 of 21 ASINs
+  still raises the size one against the right predecessor, the twin still
+  fires on a US file stamped CA, a client that throws yields `[]` rather than
+  blocking the upload, and an unguarded source stays unguarded.
+- **The real check 2 driven** over four shapes: a second brand, a full
+  re-upload, a partial overlap, and an empty cell.
+
+### Two of my own expectations were wrong, the same way twice
+**B5 and C2 both assumed the truncated file would raise BOTH halves.** It
+raises one. Half the ASINs still carry **1,204 of the baseline’s 1,284
+units**, a 6% move, so the units check correctly has nothing to say. The two
+halves answer different questions and are *supposed* to be able to disagree -
+asserted as a measurement now (B7, B8) rather than silenced, with a
+units-collapsed file beside it that does trip both (B9).
+
+And **A14’s tie fixture carried one key**, below `UPLOAD_GUARD_MIN_KEYS`, so
+the tie-break it existed to test could never run.
+
+### Still open
+- **⚠ THE CA ROWS FROM THE 2026-11-02 INCIDENT ARE STILL IN THE TABLE.**
+  v11.44 describes the US file being uploaded as CA that day; CA 2026-11-02
+  still holds **133 ASINs / 27,499 units**, of which **112 ASINs / 26,215
+  units are byte-identical to the US load of the same day** (Meowijuana
+  90 / 20,139 and Kitty Ka-Zoom 22 / 6,076, matching US exactly). The
+  corrected files were re-uploaded under **2026-11-03**, so the bad rows were
+  never removed. Deleting production rows is Jason’s call and nothing was
+  touched.
+- **The guard still covers 1 of 28 uploaders.** This release makes the one it
+  covers trustworthy; it does not widen it.
+- **⚠ THE EU SKU ECONOMICS FEED IS A WEEK BEHIND** (v11.75).
+- **⚠ THE DIGITAL SALES TRACKER HAS NOT BEEN LOADED SINCE 2026-07-08**
+  (v11.75), and it reports a YEAR as its period.
+- **⚠ The coverage grid marks a region from its NEWEST period alone**
+  (v11.75) - EU SKU Economics is missing 29 weeks since March.
+- **⚠ NOTHING SCHEDULES THE GA4 PULL** (v11.73). Jason’s call.
+- **⚠ THE STORAGE FEE REPORT IS NOT LOADED** (v11.72).
+- **⚠ NO SETTLEMENT FEED** (v11.70). **⚠ Reimbursement is netted off on
+  Break-Even and not on Fees** (v11.70).
+- **⚠ The Walmart ad grain is still MONTHLY** (v11.67).
+- **⚠ Chewy’s ad break-even is still 1.0 and that is wrong** (v11.59).
+- **Load times** (v11.72): parallel paging measured **5.8-7.3x**. Not built.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- Walmart’s allowance agreement, still the only missing input to that margin.
 
 ## v11.75 - a coverage check means "we hold the period we should hold"
 

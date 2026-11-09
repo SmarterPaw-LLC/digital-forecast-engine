@@ -140,6 +140,10 @@ function mkQ(table) {
     let out;
     if (q._head) out = { count: FIX.existingCount, data: null };
     else if (q._lt) out = { data: FIX.prevRows };
+    // v11.76 - check 2 selects the KEY column alone now, because it counts
+    // which of THIS file's keys already exist rather than every row loaded
+    // that day. One column, its own fixture.
+    else if (q._cols && String(q._cols).indexOf(',') === -1) out = { data: FIX.sameCell };
     else out = { data: FIX.samePeriod };
     return Promise.resolve(out).then(res, rej);
   };
@@ -151,12 +155,17 @@ console.warn = () => {};
 """
 
 RULES = const_obj('UPLOAD_GUARD_RULES')
+# v11.76 - the size check resolves its baseline through uploadGuardBaseline
+# now. Sliced rather than stubbed, so this suite proves the SHIPPED
+# predecessor rule rather than a copy of it.
 CONSTS = '\n'.join(
     js[js.index('const %s' % k):js.index('\n', js.index('const %s' % k))]
-    for k in ('UPLOAD_GUARD_TWIN_PCT', 'UPLOAD_GUARD_MIN_KEYS', 'UPLOAD_GUARD_COUNT_PCT'))
+    for k in ('UPLOAD_GUARD_TWIN_PCT', 'UPLOAD_GUARD_MIN_KEYS', 'UPLOAD_GUARD_COUNT_PCT',
+              'UPLOAD_GUARD_OVERLAP_PCT'))
 
 A = run_node(os.path.join(SP, '_v1144_a.js'),
-    SB + RULES + '\n' + CONSTS + '\n' + fn('uploadGuardCheck') + '\n' + r"""
+    SB + RULES + '\n' + CONSTS + '\n' + fn('uploadGuardBaseline') + '\n'
+    + fn('uploadGuardCheck') + '\n' + r"""
 const out = {};
 const mkPayload = (qty) => qty.map(([asin, q]) => ({
   asin, region: 'CA', snapshot_date: '2026-11-02', afn_fulfillable_quantity: q }));
@@ -187,9 +196,18 @@ FIX = { samePeriod: mkExisting(real, 'US'), existingCount: 0, prevRows: [], thro
   FIX = { samePeriod: mkExisting(real, 'CA'), existingCount: 0, prevRows: [], throwOn: null };
   out.a4 = await uploadGuardCheck('fba_inventory', mkPayload(real));
 
-  // B1 replacing an existing load of the same scope+period.
-  FIX = { samePeriod: [], existingCount: 133, prevRows: [], throwOn: null };
+  // B1 v11.76 - replacing is the INTERSECTION with this file's own keys,
+  // because that is all the conflict key can touch. Here the day already
+  // holds all 12 of them, plus 3 rows from another brand's upload.
+  FIX = { samePeriod: [], prevRows: [], throwOn: null,
+          sameCell: real.map(([a]) => ({ asin: a }))
+                        .concat([{ asin: 'Z1' }, { asin: 'Z2' }, { asin: 'Z3' }]) };
   out.b1 = await uploadGuardCheck('fba_inventory', mkPayload(real));
+
+  // B1d a day holding ONLY another brand's upload replaces nothing at all.
+  FIX = { samePeriod: [], prevRows: [], throwOn: null,
+          sameCell: [{ asin: 'Z1' }, { asin: 'Z2' }, { asin: 'Z3' }] };
+  out.b1d = await uploadGuardCheck('fba_inventory', mkPayload(real));
 
   // B2 a row count far off the previous load of the SAME scope.
   FIX = { samePeriod: [], existingCount: 0, throwOn: null,
@@ -232,7 +250,17 @@ eq('A4 a scope is never its own twin', [c for c in A['a4'] if 'IDENTICAL' in c['
 _rep = [c for c in A['b1'] if 'already loaded' in c['text']]
 eq('B1 replacing an existing load is reported', len(_rep), 1)
 eq('B1b as INFO, because replacing is the ordinary path', _rep[0]['level'], 'info')
-ok('133' in _rep[0]['text'], 'B1c naming how many rows go', _rep[0]['text'])
+# v11.76 RE-POINTED. This pinned '133' - the count of EVERY row loaded for
+# that (region, date). The conflict key is (asin, region, snapshot_date), so
+# only a key THIS file carries can be replaced, and counting the whole day
+# told an operator uploading a second brand that the first was about to be
+# wiped. test_v1176 section D owns the rule.
+ok("12 of this file's 12 ASINs" in _rep[0]['text'],
+   'B1c naming exactly which rows go', _rep[0]['text'])
+_repd = [c for c in A['b1d'] if 'already loaded' in c['text']]
+eq('B1d another brand on the same day is still reported', len(_repd), 1)
+ok('Nothing is replaced' in _repd[0]['text'],
+   'B1e ... as replacing nothing', _repd[0]['text'])
 
 _size = [c for c in A['b2'] if 'had' in c['text'] and 'ASINs' in c['text']]
 eq('B2 a row count far off the last load is reported', len(_size), 1)
