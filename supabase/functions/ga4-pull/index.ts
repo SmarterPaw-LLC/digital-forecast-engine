@@ -38,7 +38,8 @@
 // ----------------------------------------------------------------------------
 //   GA4_SA_JSON       the whole service-account JSON key file
 //   GA4_PROPERTY_ID   363832203
-// SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected by the platform.
+// SUPABASE_URL and SUPABASE_ANON_KEY are injected by the platform. The
+// service role is deliberately NOT used - see the note above upsert().
 // ============================================================================
 
 const SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
@@ -271,8 +272,20 @@ function num(v: string, isFloat: boolean): number {
   return isFloat ? n : Math.round(n);
 }
 
+// /!\ WRITES AS THE CALLER, NOT AS THE SERVICE ROLE.
+//
+// Not one table in this database grants service_role anything; all 52 grant
+// `authenticated` only, because the app always signs in - and load_ga4.py,
+// which this function ports, writes these exact tables that way today.
+// Granting service_role would introduce the first such grant in the
+// database, for one function, when the role making the request already has
+// the privilege.
+//
+// A SCHEDULED run has no caller, so cron would need that grant added
+// deliberately in the release that adds scheduling.
 async function upsert(
-  url: string, key: string, table: string, conflict: string, rows: Record<string, unknown>[],
+  url: string, anonKey: string, bearer: string, table: string,
+  conflict: string, rows: Record<string, unknown>[],
 ): Promise<void> {
   for (let i = 0; i < rows.length; i += INSERT_BATCH) {
     const chunk = rows.slice(i, i + INSERT_BATCH);
@@ -281,8 +294,8 @@ async function upsert(
       {
         method: "POST",
         headers: {
-          apikey: key,
-          Authorization: "Bearer " + key,
+          apikey: anonKey,
+          Authorization: bearer,
           "Content-Type": "application/json",
           Prefer: "resolution=merge-duplicates,return=minimal",
         },
@@ -332,6 +345,8 @@ Deno.serve(async (req: Request) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+    const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const bearer = req.headers.get("authorization") ?? "";
     // /!\ THIS FUNCTION AUTHENTICATES ITS OWN CALLER.
     //
     // With the platform's Verify JWT on, the gateway can reject the CORS
@@ -343,8 +358,6 @@ Deno.serve(async (req: Request) => {
     // So: deploy with Verify JWT OFF, and check here. It writes with the
     // service role, so it must not be open - and this check is correct
     // whether the platform's one is on or off.
-    const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-    const bearer = req.headers.get("authorization") ?? "";
     if (!bearer.toLowerCase().startsWith("bearer ")) {
       return json({ ok: false, error: "Not signed in: no bearer token on the request." }, 401);
     }
@@ -356,12 +369,11 @@ Deno.serve(async (req: Request) => {
         return json({ ok: false, error: "Not signed in: Supabase rejected the token (" + who.status + ")." }, 401);
       }
     }
-    const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const propertyId = Deno.env.get("GA4_PROPERTY_ID") ?? "";
     const saRaw = Deno.env.get("GA4_SA_JSON") ?? "";
     const missing = [
       !SUPABASE_URL && "SUPABASE_URL",
-      !SERVICE_KEY && "SUPABASE_SERVICE_ROLE_KEY",
+      !Deno.env.get("SUPABASE_ANON_KEY") && "SUPABASE_ANON_KEY",
       !propertyId && "GA4_PROPERTY_ID",
       !saRaw && "GA4_SA_JSON",
     ].filter(Boolean);
@@ -419,7 +431,7 @@ Deno.serve(async (req: Request) => {
         for (const [, col] of rep.metrics) row[col] = num(r[col], NUM_COLS.has(col));
         return row;
       });
-      await upsert(SUPABASE_URL, SERVICE_KEY, rep.table, rep.conflict, rows);
+      await upsert(SUPABASE_URL, anon, bearer, rep.table, rep.conflict, rows);
       counts[rep.key] = rows.length;
       done.push(rep.table);
       total += rows.length;
@@ -441,7 +453,7 @@ Deno.serve(async (req: Request) => {
     for (const rep of REPORTS) {
       if (rep.snapCol) snap[rep.snapCol] = counts[rep.key] ?? 0;
     }
-    await upsert(SUPABASE_URL, SERVICE_KEY, "ga4_snapshots", "property,snapshot_date", [snap]);
+    await upsert(SUPABASE_URL, anon, bearer, "ga4_snapshots", "property,snapshot_date", [snap]);
 
     return json({
       ok: true,

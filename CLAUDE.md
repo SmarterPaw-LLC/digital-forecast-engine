@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.83** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.84** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,53 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.84 - the function writes as the caller, because nothing here is service_role
+
+Deployed at last, and smoke-tested on its smallest window (`days: 2`). Google
+auth and the GA4 Data API both worked; it died at the first write, two
+seconds in:
+
+    permission denied for table ga4_by_date
+    hint: GRANT SELECT, INSERT, UPDATE ON public.ga4_by_date TO service_role;
+
+### ⚠ POSTGRES HANDED ME THE FIX AND IT WAS THE WRONG ONE
+Checked every table before taking the hint: **not one of the 52 tables in
+this database grants `service_role` anything.** They all grant `authenticated`
+only, because the app always signs in - and `load_ga4.py`, which this function
+is a port of, writes these exact tables that way today.
+
+So granting it would have introduced the **first service_role grants in the
+database**, changing its security posture for one function, when the role
+already making the request holds the privilege. The function verifies its
+caller (v11.83), so it carries that token through to the writes instead:
+`apikey` is the anon key, `Authorization` is the caller’s. No escalation, RLS
+applies as the user, and it cannot write anything the person pressing the
+button could not.
+
+### ⚠ A SCHEDULED RUN HAS NO CALLER
+So cron would need that grant added deliberately, in the release that adds
+scheduling. Noted rather than pre-built: a standing privilege nothing uses is
+the thing to avoid.
+
+### The deploy itself was two swapped fields
+Worth recording because the error named neither: the Supabase browser editor
+wants a **function name** (the slug) and a **file** called `index.ts`. Jason had
+the file named `ga4-pull` and the function left on its generated default
+(`rapid-action`), and the deploy failed with *Entrypoint path does not exist*.
+
+### Verification
+- `deno check` clean · **136 suites green** · B10 re-pointed.
+- The live endpoint probed: preflight **200** with the echoed headers,
+  POST **401** unauthenticated, and the signed-in call reaching the write
+  stage in 2s - so everything before the grant is proven working.
+
+### Still open
+- **⚠ THE UPDATED FUNCTION NEEDS RE-PASTING** before the button works.
+- **⚠ THE REAL STORAGE REPORT URL IS STILL UNKNOWN** (v11.80).
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
+- **⚠ FOUR TABLES CARRY `master_id` AND ARE NOT IN `runMerge`’S LIST** (v11.79).
+- Everything else on the v11.83 list.
 
 ## v11.83 - two ways to fail before your code runs, and both say the same thing
 

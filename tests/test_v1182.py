@@ -157,8 +157,14 @@ ok("ga4_snapshots" in NC and "pulled_at" in NC,
 ok("BUDGET_MS" in NC and "stoppedEarly" in NC,
    "B9  /!\\ it stops cleanly inside the time budget rather than being killed "
    "mid-report with nothing said")
-ok("SUPABASE_SERVICE_ROLE_KEY" in NC,
-   "B10 it writes with the service role, not the caller's token")
+# v11.84 - it wrote with the service role until the first real call proved
+# that NO table in this database grants service_role anything; all 52 grant
+# `authenticated` only. It carries the caller's own token through to the
+# writes now, so it cannot write what the person pressing the button could not.
+ok("SUPABASE_SERVICE_ROLE_KEY" not in NC,
+   "B10 /!\ the service role is NOT used - no table here grants it anything")
+ok("apikey: anonKey" in NC and "Authorization: bearer" in NC,
+   "B10b ...the writes carry the CALLER's token")
 ok("GA4_SA_JSON" in NC and "client_email" in NC,
    "B11 a service account, not a copied user token")
 ok("Missing secret(s)" in NC,
