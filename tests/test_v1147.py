@@ -79,6 +79,9 @@ def run_node(path, body):
 
 
 DEFS = "\n".join(fn(n) for n in (
+    # v11.75 - the freshness path gained four helpers. Sliced, so this
+    # suite proves the shipped grain rule rather than a copy of it.
+    "uploadGrain", "uploadWeekEndOffset", "uploadPeriodEnd", "uploadDataThru",
     "uploadCoverageAxes", "uploadSqlIdent", "uploadCoverageSql",
     "uploadFreshDays", "uploadRegionHidden", "uploadCoverageHtml",
     "uploadCoverageFetch", "uploadRegionCatalog"))
@@ -267,6 +270,11 @@ eq("C7b and invents no coverage", C["err"]["cells"], {})
 # D. THE RENDER. The four cards Jason screenshotted.
 # ---------------------------------------------------------------------------
 D = run_node(os.path.join(SP, "d.js"), HARNESS + DEFS + """
+// v11.75 - PIN THE CLOCK. These rows are a real snapshot with real dates in
+// them, so every freshness assertion below was a countdown: D2c went red on
+// 2026-11-09, eleven days after the fixture's newest ad day, on a release
+// that had not touched it. Pinned to the day the fixture describes.
+Date.now = () => new Date('2026-11-02T12:00:00').getTime();
 const ROLLS = """ + json.dumps(ROLLS) + r""";
 globalThis.getSB = async () => ({
   rpc: async (_f, a) => {
@@ -400,8 +408,14 @@ ok(_sub and len(_sub.group(2)) < 60,
 # ---------------------------------------------------------------------------
 # F. STRUCTURE - carried over from v11.45, whose subject this replaces.
 # ---------------------------------------------------------------------------
-eq("F1 a weekly feed is fresh for 14 days",
-   run_node(os.path.join(SP, "f.js"), HARNESS + fn("uploadFreshDays") + r"""
+# v11.75 RE-POINTED. This pinned the retired numbers - a weekly feed
+# "fresh for 14 days" is TWO cycles, so a whole missing week could not
+# move the mark, and `year` bought 400 days because of a column NAME.
+# The tolerance is one cycle of the feed's own period now, measured
+# from that period's LAST day (test_v1175 owns the rule).
+eq("F1 the tolerance is ONE cycle of the feed's own period",
+   run_node(os.path.join(SP, "f.js"),
+            HARNESS + fn("uploadGrain") + fn("uploadFreshDays") + r"""
 console.log(JSON.stringify({
   w: uploadFreshDays('sku_economics'),
   m: uploadFreshDays('amazon_sp_search_term'),
@@ -409,7 +423,7 @@ console.log(JSON.stringify({
   d: uploadFreshDays('chewy_ad_spend'),
   unknown: uploadFreshDays('nope_not_a_table'),
 }));
-"""), {"w": 14, "m": 45, "y": 400, "d": 10, "unknown": 10})
+"""), {"w": 7, "m": 31, "y": 45, "d": 10, "unknown": 10})
 
 code = nocomment(js)
 for name in ("uploadFreshDays", "uploadCoverageAxes", "uploadCoverageFetch",

@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.74** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.75** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,158 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.75 - a coverage check means "we hold the period we should hold"
+
+- **Jason**, on the Amazon SKU Economics card, whose own header read
+  *"thru Sat 2026-10-31 (1w ago)"* over a grid of green checks:
+  *"this data is ... out of date but still shows as checks."*
+
+He is right, and TWO separate errors kept that mark green. Either one alone
+was enough.
+
+### ⚠ THE AGE WAS MEASURED FROM THE PERIOD’S FIRST DAY
+A `week_start` of 2026-10-26 is the Monday key for a report running through
+**Saturday 2026-10-31**. The grid aged it from the Monday, so it read
+**14 days old when the data was 9 days old**. A `reporting_month` of
+`2026-09` was aged from `2026-09-01` - a month early, every month.
+
+And the card line **directly above the grid** already measured from the
+Saturday (`endOfWeek(wk, 5)`). So one card carried **two ages for one week,
+five days apart**, on the one surface whose entire job is to say how current
+something is. Hard rule #1, in the place it does the most damage.
+
+### ⚠ AND THE TOLERANCE WAS TWO CYCLES WIDE
+`uploadFreshDays` guessed a day count from the **NAME of the date column**:
+
+| column matches | tolerance | grain | |
+|---|---|---|---|
+| `/week/` | **14 days** | 7 | two cycles |
+| `/month/` | 45 days | ~30 | one and a half |
+| `/^year$/` | **400 days** | - | |
+| otherwise | 10 days | 1 | |
+
+So a weekly feed was *"fresh within 14 days"* and **an entire missing week
+could not move the mark** - which is exactly what Jason was looking at. And
+`digital_sales_tracker`, whose date column is literally called `year`, was
+fresh within **400 days** and had not been uploaded since **2026-07-08**.
+
+### What the check means now
+The age is measured from the period’s **LAST DAY**, against **one cycle** of
+that period: *a feed is late once a whole period has closed without arriving.*
+That is the question an operator is actually asking - **do I need to upload
+this** - rather than *is the newest row recent-ish*.
+
+| grain | late after | measured from |
+|---|---|---|
+| week | **7 days** | the week’s last day |
+| month | 31 days | the month’s last day |
+| day | 10 days (unchanged) | the day itself |
+| year / a period code | 45 days | `uploaded_at` |
+
+**Daily feeds keep 10 rather than 1 cycle**, and that is a decision rather
+than an oversight: these are hand uploads on a weekly rhythm, so one cycle
+would mark every daily feed late every single day. A warning that is always
+on is the v10.19 defect pointing the other way. **No daily mark moves.**
+
+**`uploadDataThru(table, period)` is the one definition** of where a feed’s
+data stops, read by the coverage grid **and** by the card line above it, so
+those two can no longer disagree about the same week. The local
+`endOfWeek(mondayStr, offset)` - three call sites, all with a hardcoded 5 -
+is gone, and the Sun→Sat convention it encoded is declared on the three
+Amazon weekly sources as `weekEndOffset: 5` (rule #5: every consumer
+converted in the same commit).
+
+### ⚠ A PERIOD THAT IS NOT A DATE STILL CANNOT SAY WHEN ITS DATA STOPS
+`walmart_sales_weekly`’s `202639` is a fiscal week code and
+`digital_sales_tracker`’s `2026` is a bare year. `uploadPeriodEnd` returns
+**null** for both, and they keep v11.47’s fallback to `uploaded_at`.
+
+The year is the sharper case: its last day is **2026-12-31, which is in the
+FUTURE**, so reading it as a period end would have made that feed permanently
+fresh - a worse bug than the 400 days it replaced. A29 pins the null.
+
+### ⚠ EXACTLY SEVEN MARKS CHANGE, AND EVERY ONE IS A CHECK **LOST**
+Measured, not claimed. The live state of all 22 sources was read off the
+database on 2026-11-09 and the retired rule is run beside the shipped one on
+it, with the clock pinned so it says the same thing tomorrow:
+
+| feed | holds | covers through | | |
+|---|---|---|---|---|
+| **SKU Economics EU** · 6 countries | 2026-10-26 | 2026-10-31 | 9 days | ⚠ was a CHECK |
+| **Digital Sales tracker** | 2026 | - | uploaded **124 days** ago | ⚠ was a CHECK |
+| SKU Economics US/CA | 2026-11-02 | 2026-11-07 | 2 days | check, kept |
+| Sales & Traffic US | 2026-11-02 | 2026-11-07 | 2 days | check, kept |
+| Walmart Ads · SP Search Term | 2026-10 | 2026-10-31 | 9 days | check, kept |
+| SQP ASIN view | 2026-09 | 2026-09-30 | 40 days | orange, unchanged |
+
+**22 checks before, 15 after.** C9 requires every change to be a check lost
+rather than one invented, and C10 requires the changes to fall only on the
+two feeds that are genuinely behind - so *"nothing that is current went
+orange"* is a measurement rather than a reassurance.
+
+### Verification
+- `node --check` clean · **130 suites green** · new `tests/test_v1175.py`
+  (92 assertions), sliced rather than stubbed, so a default that moves fails
+  this suite instead of being papered over.
+- **THE DEFECT REPRODUCED**: the pre-v11.75 rule (period start, name-sniffed
+  tolerance) run beside the shipped one over all 35 live (table, region)
+  pairs.
+- **The real `uploadPeriodEnd` driven** over 29 shapes: both week
+  conventions, a short February and a leap one, December rolling the year, a
+  month given a day part, a fiscal code, a bare year, null, blank, junk, a
+  NUMBER, and a grain nobody declares.
+- **The real `uploadCoverageHtml` driven** on a pinned clock with the real
+  `UH_SOURCES` and the real `esc2`: the EU grid draws **zero** checks and four
+  orange dates reading `covers through 2026-10-31 (9 days ago) · late after 7
+  days`; the US/CA grid draws four green checks reading `covers through
+  2026-11-07 (2 days ago)` - **the same Saturday the card line prints**; a
+  region never uploaded keeps its dash and its own sentence; and the tracker
+  reads `uploaded 2026-07-08 · late after 45 days` **without claiming a period
+  end it cannot compute**.
+
+### Two of my own mistakes
+- **A UTC clock pin against a LOCAL date parse** read every age a day short,
+  and I spent a round reading it as an off-by-one in the helper. `ageOf`
+  parses `YYYY-MM-DD` as local midnight, so the pin has to be local too.
+- **A patch anchor carried `·` where the source holds a real BULLET**
+  (`•`, `M-bM-^@M-"`). This is the v11.41 / v11.47 / v11.68 trap on its
+  **fifth** sighting and a new variant of it: the right instinct (build
+  non-ASCII with `chr()`) with the wrong codepoint. The guard refused and
+  wrote nothing.
+- **And the heredoc ate a `\n` in a test re-point**, putting a literal
+  newline inside a Python string literal. The rule has been in this file
+  since v9.77: **anything with an escape goes through the Write or Edit
+  tool.**
+
+### Still open
+- **⚠ THE EU SKU ECONOMICS FEED IS A WEEK BEHIND** - which this release
+  makes visible rather than fixing. Latest week is 2026-10-26; the week
+  through Sat 2026-11-07 has not been uploaded.
+- **⚠ THE DIGITAL SALES TRACKER HAS NOT BEEN LOADED SINCE 2026-07-08.**
+- **The tracker reports a YEAR as its period**, so its grid cell can only
+  ever answer from `uploaded_at`. The table carries a `month` column, so a
+  real period exists and is not being used - changing `dateField` moves the
+  Upload History columns and the rail with it, so it is Jason’s call.
+- **⚠ The coverage grid still marks a region from its NEWEST period alone**,
+  so a region with **holes behind** that period still reads as covered. EU
+  SKU Economics is missing **29 weeks** since March. The `⚠ N gaps` chip on
+  the same card already reports this, for 3 of the 22 sources - converging
+  the two is a real design question (one glyph, one concept) rather than a
+  cleanup.
+- **⚠ NOTHING SCHEDULES THE GA4 PULL** (v11.73). Jason’s call.
+- **⚠ THE STORAGE FEE REPORT IS NOT LOADED** (v11.72).
+- **⚠ NO SETTLEMENT FEED** (v11.70). **⚠ Reimbursement is netted off on
+  Break-Even and not on Fees** (v11.70).
+- **⚠ The Walmart ad grain is still MONTHLY** (v11.67).
+- **⚠ Chewy’s ad break-even is still 1.0 and that is wrong** (v11.59).
+- **A monthly P&L chart groups by the week’s START month** (v11.74).
+- The six non-`pnlTrendRender` charts get no GROUP control (v11.74).
+- **Load times** (v11.72): parallel paging measured **5.8-7.3x**. Not built.
+  `amazon_ad_spend`’s coverage rollup takes **9.2 s** on 293,745 rows.
+- The upload conformity guard covers **1 of 28** uploaders.
+- **No UK Amazon ad spend is loaded** - US, CA and MX only.
+- Walmart’s allowance agreement, still the only missing input to that margin.
 
 ## v11.74 - group by day / week / month, and the band fill as a setting
 

@@ -93,6 +93,8 @@ def strip_comments(src):
     src = re.sub(r'/\*.*?\*/', ' ', src, flags=re.S)
     return re.sub(r'//[^\n]*', ' ', src)
 
+_r = JS.index('const UH_SOURCES = {')
+REG = JS[_r:JS.index(chr(10) + '};', _r) + 3]
 RUDR = fn('refreshUploadDataRanges')
 CODE = strip_comments(RUDR)
 
@@ -316,6 +318,12 @@ function skuRows(weeks, region, perWeek, uploadedAt) {
     rows.push({ week_start: w, region, uploaded_at: uploadedAt, asin: 'A' + i });
   return rows;
 }
+
+// v11.75 - the card line reads uploadDataThru(table, period) now, the
+// same definition the coverage grid under it uses. Sliced from the
+// shipped file, so E1-E3's 'thru Sat' output proves the real Mon+5
+// convention rather than a fixture of one.
+__DEPS__
 
 __FN__
 
@@ -587,6 +595,11 @@ console.log(JSON.stringify(out));
 })();
 '''
 
+harness = harness.replace(
+    '__DEPS__',
+    (chr(10) * 2).join(fn(n) for n in (
+        'uploadGrain', 'uploadWeekEndOffset', 'uploadPeriodEnd',
+        'uploadDataThru')) + chr(10) + REG)
 harness = harness.replace('__FN__', RUDR)
 hp = os.path.join(SP, 'test_v1095_probes.js')
 io.open(hp, 'w', encoding='utf-8', newline='').write(harness)

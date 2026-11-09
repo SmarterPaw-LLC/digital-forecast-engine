@@ -67,6 +67,9 @@ globalThis.esc2 = (v) => String(v == null ? '' : v)
 globalThis._uploadRegionsHidden = null;
 """
 DEFS = "\n".join(fn(n) for n in (
+    # v11.75 - sliced, not stubbed, so D1 proves the SHIPPED staleness
+    # rule still bites rather than a local copy of it.
+    "uploadGrain", "uploadWeekEndOffset", "uploadPeriodEnd", "uploadDataThru",
     "uploadCoverageAxes", "uploadSqlIdent", "uploadCoverageSql", "uploadFreshDays",
     "uploadRegionHidden", "uploadCoverageHtml", "uploadCoverageFetch"))
 
@@ -110,6 +113,9 @@ print("  v11.48  a brand with no rows is not a missing upload")
 print("=" * 62)
 
 R = run_node(os.path.join(SP, "r.js"), HARNESS + DEFS + """
+// v11.75 - PIN THE CLOCK, for the same reason test_v1147 does: A1's fixture
+// carries real dates, so "covered" was true only until 10 days after them.
+Date.now = () => new Date('2026-11-04T12:00:00').getTime();
 const FBA = """ + json.dumps(FBA) + """;
 const STALE = """ + json.dumps(STALE) + r""";
 globalThis.getSB = async () => ({
