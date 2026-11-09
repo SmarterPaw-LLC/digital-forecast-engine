@@ -141,7 +141,16 @@ PARSE = fn("parseAmazonStorageFees")
 WRITE = fn("writeAmazonStorageFees", "async function")
 RUDR  = fn("refreshUploadDataRanges", "async function")
 MERGE = fn("runMerge", "async function")
-GRP   = s[s.index('<div class="up-grp" id="grp-amz-storage">'):s.index("<!-- SITE TRAFFIC")]
+# v11.81 - was sliced to the comment that FOLLOWED this group, and the
+# reorganisation moved that comment. A group ends at its own boundary:
+# the next up-grp, or the close of its section list.
+def grp_block(gid):
+    a = s.index(chr(60) + 'div class="up-grp" id="%s"' % gid)
+    nxt = s.find(chr(60) + 'div class="up-grp" id="', a + 10)
+    end = s.find(chr(60) + '/div' + chr(62) + chr(10) + '      ' + chr(60) + '/div' + chr(62), a)
+    b = min(x for x in (nxt, end) if x > a)
+    return s[a:b]
+GRP   = grp_block("grp-amz-storage")
 
 # ---------------------------------------------------------------------------
 print("A. static - consolidated, registered, and audited")

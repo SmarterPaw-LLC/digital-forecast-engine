@@ -190,7 +190,7 @@ const colors = (h) => [...h.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].slice(1).map(m =>
 print("\nA. /!\\ THE DEFECT REPRODUCED - v11.48's rule beside the shipped one")
 # ---------------------------------------------------------------------------
 A = run_node(os.path.join(SP, "_v1177_a.js"), HARNESS + CLOCK + FEED + "\n"
-             + fn("uploadCoverageHtml") + r"""
+             + fn("uploadAgeDays") + chr(10) + fn("uploadCoverageHtml") + r"""
 (async () => {
   const res = await uploadCoverageFetch('sku_economics', null);
   const h = uploadCoverageHtml('sku_economics', res);
@@ -299,7 +299,7 @@ const texts = (h) => [...h.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map(m =>
         .replace(/&#8212;/g, '--').trim()));
 const tips = (h) => [...h.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].slice(1).map(m =>
   [...m[1].matchAll(/<td[^>]*title="([^"]*)"/g)].map(x => x[1].replace(/&quot;/g, '"')));
-""" + fn("uploadCoverageHtml") + r"""
+""" + fn("uploadAgeDays") + chr(10) + fn("uploadCoverageHtml") + r"""
 (async () => {
   const res = await uploadCoverageFetch('fba_inventory_snapshots', null);
   const h = uploadCoverageHtml('fba_inventory_snapshots', res);
@@ -340,7 +340,7 @@ const texts = (h) => [...h.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map(m =>
   [...m[1].matchAll(/<(th|td)[^>]*>([\s\S]*?)<\/\1>/g)].map(c =>
     c[2].replace(/<[^>]*>/g, '').replace(/&#10003;/g, 'OK')
         .replace(/&#8212;/g, '--').trim()));
-""" + fn("uploadCoverageHtml") + r"""
+""" + fn("uploadAgeDays") + chr(10) + fn("uploadCoverageHtml") + r"""
 (async () => {
   const res = await uploadCoverageFetch('fba_inventory_snapshots', null);
   // The retired rule, over the same rollup.

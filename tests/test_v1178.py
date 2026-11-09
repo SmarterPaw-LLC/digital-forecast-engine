@@ -95,8 +95,17 @@ NC    = nocomment(js)
 SET   = fn("ga4SettledThrough")
 COV   = fn("seoTrCoverage")
 RUDR  = fn("refreshUploadDataRanges", "async function")
-UPL   = s[s.index('<div id="data-view-uploads"'):s.index('<!-- WALMART 1P -->')]
-GRP   = s[s.index('<div class="up-grp" id="grp-ga4">'):s.index("<!-- WALMART 1P -->")]
+UPL   = s[s.index('<div id="data-view-uploads"'):s.index('<div id="data-view-history"')]
+# v11.81 - was sliced to the comment that FOLLOWED this group, and the
+# reorganisation moved that comment. A group ends at its own boundary:
+# the next up-grp, or the close of its section list.
+def grp_block(gid):
+    a = s.index(chr(60) + 'div class="up-grp" id="%s"' % gid)
+    nxt = s.find(chr(60) + 'div class="up-grp" id="', a + 10)
+    end = s.find(chr(60) + '/div' + chr(62) + chr(10) + '      ' + chr(60) + '/div' + chr(62), a)
+    b = min(x for x in (nxt, end) if x > a)
+    return s[a:b]
+GRP   = grp_block("grp-ga4")
 BLOCK = RUDR[RUDR.index("ga4_by_date"):RUDR.index("Chewy ")]
 
 # ---------------------------------------------------------------------------
@@ -290,6 +299,9 @@ function walmartWeekToDate(c) { const y = Math.floor(c / 100), w = c % 100; cons
 function updateShopifyReportLink() {}
 function dzRecentInvalidate() {}
 function renderAllDzRecentUploads() {}
+// v11.81 - the rollup ends by calling the attention strip. Not under
+// test here, and no-op'd exactly like the two rail helpers above.
+async function renderUploadAttention() {}
 __UHS__
 __GRAIN__
 __OFFSET__

@@ -426,7 +426,7 @@ D = run_node(os.path.join(SP, "_v1175_d.js"), CORE + "\n"
 const _now = new Date('2026-11-09T00:00:00').getTime();
 Date.now = () => _now;
 
-""" + fn("uploadCoverageHtml") + r"""
+""" + fn("uploadAgeDays") + chr(10) + fn("uploadCoverageHtml") + r"""
 
 // EU, exactly as the rollup returns it: one week behind on every country.
 const eu = {

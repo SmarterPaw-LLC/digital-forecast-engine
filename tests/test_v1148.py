@@ -71,7 +71,10 @@ DEFS = "\n".join(fn(n) for n in (
     # rule still bites rather than a local copy of it.
     "uploadGrain", "uploadWeekEndOffset", "uploadPeriodEnd", "uploadDataThru",
     "uploadCoverageAxes", "uploadSqlIdent", "uploadCoverageSql", "uploadFreshDays",
-    "uploadRegionHidden", "uploadCoverageHtml", "uploadCoverageFetch"))
+    "uploadRegionHidden",
+    # v11.81 - ageOf was promoted out of uploadCoverageHtml, so the
+    # renderer now calls a function the harness has to carry.
+    "uploadAgeDays", "uploadCoverageHtml", "uploadCoverageFetch"))
 
 
 def run_node(path, body):

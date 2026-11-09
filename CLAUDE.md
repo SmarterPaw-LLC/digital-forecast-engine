@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.80** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.81** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,101 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.81 - the Uploads page is grouped by channel, and says what to feed next
+
+- **Jason:** *"i need this entire page organized better"* - with a screenshot
+  of one **Sales & P&L** list running 13 rows deep, interleaving Amazon,
+  Walmart, Chewy, Shopify and GA4, and sales with ads with fees.
+
+### The section glyphs are NOT new
+The P&L nav has had a channel vocabulary since v6.63: **📊 Amazon**,
+**🛒 Walmart**, **🐾 Chewy**, **🛍 DTC**. Coining a second set for the same
+four channels is the rule #3 defect, so the sections borrow those.
+
+| was | now |
+|---|---|
+| 📊 Sales & P&L (13 rows) | 📊 Amazon — Sales & Fees (3) |
+| 📦 Inventory (3) | 📊 Amazon — Ads (2) |
+| 🚚 FBA Shipments (2) | 📊 Amazon — Inventory & Shipments (4) |
+| | 🛒 Walmart (2) · 🐾 Chewy (3) · 🛍 DTC & Site (3) · 🗂 Cross-channel (1) |
+
+**Every group block was MOVED VERBATIM** - cut by div balance, re-emitted,
+never re-typed - and the extractor counted dropzones, file inputs, onchange
+handlers, links, tooltips and status elements on both sides first. Re-typing
+18 groups is how a tooltip or a handler goes missing (v10.87).
+
+### ⚠ TWO GROUP ICONS THIS CHANGE MADE WRONG
+Once a section header means **Amazon**, a group carrying 📊 inside the Chewy
+section reads as Amazon. Chewy Weekly Sales Actuals → 🧾, and Amazon Sales
+& Traffic → 👁 so it does not duplicate its own section. Rule #2, caused
+by this change, fixed in it.
+
+**Known divergence, NOT fixed here:** 📦 is still the group icon on three
+unrelated rows (storage fees, Chewy forecast, FBA inventory), 🏪 on two and
+🎯 on two. Those predate this release and none of them is made more
+confusing by it.
+
+### ⚠ REGROUPING DID NOT ANSWER THE QUESTION THE PAGE IS OPENED TO ASK
+Which is **which one do I feed next**, and that answer was spread across 18
+rows and seven sections. So the page now opens with a strip naming only the
+feeds that are late or have never been loaded, each a button that expands and
+scrolls to its row. **Hidden entirely when every feed is current** - an empty
+box is not a status.
+
+### ⚠ AND IT HOLDS NO SECOND OPINION ABOUT LATE
+The tolerance is `uploadFreshDays` and the period end is `uploadDataThru` - the
+v11.75 definitions the rows and the coverage grid already read, so a chip and
+the row it points at cannot disagree. The feed list comes from
+`DZ_RECENT_SOURCES`, which `test_v1086` already asserts covers every dropzone, so a
+new uploader reaches this panel **without a second registration to forget**.
+
+`ageOf` was a local const inside `uploadCoverageHtml`; it is promoted to
+`uploadAgeDays(d, asOf)` and that consumer converted in the same commit. Two
+ways to count days since a period ended is two answers to how late a feed is.
+
+### ⚠ A TABLE THAT CANNOT BE READ IS NOT REPORTED AS NEVER LOADED
+That would turn a permissions or migration problem into a standing
+instruction to go and upload something (v10.19). A failed probe drops out of
+the strip silently and the row below still says what it knows.
+
+### GA4 is declared, because it has no dropzone to discover
+It arrives by script. Being absent from the one panel whose job is naming
+what is behind would be worse than the one-line duplication, so
+`UP_ATTENTION_SCRIPTS` names it and reads its freshness from `GA4_SETTLE_DAYS`.
+
+### ⚠ DRIVING IT ON A REALISTIC DATABASE FOUND TWO DEFECTS
+Neither would have failed a shape-only check.
+
+1. **One row, two chips.** The dedupe was by TABLE, and two rows feed from
+   two tables each - SKU Economics (US/CA + EU) and Walmart Ads (campaigns
+   + keywords). Both drew two chips with the SAME label and different ages,
+   which is rule 3a on a panel four lines tall. It dedupes by ROW now and
+   the worst verdict wins.
+2. **Chips for rows that are not on this page.** `getElementById` finds a
+   group anywhere in the document, and four uploaders live on the Amazon
+   P&L sub-views. Their chips scrolled to a collapsed row on a tab nobody
+   was looking at - the v10.19 dead control. Scoped to the page.
+
+### ⚠ AND A PATCH SCRIPT THAT EXITS MID-WAY WRITES NOTHING
+Three of those edits reported `ok` and never reached the disk, because the
+script refused on a LATER anchor and the write happens at the end. The
+browser then showed the old behaviour and I spent a round blaming the
+cache. **Grep the file for the new symbol before believing the log.**
+
+### Verification
+- `node --check` clean · **135 suites green** · new `tests/test_v1181.py` (63).
+- **In a browser on the real page**: the strip, the chips, and the scroll.
+
+### Still open
+- **⚠ THE GA4 BUTTON IS NOT BUILT YET.** Jason chose *run it from Supabase*;
+  that needs a Google service account with Viewer on property 363832203 and
+  two Supabase secrets before an Edge Function can be deployed. **His move
+  first.** Next release.
+- **⚠ THE REAL STORAGE REPORT URL IS STILL UNKNOWN** (v11.80).
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
+- **⚠ FOUR TABLES CARRY `master_id` AND ARE NOT IN `runMerge``S LIST** (v11.79).
+- Everything else on the v11.79 list.
 
 ## v11.80 - the storage report link was a guess, and the guess was wrong
 

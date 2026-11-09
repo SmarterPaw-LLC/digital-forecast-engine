@@ -83,7 +83,10 @@ DEFS = "\n".join(fn(n) for n in (
     # suite proves the shipped grain rule rather than a copy of it.
     "uploadGrain", "uploadWeekEndOffset", "uploadPeriodEnd", "uploadDataThru",
     "uploadCoverageAxes", "uploadSqlIdent", "uploadCoverageSql",
-    "uploadFreshDays", "uploadRegionHidden", "uploadCoverageHtml",
+    "uploadFreshDays", "uploadRegionHidden",
+    # v11.81 - ageOf was promoted out of uploadCoverageHtml; the renderer
+    # calls it now, so the harness has to carry it too.
+    "uploadAgeDays", "uploadCoverageHtml",
     "uploadCoverageFetch", "uploadRegionCatalog"))
 
 print("\n" + "=" * 62)
@@ -426,7 +429,7 @@ console.log(JSON.stringify({
 """), {"w": 7, "m": 31, "y": 45, "d": 10, "unknown": 10})
 
 code = nocomment(js)
-for name in ("uploadFreshDays", "uploadCoverageAxes", "uploadCoverageFetch",
+for name in ("uploadFreshDays", "uploadAgeDays", "uploadCoverageAxes", "uploadCoverageFetch",
              "uploadCoverageHtml", "uploadCoverageHost", "renderUploadCoverage",
              "renderAllUploadCoverage", "uploadCoverageSql", "uploadSqlIdent",
              "uploadRegionCatalog", "renderUploadRegionSettings",

@@ -151,6 +151,9 @@ function walmartWeekToDate(c) { const y = Math.floor(c / 100), w = c % 100; cons
 function updateShopifyReportLink() {}
 function dzRecentInvalidate() {}
 function renderAllDzRecentUploads() {}
+// v11.81 - the rollup ends by calling this. Not under test here, and
+// no-op'd exactly like the two rail helpers above it.
+async function renderUploadAttention() {}
 
 let WARNED = [];
 const _warn = console.warn;
