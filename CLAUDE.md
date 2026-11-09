@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.85** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.86** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,46 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.86 - the storage report link, from the URL rather than from a pattern
+
+- **Jason:** *"monthly storage fees is here:
+  https://sellercentral.amazon.com/reportcentral/STORAGE_FEE_CHARGES/1"*
+
+### ⚠ THE ID IS `STORAGE_FEE_CHARGES`, NOT `FBA_STORAGE_FEE_CHARGES`
+v11.79 inferred the id from the two `reportcentral/` links already in this file
+plus the SP-API report type `GET_FBA_STORAGE_FEE_CHARGES_DATA`, by stripping
+`GET_` and `_DATA`. That heuristic is right twice and wrong here:
+
+| SP-API report type | reportcentral id |
+|---|---|
+| `GET_FBA_ESTIMATED_FBA_FEES_TXT_DATA` | `ESTIMATED_FBA_FEES` |
+| `GET_FBA_MYI_UNSUPPRESSED_INVENTORY_DATA` | `FBA_MYI_UNSUPPRESSED_INVENTORY` |
+| `GET_FBA_STORAGE_FEE_CHARGES_DATA` | **`STORAGE_FEE_CHARGES`** - the `FBA_` drops |
+
+**There is no derivable rule.** Two of three keep the prefix and one does
+not, which is exactly why v11.80 stopped guessing and asked. Recorded here
+so the next person reaches for the table rather than the pattern.
+
+### What the card says now
+The link points at the report, is labelled **↗ Open Storage Fees (US)**
+again, and its tooltip names the navigation path as a second route rather
+than as the operative instruction. v11.80’s hub fallback is retired: it
+existed only because the destination was unknown.
+
+### Verification
+- **137 suites green** · `node --check` clean.
+- The URL is Jason’s own, copied from his session - not derived, not probed.
+
+### Still open
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79). The table, the
+  uploader and now the link are all live; the Fees tab still reads the
+  weekly econ column that reports $0.00 in 7 of 13 months. Wiring it carries
+  the do-not-double-count decision.
+- **⚠ FOUR TABLES CARRY `master_id` AND ARE NOT IN `runMerge`’S LIST** (v11.79).
+- The six non-`pnlTrendRender` charts get no ceiling and no SCALE control
+  (v11.85).
+- Everything else on the v11.85 list.
 
 ## v11.85 - the axis follows what is drawn, and a Lock for when it must not
 
