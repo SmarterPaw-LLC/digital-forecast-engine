@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.93** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.94** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,173 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.94 - the fee levers become actions, and the window that could not see them
+
+- **Jason**, on the Fees tab: *"this still isn't telling me how to action.
+  also, how do i ensure good coverage for this data?"*
+
+### ⚠ HIS SCREENSHOT WAS A WINDOW THAT COULD NOT SEE A SINGLE LEVER
+Month-to-date on the 10th. Measured on the live table rather than inferred:
+
+| US, 2026-11-01 → 11-10 | |
+|---|---|
+| weeks of rows | **1** |
+| products | 259 |
+| net sales | $34,615 |
+| **avoidable fee** | **$0.84** |
+| storage | $0.00 |
+
+So the panel read **`0.0% avoidable`**, which says *there is nothing to do*
+when it means *this window holds no billing week*. Every avoidable line bills
+monthly - v11.71 measured storage at **1 week in 13** - so this is the normal
+state of a short window, not an edge case.
+
+The panel now says so on one line and offers the shortest period that would
+hold the charge, **derived from the week it was last billed**: `No avoidable
+fee in this window · last charged 2026-10-26 · [Last 30 days]`. Older than
+every fixed period and **no control is offered at all**, because a button
+that would still show nothing is the v10.19 defect.
+
+### ⚠ AND THE APP ALREADY HAD AN ACTION SURFACE. IT KNEW NOTHING ABOUT FEES.
+`pnlOpportunityEngine` turns a number into a verb: eight rules, each with an
+impact, a headline, an `action` and signal chips, rendered as cards that flag
+to the Change Log. **Not one of the eight was about fees** - they are all
+ads, traffic, conversion and margin. The whole fee programme (v11.70 → v11.93)
+went into a new tab and never reached the engine that exists for exactly this.
+
+Five rules, and the Fees tab keeps its job - **it ranks, the engine acts**.
+A second action list one tab over is the hard rule #1 divergence.
+
+| | trailing 365d, US | the action |
+|---|---|---|
+| 🚚 **Inbound Placement** | **$15,893** | split the shipment the way the plan asks |
+| ⏳ **Aged Inventory** | $7,646 | removal order, clearance price or bundle |
+| 📦 **Low Inventory** | $4,887 | raise the reorder point; it is paid for being *late* |
+| 🧊 **Idle Shelf** | held, nothing sold | move it before the surcharge lands |
+| 🪙 **Fee Load Outlier** | the RATE lever | size tier / shipping weight, or price |
+
+⚠ **EVERY ONE IS PRICED AT THE FEE ITSELF**, never at a modelled lift.
+`avoidable` already means the fee exists because of an operational miss, so
+fixing the operation returns exactly what was charged - **no marginal-ROAS
+assumption is involved and none was invented**, which is why the card's
+`est. impact / mo` line became a parameter rather than a lie.
+
+### ⚠ THE CONCENTRATION IS WHAT MAKES IT ACTIONABLE
+Measured per product, trailing year, US:
+
+| placement | | aged | | |
+|---|---|---|---|---|
+| Catnip Spray 3oz | $1,635 | Avocado Toast | **$884** on **$1,774** of sales |
+| Bubbles 5oz | $1,518 | Pupcorn | **$407** on **$389** |
+| Meowi-Waui | $1,171 | Lemongrass Pawty Mix | $484 on $18,642 |
+| Juananip Bottle 2-pack | $812 | Pepper Bundle | $275 on $621 |
+
+Two products pay more in age surcharges than they earn. **The aged rule
+escalates to priority 0 at 25% of net sales**, because at that point the
+decision is about the stock, not about trimming a fee.
+
+### ⚠ IDLE DOES NOT FIRE WHERE AGED ALREADY DID
+Same units, same remedy: two cards would price one decision twice. Idle is
+the **early** warning - stock held, nothing sold, surcharge not yet landed.
+
+### ⚠ REMOVAL IS DELIBERATELY NOT A RULE
+It is declared avoidable and cost **$3,394** over the trailing year. But every
+row in an action list has to be a thing to DO, and *"you removed stock and it
+cost $3,394"* is a fact about a decision already taken - **the one the aged
+rule recommends**. The reason is recorded beside the rules.
+
+### ⚠ AND THE FX CONVERSION WAS SPELLED FOUR TIMES
+v11.70 made `pnlRowFx` the one spelling and converted two sites. The
+Opportunities aggregation held a **third** and its prev-period aggregate a
+**fourth**, both CAD-only - so a GBP or EUR row would have been counted at
+face value in the engine while the Fees tab converted it. Both converted in
+this commit (rule #5), and `D5` fails the build on a fifth.
+
+**No existing number moves**: those loops filter to one region, and the
+conversion is identical on every US and CA row.
+
+### ⚠ ONE MORE RULE #2 BREACH, FIXED ON THE WAY PAST
+`invest` and `headroom` have both carried **🚀** since v8.85, and they render
+as chips **in the same strip**. HIGH-CONVERTER SCALE-READY takes 📈 now,
+which pairs with 📉 on DECLINING. `F1` fails the build on any repeat.
+
+### "how do i ensure good coverage for this data?"
+Measured, not described. **The feed behind this tab has no holes at all:**
+
+| `sku_economics` | rows | weeks | first | last | missing |
+|---|---|---|---|---|---|
+| US | 26,523 | **126** | 2024-06-10 | **2026-11-02** | **0** |
+| CA | 14,713 | **126** | 2024-06-10 | **2026-11-02** | **0** |
+
+126 weeks spanned, 126 weeks held, in both regions. **Coverage of the weekly
+feed is not the problem and does not need managing** - the Uploads page's
+freshness rules (v11.75) and its *what to feed next* strip (v11.81) already
+cover it.
+
+⚠ **The gap is a LINE, not a week.** Storage reads **$0.00 in 6 of the 11
+months of 2026** - impossible for a monthly bill - because the real charge
+lives on the settlement report. `amazon_storage_fees` holds it and **nothing
+reads it yet** (v11.79). Beside that, there is still **no settlement feed**,
+so coupon, deal, disposal and returns-processing fees are invisible.
+
+### ⚠ AND THE TARGET'S REACHABILITY DEPENDS ON THE WINDOW
+Worth recording beside v11.93's plan, because it explains why the same 5%
+target reads differently on two periods:
+
+| window | fees | avoidable | 5% target | covered |
+|---|---|---|---|---|
+| last 30d | $58,175 | $1,881 | $2,909 | 65% |
+| last 90d | $160,018 | $3,236 | $8,001 | 40% |
+| last 180d | $293,722 | $5,977 | $14,686 | 41% |
+| **trailing 365d** | - | **$31,820** | - | **v11.70's claim holds** |
+
+Avoidable fees are **lumpy** (March alone carried $6,102 of placement) while
+the fee base is steady, so a short window understates what the levers can do.
+
+### ⚠ TWO THINGS A BROWSER CAUGHT THAT NO TEST OF MINE HAD
+- **The blind-window test was wrong on the very window it was built for.**
+  My first cut asked whether the window's avoidable TOTAL was about zero.
+  His window carries **$0.84 of Removal**, so the newest avoidable billing
+  week sat INSIDE it while Placement, Aged and Low Inventory were all behind
+  it - and the control stayed silent. Whether a line is visible is a fact
+  about **that line**: it now reports *3 avoidable lines last charged before
+  this window · newest 2026-10-19*, names them on the tooltip, and triggers
+  on the **target** rather than on a size.
+- **The strip header could no longer say `/mo`.** It sums every card's
+  impact and read `$1882/mo total upside` - which, with fee cards in it, adds
+  a modelled monthly lift to a fee charged in this window. Two bases, one
+  unit, in a single number. It reads `total impact` now, with the mixture
+  named on its tooltip; the cards carry their own basis each.
+
+### ⚠ AND THE HEREDOC ATE THE ESCAPES AGAIN
+Fixing the first of those, through a heredoc, halved every `·` and the
+guard refused. The rule has been in this file since v9.77 and is not *"be
+careful"*: **anything containing an escape goes through the Write or Edit
+tool.** Rewritten as a file; it applied first time.
+
+### Verification
+- `node --check` clean · **143 suites green** · new `tests/test_v1194.py` (60).
+- **The real `pnlOpportunityEngine` driven** over 19 shapes: the floor at $25,
+  the priority escalation at 25% of net sales, the idle/aged exclusion in
+  both directions, the outlier against a modelled fleet, and the eight
+  existing rules still firing with no fee card on a fee-less row.
+- **The real `amzFeeWidenPeriod` on a pinned clock**, including a charge older
+  than every fixed period.
+- Every number in this entry read off the live database on 2026-11-10.
+
+### ⚠ ONE OF MY OWN ASSERTIONS WAS WRONG
+A11 split the engine on a marker that `nocomment()` had already removed, so
+the split was a no-op and it was reading the whole function. It slices the
+raw text now.
+
+### Still open
+- **⚠ (3) THE TWO FEE PANELS ARE STILL SEPARATE** (v11.91).
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79) - now the only thing
+  between the real monthly bill and both the Idle Shelf card and the storage
+  line that reads $0.00 in 6 of 11 months.
+- **⚠ NO SETTLEMENT FEED** (v11.70).
+- Everything else on the v11.93 list.
 
 ## v11.93 - the target points at the lines, and the shelf gets a verdict
 

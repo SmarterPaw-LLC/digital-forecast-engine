@@ -475,8 +475,15 @@ ok("minmax(360px,1fr) minmax(420px,2fr)" in s,
 chip = re.search(r'margin-left:4px">v(\d+\.\d+)', s).group(1)
 cmd = io.open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8", errors="replace").read()
 doc = re.search(r"current version \*\*v(\d+\.\d+)\*\*", cmd).group(1)
-eq("F19 the chip says v11.93", chip, "11.93")
+# /!\ RE-POINTED IN v11.94. This pinned the chip at the literal 11.93, so it
+# went red on the next release for doing its job correctly - a census that
+# asserts the status quo (v11.63's lesson). The guarantee worth keeping is
+# that the chip and CLAUDE.md AGREE, and that this release's own entry is
+# still in the file.
+ok(re.match(r"^11\.\d+$", chip) is not None, "F19 the chip carries a v11.x version", chip)
 eq("F20 /!\\ ...and CLAUDE.md agrees with it", doc, chip)
+ok("## v11.93 - the target points at the lines" in cmd,
+   "F21 /!\\ ...and v11.93's own entry is still on record")
 
 print("\n" + "-" * 68)
 print("  %d passed, %d failed" % (passed, failed))
