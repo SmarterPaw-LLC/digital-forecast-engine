@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.95** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.96** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,104 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.96 - the actions come to the Fees page, and the row opens
+
+- **Jason:** *"and the fees are still a lump number. i have no idea how to
+  action the fee table. the 'action' button goes to the opportunities page,
+  which is set up for sales"*
+
+**Both halves are mine, from the two releases before this one.**
+
+### ⚠ v11.95 BROKE THE NUMBER OUT INTO COLUMNS NOBODY CAN SEE
+It gave every fee line a column and then put them at the **far right**:
+
+    Product · Units · Net Sales · Fees · Fee % · FBA $/u · FBA % ·
+    Held · Cu Ft · Units/Held · [ FBA $ · Referral · ... ]
+
+So the decomposition starts in **column eleven**, off the right-hand edge of
+a 605px panel, and has to be scrolled to. The breakdown existed and was
+nowhere near the number it explained - which is the v10.87 shape: the thing
+was built and then put somewhere it could not be found.
+
+**The row opens now.** Click any product and its own fee lines appear
+underneath it: ranked biggest first, with the dollars, the share of that
+product's fees, a bar, and the lever each line carries.
+
+⚠ **A line charged nothing is left out.** A breakdown exists to say where
+the money went, and eleven rows of dashes under every product is what v11.72
+was right about.
+
+⚠ **Same registry, same levers, same bar as `Where the money goes`** - this
+is the per-product transpose of that panel, not a second idea about what a
+fee is.
+
+### ⚠ AND v11.94 PUT THE ACTIONS ON A PAGE THAT READS AS SALES
+Reusing `pnlOpportunityEngine` was right on the engineering and wrong for
+the person using it: that page is **eight ads and traffic rules** with five
+fee rules appended, so a button whose job was to send him off the Fees tab
+landed him somewhere that looks like a sales report.
+
+The cards render **on the Fees tab** now, under *What to do about it*, from
+the same engine and the same rules. **The cross-tab button is gone** - a
+control whose whole purpose was to leave the page was the complaint.
+
+### ⚠ ONE CARD RENDERER, AND EXACTLY ONE COPY OF ITS MARKUP
+The only way to put those cards on a second page without a second card look
+was to lift the markup out of `renderPnlOpportunities`, where it has lived
+since v8.75. **Moved verbatim** - the only change is that it takes `o` and
+returns - so no card on either page moves. `A4` fails the build on a second
+copy of `border-left:4px solid ${o.color}`.
+
+### ⚠ AND THE FEE TYPES ARE DECLARED, not inferred from what fails to fire
+`AMZ_FEE_OPP_TYPES` filters the engine's output. The ads rules read ad
+spend, sessions and a contribution figure, none of which the Fees tab's row
+shape carries - and a rule reading a missing figure as a zero is how a
+product with no ad data gets reported as **bleeding money**. `B5`/`B6` drive
+the engine on a real ads row to prove it still emits those cards and that
+this filter would drop every one.
+
+**The Opportunities page is not narrowed** - it is the portfolio list and
+still shows every type. `D11` pins that.
+
+### ⚠ AND THE BREAKDOWN DID THE EXACT THING IT WAS BUILT TO FIX
+Caught in a browser, not by a test I had written. The expansion's cell spans
+a **22-column table that is wider than its panel**, and a sticky block's
+containing block is that cell - so the grid stretched to the TABLE's width
+and put the dollars, the share and the lever **off the right-hand edge**.
+The row that exists because the columns were off screen rendered its own
+content off screen.
+
+CSS cannot read the width of a scrollport, so the grid is sized to CONTENT
+rather than to a free column (`1fr` is gone) and pinned at `left:0`.
+Measured after: **532px inside a 603px panel, and still at the left edge
+with the table scrolled 600px right.**
+
+### Verification
+- `node --check` clean · **145 suites green** · new `tests/test_v1196.py` (38).
+- **The real `amzFeeActions` driven** over this tab's own row shape, with an
+  ads row beside it.
+- **The real `amzFeeRowBreakdown` driven**: nine lines of eleven listed, the
+  two unpaid ones dropped, ranked by size, a negative refund keeping its sign
+  and its place by magnitude, shares of the product's own fees, a product
+  with no fee line saying so, and the name escaped.
+
+### ⚠ ONE OF MY OWN EXPECTATIONS WAS WRONG
+B1 wanted two cards and got three: the fixture's second product carries
+$2,000 of fees on $1,774 of sales - **113% against a fleet median of 40%** -
+so FEE LOAD OUTLIER is right to fire on it too.
+
+### Still open
+- **⚠ THE UNITS SOLD CHART IS PARKED MID-BUILD.** Jason asked for the other
+  charts' controls on it. Measured so far: it already shares `CHART_HTML_LEGEND`
+  and `pnlBandsStepperHtml`, and is missing **GROUP, FILL, SCALE and
+  COMPARE**. The first three are small; **GROUP is not** - the week key is
+  wired into `salesCoverage`, `salesGoalDatasets` (which prorates monthly
+  goals across the days of each week) and `salesRawWeekData`, which the By
+  Channel tab reads. Next.
+- **⚠ (3) THE TWO FEE PANELS ARE STILL SEPARATE** (v11.91).
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
+- Everything else on the v11.95 list.
 
 ## v11.95 - the Fees column is the sum of the columns beside it
 

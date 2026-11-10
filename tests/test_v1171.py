@@ -493,6 +493,13 @@ console.log(JSON.stringify(out));
            fn("amzFeeTargetPlan"),
            fn("amzFeeTopFor"),
            fn("amzFeeIdle"),
+           # v11.96 - the open-row set and the breakdown it renders. The row
+           # markup reads both, so this harness needs them to drive the real
+           # renderAmazonFees at all.
+           re.search(r"(?m)^let amzFeeOpenRows\s*=.*$", js).group(0),
+           fn("amzFeeRowBreakdown"),
+           re.search(r"(?m)^const AMZ_FEE_OPP_TYPES\s*=.*$", js).group(0),
+           fn("amzFeeActions"),
        ]),
        # the REAL default sort state, sliced rather than restated
        js[js.index("let amzFeeSort = "):].split(";", 1)[0] + ";",
