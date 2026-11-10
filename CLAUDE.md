@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.90** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.91** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,134 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.91 - the Fees By-product table: the view's columns, a delta, a total
+
+- **Jason**, on the Fees tab:
+  1. *"the columns appear/disappear based on the period chosen - the columns
+     should be based on the view that is set ... if there is no data for a
+     period, i need to know that"*
+  2. *"i want the delta to appear based on the previous period"*
+  4. *"the should be totals for the by product columns"*
+
+(3), the scorecards and *where* the reduction can be made, is the panel
+convergence he picked and is the **next** release. Part of it lands here.
+
+### ⚠ (1) IS v11.72, AND I SHIPPED IT
+That release gated every fee column on the window's own total, because a
+weekly window charges none of the monthly lines and the table rendered as a
+wall of dashes 93 products deep. The gate fixed the dashes and made the
+**column set a function of the period**, so the table changed shape every
+time Jason moved the window.
+
+A column is a decision about **what you want to look at**. Whether this window
+charged it is a fact about the **window**, and it belongs ON the column.
+
+**And the dashes v11.72 was right about are still handled** - said once on the
+header (dimmed, with the billing cadence on its tooltip) and once on the
+sub-line, instead of 558 times.
+
+| | v11.72 | v11.91 |
+|---|---|---|
+| weekly window | 2 fee columns | **6** |
+| wider window | 6 fee columns | **6** |
+
+### The column picker, in the popup this page already has
+`pnlToggleColsPopup` is already sub-view aware and its button is keyed to the
+**page** (`pnl_amazon`), so it already renders on the Fees tab. Building a
+Fees-only picker beside it would have been the **eighth** Customize columns
+popup. The count is pinned at 7.
+
+**Product cannot be unticked** - a table of numbers with no name is not a
+table - and that is enforced in the reader *and* the setter, not just the
+disabled checkbox.
+
+### ⚠ THE PICKER AND THE TABLE ARE A DECLARED PAIR
+`AMZ_FEE_FIXED_COLS` declares the nine non-fee columns once. **The fee columns
+are not listed there at all** - they derive from `AMZ_FEE_LINES`' `sku` field,
+which already declares that a line gets a column (v11.71). `test_v1191` D1/D2
+pin the picker's keys AND headers against the table's own, so a column cannot
+appear in one and not the other.
+
+### (2) the delta, through the chip that already exists
+`pnlDeltaChip` (v7.47 / v10.13 / v11.03) renders it; this release only decides
+what to feed it. The window comes from `getPnlPrevDateRange`, the resolver the
+scorecards and the chart overlay already use, so a cell's delta and the chip
+on the card above it cannot describe different periods.
+
+**Which way is good is declared per column.** Fees are costs, so the default
+is that a rise reads red. Units and Net Sales invert it. **Held and Cu Ft take
+v11.03's NO VERDICT** - holding more stock is neither good nor bad, and a red
+chip there would read as *cut it*. `Fee %` and `FBA %` report **points**, not
+percent-of-percent.
+
+**Null on All time**, which has no previous period, rather than measuring
+against zero and printing `+100%` on every row.
+
+### (4) the total, over the rows SHOWN
+⚠ **Not `A.tot`.** With the search box filled, a footer reading the window's
+total would contradict its own rows.
+
+⚠ **The ratios are re-derived, never summed.** 35% and 20% do not add to 55%.
+`amzFeeStamp` was **lifted out of `amzFeeAgg`** so the footer and the rows
+come through one derivation; a second spelling is how a footer stops agreeing
+with the column above it.
+
+⚠ **A null Held / Cu Ft is "not measured", never zero**, so it is left out of
+the sum and the count of those is carried: the total renders `4,500*` with
+the reason on its tooltip. **And the mark is suppressed when nothing was
+measured at all** - `0 product(s) carry a figure` is a worse sentence than a
+plain dash.
+
+### "what is 'worth'?"
+He guessed *"I think it is the reduction target in dollars"* and he was right;
+the label did not say so. It reads **Target Saving** now, with
+`5% of fee load · this window` underneath. **No delta on it**: it is a
+function of the percentage typed into the box and this window's sales, so a
+period comparison would measure two different target computations.
+
+### Verification
+- `node --check` clean · **140 suites green** · new `tests/test_v1191.py` (58).
+- **THE DEFECT REPRODUCED**: v11.72's gate run beside the shipped rule on a
+  weekly window - 2 columns against 6 - and on a wider one, where v11.72
+  returns a **different count** and the shipped rule returns the same.
+- **In a browser on the real renderer**, with two periods of rows: the prev
+  window resolves to 2026-10-25 → 10-31, storage reads $475 then and $0 now,
+  the Storage/Aged/Removal/Surcharge headers dim, the sub-line names them,
+  hiding two columns reports `2 column(s) hidden`, and Reset restores 16.
+
+### ⚠ FOUR SUITES WENT RED AND EVERY ONE WAS RIGHT TO
+- **`test_v1172` D1/D2** and **`test_v1171` E2b/E19/F4** pinned v11.72's gate
+  as correct. That is the v11.63 / v11.77 lesson again: **a census that
+  asserts the status quo goes red on the release that fixes what it was
+  hiding.** Re-pointed with the reason beside each, keeping the guarantee that
+  actually mattered - a column of dashes must never read as *nobody pays this*.
+- **`test_v1170` / `test_v1171`** sliced `amzFeeAgg` but not the `amzFeeStamp`
+  lifted out of it. Re-pointed; sliced, never stubbed.
+- **`test_v1171`'s `bodyRows` swept the new `<tfoot>` into the row list**, so
+  every ordering assertion read a trailing `TOTAL`. It stops at `</tbody>` now.
+
+### Three of my own mistakes
+- **A patch script exited mid-way and wrote nothing** - the asterisk fix
+  logged `ok` and never reached disk, and I only caught it because the browser
+  still showed `—*`. **This is the v11.81 rule, in this file, broken again:
+  grep for the new symbol before believing the log.**
+- **The heredoc ate the escapes** on a test re-point. Also already a rule here
+  since v9.77. The Edit tool, not a heredoc.
+- **My brace matcher cannot walk `pnlRenderColsPopup`** - it is almost
+  entirely nested template literals - so the whole D section failed against
+  code that was present. Sliced by its closing brace instead. And I slopped
+  `pnlToggleColsPopup`, a 456-character toggle that delegates, when the markup
+  lives in `pnlRenderColsPopup`.
+
+### Still open
+- **⚠ (3) IS NOT DONE.** The two fee panels are still separate: Summary's
+  Fee Breakdown has the delta and the per-product drill-in, the Fees tab has
+  the levers. Same rows, different labels for all 11 lines (including
+  *FBA Fulfilment* vs *FBA Fulfillment*), and Summary counts **five ad-spend
+  lines** as fees. Decided: converge, reimbursement stays OUT of the total.
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
+- Everything else on the v11.90 list.
 
 ## v11.90 - the merge carries every table that carries master_id
 

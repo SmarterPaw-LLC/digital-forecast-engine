@@ -237,7 +237,7 @@ const ROWS = [
 let WIN = { from: '2026-07-01', to: '2026-07-31' };
 const getPnlDateRange = () => WIN;
 const getPnlSource = () => ({ rows: ROWS, regionMatches: (r) => r === 'US' });
-""" + fn("pnlRowFx") + "\n" + fn("amzFeeAgg") + r"""
+""" + fn("pnlRowFx") + "\n" + fn("amzFeeStamp") + "\n" + fn("amzFeeAgg") + r"""
 const out = {};
 let A = amzFeeAgg();
 out.fees = Math.round(A.tot.fees * 100) / 100;

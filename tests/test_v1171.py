@@ -369,6 +369,16 @@ const P = (mid, name, o) => Object.assign({ mid, name, netSales: 0, units: 0, fe
   avoidable: 0, feePct: null, fbaPct: null, fbaPerU: null }, o);
 let AGG = null;
 function amzFeeAgg() { return AGG; }
+// v11.91 - the renderer grew a previous period, a per-cell delta and a column
+// set. Sliced, never stubbed.
+//
+// /!\ DELTAS ARE SUPPRESSED HERE ON PURPOSE. This suite owns the COLUMNS and
+// the SORT; what the delta says is test_v1191's. _pnlSuppressDeltas is the
+// app's own All-time flag, so amzFeePrevAgg returns null exactly as it does
+// on that period and no delta markup lands inside the cells being asserted.
+let _pnlSuppressDeltas = true;
+const localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+%s
 %s
 %s
 %s
@@ -420,7 +430,11 @@ const rows = [
 const out = {};
 const head = () => (DOM['amzfee-skus'].innerHTML.match(/<th[\\s\\S]*?<\\/th>/g) || []);
 const hdrText = () => head().map(h => h.replace(/<[^>]*>/g, '').trim());
-const bodyRows = () => (DOM['amzfee-skus'].innerHTML.split('<tbody>')[1] || '')
+// v11.91 - /!\\ STOP AT </tbody>. The table grew a <tfoot> TOTAL row, and
+// taking everything after <tbody> swept it into the row list, so every
+// ordering assertion read a trailing 'TOTAL'.
+const bodyRows = () => ((DOM['amzfee-skus'].innerHTML.split('<tbody>')[1] || '')
+  .split('</tbody>')[0] || '')
   .split('<tr').slice(1).map(r => (r.match(/<td[\\s\\S]*?<\\/td>/g) || [])
     .map(c => c.replace(/<[^>]*>/g, '').trim()));
 
@@ -455,6 +469,23 @@ console.log(JSON.stringify(out));
 """ % (fn("tableSortCmp"), fn("tableSortArrow"), LINES,
        const_obj("AMZ_FEE_LEVER").split("=", 1)[1].rstrip(";").strip(),
        const_arr("AMZ_FEE_OUTSIDE").split("=", 1)[1].rstrip(";").strip(),
+       # v11.91 - everything renderAmazonFees newly reaches for, in dependency
+       # order. Sliced out of the shipped file so a change to any of them
+       # fails this suite rather than being papered over by a stub.
+       "\n".join([
+           re.search(r"(?m)^const AMZ_FEE_DELTA_GOOD\s*=.*$", js).group(0),
+           re.search(r"(?m)^const AMZ_FEE_DELTA_PTS\s*=.*$", js).group(0),
+           fn("amzFeeDeltaDir"),
+           re.search(r"(?m)^const AMZ_FEE_COL_KEY\s*=.*$", js).group(0),
+           js[js.index("const AMZ_FEE_FIXED_COLS = ["):js.index("\n];", js.index("const AMZ_FEE_FIXED_COLS = [")) + 3],
+           fn("amzFeePickerCols"),
+           "function amzFeeAllCols() { return amzFeePickerCols().map(c => c.k); }",
+           fn("amzFeeVisibleCols"),
+           fn("amzFeeStamp"),
+           fn("amzFeeSumRows"),
+           fn("amzFeePrevAgg"),
+           fn("amzFeeDeltaCell"),
+       ]),
        # the REAL default sort state, sliced rather than restated
        js[js.index("let amzFeeSort = "):].split(";", 1)[0] + ";",
        fn("amzFeeCadenceNote"), fn("amzFeeSortBy"), fn("renderAmazonFees")))
@@ -463,12 +494,20 @@ SHORTS = [sh for _, sh in SKUC]
 CHARGED = ['Aged', 'Removal', 'Placement', 'Low Inv']
 for sh in CHARGED:
     ok(sh in E["headers"], "E2  '%s' was charged, so it has a column" % sh)
-# v11.72 - and the other half, which is the release: a line this window did
-# not charge takes NO column. 93 products x 6 columns of dashes is what made
-# the page unreadable.
+# /!\ RE-POINTED IN v11.91. This pinned v11.72's rule - a line this window
+# did not charge took no column - and Jason reversed it: "the columns should
+# be based on the view that is set ... if there is no data for a period, I
+# need to know that". The gate made the column SET a function of the period.
+#
+# The guarantee that survives is the one v11.72 actually cared about: a column
+# of dashes must never read as "nobody pays this". It is now said ON the
+# column and ONCE on the sub-line, instead of by deleting the column.
 for sh in ['Storage', 'Surcharge']:
-    ok(sh not in [h.split(" ▼")[0].split(" ▲")[0] for h in E["headers"]],
-       "E2b '%s' was NOT charged, so it takes no column" % sh, E["headers"])
+    ok(sh in [h.split(" ▼")[0].split(" ▲")[0] for h in E["headers"]],
+       "E2b '%s' keeps its column even though this window charged it nothing" % sh,
+       E["headers"])
+ok("no charge in this window: Storage, Surcharge" in E["sub"],
+   "E2c ...and the sub-line names them, once", E["sub"])
 # the active column carries the sort arrow, so match on the stem
 _bare = [h.split(" ▼")[0].split(" ▲")[0] for h in E["headers"]]
 ok("Held" in _bare and "Cu Ft" in _bare,
@@ -479,12 +518,12 @@ eq("E4  every header is sortable", E["thHasSort"], len(E["headers"]))
 # v11.72 - the default ranks what we are STORING. Sorted by Fees the table
 # ranked by product shape and sales volume, which is a list of the biggest
 # sellers - "this page tells me literally nothing".
-ok(E["sub"].endswith("sorted by Cu Ft"),
+ok("sorted by Cu Ft" in E["sub"],
    "E5  the default ranks cubic feet held", E["sub"])
-ok(E["sub"].endswith("sorted by Cu Ft"), "E6  the sub-line names the sorted column", E["sub"])
+ok("sorted by Cu Ft" in E["sub"], "E6  the sub-line names the sorted column", E["sub"])
 eq("E7  sorting by Aged ranks the aged-inventory payers",
    E["aged"]["order"], ["Avocado Toast", "Pupcorn", "Zoom Sticks"])
-ok(E["aged"]["sub"].endswith("sorted by Aged"),
+ok("sorted by Aged" in E["aged"]["sub"],
    "E8  ...and the sub-line says so", E["aged"]["sub"])
 eq("E9  a second click reverses it", E["agedAsc"]["dir"], 1)
 eq("E10 ...and nulls/zeroes do not float to the top",
@@ -509,11 +548,16 @@ ok("not in window" in E["comp"],
    "E17 a monthly line this window cannot see is LISTED, not dropped")
 ok("Last charged 2026-08-31" in E["storageTip"] and "1 of 13 weeks" in E["storageTip"],
    "E18 ...with the cadence and the last billing week on its tooltip", E["storageTip"])
-# v11.72 - Storage takes no column in this window, so there is no header to
-# carry the note. The composition row above it does (E17/E18), which is where
-# the fact belongs when the column is absent.
-ok(E["skuStorageTip"] == "",
-   "E19 ...and with no Storage column there is no header to repeat it on")
+# /!\ RE-POINTED IN v11.91. Under v11.72 Storage took no column in this
+# window, so there was no header to carry the note and this asserted silence.
+# The column now stays, which means the header IS the place the fact belongs -
+# said once there rather than on all 93 rows.
+ok("No charge in this window." in E["skuStorageTip"],
+   "E19 ...and the Storage header says this window charged it nothing",
+   E["skuStorageTip"])
+ok("1 of 13 weeks" in E["skuStorageTip"],
+   "E19b ...with the billing cadence, so it is not read as 'nobody pays this'",
+   E["skuStorageTip"])
 ok("Refund Admin" not in E["comp"],
    "E20 a line never charged at all is still never surfaced")
 
@@ -530,8 +574,10 @@ ok(all(sh and sh.strip() for _, sh in SKUC),
    "F2  ...and none of them is blank")
 eq("F3  the per-SKU columns are FBA Storage + every avoidable line",
    sorted(k for k, _ in SKUC), sorted(AVOID + ["fba_storage_fee_total"]))
-ok("const SKU_LINES = AMZ_FEE_LINES.filter(l => l.sku &&" in js,
-   "F4  the columns are DERIVED from the registry, and gated on this window")
+# v11.91 - still derived from the registry's `sku` field, no longer gated on
+# the window (that gate is what Jason reversed).
+ok("const SKU_LINES = AMZ_FEE_LINES.filter(l => l.sku);" in js,
+   "F4  the columns are DERIVED from the registry, not listed by hand")
 eq("F5  the short form is never spelled a second time",
    sum(NC.count("h: '%s'" % sh) for _, sh in SKUC), 0)
 
@@ -595,7 +641,7 @@ const ROWS = [
 let WIN = { from: '2026-10-25', to: '2026-10-31' };
 const getPnlDateRange = () => WIN;
 const getPnlSource = () => ({ rows: ROWS, regionMatches: (r) => r === 'US' });
-""" + fn("pnlRowFx") + "\n" + fn("amzFeeAgg") + "\n" + fn("amzFeeCadenceNote") + r"""
+""" + fn("pnlRowFx") + "\n" + fn("amzFeeStamp") + "\n" + fn("amzFeeAgg") + "\n" + fn("amzFeeCadenceNote") + r"""
 const out = {};
 let A = amzFeeAgg();
 out.weeksLoaded = A.weeksLoaded;

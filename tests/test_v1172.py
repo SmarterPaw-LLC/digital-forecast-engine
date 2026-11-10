@@ -256,10 +256,24 @@ eq("C10 a 100% target is the whole fee bill", C["hundred"][2], 14184)
 # ---------------------------------------------------------------------------
 print("\nD. /!\\ a column with no charge in this window is NOT a column")
 # ---------------------------------------------------------------------------
-ok("AMZ_FEE_LINES.filter(l => l.sku && Math.abs(t[l.k] || 0) > 0.005)" in js,
-   "D1  the per-SKU fee columns are gated on this window's own total")
-ok("l.sku && Math.abs" in js and "AMZ_FEE_LINES.filter(l => l.sku);" not in NC,
-   "D2  the ungated version is gone, not left beside it")
+# /!\ RE-POINTED IN v11.91, AND IT WAS RIGHT TO GO RED.
+#
+# D1/D2 pinned v11.72's rule: a fee line charging nothing in this window got
+# no column. Jason reversed it - "the columns should be based on the view that
+# is set ... if there is no data for a period, i need to know that" - because
+# the gate made the column SET a function of the period, so the table changed
+# shape every time he moved the window.
+#
+# This is the v11.63 / v11.77 lesson again: a census that asserts the status
+# quo goes red on the release that fixes what it was hiding. The guarantee
+# worth keeping is not "the column disappears", it is "a window that charged
+# nothing never reads as 'nobody pays this'" - which is what is measured now.
+ok("AMZ_FEE_LINES.filter(l => l.sku && Math.abs(t[l.k] || 0) > 0.005)" not in js,
+   "D1  /!\\ v11.72's window gate on the columns is GONE (v11.91)")
+ok("const NOCHARGE = new Set(AMZ_FEE_LINES" in js,
+   "D2  ...replaced by marking the column instead of dropping it")
+ok("No charge in this window." in js and "opacity:.45" in js,
+   "D2b ...on the header, dimmed, with the cadence on its tooltip")
 # The composition table still NAMES them, which is where the fact belongs.
 ok("const unseen = AMZ_FEE_LINES" in js and "not in window" in js,
    "D3  ...because the composition row above already says it once")
