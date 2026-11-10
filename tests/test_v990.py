@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import io, os, re, subprocess, sys
 
+sys.stdout.reconfigure(encoding="utf-8")
+
 P   = r'C:\Users\Jason\digital-forecast-engine\index.html'
 TMP = os.path.dirname(os.path.abspath(__file__))
 js  = max(re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', io.open(P, encoding='utf-8').read(), re.S), key=len)
@@ -50,6 +52,28 @@ function renderInventoryTbl() {}
 const SEED = { curves: { consumables: {} } };
 let CURVE = {};                       // ISO week -> multiplier
 function getEffectiveCurveForProduct() { return { curve: CURVE }; }
+// /!\ THE CLOCK IS PINNED, and this suite needed it.
+//
+// `ago(n)` builds a date with setDate (the LOCAL calendar) and reads it back
+// with toISOString (the UTC one). West of Greenwich those agree only until
+// the evening: past 18:00 CST, UTC has already rolled over and every window
+// boundary this suite tests moves by a day.
+//
+// Found at 21:13 local on 2026-11-09 - already 2026-11-10 in UTC - with
+// eight assertions red that had been green at midday. The suite was red for
+// roughly six hours of every day and nobody would have known why.
+//
+// Measuring in UTC throughout is NOT the fix: the code under test works in
+// local dates, so that only moves the mismatch. Pinning noon makes the two
+// calendars agree - the v11.75 lesson, already in this project's notes.
+const _RealDate = Date;
+const PINNED_NOW = new _RealDate(2026, 10, 9, 12, 0, 0).getTime();
+class PinnedDate extends _RealDate {
+  constructor(...a) { super(...(a.length ? a : [PINNED_NOW])); }
+  static now() { return PINNED_NOW; }
+}
+globalThis.Date = PinnedDate;
+
 function isoWeekOfYear(date) {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = d.getUTCDay() || 7;

@@ -226,6 +226,24 @@ for _f in ("est_base_msf", "est_sus"):
 ok("storageText(" in nocomment(fn("parseAmazonStorageFees")),
    "A23g text cells go through storageText - the `--` and the Excel apostrophe")
 
+# v11.88 - the real file reports one charge on two lines: 14 keys appear
+# twice, covering 29 rows and $29.25. Both rows are real charges, so they are
+# SUMMED rather than deduped - dropping one would lose money from the table
+# that exists because storage was under-reported.
+_add = const_line("STORAGE_FEE_ADDITIVE")
+for _f in ("estimated_monthly_storage_fee", "est_base_msf", "est_sus",
+           "average_quantity_on_hand"):
+    ok(_f in _add, "A24a %s is additive" % _f)
+for _f in ("base_rate", "storage_utilization_ratio", "item_volume"):
+    ok(("'" + _f + "'") not in _add,
+       "A24b /!\ %s is a STATE, not a flow - summing two rates is a number "
+       "nobody charged" % _f)
+ok("storageCollapse(" in nocomment(fn("parseAmazonStorageFees")),
+   "A24c the parser collapses before it returns")
+ok("collapsed" in nocomment(fn("handleAmazonStorageFeeUpload", "async function")),
+   "A24d /!\ ...and the status line SAYS how many were summed - merging rows "
+   "must not happen quietly")
+
 ok("estimated_monthly_storage_fee" in const_obj("STORAGE_FEE_COLS"),
    "A24 the fee column is in the map")
 ok("fba_storage_fee_total" in js,
@@ -269,6 +287,7 @@ __NORM__
 __COLS__
 __NUMSET__
 __NUM__
+__COLLAPSE__
 __MNAMES__
 __MONTH__
 __MEND__
@@ -340,6 +359,7 @@ B = (B.replace("__DELIM__", fn("parseDelimited"))
       .replace("__COLS__", const_obj("STORAGE_FEE_COLS"))
       .replace("__NUMSET__", const_line("STORAGE_FEE_NUMERIC"))
       .replace("__NUM__", fn("storageText") + chr(10) + fn("storageNum"))
+      .replace("__COLLAPSE__", const_line("STORAGE_FEE_ADDITIVE") + chr(10) + fn("storageRowKey") + chr(10) + fn("storageCollapse"))
       .replace("__MNAMES__", const_line("STORAGE_MONTH_NAMES"))
       .replace("__MONTH__", fn("storageMonth"))
       .replace("__MEND__", fn("storageMonthEnd"))
@@ -370,6 +390,7 @@ __NORM__
 __COLS__
 __NUMSET__
 __NUM__
+__COLLAPSE__
 __MNAMES__
 __MONTH__
 __MEND__
@@ -435,6 +456,7 @@ C = (C.replace("__DELIM__", fn("parseDelimited"))
       .replace("__COLS__", const_obj("STORAGE_FEE_COLS"))
       .replace("__NUMSET__", const_line("STORAGE_FEE_NUMERIC"))
       .replace("__NUM__", fn("storageText") + chr(10) + fn("storageNum"))
+      .replace("__COLLAPSE__", const_line("STORAGE_FEE_ADDITIVE") + chr(10) + fn("storageRowKey") + chr(10) + fn("storageCollapse"))
       .replace("__MNAMES__", const_line("STORAGE_MONTH_NAMES"))
       .replace("__MONTH__", fn("storageMonth"))
       .replace("__MEND__", fn("storageMonthEnd"))
@@ -460,6 +482,7 @@ function t(name, got, want) {
 }
 __PNUM__
 __NUM__
+__COLLAPSE__
 
 // Every other parser in this file reads numbers with pNum. On a fee column
 // that is the v11.72 defect: a month Amazon did not report reads as a month
@@ -483,7 +506,10 @@ t('D6  junk is null rather than a silent 0', storageNum('n/a'), null);
 console.log(JSON.stringify(out));
 """
 PNUM = re.search(r"(?m)^function pNum\(s\)\{.*$", js).group(0)
-D = D.replace("__PNUM__", PNUM).replace("__NUM__", fn("storageText") + chr(10) + fn("storageNum"))
+D = (D.replace("__PNUM__", PNUM)
+      .replace("__NUM__", fn("storageText") + chr(10) + fn("storageNum"))
+      .replace("__COLLAPSE__", const_line("STORAGE_FEE_ADDITIVE") + chr(10)
+               + fn("storageRowKey") + chr(10) + fn("storageCollapse")))
 p = os.path.join(SP, "_v1179_d.js")
 io.open(p, "w", encoding="utf-8", newline="").write(D)
 r = subprocess.run(["node", p], capture_output=True, text=True, encoding="utf-8")

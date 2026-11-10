@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.87** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.88** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,84 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.88 - one charge on two lines is summed, not deduped
+
+The upload hit `amazon_storage_fees_uniq`. Measured on the real file rather
+than reasoned about: **14 keys appear twice, covering 29 rows and $29.25.**
+
+    B07KPRTSMT @ MEM2   avg qty    0.07   fee $0.0005
+    B07KPRTSMT @ MEM2   avg qty 1772.70   fee $14.2881
+
+Same ASIN, same fulfilment centre, same month, same size tier, same item
+volume, same base rate, same utilisation ratio. The **only** columns that
+differ are the quantities and the fees they drive. **Nothing in the file
+distinguishes them** - there is no column to widen the key with.
+
+### ⚠ SO BOTH ROWS ARE REAL CHARGES AND THE BILL IS THEIR SUM
+Keeping one would lose money, silently, from the table that exists because
+storage was being under-reported. They are collapsed, not deduped.
+
+### ⚠ AND THE DISTINCTION IS v11.67’S, ALREADY NAMED IN THIS FILE
+A **flow** happened over the period and sums: the quantities, the volumes,
+the fees. A **state** is what the setting IS and does not: the base rate,
+the utilisation ratio, the size tier, the per-unit volume. Summing two base
+rates would produce a rate nobody was charged.
+
+Measured across all 14 pairs, every state column is identical - so taking
+either is taking the same value. It is **declared** rather than assumed,
+because a future file that disagrees should keep the state.
+
+`breakdown_incentive_fee_amount` is text and differs on 2 of the 14 pairs, so
+the two labels are joined rather than one being picked and the other lost.
+
+### Measured before and after
+
+| | rows | unique keys | US fee | CA fee |
+|---|---|---|---|---|
+| the file | 2,357 | 2,342 | $444.35 | $8.46 |
+| after the collapse | **2,342** | **2,342** | **$444.35** | **$8.46** |
+
+**15 merges, and not a cent moved.** Every key is now unique, so the
+constraint cannot fire - and the totals are identical, which is the only
+form in which *no money was lost or double-counted* is checkable.
+
+### ⚠ AND THE STATUS LINE SAYS SO
+*N duplicate row(s) summed into their match.* Merging rows quietly on this
+table is exactly the class of thing that put us here.
+
+### ⚠ AND test_v990 HAS BEEN RED FOR SIX HOURS OF EVERY DAY
+Found on the way, not looked for, and **not caused by this release**.
+
+Its harness builds dates with `setDate` (the LOCAL calendar) and reads them
+back with `toISOString` (the UTC one). West of Greenwich those agree only
+until the evening: past 18:00 CST, UTC has already rolled over and every
+window boundary the suite tests moves by a day. Caught at **21:13 local on
+2026-11-09, already 2026-11-10 in UTC** - eight assertions red that had been
+green at midday, every one off by exactly one day.
+
+It was also **crashing rather than reporting**: no `stdout.reconfigure`, so
+printing node's output died on a non-ASCII character and the real failures
+never printed.
+
+Measuring in UTC throughout is NOT the fix - the code under test works in
+local dates, so that only moves the mismatch, and I tried it first and got a
+different set of reds. **The clock is pinned to local noon**, the way
+`test_v1147` / `test_v1148` / `test_v1178` already are. 87 assertions green.
+
+### Verification
+- **The shipped parser driven over the real 2,357-row export**, before and
+  after, with the totals compared.
+- **137 suites green** · `node --check` clean.
+
+### Still open
+- **⚠ JASON HAS TO RUN `supabase_v11_87_storage_fee_columns.sql`** before
+  the upload can succeed.
+- **⚠ THE BAND LEGEND EATS THE PLOT AREA AT 50 BANDS** - Jason, mid-session.
+  Next.
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
+- **⚠ FOUR TABLES CARRY `master_id` AND ARE NOT IN `runMerge`’S LIST** (v11.79).
+- Everything else on the v11.87 list.
 
 ## v11.87 - the storage parser meets a real file, and six columns were wrong
 
