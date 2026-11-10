@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.94** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.95** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,95 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.95 - the Fees column is the sum of the columns beside it
+
+- **Jason:** *"on the fees, the biggest bucket is 'fees' column, which isn't
+  broken out further."*
+
+### ⚠ IT WAS 96.8% OF THE NUMBER
+v11.71 gave a per-SKU column to **FBA Storage plus every avoidable line** -
+six of eleven - and **those six are the small ones.** Measured on the live
+table, US:
+
+| window | Fees | with a column beside them | covered |
+|---|---|---|---|
+| last 30d | $58,175 | $1,881 | **3.2%** |
+| last 90d | $160,018 | $3,712 | **2.3%** |
+| trailing 365d | $632,176 | $40,571 | **6.4%** |
+
+**FBA Fulfilment ($387,236 over the trailing year) and Referral ($183,487)
+are 90% of the bill and neither had a column at all.** So the row could not
+be reconciled from its own face - which is exactly what v11.71 claimed for
+the Avoidable column and never delivered for Fees.
+
+### The change is five fields
+`sku` is what already declares that a line gets a column (v11.71), so the
+picker, the table, the sort, the delta, the no-charge mark and the
+composition row's click all follow with **no further change**:
+
+| | |
+|---|---|
+| FBA Fulfilment | **FBA $** |
+| Referral | **Referral** |
+| Referral Refunds | **Ref Refunds** |
+| Inbound Transport | **Transport** |
+| Refund Admin | **Refund Adm** |
+
+⚠ **`FBA $`, `FBA $/u` and `FBA %` are three measures of one line**, each
+named by its own arithmetic - the dollars charged, the rate per unit, and the
+share of net sales. That is rule 3a satisfied rather than bent, and the suite
+pins every header as unique.
+
+### ⚠ AND IT TIES OUT, which is the only form the fix can be checked in
+Driven on the real `amzFeeAgg` and then on the real rendered table:
+
+| product | Fees | the eleven columns summed |
+|---|---|---|
+| Pawty Mix | $33,402 | **$33,402** |
+| Meowi-Waui | $27,120 | **$27,120** |
+| Catnip Spray 3oz | $3,910 | **$3,910** |
+| Avocado Toast | $1,204 | **$1,204** |
+| **TOTAL** | **$65,636** | **$65,636** |
+
+⚠ **Avoidable is a ROLL-UP of five of those lines, not a twelfth one**, so it
+is outside the tie-out and still equals its own five. The Fees tooltip says
+both, because a reader summing every numeric column would otherwise
+double-count.
+
+⚠ **A CAD row still ties out**, because the conversion happens once in
+`pnlRowFx` before the split rather than per column.
+
+### A consequence rather than a new rule
+Every composition row can now be opened on its products, because
+`amzFeeFocusLine` gates on the same `sku` field - **FBA Fulfilment, the
+biggest line in the catalogue, had no drill-in until this release.** Verified
+with a real click: it ranks the table by `FBA $`.
+
+### Verification
+- `node --check` clean · **144 suites green** · new `tests/test_v1195.py` (36).
+- **THE DEFECT REPRODUCED**: v11.71's six-column rule run beside the shipped
+  one, with the live coverage percentages as readings rather than claims.
+- **In a browser on the real renderer**: 22 columns, every row and the footer
+  tying out, and the FBA Fulfilment row opening its own column.
+
+### ⚠ FOUR SUITES WENT RED AND EVERY ONE WAS RIGHT TO
+`test_v1171` F3 pinned *"FBA Storage + every avoidable line"* and E2c pinned
+the two unpaid columns by name; `test_v1191` E2/E5 pinned the count at six.
+All four were **censuses of the registry**, and the registry grew - the
+v11.63 lesson for the fourth time. Re-pointed to the guarantee each was
+actually protecting: no column was lost, the set does not depend on the
+window, and the unpaid ones are named once.
+
+`test_v1194` F4 pinned the chip at the literal `11.94`. Re-pointed the same
+way `test_v1193` F19 was in v11.94 - **a suite that pins the version number
+goes red on the next release for doing its job.**
+
+### Still open
+- **⚠ (3) THE TWO FEE PANELS ARE STILL SEPARATE** (v11.91).
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
+- **⚠ NO SETTLEMENT FEED** (v11.70).
+- Everything else on the v11.94 list.
 
 ## v11.94 - the fee levers become actions, and the window that could not see them
 

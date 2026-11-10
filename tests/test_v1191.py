@@ -311,7 +311,13 @@ const tot = { inbound_placement_fee_total: 120, low_inventory_fee_total: 40,
 const v1172 = AMZ_FEE_LINES.filter(l => l.sku && Math.abs(tot[l.k] || 0) > 0.005);
 const v1191 = AMZ_FEE_LINES.filter(l => l.sku);
 t('E1  /!\\ v11.72 showed 2 fee columns on this window', v1172.length, 2);
-t('E2  /!\\ v11.91 shows all 6, whatever the window charged', v1191.length, 6);
+// /!\ RE-POINTED IN v11.95: the count is the REGISTRY's, not a literal six.
+// That release gave the remaining five lines a column because `Fees` could
+// not be reconciled from the row it sat in. What this assertion is for is
+// that the column set does not depend on the WINDOW.
+t('E2  /!\\ v11.91 shows every declared column, whatever the window charged',
+  v1191.length, AMZ_FEE_LINES.filter(l => l.sku).length);
+t('E2b ...and that is now all eleven lines', v1191.length, 11);
 // And the window moving changed the SHAPE of the table, which was the bug.
 const wide = { inbound_placement_fee_total: 120, low_inventory_fee_total: 40,
                fba_storage_fee_total: 475, aged_inventory_fee_total: 12,
@@ -324,7 +330,13 @@ t('E4  /!\\ the shipped rule gives the same count on both',
 // The four with nothing charged are the ones now marked rather than dropped.
 const nocharge = AMZ_FEE_LINES.filter(l => l.sku && Math.abs(tot[l.k] || 0) <= 0.005)
   .map(l => l.sku);
-t('E5  and they are named', nocharge.join(','), 'Storage,Aged,Removal,Surcharge');
+// /!\ DERIVED, NOT LISTED (re-pointed in v11.95). The four this fixture
+// leaves unpaid are still unpaid; the registry simply has more lines now.
+t('E5  and they are named', nocharge.join(',').length > 0, true);
+t('E5b /!\\ ...including the four this window charged nothing for',
+  ['Storage', 'Aged', 'Removal', 'Surcharge'].every(h => nocharge.includes(h)), true);
+t('E5c ...and never a line the window DID charge',
+  nocharge.includes('Placement') || nocharge.includes('Low Inv'), false);
 console.log(JSON.stringify(out));
 """
 E = E.replace("__LINES__", const_blk("AMZ_FEE_LINES"))

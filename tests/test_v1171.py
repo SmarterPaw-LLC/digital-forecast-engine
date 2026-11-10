@@ -514,8 +514,15 @@ for sh in ['Storage', 'Surcharge']:
     ok(sh in [h.split(" ▼")[0].split(" ▲")[0] for h in E["headers"]],
        "E2b '%s' keeps its column even though this window charged it nothing" % sh,
        E["headers"])
-ok("no charge in this window: Storage, Surcharge" in E["sub"],
+# /!\ RE-POINTED IN v11.95, which gave the remaining five lines a column too,
+# so this fixture now has five unpaid columns rather than two. The guarantee
+# is that they are NAMED ONCE on the sub-line, not which ones they happen to
+# be - a literal list is a census of the registry, and the registry grew.
+ok("no charge in this window: " in E["sub"]
+   and "Storage" in E["sub"] and "Surcharge" in E["sub"],
    "E2c ...and the sub-line names them, once", E["sub"])
+ok(E["sub"].count("no charge in this window") == 1,
+   "E2d ...once, not once per column", E["sub"])
 # the active column carries the sort arrow, so match on the stem
 _bare = [h.split(" ▼")[0].split(" ▲")[0] for h in E["headers"]]
 ok("Held" in _bare and "Cu Ft" in _bare,
@@ -580,8 +587,14 @@ eq("F1  every `sku` short form is declared beside a full label",
    len(SKUC), len(re.findall(r"sku: '", LINES)))
 ok(all(sh and sh.strip() for _, sh in SKUC),
    "F2  ...and none of them is blank")
-eq("F3  the per-SKU columns are FBA Storage + every avoidable line",
-   sorted(k for k, _ in SKUC), sorted(AVOID + ["fba_storage_fee_total"]))
+# /!\ RE-POINTED IN v11.95. This pinned v11.71's choice - FBA Storage plus
+# every avoidable line - and Jason reversed it: "the biggest bucket is 'fees'
+# column, which isn't broken out further." Those six were 3.2% of fees over
+# 30 days. The guarantee worth keeping is that NONE OF THE SIX WAS LOST.
+for _k in sorted(AVOID + ["fba_storage_fee_total"]):
+    ok(_k in [k for k, _ in SKUC], "F3  %s still has its column" % _k)
+eq("F3b /!\\ ...and now every line does",
+   len(SKUC), len(re.findall(r"\{ k: '", LINES)))
 # v11.91 - still derived from the registry's `sku` field, no longer gated on
 # the window (that gate is what Jason reversed).
 ok("const SKU_LINES = AMZ_FEE_LINES.filter(l => l.sku);" in js,
