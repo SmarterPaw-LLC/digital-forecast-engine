@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.91** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.92** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,89 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.92 - two controls that lied
+
+- **Jason**, on the Fees tab: *"this label does nothing"* and *"there is no
+  column picker to pick and save views"*.
+
+Both verified against the running page before anything was changed.
+
+### ⚠ THE LABELS BUTTON WAS ON EVERY PANEL, CHART OR NOT
+`injectChartLabelsToggles` (v8.42) appended a 🏷 Labels toggle to **every**
+`.ds-hdr` in the document, and that toggle switches **Chart.js data labels**.
+Measured on the Amazon P&L page:
+
+| | |
+|---|---|
+| `.ds-hdr` panels | **24** |
+| panels holding a canvas | **9** |
+| **buttons with nothing to act on** | **15** |
+
+Both Fees panels are among the fifteen. A live control with nothing to act on
+is the v10.19 defect, and this one was on every table panel in the app.
+
+The toggle now requires the panel to hold a `canvas`. **9 panels, 9 buttons**,
+and no chart panel lost one.
+
+### ⚠ A SKIPPED HEADER IS NOT MARKED, AND THAT IS LOAD-BEARING
+`hdr.dataset.hasLabelsToggle = '1'` moved **below** the test. Marking a
+skipped header would make the skip permanent, and several panels mount their
+canvas after their header - so a lazily-drawn chart would never get a toggle
+again. The MutationObserver also watches for a **canvas** now, not only for a
+new `.ds-hdr`: before the chart-or-nothing test that could not matter, because
+every header got one regardless.
+
+### ⚠ THE PICKER EXISTED. SAVING IT DID NOT.
+This is the half I got wrong in v11.91 and reported as done. The popup renders
+**16 Fees checkboxes** correctly - but `pnlSnapshotState` captured `cols` (the
+**Summary** table's), the sub-view and the Page Performance block, and nothing
+else. So a view saved on Fees came back with the sub-view restored and **every
+column choice, the sort and the reduction target silently dropped**.
+
+The snapshot now carries `fees: { cols, sort, targetPct, search }`, read
+through `amzFeeVisibleCols()` and `amzFeeSort` - the tab's own accessors, so a
+saved view cannot disagree with what the tab is showing.
+
+### ⚠ AN OLD VIEW HAS NO `fees` KEY, AND AN EMPTY LIST IS NOT "HIDE EVERYTHING"
+Every pre-v11.92 view would otherwise blank the table on Apply. Absent or
+empty, the columns are left alone. The restore also runs **before** the
+sub-view is switched back at the tail of `pnlApplyView`, so the Fees render
+pass sees the restored state rather than the old one.
+
+And the save caption names what it captures, because a control that
+under-states itself is the v11.90 dialog problem.
+
+### Verification
+- `node --check` clean · **141 suites green** · new `tests/test_v1192.py` (27).
+- **THE DEFECT REPRODUCED**: 24 panels against 9, with the 15 named.
+- **The real injector driven over a modelled page**, including a canvas that
+  mounts *after* its header - which is the case the un-marking exists for.
+- **In a browser on the real page**: 9 toggles on 9 chart panels, none on
+  either Fees table panel, and a full save → wreck → restore round trip
+  (14 columns, sort on Aged ascending, target 12%) coming back exact.
+
+### ⚠ AND THE PATCH SCRIPT WROTE NOTHING, FOR THE THIRD TIME THIS SESSION
+Four substitutions logged `ok`, the fifth refused, and **the file is written
+at the end** - so none of them landed. The anchor carried `·` where the
+source holds a real `·`: the v11.41 / v11.47 / v11.68 / v11.75 trap on its
+**sixth** sighting. Both rules are already in this file. **Grep for the new
+symbol before believing the log.**
+
+### Still open
+- **⚠ THE REDUCTION TARGET STILL DOES NOT SHOW WHERE THE SAVING COMES FROM.**
+  Jason, same message. Target Saving reports a number and nothing points at
+  the lines or products that could supply it.
+- **⚠ HELD / CU FT HAVE NO SELL-THROUGH ANALYSIS.** Jason: *"the units held in
+  storage does not have any kind of analysis of sell through during that
+  period to indicate storage savings"*. The tab ranks what we are storing and
+  says nothing about whether it is turning. ⚠ Note rule 3a before building:
+  `Cover days` (Inventory Planning) and `Stock Cover Months` (Break-Even)
+  already exist and a third spelling is not allowed - check their arithmetic
+  before reusing either label.
+- **⚠ (3) THE TWO FEE PANELS ARE STILL SEPARATE** (v11.91).
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
+- Everything else on the v11.91 list.
 
 ## v11.91 - the Fees By-product table: the view's columns, a delta, a total
 
