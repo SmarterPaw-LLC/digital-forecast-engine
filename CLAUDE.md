@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.92** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.93** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,143 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.93 - the target points at the lines, and the shelf gets a verdict
+
+- **Jason**, on the Fees tab: *"changing the reduction target does not
+  highlight where the savings targeted could come from"* and *"the units held
+  in storage does not have any kind of analysis of sell through during that
+  period to indicate storage savings"*.
+
+Both of his own words from the v11.92 message, and both are analysis rather
+than a control that lied.
+
+### ⚠ TARGET SAVING REPORTED A NUMBER AND POINTED AT NOTHING
+`To Target` is a column on the composition table now - the table he said it
+had to be on - and it is built from the registry's own `lever`. **Avoidable
+lines only, at full value**, because that is what `avoidable` already means
+here: the fee exists because of an operational miss, so fixing the operation
+takes it to zero (v11.70). A `rate` line cannot give up a dollar without a
+decision about packaging or stock, and a `fixed` line moves only if the price
+moves. **Claiming a slice of either would be a number nobody can act on** -
+the same reason v11.72 refused to hardcode a storage rate card.
+
+Biggest line first, applied until the target is met, the last one capped at
+what is left. Driven in a browser on a $23,980 window:
+
+| target | lines drawn on | the column |
+|---|---|---|
+| 0% | none | `—` |
+| 5% · $1,199 | **Aged Inventory alone** | $1,199 |
+| 15% · $3,597 | Aged $2,640 + **Placement capped at $957** | $3,597 |
+| 30% · $7,194 | all five, and that is the whole pool | **$4,330** |
+
+**So the column sums to the target exactly when the target is reachable, and
+to the pool when it is not.** At 30% the card reads *$2,864 short of
+avoidable* rather than quietly filling the gap from a line that cannot pay it.
+
+### ⚠ AND IT NAMES THE PRODUCTS, because "where" is not a fee line
+Under each line in the plan: the three products carrying most of it, with the
+rest on the tooltip. Clicking the row ranks the by-product table by that fee -
+**through the existing sort and the existing column setter**, so there is no
+second ranking mechanism and no second writer of the saved column set. A line
+with no per-SKU column gets no cursor and no handler, because `sku` is already
+what declares that a line has one (v11.71).
+
+Measured: the Aged Inventory row names *Meowi-Waui $1,140 · Avocado Toast
+$884 · Pupcorn $526*, and a real click on it - with the column hidden first -
+switches the column back on and ranks those three in that order.
+
+### ⚠ ONE TARGET-DOLLARS DEFINITION, because there were two
+`const target = t.fees * tgtPct / 100` sat directly above `loadGap`, computed
+**the same number by a second route**, and nothing read it. Deleted rather
+than reused: the plan takes the card's own figure, so the panel and the
+scorecard cannot disagree about what the target is worth.
+
+### ⚠ HELD AND CU FT NOW CARRY A VERDICT: `Units/Held`
+Net units sold in this window over units held at Amazon. **A share, not a
+duration** - `Cover days` (Inventory Planning) and `Stock Cover Months`
+(Break-Even) already exist with different arithmetic, and a third spelling of
+cover is the rule 3a defect. The header names its own two operands instead.
+
+Sorted ascending it floats the dead stock: **Avocado Toast 0.0%** (980 units
+held, nothing sold), Pupcorn 2.4%, then 33 / 36 / 38 / 51%.
+
+⚠ **The footer is RE-DERIVED, never averaged**: 3,750 units over 10,765 held
+reads **35%**, where averaging the six rows would read 27%. And **the
+numerator is the units that HAVE a denominator** - held sums only the measured
+products (a null is *not measured*, never zero), so the units follow the same
+rows or the ratio reads units-over-part-of-the-held.
+
+### ⚠ `Idle Shelf`, the account-level answer
+**50 cu ft held by 1 of 6 products that sold nothing in this window.** That is
+the one number on this tab that names a storage saving you could go and take.
+A product with no Fee Preview row is in the count and out of the volume.
+
+### ⚠ AND v11.91'S HELD / CU FT CHIPS COULD ONLY EVER READ `0.0%`
+Found while wiring the delta for the new column, not looked for.
+**`amzUnitsHeld` takes no window**: it reads today's `records` snapshot, so
+the previous period's aggregation returns the identical figure. Measured on
+the live page over two genuinely different windows:
+
+| | October | September |
+|---|---|---|
+| units | 2,100 | 1,600 |
+| fees | $12,378 | $5,400 |
+| **held** | **4,135** | **4,135** |
+| **cu ft** | **150.93** | **150.93** |
+
+...and the chip: `→ +0.0% vs prev`, on every row holding stock. A live
+indicator with nothing to indicate, which is the v10.19 defect.
+
+`AMZ_FEE_DELTA_NONE` suppresses it on Held, Cu Ft and Units/Held - whose
+denominator is that same snapshot, so its chip would restate the Units chip
+two columns over. **`AMZ_FEE_DELTA_GOOD` is untouched**: which way is good
+(v11.03's NO VERDICT) and whether a comparison exists at all (v10.13's
+suppression) are two questions. Verified that **no other column lost its
+chip**.
+
+### ⚠ A LAYOUT DEFECT I INTRODUCED, CAUGHT BY MEASURING RATHER THAN LOOKING
+The names line is `white-space:nowrap`, and as a plain block that set the
+first column's min-content width to **302px** - pushing the **585px** table
+**70px out of its 515px panel**, which `.ds-body` does not clip. Absolutely
+positioned inside a fixed-height box it contributes no intrinsic width: the
+column is back to **148px**, the table is 513px in a 513px body, and the names
+ellipsis with the full list on the tooltip.
+
+### The CSV, which v11.72 forgot
+`Units Held`, `Cu Ft Held` and `Units/Held %` are on every row and the TOTAL.
+Those two columns have been on the screen since v11.72 and never on the
+export - the standing rule is that every data-bearing column is exportable.
+
+### Verification
+- `node --check` clean · **142 suites green** · new `tests/test_v1193.py` (98).
+- **THE DEFECT REPRODUCED**: the real `amzFeeAgg` run over two windows, with
+  the real `pnlDeltaChip` fed its own output - so `0.0%` is a measurement.
+- **The real `amzFeeTargetPlan` driven** over 24 shapes: capping, a shortfall,
+  a zero target, a zero line, a missing total, and a rate line of $9,000 that
+  the plan must never touch however large it is.
+- **In a browser on the real renderer**, with two periods of rows: the four
+  target levels above, the click with the column hidden, the ascending sort,
+  the suppressed chips beside the surviving ones, and the CSV captured from
+  its own blob - **26 columns**, Avocado Toast reading `980, 49.98, 0`.
+
+### ⚠ ONE OF MY OWN EXPECTATIONS WAS WRONG
+B16 wanted `51.3`. 1025/2000 is not a dyadic rational, so the product lands on
+51.24999999999999 and one decimal place rounds it **down**. The code was
+right; the assertion reads two places now.
+
+`test_v1171` went red and was right to: it drives the real `renderAmazonFees`,
+which now reaches for the plan. Re-pointed by slicing the new helpers, not by
+stubbing them.
+
+### Still open
+- **⚠ (3) THE TWO FEE PANELS ARE STILL SEPARATE** (v11.91). Summary's Fee
+  Breakdown has the per-product drill-in; the Fees tab has the levers and now
+  the plan. Decided: converge, reimbursement stays OUT of the total.
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79) - and it is what
+  would turn `Idle Shelf` from cubic feet into dollars.
+- Everything else on the v11.92 list.
 
 ## v11.92 - two controls that lied
 

@@ -485,6 +485,14 @@ console.log(JSON.stringify(out));
            fn("amzFeeSumRows"),
            fn("amzFeePrevAgg"),
            fn("amzFeeDeltaCell"),
+           # v11.93 - the target plan, the idle shelf and the per-line product
+           # ranking. Sliced for the same reason as everything above it: this
+           # suite drives the REAL renderAmazonFees, so a stub here would hide
+           # a change to the numbers it now prints.
+           re.search(r"(?m)^const AMZ_FEE_DELTA_NONE\s*=.*$", js).group(0),
+           fn("amzFeeTargetPlan"),
+           fn("amzFeeTopFor"),
+           fn("amzFeeIdle"),
        ]),
        # the REAL default sort state, sliced rather than restated
        js[js.index("let amzFeeSort = "):].split(";", 1)[0] + ";",
