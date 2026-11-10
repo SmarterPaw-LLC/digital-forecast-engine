@@ -166,6 +166,18 @@ period comparison would measure two different target computations.
 - **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
 - Everything else on the v11.90 list.
 
+### ⚠ API AUTOMATION IS PARKED, AND THAT IS A DECISION
+Jason asked how to apply for developer API access to pull these reports
+automatically, then: *"this is logged, save it for later. I won't do this
+yet."* Same standing as the GA4 scheduled task he declined in v11.78 - **it
+is off the open list, do not re-offer it.**
+
+The write-up is `API_ACCESS.md` in this folder, **deliberately uncommitted**
+because this repo is served publicly. Four findings worth not re-deriving:
+Shopify needs **no application at all**; Walmart is **1P**, so the Marketplace
+API is the wrong door (Retail Link / Luminate); Chewy has no public API; and
+SP-API should be registered as a **private developer declaring no PII**.
+
 ## v11.90 - the merge carries every table that carries master_id
 
 - **Jason**, with the confirm dialog open: *"can you make sure this merge will
