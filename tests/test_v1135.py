@@ -204,6 +204,11 @@ function mkEl(tag) {
     addEventListener(t, h) { el['_on' + t] = h; },
     get offsetHeight() { return el._h == null ? 0 : el._h; },
     set offsetHeight(v) { el._h = v; },
+    // v11.89 - the content height. It equals the box unless a test says
+    // otherwise, which is the un-overflowing case every assertion here
+    // already assumes.
+    get scrollHeight() { return el._sh == null ? (el._h == null ? 0 : el._h) : el._sh; },
+    set scrollHeight(v) { el._sh = v; },
   };
   return el;
 }
@@ -257,7 +262,12 @@ function mkCanvas(id, parentPos) {
 # repainting, so the harness slices that too. The guarantees the sync itself
 # makes live in test_v1166; what this suite owns is that the legend is
 # unchanged in every other respect.
-CORE = DOM + '\n' + fn('pnlScaleCeiling') + chr(10) + fn('pnlChartScaleLock') + chr(10) + fn('chartRescaleY') + chr(10) + fn('chartLegendHost') + '\n' + fn('chartLegendToggle') + '\n' \
+# v11.89 — the plugin caps the legend's height before reserving room for it,
+# so the harness slices that helper and its two constants. Sliced, never
+# stubbed: a cap that moves must fail this suite rather than be papered over.
+# What the cap itself guarantees lives in test_v1189.
+_CAPBLK = js[js.index('const CHART_LEGEND_MAX_SHARE'):js.index('const CHART_HTML_LEGEND = {')]
+CORE = DOM + '\n' + _CAPBLK + chr(10) + fn('pnlScaleCeiling') + chr(10) + fn('pnlChartScaleLock') + chr(10) + fn('chartRescaleY') + chr(10) + fn('chartLegendHost') + '\n' + fn('chartLegendToggle') + '\n' \
      + fn('chartLegendIsOverlay') + '\n' + fn('chartLegendSyncOverlay') + '\n' \
      + fn('chartLegendSoloed') + '\n' \
      + fn('chartLegendOnly') + '\n' + const_obj('CHART_HTML_LEGEND') + '\n'

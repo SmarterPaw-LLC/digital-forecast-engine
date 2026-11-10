@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.88** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.89** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,124 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.89 - the legend may not eat the plot
+
+- **Jason:** *"on the graph - when i click bigger bands, the band legend cuts
+  off the graph."*
+
+### ⚠ THE RESERVATION IS THE CAUSE, AND IT IS v11.35'S
+`layout.padding.top = host.offsetHeight` reserves **exactly** the room the
+legend takes. That is correct at three bands and ruinous at fifty, because
+the canvas height is fixed by its panel: every pixel the legend grows is a
+pixel the curve loses.
+
+Measured on the real `pnlTrendRender`, a 322px canvas, before changing
+anything:
+
+| bands | legend | plot |
+|---|---|---|
+| 3 | 24px | 272px |
+| 10 | 59px | 237px |
+| 20 | 94px | 202px |
+| 30 | 146px | 150px |
+| **50** | **234px** | **62px** |
+| 120 | 531px | **0px** |
+
+At fifty the legend takes **73% of the canvas**, which is worse than the
+screenshot looked. At 120 there is no chart left at all.
+
+### ⚠ THE CAP IS DERIVED FROM THE CANVAS, NOT TYPED
+A third of the canvas, floored at two rows so a short panel is never left
+with an unusable sliver. **Nine charts share this legend and their panels are
+not all 322px**, so a pixel count would be wrong on the next one.
+`test_v1189` A14 fails the build on a pixel literal inside the helper.
+
+### ⚠ AND NO CHIP IS LOST
+Capping without scrolling would hide bands with **no way to reach them** -
+worse than the bug, and the v10.19 shape. The host scrolls, and
+`pointer-events: auto` comes back with the overflow, because **a host that
+cannot be hit cannot be scrolled**.
+
+The scrollbar is the app's **own global 5px themed one** (declared at line
+~596), so this adds no second scrollbar look - A18/A19 pin that the class
+declares none of its own.
+
+### ⚠ CAP FIRST, THEN MEASURE - THAT ORDER IS THE WHOLE MECHANISM
+`max-height` clamps `offsetHeight`, so the reservation reads the capped
+number with **no second opinion about how tall the legend is**: one CSS
+property drives both the box and the room reserved for it. Written after the
+read, the reservation would take the uncapped height and the fix would do
+nothing. A6 asserts the order.
+
+**The scroll class is driven by the MEASUREMENT, never by a band count** -
+twelve short labels wrap to fewer rows than six long ones, so only
+`scrollHeight > offsetHeight` knows.
+
+### Measured after, on the same renderer
+
+| bands | plot before | plot after | scrolls | chips |
+|---|---|---|---|---|
+| 3 | 272 | **272** | no | 3 |
+| 10 | 237 | **237** | no | 10 |
+| 20 | 202 | **202** | no | 20 |
+| 30 | 150 | **189** | yes | 30 |
+| 50 | 62 | **189** | yes | 50 |
+| 120 | 0 | **189** | yes | 120 |
+
+**Nothing below the cap moved**, which is the only form in which *no chart
+changed by default* is checkable rather than read off a diff.
+
+### Four edge cases driven in the browser
+- **A hidden panel measures 0** and is capped at nothing - `max-height:0`
+  would hide the legend outright, so a 0 cap clears the property instead.
+- **Shown again**, the cap returns and the plot keeps 189px.
+- **Two series**: 24px, under the cap, unchanged.
+- **One series**: Chart.js suppresses the legend entirely and nothing is
+  reserved.
+
+### ⚠ AND THE CHIPS STILL WORK WHILE SCROLLED
+Driven at 50 bands: the host scrolls 127px, the **last** chip is fully inside
+the box, a real click on it toggles that series and strikes it through, and
+`only` on chip 49 isolates to a single band - all with the legend and the
+plot holding at 107 / 189.
+
+### Verification
+- `node --check` clean · **138 suites green** · new `tests/test_v1189.py` (46).
+- **THE DEFECT REPRODUCED**: the pre-v11.89 reservation run beside the shipped
+  one on the **real measured legend heights**, so *62px* and *0px* are
+  measurements rather than readings.
+- **In a browser on the real `pnlTrendRender` and the real
+  `CHART_HTML_LEGEND`**, at six band counts.
+
+### ⚠ AND THE STORAGE FEED IS LIVE - I ASKED HIM TO RUN SOMETHING HE HAD RUN
+Jason: *"i ran that already. PLEASE STOP TELLING ME TO RUN QUERIES I'VE
+ALREADY RUN. IF YOU DON'T KNOW, YOU SHOULD INDICATE."*
+
+He is right, and the rule has been in my memory the whole time: **when Jason
+says he did something, trust it and debug elsewhere.** The schema was read
+rather than asked about:
+
+| | rows | fee | base | matched |
+|---|---|---|---|---|
+| US 2026-09 | 2,315 | **$444.35** | $444.35 | 2,315 / 2,315 |
+| CA 2026-09 | 27 | **$8.46** | $8.46 | 27 / 27 |
+
+All 35 columns the parser writes exist, `breakdown_incentive_fee_amount` is
+**text**, both retired names are **gone**, the unique index is on the
+`coalesce()` expressions, and **2,342 rows are loaded** - exactly the
+post-collapse count, with the totals tying to his file to the cent.
+
+**The storage upload is DONE. Do not ask him to run that migration again.**
+
+### Still open
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79) - and this is now
+  the only thing between the feed and the Fees tab. It carries the
+  do-not-double-count decision.
+- **⚠ FOUR TABLES CARRY `master_id` AND ARE NOT IN `runMerge`'S LIST** (v11.79).
+- The six non-`pnlTrendRender` charts get no ceiling and no SCALE control
+  (v11.85), and no legend cap either - they do not use this legend.
+- Everything else on the v11.88 list.
 
 ## v11.88 - one charge on two lines is summed, not deduped
 
@@ -108,10 +226,11 @@ different set of reds. **The clock is pinned to local noon**, the way
 - **137 suites green** · `node --check` clean.
 
 ### Still open
-- **⚠ JASON HAS TO RUN `supabase_v11_87_storage_fee_columns.sql`** before
-  the upload can succeed.
-- **⚠ THE BAND LEGEND EATS THE PLOT AREA AT 50 BANDS** - Jason, mid-session.
-  Next.
+- **RESOLVED 2026-11-10: Jason ran `supabase_v11_87_storage_fee_columns.sql`
+  and the upload succeeded.** 2,342 rows, US $444.35 / CA $8.46, every row
+  matched. Verified by reading the live schema, not by asking. **Do not ask
+  him to run it again.**
+- **RESOLVED 2026-11-10: the band legend is capped.** See v11.89.
 - **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
 - **⚠ FOUR TABLES CARRY `master_id` AND ARE NOT IN `runMerge`’S LIST** (v11.79).
 - Everything else on the v11.87 list.
