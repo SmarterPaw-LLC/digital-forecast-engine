@@ -248,8 +248,11 @@ sok('salesSelectionActive' in sales, 'Units Sold tracks whether a selection is a
 sok('salesVisibleRows' in sales, 'Units Sold falls back to the visible rows')
 sok('if (salesSelected.size === 0) { closeSalesDrill(); return; }' not in sales,
     'Units Sold no longer closes the panel when nothing is selected')
-sok(sales.count('chartMids.forEach(mid => {') == 4,
-    'all four per-product loops walk chartMids')
+# /!\ FIVE SINCE v11.97, which added the previous-period sweep. The guarantee
+# this assertion exists for is that EVERY per-product loop walks chartMids
+# rather than the raw selection (the v10.13 defect), not how many there are.
+sok(sales.count('chartMids.forEach(mid => {') == 5,
+    'every per-product loop walks chartMids, including the prev-period sweep')
 sok(sales.count('salesSelected.forEach(mid => {') == 0,
     'no loop still walks the raw selection')
 sok('Total \\u00b7 ${chartMids.length} product' in sales or 'Total · ${chartMids.length} product' in sales,

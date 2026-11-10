@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.96** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.97** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,126 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.97 - the Units Sold chart joins the shared chart controls
+
+- **Jason:** *"can you add the functionality of the other charts to the units
+  sold page chart?"*
+
+It had BANDS and the shared HTML legend and nothing else. **GROUP, FILL,
+SCALE and COMPARE** - carried by the P&L charts since v11.68 / v11.74 /
+v11.85 - were all missing, and every one of them is now the SAME helper
+those charts call, so the stored setting is one setting app-wide.
+
+### ⚠ VIEW IS DELIBERATELY NOT ADDED
+This page has its own five-option picker - **line / bar / stacked / area /
+area combined** - which is a SUPERSET of the shared Line / Stacked toggle.
+Injecting the shared one beside it would be two controls for one decision,
+which is hard rule #1 pointing the other way.
+
+### ⚠ GROUP IS WEEK AND MONTH. DAY IS A NUMBER NOBODY HAS.
+Amazon, Chewy and Walmart are stamped **one row per week**; only Shopify is
+daily. A daily bucket would draw Shopify's real days against one Amazon spike
+a week - a shape these feeds do not have, which is v11.74's own rule. The D
+button renders disabled, with that sentence on it, and `pnlGrainResolve`
+clamps anyway because a disabled control is bypassable from the console.
+
+### ⚠ ONE GRAIN FOR BOTH TABS, AND IT TIES OUT
+`salesChartGrain()` resolves once; Total and By Channel both read it. Driven
+in a browser on a 12-week fixture:
+
+| | buckets | units |
+|---|---|---|
+| weekly (the default) | 12 | **3,576** |
+| monthly | **3** (Aug / Sep / Oct 26) | **3,576** |
+| monthly, By Channel tab | 3 | **3,576** |
+
+**Not a unit moved, and the two tabs agree** - which is the only form in which
+"the grain did not lose or double-count anything" is checkable.
+
+### ⚠ THE GOAL PRORATION GENERALISED RATHER THAN FORKED
+`salesGoalWeeklyFor` walked **seven days from the Monday**. It asks the bucket
+how many days it covers now - and the arithmetic underneath is unchanged, a
+monthly goal divided by the days in its month, summed over the bucket's days.
+
+- A **week** bucket is byte-identical to the retired rule (C1 runs the old
+  loop beside it).
+- A **month** bucket is worth exactly that month's goal: October 3,100 reads
+  3,100.
+- A week straddling a boundary still mixes the two months' daily rates: six
+  October days at 100 plus one November day at 50 = **650**.
+
+`salesBucketDays` reads the span off the **key's own shape**, so no consumer
+has to be told which grain built it.
+
+### ⚠ AND A MONTHLY GRAIN WOULD HAVE BROKEN THE COVERAGE BAND SILENTLY
+`salesCoverage` finds the first bucket past a channel's last report with a
+string compare - and a month key is a **prefix** of a week key inside it:
+
+    '2026-10' > '2026-09-28'   ->  true   (fine)
+    '2026-10' > '2026-10-05'   ->  FALSE  (the month holding the gap is skipped)
+
+So the hatching would have pointed at the wrong month, or at none. The
+channel's last week is bucketed before the find, with the **shape read off
+the chart's own keys** rather than passed in, so no caller can forget it -
+and `c.last` still reports the real WEEK, because that is what the boundary
+label prints.
+
+### The rest, through the helpers that already existed
+- **COMPARE**: one more pass over rows already in memory, windowed by
+  `getPnlPrevDateRange` - the resolver the scorecards and the P&L charts use.
+  Measured: 12 paired points, `Previous period (2026-05-11 → 2026-07-27)`,
+  **1,410 units against the current 3,576**, pushed last and in its own stack
+  group. **All time** disables the control with its reason rather than
+  measuring against nothing.
+- **SCALE**: the two Units Sold charts gained v11.63's ceiling, so `Fit` has
+  something to fit - measured at 444 on a 386 peak, and hiding a band now
+  rescales through the `chartRescaleY` that already existed.
+- **FILL**: the stacked-area alpha was a literal `'d9'`. It reads
+  `pnlStackAlpha()` now - `#4a9e3855` sheer, `#4a9e38d9` solid. Plain
+  (unstacked) area keeps its own 33%, because there the series OVERLAP and a
+  solid fill hides the ones underneath.
+- **One bucket label**: `fmtWeek` was declared identically in both charts.
+  One `salesBucketLabel`, both converted in this commit (rule #5), and a week
+  label is unchanged so the axis does not move by default.
+
+### ⚠ THE HEADER HAD NO FLOOR UNDER ITS TITLE COLUMN
+Caught in a browser at 1024px: `<div style="flex:1">` collapses to
+**min-content** when the row runs out of room, and three more controls was
+enough - the title shrank to **63px** and the subtitle wrapped into a
+**417px-tall vertical ribbon**, leaving the chart a sliver. A `min-width:240px`
+floor and `flex-wrap` on the header: title **942px**, header **141px**, and
+the controls wrap onto their own line.
+
+### Verification
+- `node --check` clean · **146 suites green** · new `tests/test_v1197.py` (58).
+- **The real `salesGoalWeeklyFor` run beside the rule it replaced**, over the
+  same weeks.
+- **The string trap reproduced** before the fix is asserted.
+- **In a browser on the real `updateSalesChart` and `updateChannelChart`**:
+  every number above.
+
+### ⚠ TWO OF MY OWN EXPECTATIONS WERE WRONG
+- A15 counted two ceilings and there are **three**: `pnlTrendRender` has had
+  one since v11.63 and the two Units Sold charts joined it.
+- C3's fixture gave October and November the **same daily rate** (3,100/31 and
+  3,000/30 are both 100/day), so the straddling-week assertion could not tell
+  the two prorations apart and proved nothing. November is 1,500 now.
+
+Five suites went red and every one was a census of a shared helper's call
+sites - `chartMids.forEach` 4 → 5, `PNL_SCALE_GRACE` 2 → 4, `pnlScaleCeiling`
+2 → 4, `pnlStackAlpha` 6 → 7, `pnlGrainResolve` 8 → 9. That is what wiring a
+chart into shared machinery looks like; each was re-pointed to the guarantee
+it was protecting. `test_v1076` needed `salesBucketDays` sliced into its
+harness - sliced, never stubbed.
+
+### Still open
+- **⚠ (3) THE TWO FEE PANELS ARE STILL SEPARATE** (v11.91).
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
+- The Units Sold chart still has no partial-bucket mark (v11.73's asterisk is
+  opt-in and only the SEO chart takes it). Its coverage band already says
+  where a channel's data stops, which is the stronger statement here.
+- Everything else on the v11.96 list.
 
 ## v11.96 - the actions come to the Fees page, and the row opens
 

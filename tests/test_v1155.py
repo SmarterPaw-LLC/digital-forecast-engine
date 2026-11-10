@@ -159,8 +159,11 @@ ok(not A["axesXHasGrace"], "A5b and the x axis still does not")
 # ---------------------------------------------------------------------------
 code = nocomment(js)
 eq("B1 declared exactly once", code.count("const PNL_SCALE_GRACE"), 1)
-eq("B2 and read in exactly two places - both scale paths",
-   code.count("grace: PNL_SCALE_GRACE"), 2)
+# /!\ FOUR SINCE v11.97: pnlTrendRender's two scale paths plus the two Units
+# Sold charts, which joined the same ceiling. The guarantee is that the grace
+# is never a literal beside it - which the next assertion pins.
+eq("B2 and read only through the constant - now four scale paths",
+   code.count("grace: PNL_SCALE_GRACE"), 4)
 ok(re.search(r"grace:\s*['\"0-9]", code) is None,
    "B3 never written as a literal beside the shared one")
 ok(code.index("const PNL_SCALE_GRACE") < code.index("async function pnlTrendRender("),
@@ -277,7 +280,10 @@ for key, why in [("empty", "no datasets"), ("noDatasets", "a null datasets list"
 
 # One definition, both scale paths - and never a literal beside it.
 eq("D9 declared exactly once", code.count("function pnlScaleCeiling("), 1)
-eq("D9b read by BOTH scale paths", code.count("...pnlScaleCeiling("), 2)
+# /!\ FOUR SINCE v11.97 - the two Units Sold charts joined the same helper
+# rather than growing a ceiling of their own.
+eq("D9b read by every scale path, through the one helper",
+   code.count("...pnlScaleCeiling("), 4)
 eq("D9c the headroom constant is named once",
    code.count("const PNL_SCALE_HEADROOM"), 1)
 ok(re.search(r"suggestedMax:\s*[0-9]", code) is None,

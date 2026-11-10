@@ -362,8 +362,10 @@ eq("F4  pnlGrainKey declared once", NC.count("function pnlGrainKey("), 1)
 eq("F5  /!\\ no stacked band still carries a LITERAL alpha",
    len(re.findall(r"backgroundColor:[^,\n]*'(?:d9|55)'", NC)), 0)
 # Five call sites plus the helper's own declaration.
+# /!\ SEVEN SINCE v11.97: the Units Sold stacked-area fill joined the setting
+# instead of keeping its own 'd9' literal.
 eq("F6  and every stacked fill reads the shared setting",
-   NC.count("pnlStackAlpha()"), 6)
+   NC.count("pnlStackAlpha()"), 7)
 eq("F7  the four P&L charts declare weekly rows",
    len(re.findall(r"pnlGrainResolve\(\{ from, to \}, \['week', 'month'\]\)", NC)), 4)
 eq("F8  the SEO chart offers all three",
@@ -377,7 +379,11 @@ ok("(mode === 'stacked' ? pnlFillToggleHtml(rerenderName) : '')" in NC,
 ok("pnlGrainStepperHtml(rerenderName, grain)" in NC,
    "F12 the grain stepper renders in both modes - it describes the X AXIS")
 # Four P&L + SEO + both Ads readings = seven charts that resolve a grain.
-eq("F13 seven charts resolve a grain", NC.count("pnlGrainResolve("), 8)
+# /!\ NINE SINCE v11.97, when Units Sold joined - and it resolves ONCE for
+# both its tabs, through salesChartGrain, so the Total and By Channel charts
+# cannot draw different buckets.
+eq("F13 every chart that groups resolves through the one rule",
+   NC.count("pnlGrainResolve("), 9)
 # /!\ ONE survives, and it is correct: the Digital Sales tracker is not on
 # pnlTrendRender at all (v11.60's list of six) and its feed is monthly by
 # construction, so its title states a fact rather than guessing at a grain.

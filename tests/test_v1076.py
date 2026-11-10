@@ -133,6 +133,10 @@ harness = r'''
 __PARSE_LOCAL__
 __MONTHKEY__
 __DAYSIN__
+// v11.97 - salesGoalWeeklyFor now asks the BUCKET how many days it covers,
+// so the span helper is part of what has to be sliced. Sliced, never stubbed:
+// a stand-in here would let the real one drift.
+__BUCKETDAYS__
 __CHANNELS__
 __WEEKLYFOR__
 __GOALCHANS__
@@ -290,6 +294,7 @@ harness = (harness
     .replace('__PARSE_LOCAL__', fn('parseLocalDate'))
     .replace('__MONTHKEY__',    const_line('_salesMonthKey'))
     .replace('__DAYSIN__',      const_line('_salesDaysInMonth'))
+    .replace('__BUCKETDAYS__',  fn('salesBucketDays'))
     .replace('__CHANNELS__',    const_obj('SALES_CHANNELS'))
     .replace('__WEEKLYFOR__',   fn('salesGoalWeeklyFor'))
     .replace('__GOALCHANS__',   fn('salesGoalChannels'))
