@@ -83,6 +83,9 @@ HDR = ('"Date","Impressions","Clicks","Average CPC","CTR",'
        '"Total Product Detail Page Views","Total Add to Cart","Ad Spend",'
        '"Total Attr. Sales Revenue","ROAS","In-store Attributed Sales "')
 
+# /!\ A PREAMBLE LINE ABOVE THE HEADER, which the Custom export really
+# ships. The Advertiser export does not, and both must parse.
+PREAMBLE = '"Period Requested: Nov 08, 2026 - Nov 10, 2026 "'
 FIX = "\n".join([
     HDR,
     '"Nov 10, 2026","54,365","243","$0.65","0.45%","0","0","$158.09","$235.70","$1.49","$12.43"',
@@ -97,6 +100,10 @@ PIECES = "\n".join([
     fn_flat("_wmcNum"),
     line_of("function _wmcInt(v)"),
     fn_flat("_wmcCi"),
+    # v12.05 - the header is FOUND now, through a helper both Walmart
+    # daily parsers share. hdrNorm is a one-liner, so line_of.
+    line_of("const hdrNorm ="),
+    fn_flat("_wmcHeaderIdx"),
     const_obj("_WMC_SQL"),
     fn_flat("_wmcTableErr"),
     fn_flat("adsParseDate"),

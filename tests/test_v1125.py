@@ -407,8 +407,10 @@ ok('function promptWalmartAdMeta(' in js, 'I1a there is a month prompt')
 # The third is the Daily performance export, which passes {dated: true}:
 # its file carries a Date on every row, so the month input is not rendered
 # at all rather than rendered and ignored (v10.19).
+# v12.05 - FOUR now: campaigns, keywords, the Advertiser daily feed and
+# Campaign x Day. The guarantee is still 'every one of them', not 'three'.
 eq('I1b used by EVERY Walmart ads uploader, so they cannot drift about the account',
-   js.count('await promptWalmartAdMeta('), 3)
+   js.count('await promptWalmartAdMeta('), 4)
 ok('{ dated: true }' in js, 'I1c  /!\\ and the dated one asks for no month')
 # v11.31 - RE-POINTED. v11.25 defaulted to LAST month on the reasoning that a
 # part-month must not be stamped as a whole one on the commonest path. Jason:

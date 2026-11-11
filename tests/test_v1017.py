@@ -102,8 +102,10 @@ STRIPS = {
     'Walmart P&L':        ['wmpnl-tab-sales', 'wmpnl-tab-cost', 'wmpnl-tab-ads'],
     # v12.03 - the Daily area leads the strip and is the default: it is the
     # only Walmart ads view that can answer 'how are we doing this week'.
-    'Walmart Ads':        ['wmpnl-ads-tab-daily', 'wmpnl-ads-tab-campaigns',
-                           'wmpnl-ads-tab-keywords'],
+    # v12.05 - Campaign x Day joins, and the old monthly campaigns tab is
+    # relabelled Monthly. Four grains, four tabs, each honest about its own.
+    'Walmart Ads':        ['wmpnl-ads-tab-daily', 'wmpnl-ads-tab-campdaily',
+                           'wmpnl-ads-tab-campaigns', 'wmpnl-ads-tab-keywords'],
 }
 DEFAULT_ON = {'chpnl-tab-sales', 'dst-uploads', 'pnl-amzn-tab-summary',
               'ipv-planning', 'pricing-mode-new', 'ds-view-grid',

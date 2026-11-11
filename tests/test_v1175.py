@@ -213,9 +213,11 @@ ok(set(A["grains"].values()) <= {"day", "week", "month", "year"},
 # so it resolves as a DAY grain and takes v11.75's 10-day daily tolerance -
 # deliberately wider than one cycle, because a one-day tolerance would mark
 # every daily feed late every single day.
-eq("A7  24 sources registered", len(A["grains"]), 24)
-eq("A7b /!\\ the new one resolves as a DAY, not a period code",
-   A["grains"].get("walmart_ad_daily"), A["grains"].get("shopify_sales_daily"))
+# v12.05 - 25: walmart_ad_campaign_daily joined, also a real DATE grain.
+eq("A7  25 sources registered", len(A["grains"]), 25)
+for t in ("walmart_ad_daily", "walmart_ad_campaign_daily"):
+    eq("A7b /!\\ %s resolves as a DAY, not a period code" % t,
+       A["grains"].get(t), A["grains"].get("shopify_sales_daily"))
 
 eq("A8  Amazon SKU Economics declares Mon+5", A["offAmz"], 5)
 eq("A9  Amazon SKU Economics EU declares Mon+5", A["offAmzEu"], 5)

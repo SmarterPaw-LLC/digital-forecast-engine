@@ -88,6 +88,10 @@ cp = JS[cp_o:JS.index("\n  ],", cp_o)]
 # per-key expectation below is 3 for the keys it uses and 2 for those four.
 dy_o = JS.index("      columns: [", JS.index("    daily: {"))
 dy = JS[dy_o:JS.index("\n      ],", dy_o)]
+# v12.05 - the FOURTH registry: Campaign x Day. Unlike the Advertiser
+# feed it carries orders and units, so it uses all 15 shared tips.
+cd_o = JS.index("      columns: [", JS.index("    campdaily: {"))
+cd = JS[cd_o:JS.index("\n      ],", cd_o)]
 
 for blk, name in ((kw, "keyword"), (cp, "campaign")):
     missing = [k for k in SHARED if ("tip: WM_ADS_TIP." + k) not in blk]
@@ -102,16 +106,21 @@ eq("B1b daily    table reads the shared tip for every measure it offers",
    dy_missing, [])
 eq("B1c /!\\ ...and offers none of the four it cannot derive",
    [k for k in DAILY_OMITS if ("tip: WM_ADS_TIP." + k) in dy], [])
+eq("B1d campdaily reads the shared tip for all 15",
+   [k for k in SHARED if ("tip: WM_ADS_TIP." + k) not in cd], [])
 
 # v12.03 - RE-POINTED. Two registries x 15 keys, plus the daily one which
 # offers 11 of the 15. Derived rather than typed, so the next registry
 # fails this line for the right reason.
-WANT_REFS = len(SHARED) * 2 + (len(SHARED) - len(DAILY_OMITS))
+# v12.05 - THREE registries carry all 15 (keywords, campaigns, campdaily)
+# and the Advertiser daily one carries 11. Derived, so the next registry
+# fails this line for the right reason rather than by a typed number.
+WANT_REFS = len(SHARED) * 3 + (len(SHARED) - len(DAILY_OMITS))
 eq("B2  %d references in all" % WANT_REFS, JS.count("tip: WM_ADS_TIP."), WANT_REFS)
 
 # No entry in the shared table is dead weight.
 for k in SHARED:
-    want = 2 if k in DAILY_OMITS else 3
+    want = 3 if k in DAILY_OMITS else 4
     eq("B3  %-12s referenced %d time(s)" % (k, want),
        # /!\ `WM_ADS_TIP.roas` is a PREFIX of `WM_ADS_TIP.roasVsBe`, so a
        # substring count reads 4 for roas. Match the whole identifier.
@@ -212,7 +221,7 @@ eq("E2  the In-Store $ text exists exactly once in the file", JS.count(INSTORE),
 # the TEXT exists once (E2) and every column that shows In-Store $ reads it,
 # not that there are two such columns. The Advertiser daily view is the third.
 eq("E3  ...and every column that shows it reads that one string",
-   JS.count("tip: WM_ADS_TIP.inStoreSales"), 3)
+   JS.count("tip: WM_ADS_TIP.inStoreSales"), 4)
 
 print("\n%s  %d passed, %d failed" % ("PASS" if not failed else "FAIL", passed, failed))
 sys.exit(1 if failed else 0)

@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.03** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.05** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,168 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.05 - Walmart campaigns, every day, and they tie out
+
+- **Jason**, after two dead ends: *"this report builder isn't it"* ... then
+  *"actually maybe i can get it to work"* - and he did.
+
+Ad Center → Reports → **Custom**, saved as **`Campaign x Day - 14d`**.
+
+| | grain | dimension | answers |
+|---|---|---|---|
+| `walmart_ad_daily` (v12.03) | day | the account | how are we pacing |
+| **`walmart_ad_campaign_daily`** | **day** | **per campaign** | **what do I change** |
+| `walmart_ad_campaign` (v11.25) | month | per campaign | history + settings |
+
+This is the feed the Walmart ads work has been missing since v11.25. The
+Campaigns and Keywords exports carry **no reporting date**, so the uploader
+has to ask which month a file covers - which is why the campaign grain has
+been monthly and a campaign going sideways was invisible until month end.
+
+### ⚠ IT RECONCILES TO THE ADVERTISER FEED EXACTLY, AND THAT WAS CHECKED FIRST
+Summing the five campaigns on each of the seven days reproduces the
+independently-pulled Advertiser export to the cent:
+
+| | 11-04 | 11-05 | 11-06 | 11-07 | 11-08 | 11-09 | 11-10 |
+|---|---|---|---|---|---|---|---|
+| **spend** | 155.65 | 161.49 | 181.39 | 190.83 | 177.51 | 154.48 | 158.09 |
+| **sales** | 430.00 | 441.84 | 408.92 | 521.68 | 357.73 | 379.97 | 235.70 |
+
+**Both rows, all seven days, zero drift.** That is the strongest verification
+available here: two feeds pulled from two different reports agreeing. It is
+also why the two must **never be summed** - same dollars, two breakdowns.
+
+### ⚠ A LITERAL `null` IN THIS EXPORT IS A REPORTED ZERO, AND THE TIE-OUT PROVED IT
+Walmart writes the **text** `null` into Units / Orders / Sales on some rows and
+`0` into the same columns on other rows of **the same campaign**. v11.25's
+blank-means-null rule is the right default and is **wrong here**: the daily
+sums match only when those cells count as zero.
+
+It matters which way round. Stored as null, `SP - KW - MIXED - DOGGIJUANA`
+shows a **blank ROAS** on the days it spent $3.00 and returned nothing -
+hiding a loser behind what reads as missing data. Stored as 0 it reads
+`0.00x`, which is the fact. **Nine rows in the first file.** An *empty* cell is
+still a null; only the literal word moves.
+
+### ⚠ ONE ATTRIBUTION WINDOW PER FILE, OR THE FILE IS REFUSED
+Every conversion measure in the Custom builder comes in **3 / 14 / 30 Day**
+variants and names its own in the header (`Orders - 14 Day`). 14 is the pick,
+because it matches the Advertiser report's own selector - which is what makes
+the tie-out above possible - and is Walmart's default.
+
+`attribution_days` is **stored on the row**, and a file mixing two windows is
+refused by name: a 3-day Orders column beside a 14-day Sales column makes ROAS
+and CPA describe different populations **in the same row**, with nothing on
+screen able to say so.
+
+⚠ It is deliberately **not in the unique key**. Re-pulling the same days at
+30-day **replaces** them rather than doubling the spend, which is the safer
+failure, and the column then shows what landed.
+
+### ⚠ THE BRAND COMES FROM THE CAMPAIGN NAME, NOT WALMART'S BRAND DIMENSION
+Walmart's own Brand split put campaign **5640253 under BOTH `kitty ka-zoom`
+and `unknown`** ($157.76 and $49.65). Caught in Jason's screenshot before a
+line was written. `adsAdvertiserToBrand` is what `walmart_ad_campaign` already
+uses, and it is what files `SP - KW - MIXED - DOGGIJUANA` under Doggijuana
+inside the Kitty Ka-Zoom account.
+
+### ⚠ NTB COUNTS ORDERS HERE AND CUSTOMERS ON CHEWY
+So it is **never mapped onto `ntb`**. Its own slots (`ntbOrders`, `ntbSales`)
+and its own column headers naming their operand - rule 3a, caught at design
+time rather than three releases later.
+
+### The header is FOUND, and normalized
+Two things this export does that the Advertiser one does not:
+- a **preamble line** above the header (`"Period Requested: ..."`), so
+  `_wmcHeaderIdx` finds the header rather than assuming line 1 - **both
+  parsers converted** (rule #5);
+- `In-store Attributed Sales  - 14 Days` with a **double space**, so headers
+  are matched through `hdrNorm`. An exact match would have read that column as
+  absent and dropped in-store silently.
+
+### Four tabs now, each honest about its grain
+📆 **Daily** (account) · 📡 **Campaigns** (day) · 🗓 **Monthly** (the v11.25
+archive, and the only feed carrying daily budget, status and bidding strategy)
+· 🔑 **Keywords**. 📡 keeps meaning *campaigns*; the monthly one takes its own
+glyph rather than the word moving concept.
+
+### Verification
+- `node --check` clean · **153 suites green** · new `tests/test_v1205.py`.
+- **The shipped parser driven over the real export**, with the seven-day
+  tie-out above run as an assertion rather than described.
+- The refusals driven: a mixed-window file, an Advertiser export dropped on
+  the wrong zone, a preamble-only file, unreadable dates.
+
+### ⚠ AND MY PATCH SCRIPT GENERATED A BROKEN REGEX
+`'(\\\\d+)days?$'` inside a raw Python string reached the file as
+`(\\d+)` - a regex matching a literal backslash. Every conversion column read
+as **absent**, the parser cheerfully returned 35 rows of spend-only, and the
+tie-out harness is the only reason it was caught: spend matched on all seven
+days while sales read `0.00`. **A partial tie-out is how a silent mapping
+failure looks.** Checking one number would have passed it.
+
+### Still open
+- **⚠ JASON HAS TO RUN `supabase_v12_05_walmart_ad_campaign_daily.sql`.**
+- **⚠ NO CAMPAIGN ID IN THE EXPORT**, so the campaign NAME is the key. A
+  renamed campaign starts a new row. Adding Campaign Id to the saved report's
+  Split would fix it and is worth doing on the next pull.
+- **⚠ KEYWORDS ARE STILL MONTHLY.** The same builder has Bidded Keyword,
+  Match Type and Ad Group Name as dimensions, so a `Keyword x Day` report is
+  the same shape of build. Not started.
+- **⚠ THE CUSTOM REPORT'S URL IS NOT IN THE FILE.** It carries Jason's own
+  advertiser id and this repo is served publicly, so the card names the
+  navigation path instead (the v11.80 rule).
+- **⚠ CHEWY / WALMART TACoS IS PARKED MID-INVESTIGATION.** Jason picked **our
+  revenue** as the denominator, not retail. Measured on 2026-08-11 → 11-09:
+  Walmart retail **$16,579** against our revenue **$6,179** (KK $13,582 /
+  $5,262, Doggi $2,997 / $916), and **zero** sell-through rows lack a
+  `cost_per_each`, so the denominator is complete. `adsLoadBreakEven` already
+  derives the same join. Chewy's side needs `chewyCatalogPricePerEach`, which
+  is JS rather than SQL, so its our-revenue aggregate has to be computed in
+  the page rather than in one query.
+- Everything else on the v12.04 list.
+
+## v12.04 - the header is found, and a thin file may not erase a fat one
+
+Jason pulled the same seven days from **Reports → Custom** instead of
+**→ Advertiser**. Three differences, and only one of them mattered:
+
+| | |
+|---|---|
+| a **preamble line** above the header | refused the file |
+| `04-Nov-26` instead of `Nov 10, 2026` | handled, but see below |
+| `$ 155.65` with a space | `_wmcNum` already strips it |
+
+### ⚠ THE TWO-DIGIT YEAR WAS BEING GUESSED BY V8
+`04-Nov-26` reached `adsParseDate`'s `parseLocalDate` fallback, which is
+`new Date(str)` underneath - so **the century came from the engine's leniency
+rather than from a rule anyone wrote down.** It happened to return 2026.
+
+A two-digit year is the last input to let an engine guess at. The rule is
+declared now: **00-68 → 2000s, 69-99 → 1900s**, POSIX's own convention and the
+one every other tool Jason reconciles against uses. Four-digit years as
+written.
+
+### ⚠ AND A PARTIAL FILE WOULD HAVE ERASED THE DAYS IT OVERLAPPED
+**Found by driving the second file, not by reading the code.** The Custom
+export carries Date, Impressions, Clicks, Ad Spend and nothing else; the
+Advertiser export for the same days carries sales, page views, add to cart and
+in-store on top.
+
+The write is an upsert, and every absent column was being sent as an explicit
+`null` - so dropping the Custom file on a day the Advertiser file had already
+filled would have **upserted NULL over $235.70 of sales, $12.43 of in-store
+and the whole funnel**, silently, while reporting a clean "7 days".
+
+A column a file does not carry is a column it has **nothing to say about**. It
+is omitted from the payload now, so `ON CONFLICT DO UPDATE` never touches it,
+and the status line names what the file brought: *no sales/dpv/atc/in_store in
+this file — those columns were left as they were.* A thin upload cannot look
+like a full one.
+
+### Still open
+- Everything on the v12.03 list.
 
 ## v12.03 - the Walmart ads feed finally carries its own date
 
