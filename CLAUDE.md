@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.98** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.99** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,139 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.99 - the uploader checks that the product still exists
+
+- **Jason, mid-upload:** *"and i just tried to upload the new inventory
+  report"* - with a screenshot reading
+
+      FBA inventory upload error: insert or update on table
+      "fba_inventory_snapshots" violates foreign key constraint
+      "fba_inventory_snapshots_master_id_fkey"
+
+### ⚠ CAUSE MEASURED, NOT GUESSED
+`allProducts` is a **snapshot taken at page load**. Read off `merge_history`
+the moment he said it, two merges the day before deleted the exact rows his
+file resolves to:
+
+| merged | deleted master_id | survivor |
+|---|---|---|
+| 2026-11-10 16:46 | `SP-TEMP-B0HJDBGVVW` | SP-0560 Rudolph's Rollies |
+| 2026-11-10 16:37 | `SP-TEMP-B0HJDDN85X` | SP-0555 Frosticles |
+
+His tab had been open since before them, so it stamped two master_ids that no
+longer exist and Postgres rejected **the whole batch** - with a message
+naming no ASIN, no product and no remedy. **Nothing was written and there are
+zero orphan rows**, so there was nothing to clean up; the immediate unblock
+was a page reload.
+
+### ⚠ A STALE ID IS RE-POINTED, NOT DROPPED
+The FK is nullable, so nulling every stale id would have "worked". It would
+also have **orphaned the history the merge had just finished gathering** -
+v11.90 reassigns 21 tables onto the survivor, and the ASIN moves with it. So
+the survivor is where the row belongs, and that is where it goes. Only an
+ASIN resolving to nothing at all becomes null, and those are **named rather
+than counted**.
+
+Driven on his own two ids: `SP-TEMP-B0HJDBGVVW` → **SP-0560**,
+`SP-TEMP-B0HJDDN85X` → **SP-0555**, and the third row untouched.
+
+### ⚠ ONE ROUND TRIP, AND ONLY WHEN SOMETHING IS ACTUALLY STALE
+A single `in` over the **distinct** ids - 500 rows of one id is one id
+checked - and `loadProducts()` runs **only after a miss**, asserted by
+position (A8) rather than by reading the code. A clean upload pays one small
+query and nothing else, which is the measurable form of *nothing changed for
+the normal case*.
+
+### ⚠ AND A FAILED CHECK THROWS RATHER THAN WRITING ANYWAY
+Carrying on would write the very batch this exists to stop, and the FK error
+it then hits names nothing. The reason the **check** failed is the more
+useful message, so that is the one raised.
+
+### ⚠ SIX UPLOADERS, NOT ONE
+Only the inventory uploader broke, but the line that broke it
+(`allProducts.find(p => p.asin === ...)` → an FK-carrying table) is spelled
+in six. Fixing one would have left five able to throw the same error on the
+same merge.
+
+| | writes |
+|---|---|
+| `parseSalesWeekly` | `sales_weekly` |
+| `parseAmazonSqpAsinView` | `amazon_query_performance_asin` |
+| `parseFbaInventorySnapshot` | `fba_inventory_snapshots` + `inventory` |
+| `parseFbaShipment` | `fba_shipments` |
+| `parseSkuEconomics` | `sales_weekly` + `sku_economics` |
+| `parseEuSkuEconomics` | `sales_weekly` + `sku_economics_eu` |
+
+**All six converted in this commit** (rule #5). The other 23 sites that read
+`allProducts` by ASIN are renderers and brand lookups where a stale entry is
+harmless, and converting them would have been noise.
+
+### ⚠ THE REGISTRY IS CHECKED IN BOTH DIRECTIONS
+`MASTER_ID_UPLOADERS` declares the six, and `D91` walks **every** `parse*`
+function, finds the ones that resolve an ASIN and write into a table
+`MERGE_MASTER_ID_TABLES` marks `reassign`, and fails the build on any that is
+not declared. That is the v11.90 lesson applied to a second list: remembering
+to add a table to a list has now failed six times, so the list is checked
+against the code rather than against memory.
+
+### ⚠ AND THE PRODUCT AUTO-CREATE WAS SWALLOWING ITS ERROR
+Found on the way. `if (!error) { await loadProducts(); ... }` with no `else`,
+so a failed auto-create was **silent** - those ASINs then stamped a null
+master_id and landed unlinked with nothing said. It warns now.
+
+### The stamp sits BEFORE the conformity guard
+The guard shows the operator a payload and asks them to confirm it. A payload
+carrying a dead id cannot be written whatever they answer, so re-pointing
+first means **the figures they confirm are the figures that land**. `E2`
+asserts the order.
+
+### Verification
+- `node --check` clean · **148 suites green** · new `tests/test_v1199.py` (51).
+- **THE DEFECT REPRODUCED**: the pre-v11.99 resolution run beside the shipped
+  one on the same stale tab state - the old one stamps both deleted ids, the
+  new one stamps both survivors, and **no dead id survives**.
+- **The real `stampMasterIds` driven** over 12 shapes: the clean path with
+  `loadProducts` NOT re-run, the live incident, an ASIN resolving to nothing,
+  the SP-TEMP fallback, a verification that errors, empty input, all-null
+  input, 500 rows of one id, 250 ids chunking 200 + 50, and a non-default
+  asin key.
+
+### ⚠ AND MY OWN HARNESS SLICED THE `async` OFF
+`fn_flat` starts at the `function` keyword, so the sliced copy lost its
+`async ` prefix and failed to parse on its own `await` - which reads as a bug
+in the code under test rather than in the harness. It keeps the prefix now.
+
+### ⚠ AND THE PATCH SCRIPT EXITED MID-WAY AND WROTE NOTHING
+Fifth sighting of the non-ASCII anchor trap, and the first one this session
+to hit a **template literal**: the status line holds a real `·` (U+00B7)
+where I had written `·`. Five substitutions logged `ok` and the file was
+untouched, because the write happens at the end. `DOT = chr(0x00b7)` at the
+top of the script now, and the file was grepped for the new symbol before the
+log was believed.
+
+### Still open
+- **⚠ KITTY KA-ZOOM US INVENTORY IS A WEEK BEHIND.** Monday's load was
+  Doggijuana (40) + Meowijuana (89) and **no KK**, so US KK still reads
+  2026-11-02. EU/UK was not in that run either (last 2026-11-02).
+- **⚠ THE POOLED SNAPSHOT DATE REPORTS A DROPPED ASIN AS STALE DATA.** Jason
+  approved the fix and the upload failure pre-empted it. A pooled row takes
+  the **oldest** date across its regions, so an ASIN that CA no longer lists
+  (because it holds nothing there) drags the row to CA's last sighting -
+  `Paw Natural OG Jar` reads **22d ago** while its US row is Monday's, 298
+  units. **115 ASIN/region pairs are behind their own region's newest load**
+  (CA 62, US 51, EU/UK 2). Agreed design: compare each region's ASIN date
+  against **that region's own newest load**; a region that has loaded since
+  without listing the ASIN has DROPPED it, which is not staleness and must
+  not drag the floor down. **Five copies of the oldest-across-regions rule
+  exist** (`getAmazonSnapshotFreshness`, the column's `sortVal` and `render`,
+  the `fba_inbound` tooltip, the CSV export) - one helper, all five
+  converted, per rule #1.
+- **⚠ EU/UK SKU ECONOMICS IS TWO WEEKS BEHIND** - all six countries stop at
+  2026-10-26.
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
+- **⚠ (3) THE TWO FEE PANELS ARE STILL SEPARATE** (v11.91).
+- Everything else on the v11.98 list.
 
 ## v11.98 - the size tier on the Fees table, and what it would be worth
 
