@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.05** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.06** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,73 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.06 - the funnel joins campaign x day, and four tabs stop reading as four equal choices
+
+- **Jason:** *"what reports are being used now? can we clean up the uploader
+  and ads page?"*
+
+### The Custom builder DOES offer Page Views and Add to Cart
+v12.05 was built before that was known. With them,
+`walmart_ad_campaign_daily` carries **everything the Advertiser export
+carries AND breaks it out by campaign** - so the whole funnel reads on one
+row, per campaign, per day:
+
+    Impressions -> Clicks -> Page Views -> Add to Cart -> Orders
+
+They carry an attribution window of their own (`- 14 Day`), so both are inside
+the one-window check. A 3-day Page Views column beside a 14-day Orders column
+would otherwise have passed, which is the exact defect that check exists for.
+
+### WHAT IS ACTUALLY BEING USED, measured on the live database
+
+| feed | holds | pull it? |
+|---|---|---|
+| `walmart_ad_campaign_daily` | the levers, per day | **weekly. the primary** |
+| `walmart_ad_daily` | the account total, per day | the cross-check |
+| `walmart_ad_campaign` | Mar-Oct, 5 campaigns, last pulled **Oct 29** | settings only |
+| `walmart_ad_keyword` | 63 keywords x 8 months | bids only |
+
+**The pattern is flows versus settings.** The Custom builder gives flows at
+any grain; the two monthly exports are the only place **daily budget, status,
+bidding strategy** and **bid / suggested bid** live. So those become occasional
+snapshot pulls rather than weekly ones, and their cards say so.
+
+### ⚠ THE ANSWER WAS NOT TO DELETE THE ACCOUNT FEED
+It is fully superseded on content - campaign x day sums to it exactly. But it
+is pulled from a **different report**, and that independence is what caught
+v12.05's regex bug: spend matched on all seven days while sales read `0.00`.
+**A cross-check that has already earned its keep is worth a tab.**
+
+What was wrong is that four tabs read as four **equal** choices. The cleanup
+is therefore in the labels: Campaigns says **START HERE**, Account says
+**SECONDARY** and why it is kept, and each monthly card names the one thing it
+is still the only source of.
+
+### ⚠ AND TWO DATA ERRORS FOUND WHILE INVENTORYING
+- **June and July keyword files are the same file.** Identical 189 rows,
+  **$749.94** spend, **$650.40** sales, **44,570** impressions, **500** clicks,
+  uploaded **8 seconds apart** on 2026-10-29. That export carries no date at
+  all (v11.25), so the month is stamped by hand - and one of the two stamps is
+  wrong. **Not deleted: which month is real is Jason's call.**
+- **March, April and May keyword rows carry no spend at all** - 189 blank rows
+  each. That feed is only real for August, September and October.
+
+### Verification
+- `node --check` clean · **154 suites green** · new `tests/test_v1206.py`.
+- **The shipped parser re-driven over the real export with the funnel
+  columns**, and the seven-day tie-out to the Advertiser feed still EXACT on
+  spend and sales.
+- Every figure in the inventory table read off the live database.
+
+### Still open
+- **⚠ JASON HAS TO RUN `supabase_v12_06_walmart_campaign_daily_funnel.sql`.**
+  Additive only; the v12.05 table already holds its RLS policy and grants.
+- **⚠ THE JUNE / JULY KEYWORD DUPLICATE IS NOT FIXED.**
+- **⚠ NO CAMPAIGN ID IN THE EXPORT** (v12.05) - the campaign NAME is the key.
+- **⚠ KEYWORDS ARE STILL MONTHLY** (v12.05).
+- **⚠ CHEWY / WALMART TACoS IS PARKED** (v12.05).
+- Everything else on the v12.05 list.
 
 ## v12.05 - Walmart campaigns, every day, and they tie out
 

@@ -88,16 +88,18 @@ PRE = '"Period Requested: Nov 04, 2026 - Nov 06, 2026 "'
 HDR = ("Date,Campaign Type Name,Campaign Name,Impressions,Clicks,Ad Spend,CTR,"
        "Total Units Sold - 14 Day,Orders - 14 Day,Total Sales Rev. - 14 Day,"
        "In-store Attributed Sales  - 14 Days,New-to-Brand Orders - 14 Days,"
-       "New-to-Brand Sales - 14 Days")
+       "New-to-Brand Sales - 14 Days,"
+       # v12.06 - the Custom builder does offer these two after all.
+       "Total Product Detail Page Views - 14 Day,Total Add to Cart - 14 Day")
 
 FIX = "\n".join([
     PRE, HDR,
-    '04-Nov-26,Sponsored Products (Auto),SP - AUTO - TEST - Kitty Ka zoom,"34,414",114,$ 67.77,0.33%,30,28,$ 209.48,$ 0.00,27,$ 201.90',
+    '04-Nov-26,Sponsored Products (Auto),SP - AUTO - TEST - Kitty Ka zoom,"34,414",114,$ 67.77,0.33%,30,28,$ 209.48,$ 0.00,27,$ 201.90,93,24',
     # /!\ the literal word null, which this export really writes
-    '04-Nov-26,Sponsored Products (Manual),SP - KW - TEST - DOGGIJUANA,"1,639",4,$ 3.00,0.24%,null,null,null,$ 0.00,0,$ 0.00',
-    '05-Nov-26,Sponsored Videos,SBV - TEST - Mixed - Kitty Ka Zoom,"7,979",44,$ 26.47,0.55%,10,8,$ 70.31,$ 5.43,7,$ 49.40',
+    '04-Nov-26,Sponsored Products (Manual),SP - KW - TEST - DOGGIJUANA,"1,639",4,$ 3.00,0.24%,null,null,null,$ 0.00,0,$ 0.00,null,null',
+    '05-Nov-26,Sponsored Videos,SBV - TEST - Mixed - Kitty Ka Zoom,"7,979",44,$ 26.47,0.55%,10,8,$ 70.31,$ 5.43,7,$ 49.40,11,19',
     # a genuinely EMPTY cell is still a null - only the literal word moves
-    '05-Nov-26,Sponsored Products (Auto),SP - AUTO - TEST - Unbranded,"1,000",2,$ 1.00,0.20%,,,,$ 0.00,0,$ 0.00',
+    '05-Nov-26,Sponsored Products (Auto),SP - AUTO - TEST - Unbranded,"1,000",2,$ 1.00,0.20%,,,,$ 0.00,0,$ 0.00,,',
 ])
 
 PIECES = "\n".join([
@@ -197,6 +199,12 @@ eq("A12 ...and stamped on every row",
 eq("A13 it upserts on date+region+account+campaign", A["good"]["conflict"],
    "date,region,account,campaign")
 eq("A14 every measure was found", R["absent"], [])
+# v12.06 - the funnel, per campaign per day.
+eq("A15 /!\\ page views and add to cart map", [ROWS[0]["dpv"], ROWS[0]["atc"]], [93, 24])
+eq("A16 ...their literal `null` is a zero like the rest",
+   [ROWS[1]["dpv"], ROWS[1]["atc"]], [0, 0])
+eq("A17 ...and an EMPTY cell is still a gap",
+   [ROWS[3]["dpv"], ROWS[3]["atc"]], [None, None])
 
 print("\nB. the literal `null`, and the empty cell beside it")
 # /!\ THE TIE-OUT IS THE EVIDENCE. Walmart writes the TEXT `null` where it
@@ -341,7 +349,10 @@ for pat, label in [
     ('id="wmpnl-ads-tab-campdaily"', "G9  sub-tab"),
     ('id="wmpnl-ads-view-campdaily"', "G10 area"),
     ('id="wmcd-host"', "G11 host"),
-    ("walmart_ad_campaign_daily: 'supabase_v12_05_walmart_ad_campaign_daily.sql',",
+    # v12.06 - RE-POINTED: the funnel columns arrived in a SECOND migration, so
+    # the schema error names both. The guarantee is that it names this table's
+    # migration at all, not that there is exactly one file.
+    ("walmart_ad_campaign_daily: 'supabase_v12_05_walmart_ad_campaign_daily.sql",
      "G12 the migration is named by the error"),
 ]:
     ok(pat in s, label, None if pat in s else pat)
