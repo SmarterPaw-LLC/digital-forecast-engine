@@ -101,7 +101,8 @@ ok("REMOVAL IS DELIBERATELY NOT A RULE" in fn_flat("pnlOpportunityEngine"),
 # The impact note is a PARAMETER, not a second card renderer (v10.60).
 ok("o.impactNote || 'est. impact / mo'" in js,
    "A9  /!\\ the card's impact note is parameterised, not forked")
-ok(ENG.count("impactNote:") == 5, "A10 ...and every fee rule sets its own")
+# /!\ SIX SINCE v11.98, which added the SIZE TIER rule.
+ok(ENG.count("impactNote:") == 6, "A10 ...and every fee rule sets its own")
 # /!\ AND THE STRIP HEADER CANNOT CARRY ONE, because it is one figure over
 # several cards - so it stops claiming a period rather than claiming the
 # wrong one. Caught in a browser: it read `$1882/mo total upside` over a
@@ -295,7 +296,9 @@ for t_, i_ in ic:
     seen.setdefault(i_, []).append(t_)
 dupes = {k: v for k, v in seen.items() if len(v) > 1}
 eq("F1  /!\\ one glyph, one opportunity type (rule #2)", dupes, {})
-eq("F2  ...across all fourteen rules", len(ic), 14)
+# /!\ FIFTEEN SINCE v11.98. The guarantee is UNIQUENESS, above; the count
+# is a census and grows with the engine.
+eq("F2  ...across every rule the engine declares", len(ic), 15)
 # /!\ FIXED ON THE WAY PAST, NOT CAUSED HERE: `invest` and `headroom` both
 # carried the rocket since v8.85, and they render as chips in one strip.
 ok("type: 'headroom', icon: '\U0001f4c8'" in js,

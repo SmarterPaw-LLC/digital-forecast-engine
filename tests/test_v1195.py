@@ -180,6 +180,10 @@ B = run_node(os.path.join(SP, "_v1195_b.js"),
     const_arr("AMZ_FEE_LINES") + "\n" + const_arr("AMZ_FEE_OUTSIDE") + "\n" + r"""
 let pnlCurrencyMode = 'usd', pnlFxRate = 1.35, pnlFxGbp = 1.25, pnlFxEur = 1.1;
 let amzCuFtByMid = {}, _amzCuFtLoading = false;
+// v11.98 - amzFeeAgg stamps the Fee Preview pack onto every product,
+// so the index and the gap rule have to be in scope. Sliced below.
+let amzPackByMid = {};
+
 const pnlRegion = 'US';
 let records = [];
 const allProducts = [];
@@ -208,7 +212,7 @@ const getPnlDateRange = () => WIN;
 const getPnlSource = () => ({ rows: ROWS, regionMatches: r => r === 'US' });
 function amzUnitsHeld() { return null; }
 """ + fn("pnlRowFx") + "\n" + fn("amzFeeStamp") + "\n" + fn("amzFeeSumRows") + "\n"
-    + fn("amzFeeAgg") + r"""
+    + re.search(r"(?m)^const AMZ_SMALL_STD = .*$", js).group(0) + "\n" + fn("amzSmallStdGap") + "\n" + fn("amzFeeAgg") + r"""
 const out = [];
 const t = (name, got, want) => out.push({ name, got, want, pass: got === want });
 const r2 = v => Math.round(v * 100) / 100;

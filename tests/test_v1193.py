@@ -173,8 +173,12 @@ ok("shortfall" in PLANFN, "A9  a shortfall is a result, not an error")
 ok(not re.search(r"\*\s*0\.\d", PLANFN), "A10 no invented haircut percentage")
 
 # The suppression, and WHY it is not the same thing as the direction map.
-ok("const AMZ_FEE_DELTA_NONE = new Set(['held', 'cuft', 'sellThru']);" in js,
-   "A11 /!\\ the columns whose delta cannot move are declared")
+# /!\ THE SET GREW IN v11.98 (the three pack columns are states too). What
+# this assertion is for is that v11.93's three are IN it, not that they are
+# the only ones - a census of a list that is meant to grow.
+for _k in ('held', 'cuft', 'sellThru'):
+    ok(re.search(r"const AMZ_FEE_DELTA_NONE = new Set\(\[[^\]]*'%s'" % _k, js) is not None,
+       "A11 /!\\ %s's delta cannot move, and is declared" % _k)
 ok("const AMZ_FEE_DELTA_GOOD = { units: true, netSales: true, held: null, cuft: null };" in js,
    "A12 ...and the direction map is untouched (two questions, not one)")
 
@@ -363,6 +367,10 @@ E = run_node(os.path.join(SP, "_v1193_e.js"),
     + r"""
 let pnlCurrencyMode = 'usd', pnlFxRate = 1.35, pnlFxGbp = 1.25, pnlFxEur = 1.1;
 let amzCuFtByMid = { 'M1|US': 0.5 }, _amzCuFtLoading = false;
+// v11.98 - amzFeeAgg stamps the Fee Preview pack onto every product,
+// so the index and the gap rule have to be in scope. Sliced below.
+let amzPackByMid = {};
+
 const pnlRegion = 'US';
 let _pnlSuppressDeltas = false;
 const records = [{ master_id: 'M1', region: 'US', fba_available: 900, fba_inbound: 100 }];
@@ -381,7 +389,7 @@ const getPnlDateRange = () => WIN;
 const getPnlSource = () => ({ rows: ROWS, regionMatches: r => r === 'US' });
 """
     + fn("pnlRowFx") + "\n" + fn("amzUnitsHeld") + "\n" + fn("amzFeeStamp") + "\n"
-    + fn("amzFeeAgg") + "\n" + fn("pnlDeltaChip") + r"""
+    + re.search(r"(?m)^const AMZ_SMALL_STD = .*$", js).group(0) + "\n" + fn("amzSmallStdGap") + "\n" + fn("amzFeeAgg") + "\n" + fn("pnlDeltaChip") + r"""
 const out = [];
 const t = (name, got, want) => out.push({ name, got, want, pass: got === want });
 const cur = amzFeeAgg({ from: '2026-10-01', to: '2026-10-31' });

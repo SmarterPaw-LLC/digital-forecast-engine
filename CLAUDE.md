@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.97** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.98** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,98 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v11.98 - the size tier on the Fees table, and what it would be worth
+
+- **Jason:** *"i also need to see the units size tier on this to see if there
+  are potential savings options"*
+
+FBA Fulfilment is **65% of the bill** and the size tier is the whole of its
+lever, and the tab had no way to see it. Measured on the live Fee Preview,
+US, newest snapshot per SKU:
+
+| tier | SKUs | avg fee/unit |
+|---|---|---|
+| `UsLargeStandardSize` | **119** | **$5.13** |
+| `UsSmallStandardSize` | 5 | $3.08 |
+
+Three columns - **Size Tier · Short in · Pack lb** - and a sixth fee rule.
+
+### ⚠ THE FEE COMES FROM OUR OWN ROWS. THE BOUNDARY HAD TO BE WRITTEN DOWN.
+v11.72 refused to hardcode Amazon's rates because they change annually and
+would be stale in the file the day they move. That refusal is kept:
+`amzSmallStdFee()` is the **median of the SKUs we already have in Small
+Standard**, so it re-derives itself from the next Fee Preview upload, and
+`A4` fails the build on a dollar literal inside it. **No Small Standard SKUs
+in a region, no figure, no card.**
+
+A tier **boundary** is a different thing from a rate, and it does have to be
+written down: nothing in the feed says what a SKU *would* be if it were
+smaller. `AMZ_SMALL_STD` declares the four limits once, with its source and
+the date it was read.
+
+### ⚠ ALL FOUR LIMITS, NOT JUST THE THIN ONE
+A pack over the longest-side, median-side or weight limit is **not** a
+candidate however thin it is - saying otherwise sends him at a pack change
+that cannot pay. And an **unreported weight does not disqualify**: the feed
+reports some rows in another unit and v11.72's rule is that we do not convert
+on a guess.
+
+### ⚠ AND A 4.5-INCH CUBE WAS FLAGGED AS ONE TRIM AWAY
+Caught in a browser, not by a test I had written. **Buds Jar measures
+4.50 × 4.50 × 4.50 at 0.6 lb**, so it meets every Small Standard limit except
+the shortest side - **by 3.75 inches**. The rule was right and the card was
+absurd: taking 83% off a dimension is a different product, not a packaging
+change, and a suggestion that cannot be taken is the v10.19 defect.
+
+The gap has to be **within one limit's worth of the line** now, so a pack up
+to double the limit is a candidate and a cube is not. A judgement, declared
+in the function rather than buried in the rule.
+
+### The one the data actually points at
+**Juananip Bites Duo Pack - Chicken & Peanut Butter.** 11.85″ × 10″ × 1.42″
+at 0.86 lb, $5.53/unit, **1,571 units and $7,155 of fulfilment in the
+trailing year.**
+
+    Take 0.67" off the shortest side and it prices as Small Standard:
+    $2.82 a unit less, $4,430 at this window's 1,571 units.
+
+Behind it, **Crunchie Munchies Variety Trio** at 1.46″ and 279 units, and a
+cluster of compressed-catnip SKUs at exactly 1.18″ paying $3.24-4.36 a unit
+on a 1.97 × 1.57 pack.
+
+### ⚠ AND THE THREE NEW COLUMNS CARRIED DELTA CHIPS
+Also caught in a browser: every row read `▲ new · no prior data` on Size
+Tier, Short in and Pack lb. They are **states** - what the pack IS - exactly
+like Held and Cu Ft, and the previous window has no pack of its own to
+compare. Added to `AMZ_FEE_DELTA_NONE`, which is v11.93's own list.
+
+### One fetch, two indexes
+`amzLoadCuFt` already read `fba_fee_preview`. It carries the tier, the three
+sides, the weight and Amazon's own expected fee now, indexed a second way -
+**no second round trip**, and `amzCuFtByMid` keeps its shape so nothing that
+reads it moves. The pack is indexed **before** the cu ft guard, because a row
+with unusable dimensions still carries a tier Amazon has told us.
+
+### Verification
+- `node --check` clean · **147 suites green** · new `tests/test_v1198.py` (60).
+- **The real `amzSmallStdGap` driven** over 15 shapes, including the cube and
+  each of the four limits in turn.
+- **The real `amzSmallStdFee` driven**: the median of our own rows, another
+  region excluded, an even count, and an empty tier answering null.
+- **The real rule driven** over the live Juananip numbers - $4,430 - plus
+  every case it must refuse.
+- **In a browser on the real renderer**: three columns, the star and the red
+  side on the candidate only, one card, and no chip on any pack column.
+
+### Still open
+- **⚠ STORAGE IS STILL UNWIRED** (v11.79), and quarter-to-date shows none:
+  `sku_economics` last carried a storage charge in the week of **2026-08-31**,
+  and `amazon_storage_fees` holds **September only**. Jason is pulling the
+  monthly reports; wiring them carries the do-not-double-count rule and the
+  daily proration.
+- **⚠ (3) THE TWO FEE PANELS ARE STILL SEPARATE** (v11.91).
+- Everything else on the v11.97 list.
 
 ## v11.97 - the Units Sold chart joins the shared chart controls
 

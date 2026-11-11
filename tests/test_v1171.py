@@ -500,6 +500,13 @@ console.log(JSON.stringify(out));
            fn("amzFeeRowBreakdown"),
            re.search(r"(?m)^const AMZ_FEE_OPP_TYPES\s*=.*$", js).group(0),
            fn("amzFeeActions"),
+           # v11.98 - the size tier reaches both amzFeeAgg (which stamps the
+           # pack onto every product) and the table (which labels it).
+           re.search(r"(?m)^const AMZ_SMALL_STD = .*$", js).group(0),
+           re.search(r"(?m)^const AMZ_TIER_LABEL = .*$", js).group(0),
+           fn("amzSmallStdGap"),
+           fn("amzSmallStdFee"),
+           "let amzPackByMid = {};",
        ]),
        # the REAL default sort state, sliced rather than restated
        js[js.index("let amzFeeSort = "):].split(";", 1)[0] + ";",
@@ -669,7 +676,11 @@ const ROWS = [
 let WIN = { from: '2026-10-25', to: '2026-10-31' };
 const getPnlDateRange = () => WIN;
 const getPnlSource = () => ({ rows: ROWS, regionMatches: (r) => r === 'US' });
-""" + fn("pnlRowFx") + "\n" + fn("amzFeeStamp") + "\n" + fn("amzFeeAgg") + "\n" + fn("amzFeeCadenceNote") + r"""
+""" + fn("pnlRowFx") + "\n" + fn("amzFeeStamp") + "\n"
+    + "let amzPackByMid = {};\n"
+    + re.search(r"(?m)^const AMZ_SMALL_STD = .*$", js).group(0) + "\n"
+    + fn("amzSmallStdGap") + "\n"
+    + fn("amzFeeAgg") + "\n" + fn("amzFeeCadenceNote") + r"""
 const out = {};
 let A = amzFeeAgg();
 out.weeksLoaded = A.weeksLoaded;
