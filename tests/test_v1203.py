@@ -442,6 +442,33 @@ ok("walmartAdDailyCache = [];" in fn_flat("handleWalmartAdDailyUpload"),
    "I5  which the upload invalidates")
 
 # ===========================================================================
+print("\nK. RLS - the grants alone are not enough")
+# ===========================================================================
+# /!\ SHIPPED WITHOUT A POLICY, AND JASON'S FIRST UPLOAD FAILED WITH
+#     new row violates row-level security policy for table "walmart_ad_daily"
+# Supabase turns RLS ON for a new table by itself, and `authenticated` already
+# holds the privileges from default grants - so the grants I wrote were the
+# no-op half and the policy, the half that mattered, was missing. The EXACT
+# message is documented inside supabase_v11_25_walmart_ads.sql, which I had
+# open while writing this migration.
+#
+# Hard rule since v6.47: enable RLS + a policy + grants on EVERY new table.
+ok("alter table walmart_ad_daily enable row level security;" in sql,
+   "K1  /!\\ RLS is enabled")
+ok("create policy walmart_ad_daily_authenticated_all" in sql,
+   "K2  /!\\ ...and a policy exists, which is the half that was missing")
+ok("for all to authenticated using (true) with check (true)" in sql,
+   "K3  /!\\ with check (true) - an INSERT is refused without it")
+ok("to authenticated" in sql and "to anon" not in sql,
+   "K4  /!\\ written for `authenticated`: the app signs in, so that is the role")
+ok("grant select, insert, update, delete on table walmart_ad_daily to authenticated;" in sql,
+   "K5  the table grant")
+ok("grant usage, select on sequence walmart_ad_daily_id_seq to authenticated;" in sql,
+   "K6  /!\\ and the SEQUENCE grant - bigserial needs it to allocate an id")
+ok("if not exists (" in sql and "from pg_policies" in sql,
+   "K7  re-running the file is safe")
+
+# ===========================================================================
 print("\nJ. the chip agrees with CLAUDE.md")
 # ===========================================================================
 md = io.open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read()

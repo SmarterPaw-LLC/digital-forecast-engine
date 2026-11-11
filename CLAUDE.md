@@ -185,6 +185,18 @@ right first thing to see, not a silently empty tab.
 Also: `fn_flat` cannot slice a **one-liner** — `col0` swallowed `ADS_VIEWS`
 whole and node reported a duplicate declaration. `line_of` for those.
 
+### ⚠ AND I SHIPPED THE MIGRATION WITHOUT AN RLS POLICY
+Jason's first upload: `new row violates row-level security policy for
+table "walmart_ad_daily"`. Supabase turns RLS **on** for a new table by
+itself and `authenticated` already holds the privileges from default
+grants - so the grants I wrote were the **no-op half**, and the policy,
+the half that mattered, was missing.
+
+**The exact message is documented inside `supabase_v11_25_walmart_ads.sql`**,
+which I had open while writing this one. Hard rule since v6.47: **enable
+RLS + a policy + grants on every new table.** Section K of the suite pins
+all three, plus the sequence grant a `bigserial` needs to allocate an id.
+
 ### Still open
 - **⚠ THE LEVERS ARE STILL MONTHLY, AND THAT IS THE HALF HE ASKED FOR.** This
   release makes the account's pacing weekly; *"drive performance"* needs

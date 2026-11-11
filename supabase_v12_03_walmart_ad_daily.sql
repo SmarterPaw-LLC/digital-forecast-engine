@@ -112,11 +112,46 @@ create unique index if not exists walmart_ad_daily_uniq
 create index if not exists walmart_ad_daily_date_idx   on walmart_ad_daily (date desc);
 create index if not exists walmart_ad_daily_region_idx on walmart_ad_daily (region, date desc);
 
+-- ─────────────────────────── RLS + grants ───────────────────────────
+-- /!\ RLS WITH NO POLICY DENIES EVERYTHING, and the grants alone are not
+-- enough. Shipping this file without the policy produced, on Jason's first
+-- upload, the EXACT message v11.25's own migration documents:
+--
+--   new row violates row-level security policy for table "walmart_ad_daily"
+--
+-- Supabase turns RLS on for a new table by itself and `authenticated` already
+-- holds the privileges from default grants, so the alter and the grants below
+-- are usually no-ops. `pg_policies` being EMPTY is the whole problem.
+--
+-- The app connects with the anon KEY but then SIGNS IN, so every statement it
+-- runs arrives as `authenticated` - which is why the policy is written for
+-- that role and not for anon. Hard rule since v6.47: enable RLS + a policy +
+-- grants on EVERY new table. Same shape as supabase_v11_25_walmart_ads.sql.
+alter table walmart_ad_daily enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'walmart_ad_daily'
+      and policyname = 'walmart_ad_daily_authenticated_all'
+  ) then
+    create policy walmart_ad_daily_authenticated_all
+      on walmart_ad_daily for all to authenticated using (true) with check (true);
+  end if;
+end $$;
+
 -- The app always signs in, so the grants go to `authenticated` — the same
 -- posture every other table in this database has (v11.84). No service_role
 -- grant is added here; nothing in this database has one.
-grant select, insert, update, delete on walmart_ad_daily to authenticated;
+grant select, insert, update, delete on table walmart_ad_daily to authenticated;
 grant usage, select on sequence walmart_ad_daily_id_seq to authenticated;
+
+-- Verify: rowsecurity = true, and exactly one policy.
+-- select tablename, rowsecurity from pg_tables
+--   where schemaname='public' and tablename='walmart_ad_daily';
+-- select tablename, policyname, roles from pg_policies
+--   where schemaname='public' and tablename='walmart_ad_daily';
 
 comment on table  walmart_ad_daily is
   'Walmart Connect Advertiser -> Daily performance export. ADVERTISER TOTAL, one row per day. Never sum with walmart_ad_campaign: same dollars, two grains.';
