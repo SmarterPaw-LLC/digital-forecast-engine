@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.00** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.01** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,64 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.01 - one card may not take down the tab
+
+- **Jason**, on the Amazon P&L → Ads tab, one release after v12.00:
+  `X Cannot read properties of undefined (reading 'from')` - and **nothing
+  else rendered.** Not the six cards that pre-date TACoS, not the chart, not
+  the campaign table.
+
+### ⚠ MINE, AND ONE LINE OLD
+`getPnlPrevDateRange(cur)` **requires** the current range; it reads
+`cur.from` on its third line. v12.00 called it **with no argument at all**,
+so every render of that tab threw before a single card was drawn.
+
+### ⚠ WHY NO TEST OF MINE CAUGHT IT
+`test_v1200` drove `adsTacosFor` over twelve shapes and asserted the card's
+markup **as text**. It never executed the four lines of the RENDERER that
+call them - so the one call with a wrong signature sat in the only part of
+the change that nothing ran. **A helper proven in isolation says nothing
+about the code that calls it.**
+
+### ⚠ AND I SHIPPED IT WITHOUT SEEING IT RENDER
+The standing rule is to load the page and read the console before saying
+"shipped". The browser pane is not signed in to Supabase, so I verified the
+helper and the markup and pushed anyway. **I said so in the report, which is
+not the same as not doing it.** A card that cannot be rendered in a test or
+a browser is a card that has not been verified, and the honest move was to
+say it was unverified and ask him to look before I called it done.
+
+### The blast radius is the second bug
+A scorecard must not be able to destroy the page it sits on. The whole TACoS
+computation is wrapped now: a throw costs **this one card its number** and
+nothing else, the reason lands on its tooltip, and `console.warn` keeps it
+visible. Both variables are seeded **before** the `try`, or the catch would
+leave them undefined and the strip would throw on `tacos.pct` instead - the
+same defect moved three lines down. `B6`/`B7` pin that order.
+
+### ⚠ AND THE HELPER NOW REFUSES A WINDOW IT WAS NOT GIVEN
+`amzFeeAgg` falls back to `getPnlDateRange()` when handed nothing - which
+would have measured **sales over one window and spend over another, in a
+single ratio**, with nothing on screen saying so. A null, empty or
+half-filled range is now a refusal with its own sentence. `C5` drives the
+stand-in aggregator and requires it never to be reached without an explicit
+`from` AND `to`.
+
+### Verification
+- `node --check` clean · **150 suites green** · new `tests/test_v1201.py` (19).
+- **THE DEFECT REPRODUCED**: the real `getPnlPrevDateRange` called with no
+  argument, asserting **Jason's exact message**, beside the shipped call
+  returning `2026-10-26 → 2026-11-01`.
+- **The real `adsTacosFor` driven** on null, empty and half-filled ranges.
+
+### Still open
+- **⚠ THE TACoS CARD HAS STILL NOT BEEN SEEN TO RENDER.** Everything around
+  it is proven; the card itself needs Jason's signed-in page.
+- **⚠ THE POOLED SNAPSHOT DATE STILL REPORTS A DROPPED ASIN AS STALE** (v11.99).
+- **⚠ THE INVENTORY PLANNING SPARKLINE IS UNDECIDED** (v12.00).
+- **⚠ KITTY KA-ZOOM US INVENTORY IS A WEEK BEHIND** (v11.99).
+- Everything else on the v12.00 list.
 
 ## v12.00 - TACoS on the Ads tab, and why it cannot come from SKU Economics
 
