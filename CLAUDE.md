@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.01** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.02** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,66 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.02 - TACoS is plottable
+
+- **Jason:** *"i can't click to add the tacos% to the graph"*
+
+Every other card on that strip carries a **+**. v12.00 shipped TACoS without
+one because the chart's metric list is derived from the **table's columns**,
+and TACoS is not a column - it cannot be, since sales do not belong to a
+campaign. So it needed a series of its own.
+
+### ⚠ THE TWO WEEK CONVENTIONS ARE ONE DAY APART
+| | key |
+|---|---|
+| ads bucket | **Sunday** (`adsBucketFn`: `dt.setDate(dt.getDate() - dt.getDay())`) |
+| `sku_economics` | **Monday** (Amazon's Sun-Sat week, mapped forward) |
+
+Joining them **by string** would have paired every week's sales with the
+**previous** week's spend, silently. The bucket's own **span** is used
+instead, through `pnlBucketRange`, and `amzFeeAgg` sums the weeks inside it -
+**the same aggregator the scorecard uses**, so the card and the line cannot
+disagree. `D2`/`D3` drive the real helpers and require the week's own Monday
+to fall inside the span and the previous week's to fall outside.
+
+### ⚠ A BUCKET WITH NO SALES IS A GAP, NEVER 0%
+0.0% TACoS means *sold plenty, spent nothing* - a different fact from having
+no sales figure for that week. `netSales` is deliberately **not seeded** in
+the per-bucket accumulator (`E8`), so a bucket the scan skipped reads absent
+rather than zero.
+
+### ⚠ AND THE SCAN ONLY RUNS WHEN IT IS PLOTTED
+Attaching the denominator is a full pass over `sku_economics` **per bucket**,
+and no other metric needs it. Gated on the metric's own `needsNetSales` flag
+rather than on its name.
+
+### Two refusals, disabled rather than hidden
+- **DAY grain** - there is no daily sales figure to divide by.
+- **A campaign selection** - organic sales do not belong to a campaign.
+
+Both render the button disabled with the reason on it; `pnlCard` strips the
+onclick when disabled, so a refused control cannot be clicked through. A
+toggle that silently vanished on some grains would read as a bug.
+
+### Verification
+- `node --check` clean · **151 suites green** · new `tests/test_v1202.py` (35).
+- **The real `ADS_METRIC_SPEC.tacos`, `adsChartMetrics` and `pnlBucketRange`
+  driven**, including the Sunday/Monday alignment both ways.
+- **The CALLERS asserted, not just the helpers** - v12.01's lesson, which was
+  a crash in the only four lines no test executed.
+
+### ⚠ ONE OF MY OWN EXPECTATIONS WAS WRONG
+`E2` counted three `adsChartMetrics(COLS, channel)` and there are **four**:
+the function's own declaration reads the same. Counted both ways now.
+
+### Still open
+- **⚠ THE TACoS CARD AND LINE HAVE STILL NOT BEEN SEEN TO RENDER** - the
+  browser pane is not signed in to Supabase. Jason's screen is the check.
+- **⚠ THE POOLED SNAPSHOT DATE STILL REPORTS A DROPPED ASIN AS STALE** (v11.99).
+- **⚠ THE INVENTORY PLANNING SPARKLINE IS UNDECIDED** (v12.00).
+- **⚠ KITTY KA-ZOOM US INVENTORY IS A WEEK BEHIND** (v11.99).
+- Everything else on the v12.01 list.
 
 ## v12.01 - one card may not take down the tab
 
