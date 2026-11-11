@@ -309,7 +309,7 @@ cmd = io.open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8", errors="replace
 doc = re.search(r"current version \*\*v(\d+\.\d+)\*\*", cmd).group(1)
 # /!\ NOT A LITERAL VERSION (the v11.93 lesson, applied here before it bit):
 # a suite that pins the chip goes red on the next release for doing its job.
-ok(re.match(r"^11\.\d+$", chip) is not None, "F4  the chip carries a v11.x version", chip)
+ok(re.match(r"^\d+\.\d+$", chip) is not None, "F4  the chip carries a v11.x version", chip)
 eq("F5  /!\\ ...and CLAUDE.md agrees with it", doc, chip)
 ok("## v11.94 - the fee levers become actions" in cmd,
    "F6  /!\\ ...and v11.94's own entry is still on record")

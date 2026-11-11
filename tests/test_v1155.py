@@ -215,7 +215,7 @@ ok("A LOTTERY" in js or "lottery" in js,
    "C3b the source says why grace ALONE is not a guarantee")
 ok("4,660" in js, "C3c and cites the peak that disproved the v11.60 claim")
 
-eq("C2 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
+eq("C2 version chip", len(re.findall(r">v\d+\.\d+ · [\d-]+<", s)), 1)
 
 # ---------------------------------------------------------------------------
 # D. v11.63 - THE REAL pnlScaleCeiling, driven.

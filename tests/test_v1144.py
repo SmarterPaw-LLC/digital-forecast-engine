@@ -331,8 +331,8 @@ ok("done(false)" in _d and "done(true)" in _d, 'F4b both answers are reachable')
 ok('esc2(c.text)' in _d and 'esc2(title)' in _d,
    'F5 nothing reaches the dialog markup unescaped')
 
-eq('F6 version chip', len(re.findall(r'>v11\.\d+ \u00b7 [\d-]+<', s)), 1)
-eq('F6b exactly one chip', len(re.findall(r'>v11\.\d+ \u00b7 [\d-]+<', s)), 1)
+eq('F6 version chip', len(re.findall(r'>v\d+\.\d+ \u00b7 [\d-]+<', s)), 1)
+eq('F6b exactly one chip', len(re.findall(r'>v\d+\.\d+ \u00b7 [\d-]+<', s)), 1)
 
 print('\n%d passed, %d failed' % (passed, failed))
 sys.exit(1 if failed else 0)

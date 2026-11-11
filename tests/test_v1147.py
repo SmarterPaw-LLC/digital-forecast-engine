@@ -467,7 +467,7 @@ _rail = js[js.index("function _dzFmtRange"):js.index("function renderAllDzRecent
 ok(".upsert(" not in _rail and ".update(" not in _rail,
    "F6 the rail span contains no write")
 
-eq("F7 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
+eq("F7 version chip", len(re.findall(r">v\d+\.\d+ · [\d-]+<", s)), 1)
 
 print("\n" + "=" * 62)
 print("  v11.47  PASS %d   FAIL %d" % (passed, failed))

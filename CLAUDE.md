@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v11.99** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.00** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,115 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.00 - TACoS on the Ads tab, and why it cannot come from SKU Economics
+
+- **Jason:** *"on amazon p&L - i need a TACOS % scorecard as well (this will
+  need to come from sku economics data unless it can be derived)"*
+
+### ⚠ THE ANSWER TO HIS PARENTHETICAL IS NO, AND IT WAS MEASURED FIRST
+`sku_economics` carries exactly **one** ad column, `sponsored_products_total`.
+Measured on the live table, US, trailing 90 days:
+
+| ad product | spend |
+|---|---|
+| `sponsored_products` | **$44,250** |
+| `sponsored_brands` | $10,337 |
+| `sponsored_display` | $1,753 |
+| `sponsored_tv` | $1,739 |
+
+**Sponsored Products is 76% of spend.** Over 12 full weeks, an SP-only TACoS
+reads **12.4%** against a real **16.5%** - it would hide a quarter of the
+spend on the one card whose entire job is to report what advertising costs in
+**total**. So the numerator is this tab's own **Ad Spend** (every ad product,
+from `amazon_ad_spend`) and SKU Economics supplies the denominator.
+
+### ⚠ AND TACoS ALREADY EXISTED
+`renderPnlPerformance` has carried a **TACoS** tile - `ad spend / net sales` -
+since v7.93. Coining a second definition one tab over is the rule 3a defect,
+so the new card is **the same arithmetic**, `spend / netSales * 100`, and
+`A4` pins the two together.
+
+### ⚠ A CAMPAIGN SELECTION CANNOT NARROW THE DENOMINATOR
+Organic sales do not belong to a campaign. Pairing three campaigns' spend
+with the whole catalogue's sales would read far too low **and would move
+every time a row is ticked** - a card that appears to answer a control it
+cannot honour is the v10.19 defect. With rows selected it reports **no
+number and the reason**, and the numerator is the scope total `t` rather than
+the selection-aware `cardT`, so the two sides always describe one population.
+
+Three more refusals, each with its own sentence rather than a bare dash:
+**another channel** (only Amazon has a total-sales feed on this page), **EU**
+(no EU Amazon ad spend is loaded, so it would read 0.0% against real sales),
+and **an empty window**. An aggregator that throws carries its real error up,
+because *"statement timeout"* is more useful than a dash.
+
+⚠ **Zero spend is a READING, not a refusal** - 0.0% is the true answer when
+nothing was spent, and refusing it would hide a real state.
+
+### ⚠ THE NUMERATOR IS DAILY AND THE DENOMINATOR IS WEEKLY
+`amazon_ad_spend` is stamped per day; `sku_economics` is one row per week. So
+a 29-day ad window buys **whole weeks** of sales - measured on the live
+window, ads cover **2026-10-12 → 11-09** while the sales behind them cover
+**2026-10-12 → 11-08**.
+
+**Nothing is prorated**, because these feeds carry no daily sales to prorate
+with (v11.74's rule). The card **names the days its sales actually cover** on
+the tooltip instead of implying they match the ad window.
+
+### Measured
+| | |
+|---|---|
+| ad spend, US, 2026-10-12 → 11-09 | **$20,312** |
+| net sales, the weeks that window buys | **$118,023** |
+| **TACoS** | **17.21%** |
+
+### Verification
+- `node --check` clean · **149 suites green** · new `tests/test_v1200.py` (38).
+- **The real `adsTacosFor` driven** over 12 shapes: the live window, a
+  selection, an EMPTY selection array (not a selection), another channel, EU,
+  an empty window, an aggregator that throws, zero spend, a null spend and a
+  malformed aggregate.
+- **In a browser on the real helper**, before the suite was written: 17.21%
+  on the live numbers, and four of the five refusals firing.
+
+### ⚠ AND MY BROWSER PROBE COULD NOT SET `pnlRegion`
+The EU refusal read `null` in the browser and the code was right: `pnlRegion`
+is `let`-declared, so it is a **lexical binding and not a property of
+`window`** - assigning `window.pnlRegion` creates a different variable the
+function never reads. Verified properly in node, where the slice declares it.
+Worth recording: any future browser probe of a `let` global has this problem.
+
+### ⚠ AND CROSSING OUT OF v11.x TURNED 25 SUITES RED AT ONCE
+Not one of them was about this release. Every chip assertion in the repo was
+written as `>v11\.\d+ · [\d-]+<` - a SHAPE check that silently hardcoded the
+MAJOR version, so the first release to leave v11 failed all of them, plus
+`current version **v(11\.\d+)**` and `^## v(11\.\d+)` in test_v1163's
+CLAUDE.md checks.
+
+That is the v11.63 lesson at a larger scale: **a census that asserts the
+status quo goes red on the release that moves it.** Re-pointed to the
+guarantee each was protecting - the chip is well-formed, there is exactly one
+of it, and it agrees with CLAUDE.md - by making all 27 patterns
+version-agnostic (`v\d+\.\d+`). The next major bump cannot repeat this.
+
+⚠ **The deliberately STALE fixture was left alone**: test_v1163 C1 builds
+`>v11.00 · 1999-01-01<` on purpose, to prove a shape check passes a chip that
+is years out of date. Loosening that would have deleted the point of the test.
+
+### Still open
+- **⚠ THE POOLED SNAPSHOT DATE STILL REPORTS A DROPPED ASIN AS STALE**
+  (v11.99). Approved, measured, not yet built: 115 ASIN/region pairs affected
+  and **five copies** of the oldest-across-regions rule to converge.
+- **⚠ THE INVENTORY PLANNING SPARKLINE IS UNDECIDED** - Jason asked for a
+  column like Amazon's *Sales / Last 30 days*. Grain is forced to **weekly**
+  (only Shopify is daily), and the open choices are units vs dollars and the
+  window length.
+- **⚠ KITTY KA-ZOOM US INVENTORY IS A WEEK BEHIND** (v11.99).
+- **⚠ EU/UK SKU ECONOMICS IS TWO WEEKS BEHIND** (v11.99).
+- **⚠ NOTHING READS `amazon_storage_fees` YET** (v11.79).
+- **⚠ (3) THE TWO FEE PANELS ARE STILL SEPARATE** (v11.91).
+- Everything else on the v11.99 list.
 
 ## v11.99 - the uploader checks that the product still exists
 

@@ -387,9 +387,9 @@ ok(_h.count("rows through") == 0,
 
 # v11.63: the chip and CLAUDE.md's current-version line must AGREE.
 doc = io.open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8", newline="").read()
-chip = re.findall(r">v(11\.\d+) " + DOT + r" ([\d-]+)<", s)
+chip = re.findall(r">v(\d+\.\d+) " + DOT + r" ([\d-]+)<", s)
 eq("E9  exactly one version chip", len(chip), 1)
-docv = re.search(r"current version \*\*v(11\.\d+)\*\*", doc)
+docv = re.search(r"current version \*\*v(\d+\.\d+)\*\*", doc)
 eq("E10 the chip agrees with CLAUDE.md", chip[0][0], docv.group(1) if docv else None)
 
 print("\n" + "-" * 68)

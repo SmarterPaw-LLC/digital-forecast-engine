@@ -228,7 +228,7 @@ for phrase in ("A TARGET PRICE CHANGES THE QUESTION",
                "Two highlighted rows would be two"):
     ok(phrase in js, "D1 the reasoning survives: %s" % phrase[:38])
 
-eq("D2 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
+eq("D2 version chip", len(re.findall(r">v\d+\.\d+ · [\d-]+<", s)), 1)
 # ⚠ index.html has carried 2 more "<label" than "</label>" since long
 # before this release (HEAD measures the same 2), because the string appears
 # inside JS as well as markup. The guarantee worth asserting is that THIS

@@ -192,7 +192,7 @@ for h in hosts:
         ok(('id="%s%s"' % (h, suffix)) in s,
            "D3 %s has its %s control" % (h, suffix))
 
-eq("D4 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
+eq("D4 version chip", len(re.findall(r">v\d+\.\d+ · [\d-]+<", s)), 1)
 
 for phrase in ("an incomplete custom range is not a window",
                "the SEO Traffic bar now carries the same four controls"):

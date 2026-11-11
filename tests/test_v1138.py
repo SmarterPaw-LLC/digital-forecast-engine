@@ -242,7 +242,7 @@ ok('href="${href}"' in _cellcode, 'C4b but it is still a real link')
 ok('NOT target="_blank" (v11.38)' in _cell,
    'C4c with the comment explaining why still present')
 
-eq('C5 version chip', len(re.findall(r'>v11\.\d+ \u00b7 [\d-]+<', s)), 1)
+eq('C5 version chip', len(re.findall(r'>v\d+\.\d+ \u00b7 [\d-]+<', s)), 1)
 
 print('\n%d passed, %d failed' % (passed, failed))
 sys.exit(1 if failed else 0)

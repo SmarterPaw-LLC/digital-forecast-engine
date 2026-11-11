@@ -26,7 +26,7 @@ s = io.open(os.path.join(ROOT, "index.html"), encoding="utf-8", newline="").read
 doc = io.open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8", newline="").read()
 
 D = chr(0x00b7)          # /!\ via chr(), never pasted and never escaped (v11.41)
-CHIP_RE = r">v11\.\d+ " + re.escape(D) + r" [\d-]+<"
+CHIP_RE = r">v\d+\.\d+ " + re.escape(D) + r" [\d-]+<"
 
 passed = failed = 0
 
@@ -50,7 +50,7 @@ print("\nA. The chip exists, once, and is well formed")
 chips = re.findall(CHIP_RE, s)
 eq("A1  exactly one version chip", len(chips), 1)
 chip = chips[0] if chips else ""
-m = re.match(r">v(11\.\d+) " + re.escape(D) + r" (\d{4}-\d{2}-\d{2})<", chip)
+m = re.match(r">v(\d+\.\d+) " + re.escape(D) + r" (\d{4}-\d{2}-\d{2})<", chip)
 ok(m is not None, "A2  chip is `vN.NN <dot> YYYY-MM-DD`", chip)
 chip_ver, chip_date = (m.group(1), m.group(2)) if m else ("", "")
 
@@ -62,14 +62,14 @@ print("\nB. /!\\ THE CHIP AGREES WITH CLAUDE.md - the whole point of this suite"
 # single-file app to derive one from the other, so they are converged by
 # ASSERTION instead. This is the only assertion in the repo that reads the
 # chip's VALUE, and it needs no edit on a bump.
-decl = re.findall(r"current version \*\*v(11\.\d+)\*\*", doc)
+decl = re.findall(r"current version \*\*v(\d+\.\d+)\*\*", doc)
 eq("B1  CLAUDE.md declares the current version exactly once", len(decl), 1)
 doc_ver = decl[0] if decl else ""
 eq("B2  the chip and CLAUDE.md name the SAME release", chip_ver, doc_ver)
 
 # The newest `## vN.NN` entry in CLAUDE.md is that same release, so a bumped
 # version line with no entry behind it does not pass either.
-entries = re.findall(r"(?m)^## v(11\.\d+)\b", doc)
+entries = re.findall(r"(?m)^## v(\d+\.\d+)\b", doc)
 ok(entries and entries[0] == doc_ver,
    "B3  the newest CLAUDE.md entry is that release too",
    entries[0] if entries else None)
@@ -81,7 +81,7 @@ print("\nC. /!\\ THE OLD GUARD, REPRODUCED - it passes on a stale chip")
 STALE = s.replace(chip, ">v11.00 " + D + " 1999-01-01<", 1)
 ok(len(re.findall(CHIP_RE, STALE)) == 1,
    "C1  a chip reading v11.00 from 1999 still satisfies the SHAPE check")
-stale_ver = re.match(r">v(11\.\d+)", ">v11.00 " + D + " 1999-01-01<").group(1)
+stale_ver = re.match(r">v(\d+\.\d+)", ">v11.00 " + D + " 1999-01-01<").group(1)
 ok(stale_ver != doc_ver,
    "C2  ...while THIS suite's agreement check rejects it")
 # And the converse: a chip that is merely absent must fail the shape check, so
@@ -100,9 +100,9 @@ ok(2025 <= y <= 2100 and 1 <= mo <= 12 and 1 <= dy <= 31,
 # /!\ A `// vN.NN - ...` source comment records WHEN A MECHANISM ARRIVED and
 # must never be swept along with the chip. v11.58 learned the same thing about
 # tooltips: the UI carries no release numbers, the SOURCE carries them all.
-prov = len(re.findall(r"// v11\.\d+ ", s))
+prov = len(re.findall(r"// v\d+\.\d+ ", s))
 ok(prov >= 40, "D2  source provenance markers survive in bulk", prov)
-ok(re.search(r">v11\.\d+ " + re.escape(D) + r" [\d-]+<", s) is not None
+ok(re.search(r">v\d+\.\d+ " + re.escape(D) + r" [\d-]+<", s) is not None
    and s.count("v11." + chip_ver.split(".")[1]) >= 1,
    "D3  the chip's own version is spelled in the markup")
 

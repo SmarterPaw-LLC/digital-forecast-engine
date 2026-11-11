@@ -451,9 +451,9 @@ ok('catch' in _sel,
    'D9d and catches, because a throw out of a timer has no caller and blanks the page')
 eq('D9e exactly one definition of it', js.count('function seaSelectProductDeferred('), 1)
 
-eq('D6 version chip', len(re.findall(r'>v11\.\d+ \u00b7 [\d-]+<', s)), 1)
+eq('D6 version chip', len(re.findall(r'>v\d+\.\d+ \u00b7 [\d-]+<', s)), 1)
 eq('D6b exactly one chip, and no older one survives',
-   len(re.findall(r'>v11\.\d+ \u00b7 [\d-]+<', s)), 1)
+   len(re.findall(r'>v\d+\.\d+ \u00b7 [\d-]+<', s)), 1)
 
 print('\n%d passed, %d failed' % (passed, failed))
 sys.exit(1 if failed else 0)

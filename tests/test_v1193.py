@@ -488,7 +488,7 @@ doc = re.search(r"current version \*\*v(\d+\.\d+)\*\*", cmd).group(1)
 # asserts the status quo (v11.63's lesson). The guarantee worth keeping is
 # that the chip and CLAUDE.md AGREE, and that this release's own entry is
 # still in the file.
-ok(re.match(r"^11\.\d+$", chip) is not None, "F19 the chip carries a v11.x version", chip)
+ok(re.match(r"^\d+\.\d+$", chip) is not None, "F19 the chip carries a vN.NN version", chip)
 eq("F20 /!\\ ...and CLAUDE.md agrees with it", doc, chip)
 ok("## v11.93 - the target points at the lines" in cmd,
    "F21 /!\\ ...and v11.93's own entry is still on record")

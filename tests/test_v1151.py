@@ -157,7 +157,7 @@ for phrase in ("THE WHOLESALE BASIS, stated separately on purpose",
                "it is NOT the Chewy tab's GM"):
     ok(phrase in js, "D4 the reasoning survives: %s" % phrase[:36])
 
-eq("D5 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
+eq("D5 version chip", len(re.findall(r">v\d+\.\d+ · [\d-]+<", s)), 1)
 
 print("\n" + "=" * 62)
 print("  v11.51  PASS %d   FAIL %d" % (passed, failed))

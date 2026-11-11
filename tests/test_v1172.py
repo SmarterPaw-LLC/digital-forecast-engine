@@ -307,8 +307,8 @@ ok("rival spelling of it" in js and "Cover days" in rf,
    "E5  and the source says why it was not duplicated")
 
 cm = io.open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read()
-chip = re.search(r">v(11\.\d+) . 20\d\d-\d\d-\d\d<", s).group(1)
-doc  = re.search(r"current version \*\*v(11\.\d+)\*\*", cm).group(1)
+chip = re.search(r">v(\d+\.\d+) . 20\d\d-\d\d-\d\d<", s).group(1)
+doc  = re.search(r"current version \*\*v(\d+\.\d+)\*\*", cm).group(1)
 eq("E6  the chip and CLAUDE.md agree", chip, doc)
 ok("fba_fee_preview" in js and "amzLoadCuFt" in js,
    "E7  the dimensions feed is wired")

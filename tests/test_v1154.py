@@ -234,7 +234,7 @@ blk = code[code.index("function renderLoadingIndicator("):][:3000]
 ok(blk.index("classList.add('gbb-on')") < blk.index("classList.remove('gbb-on')"),
    "D2 started in the busy branch, stopped in the idle one")
 
-eq("D3 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
+eq("D3 version chip", len(re.findall(r">v\d+\.\d+ · [\d-]+<", s)), 1)
 
 for phrase in ("The sweep is not decoration",
                "the glint is a ::after pseudo-element"):

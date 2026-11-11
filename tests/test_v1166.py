@@ -519,7 +519,7 @@ r = subprocess.run(["node", "--check", os.path.join(SP, "_v1166_a.js")],
                    capture_output=True, text=True)
 ok(r.returncode == 0, "E8  the sliced source parses", r.stderr[-300:])
 
-ok(len(re.findall(r">v11\.\d+ · [\d-]+<", s)) == 1, "E9  the version chip is well-formed")
+ok(len(re.findall(r">v\d+\.\d+ · [\d-]+<", s)) == 1, "E9  the version chip is well-formed")
 
 print("\n%d passed, %d failed" % (passed, failed))
 sys.exit(1 if failed else 0)

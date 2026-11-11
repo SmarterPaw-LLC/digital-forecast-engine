@@ -193,7 +193,7 @@ for phrase in ("1.0 is the wrong line on a 1P channel", "DERIVED, NEVER TYPED",
                "Share and margin are computed over the SAME joined rows"):
     ok(phrase in js, "E5 the reasoning survives: %s" % phrase[:34])
 
-eq("E6 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
+eq("E6 version chip", len(re.findall(r">v\d+\.\d+ · [\d-]+<", s)), 1)
 
 print("\n" + "=" * 62)
 print("  v11.52  PASS %d   FAIL %d" % (passed, failed))

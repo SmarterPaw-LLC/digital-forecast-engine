@@ -411,7 +411,7 @@ ok("_seoTrRendered[dim] = list.map" in code,
 # narrows the bands, and it has to say "2 channel groups" in the same words
 # the subtitle would. Still ONE definition.
 eq("D4 the noun has one definition and seven readers", code.count("seoTrSelNoun("), 8)
-eq("D5 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
+eq("D5 version chip", len(re.findall(r">v\d+\.\d+ · [\d-]+<", s)), 1)
 for phrase in ("ONE SELECTION, ONE DIMENSION", "they are excluded",
                "a selection is a view of"):
     ok(phrase in js, "D6 the reasoning survives: %s" % phrase[:38])

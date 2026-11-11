@@ -623,11 +623,11 @@ ok("pnlRenderAmazonView(pnlAmazonView, { empty: true })" in empty_branch,
 ok("pnlVisibleMids = [];" in empty_branch,
    "F7  ...and it still clears the visible mids")
 
-ok(re.search(r">v11\.\d+ . 20\d\d-\d\d-\d\d<", s) is not None,
+ok(re.search(r">v\d+\.\d+ . 20\d\d-\d\d-\d\d<", s) is not None,
    "F8  the version chip is present")
 cm = io.open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read()
-chip = re.search(r">v(11\.\d+) . 20\d\d-\d\d-\d\d<", s).group(1)
-doc  = re.search(r"current version \*\*v(11\.\d+)\*\*", cm).group(1)
+chip = re.search(r">v(\d+\.\d+) . 20\d\d-\d\d-\d\d<", s).group(1)
+doc  = re.search(r"current version \*\*v(\d+\.\d+)\*\*", cm).group(1)
 eq("F9  the chip and CLAUDE.md agree (v11.63's rule)", chip, doc)
 
 eq("F10 the CSV follows the sort that is on screen",

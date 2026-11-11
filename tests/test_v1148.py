@@ -272,7 +272,7 @@ ok(not brand_scoped,
    "F1 no upload card makes the operator pick a BRAND", brand_scoped)
 ok(len(cards) >= 20, "F1b over a real set of cards", len(cards))
 
-eq("F2 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
+eq("F2 version chip", len(re.findall(r">v\d+\.\d+ · [\d-]+<", s)), 1)
 
 print("\n" + "=" * 62)
 print("  v11.48  PASS %d   FAIL %d" % (passed, failed))

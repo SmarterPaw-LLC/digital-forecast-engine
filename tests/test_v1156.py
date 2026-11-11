@@ -299,7 +299,7 @@ eq("E2b which is exactly what the channels alone come to",
    E["channelsOnly"], E["withReference"])
 eq("E3 a line chart still has no total footer", E["lineFooter"], "undefined")
 
-eq("D7 version chip", len(re.findall(r">v11\.\d+ · [\d-]+<", s)), 1)
+eq("D7 version chip", len(re.findall(r">v\d+\.\d+ · [\d-]+<", s)), 1)
 for phrase in ('does not mean "and hide what I am',
                '"all" means all - references included'):
     ok(phrase in js, "D8 the reasoning survives: %s" % phrase[:40])
