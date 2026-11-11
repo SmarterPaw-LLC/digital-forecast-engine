@@ -8,6 +8,7 @@ const document = { getElementById: (id) => EL[id] || null };
 class Event { constructor(t) { this.type = t; } }
 
 mk('amzads-search', 'Search…');
+mk('amzfee-search', 'Search product…');
 mk('be-search', 'Search SKU / ASIN / title…');
 mk('bom-search-${i}', 'Search by name or ID…');
 mk('bundleSrch', 'Search bundle…');
@@ -71,6 +72,10 @@ const GLOBAL_SEARCH_MAP = {
   // never mapped either, so the bar went dead there too.
   pnl_amazon_changelog: { id: 'cl-search' },
   pnl_amazon_breakeven: { id: 'be-search' },             // v10.19
+  // v11.70 - the Fees tab. Mapped in the same commit that adds it, because
+  // the v10.3 defect is exactly what an unmapped sub-view search looks like:
+  // the top bar reads "No search on this page" while a live box sits below it.
+  pnl_amazon_fees: { id: 'amzfee-search' },
   // v11.16 — the two Ads tabs. Their inputs are emitted by the SHARED
   // shell, so the ids are built from ADS_CHANNELS[*].host rather than written
   // in the markup - which is why the v10.3 sweep could not see them and why
@@ -100,6 +105,7 @@ function globalSearchCurrentKey() {
       const av = (typeof pnlAmazonView !== 'undefined' && pnlAmazonView) ? pnlAmazonView : 'summary';
       if (av === 'changelog') return 'pnl_amazon_changelog';
       if (av === 'breakeven') return 'pnl_amazon_breakeven';   // v10.19
+      if (av === 'fees')      return 'pnl_amazon_fees';        // v11.70
       if (av === 'ads')       return 'pnl_amazon_ads';         // v11.16
     }
     return `pnl_${sub}`;
@@ -322,7 +328,7 @@ console.log('\n== F. Nothing in the markup is left unmapped by accident ==');
 // one per component row).
 const EXCLUDE = new Set(['globalSearch', 'pricing-search', 'catsy-search-input',
                          'merge-src', 'merge-tgt', 'bom-search-${i}']);
-const unmapped = ["amzads-search", "be-search", "bom-search-${i}", "bundleSrch", "catsy-search-input", "chads-search", "chpnl-be-search", "chpnl-cost-search", "chpnl-sales-search", "chpnl-search", "chwy-search", "cl-search", "cogs-search", "fba-ship-srch", "ip-srch", "ipr-srch", "pnl-search", "pricing-search", "prodSrch", "salesSrch", "sea-search", "seo-search", "seo-tr-search", "spnl-search", "srchInput", "wmpnl-search"].filter(id => !EXCLUDE.has(id) && !mapped.includes(id));
+const unmapped = ["amzads-search", "amzfee-search", "be-search", "bom-search-${i}", "bundleSrch", "catsy-search-input", "chads-search", "chpnl-be-search", "chpnl-cost-search", "chpnl-sales-search", "chpnl-search", "chwy-search", "cl-search", "cogs-search", "fba-ship-srch", "ip-srch", "ipr-srch", "pnl-search", "pricing-search", "prodSrch", "salesSrch", "sea-search", "seo-search", "seo-tr-search", "spnl-search", "srchInput", "wmpnl-search"].filter(id => !EXCLUDE.has(id) && !mapped.includes(id));
 t('no unmapped page-search inputs remain', unmapped.length === 0, unmapped);
 
 console.log('\n' + (fail ? '\u2717 ' + fail + ' FAILED, ' : '\u2713 ') + pass + ' passed');

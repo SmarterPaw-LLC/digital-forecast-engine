@@ -1,3 +1,51 @@
+const PNL_GRAIN_ORDER = ['day', 'week', 'month'];
+const PNL_FILL_ALPHA = { sheer: '55', solid: 'd9' };
+const PNL_FILL_LINE = '22';
+function pnlChartGrain() {
+  try {
+    const v = localStorage.getItem('pnlChartGrain');
+    return PNL_GRAIN_ORDER.includes(v) ? v : 'auto';
+  } catch (_) { return 'auto'; }
+}
+function pnlGrainAuto(win) {
+  if (!win || !win.from || !win.to) return 'week';
+  const days = Math.round((new Date(win.to + 'T00:00:00') - new Date(win.from + 'T00:00:00')) / 86400000) + 1;
+  if (!isFinite(days) || days <= 0) return 'week';
+  if (days <= 70) return 'day';
+  if (days <= 400) return 'week';
+  return 'month';
+}
+function pnlGrainResolve(win, allowed) {
+  const can = (allowed && allowed.length) ? allowed : PNL_GRAIN_ORDER;
+  const want = pnlChartGrain();
+  if (want !== 'auto' && can.includes(want)) return want;
+  const auto = pnlGrainAuto(win);
+  if (can.includes(auto)) return auto;
+  // Nearest the chart CAN do, COARSER first: a finer grain than the rows
+  // carry would be invented, a coarser one is only a rollup.
+  const i = PNL_GRAIN_ORDER.indexOf(auto);
+  for (let k = i; k < PNL_GRAIN_ORDER.length; k++) if (can.includes(PNL_GRAIN_ORDER[k])) return PNL_GRAIN_ORDER[k];
+  for (let k = i; k >= 0; k--) if (can.includes(PNL_GRAIN_ORDER[k])) return PNL_GRAIN_ORDER[k];
+  return 'week';
+}
+function pnlGrainKey(d, grain) {
+  const s = String(d || '');
+  if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return s;       // already a month key, or junk
+  if (grain === 'month') return s.slice(0, 7);
+  if (grain !== 'week') return s.slice(0, 10);
+  const x = new Date(s.slice(0, 10) + 'T00:00:00');
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+}
+function pnlGrainAdv(grain) {
+  return grain === 'day' ? 'daily' : grain === 'week' ? 'weekly'
+       : grain === 'month' ? 'monthly' : (grain + 'ly');
+}
+function pnlChartFill() {
+  try { return localStorage.getItem('pnlChartFill') === 'solid' ? 'solid' : 'sheer'; }
+  catch (_) { return 'sheer'; }
+}
+function pnlStackAlpha() { return PNL_FILL_ALPHA[pnlChartFill()] || PNL_FILL_ALPHA.sheer; }
 const ADS_NO_CAMPAIGN = '(no campaign)';
 
 // Amazon stores the ad product as a slug (v11.14's `_amzAdProduct`). This
@@ -28,11 +76,145 @@ function adsColFmt(col) {
   return 'n';
 }
 
+// ===========================================================================
+// v11.52 - BREAK-EVEN ROAS, because 1.0 is the wrong line on a 1P channel
+// ===========================================================================
+// Jason: "i need to be able to analyze walmart.com ads and make decisions
+// about what changes to make."
+//
+// ⚠ Walmart Connect reports ROAS on RETAIL sales. We are 1P: Walmart buys
+// from us at wholesale and keeps the retail margin, so a dollar of reported
+// ad sales is NOT a dollar of our revenue. Break-even is
+//
+//     1 / (our share of retail  x  our gross margin on wholesale)
+//
+// Measured on the live feeds for Kitty Ka-Zoom - 95% of Walmart ad spend -
+// that is 1 / (0.526 x 0.592) = 3.21, not 1.00. Every Walmart ROAS between
+// 1.00 and 3.21 was rendering as ordinary text while losing money.
+//
+// ⚠ DERIVED, NEVER TYPED. The share and the margin move as prices and COGS
+// move, and a hardcoded 3.21 would be quietly wrong a quarter from now. It is
+// read from walmart_sales_weekly x walmart_cost_per_each x product_cogs, the
+// same three feeds the Walmart P&L uses.
+//
+// Amazon and Chewy keep a floor of 1.0: on those channels the reported sales
+// ARE our revenue, so the old line is the right one. Absent an entry here a
+// channel is byte-identical to v11.51.
+let _adsBreakEven = {};
+
+// The brand the ads panel is currently scoped to, or '' for all. The
+// break-even differs materially by brand - Kitty Ka-Zoom keeps 52.6% of
+// retail against 57.2% blended - so the floor follows the filter.
+function adsBrandFilterValue(ch) {
+  try { return (ch && typeof ch.brand === 'function') ? (ch.brand() || '') : ''; }
+  catch (_) { return ''; }
+}
+
+function adsRoasFloor(channel, brand) {
+  const be = _adsBreakEven[channel];
+  if (!be || be.pending) return 1;
+  const row = (brand && be.byBrand && be.byBrand[brand]) || be.overall;
+  return (row && row.roas > 0) ? row.roas : 1;
+}
+
+// /!\ A FLOOR OF 1.0 IS THE FALLBACK, NOT AN ANSWER. adsLoadBreakEven fails
+// to 1.0 on purpose, so that a derivation that could not run colours nothing.
+// A `vs Break-Even` column therefore has to tell the two apart: without this
+// it would report a confident gap measured against a line nobody computed,
+// which is the one wrong answer here that looks like a real one.
+function adsRoasFloorKnown(channel, brand) {
+  const be = _adsBreakEven[channel];
+  if (!be || be.pending) return false;
+  const row = (brand && be.byBrand && be.byBrand[brand]) || be.overall;
+  return !!(row && row.roas > 0);
+}
+
+// Stamp the gap onto already-derived rows. It cannot live in adsDeriveRow:
+// that function has neither the channel nor the brand filter, and the floor
+// depends on both.
+//
+// /!\ ONE NUMBER, EVERY CONSUMER. Stamped on `res` itself - which the export
+// snapshot already holds by reference - so the table, the sort, the TOTAL row
+// and the CSV cannot disagree about it (the v8.00 rule).
+function adsStampBreakEven(rows, channel, brand) {
+  const known = adsRoasFloorKnown(channel, brand);
+  const floor = adsRoasFloor(channel, brand);
+  for (const c of (rows || [])) {
+    if (!c) continue;
+    c.beRoas   = known ? floor : null;
+    c.roasVsBe = (known && c.roas != null) ? c.roas - floor : null;
+  }
+}
+
+function adsBreakEvenNote(channel, brand) {
+  const be = _adsBreakEven[channel];
+  if (!be || be.pending) return '';
+  const row = (brand && be.byBrand && be.byBrand[brand]) || be.overall;
+  if (!row || !(row.roas > 0)) return '';
+  return `break-even ROAS ${row.roas.toFixed(2)}x`
+    + ` (we keep ${row.sharePct.toFixed(0)}% of retail, ${row.gmPct.toFixed(0)}% GM on that)`;
+}
+
+// Only Walmart needs one today. The shape is per-channel so a second 1P
+// channel does not need a second mechanism.
+async function adsLoadBreakEven(channel) {
+  if (channel !== 'walmart') { _adsBreakEven[channel] = { overall: null }; return; }
+  if (_adsBreakEven[channel]) return;
+  _adsBreakEven[channel] = { pending: true };
+  try {
+    const sb = await getSB();
+    // ⚠ Share and margin are computed over the SAME joined rows. Taking the
+    // share over all sell-through and the margin over the priced subset would
+    // multiply two figures that describe different populations.
+    const cogs = "coalesce(cg.landed_cost, cg.dtc_cogs, cg.amazon_cogs)";
+    const sql = `select coalesce(p.brand, '') brand,
+        sum(w.net_sales) retail,
+        sum(w.units * c.cost_per_each) wholesale,
+        sum(w.units * ${cogs}) cogs
+      from public.walmart_sales_weekly w
+      join public.walmart_cost_per_each c on c.master_id = w.master_id
+      join public.product_cogs cg on cg.master_id = w.master_id
+      left join public.products p on p.master_id = w.master_id
+      where ${cogs} is not null and w.net_sales > 0
+      group by 1`;
+    const { data, error } = await sb.rpc('exec_sql', { query: sql });
+    if (error) throw error;
+    const mk = (retail, wholesale, cogs_) => {
+      const sharePct = retail > 0 ? (wholesale / retail) * 100 : 0;
+      const gmPct = wholesale > 0 ? ((wholesale - cogs_) / wholesale) * 100 : 0;
+      const factor = (sharePct / 100) * (gmPct / 100);
+      return factor > 0 ? { roas: 1 / factor, sharePct, gmPct } : null;
+    };
+    let R = 0, W = 0, C = 0;
+    const byBrand = {};
+    for (const r of (data || [])) {
+      const retail = Number(r.retail) || 0, wholesale = Number(r.wholesale) || 0;
+      const cg = Number(r.cogs) || 0;
+      R += retail; W += wholesale; C += cg;
+      const m = mk(retail, wholesale, cg);
+      if (m && r.brand) byBrand[r.brand] = m;
+    }
+    _adsBreakEven[channel] = { overall: mk(R, W, C), byBrand };
+  } catch (e) {
+    // ⚠ Fail to 1.0 rather than to a guess. A break-even we could not compute
+    // must not colour anything, and must not claim a line it does not know.
+    console.warn('ads break-even unavailable for', channel, e?.message || e);
+    _adsBreakEven[channel] = { overall: null };
+  }
+}
+
 function adsFmtNum(v, fmt) {
   if (fmt === '$')  return '$' + Math.round(v).toLocaleString();
   if (fmt === '$2') return '$' + v.toFixed(2);
   if (fmt === '%')  return v.toFixed(1) + '%';
   if (fmt === 'x')  return v.toFixed(2) + 'x';
+  // v11.59 - a SIGNED multiple. The sign is the whole message on a gap
+  // column, and a bare "0.35x" beside a "2.50x" ROAS reads as another ratio.
+  if (fmt === 'xs') return (v >= 0 ? '+' : '\u2212') + Math.abs(v).toFixed(2) + 'x';
+  // v11.67 - a SIGNED two-decimal dollar, for a bid gap. Same reasoning as
+  // 'xs' one line up: the sign is the message, and a bare "0.12" beside a
+  // "$0.65" bid reads as another price rather than as a difference.
+  if (fmt === '$2s') return (v >= 0 ? '+' : '\u2212') + '$' + Math.abs(v).toFixed(2);
   return Math.round(v).toLocaleString();
 }
 
@@ -153,11 +335,23 @@ const ADS_CHANNELS = {
   // config a (channel, view) pair resolves to, so that costs nothing here.
   walmart: {
     label: 'Walmart Ads', icon: '\ud83d\udcef', host: 'wmads',
-    table: 'walmart_ad_campaign',
-    freshness: [{ label: 'Walmart Ads', table: 'walmart_ad_campaign', icon: '\ud83d\udcef' }],
-    src: ['walmart_ad_campaign'],
-    dateField: 'reporting_date',
-    rows: () => (typeof walmartAdCampaignCache !== 'undefined' && walmartAdCampaignCache) || [],
+    // v12.07 - /!\ THE CHANNEL IS THE CAMPAIGN x DAY FEED NOW.
+    // walmart_ad_campaign was monthly because its EXPORT carries no date at
+    // all (v11.25) - the operator stamped a month at upload and nothing could
+    // check it. The Custom report gives the same numbers with a real date per
+    // row, so the monthly feed has no job left: its three settings columns
+    // (daily budget, status, bidding strategy) are readable in Ad Center and
+    // its history is re-pullable at day grain.
+    //
+    // Replaced rather than deleted, because this object is the PROTOTYPE every
+    // Walmart view inherits - and being the channel is what makes Campaigns
+    // the default tab with no view key, exactly like Amazon's.
+    table: 'walmart_ad_campaign_daily',
+    freshness: [{ label: 'Walmart Campaign \u00d7 Day', table: 'walmart_ad_campaign_daily', icon: '\ud83d\udce1' }],
+    src: ['walmart_ad_campaign_daily'],
+    dateField: 'date',
+    rows: () => (typeof walmartAdCampaignDailyCache !== 'undefined' && walmartAdCampaignDailyCache) || [],
+    load: () => (typeof loadWalmartAdCampaignDaily === 'function') ? loadWalmartAdCampaignDaily() : null,
     // The Walmart P&L's own period control, through its one resolver - the
     // same relationship the Amazon tab has with getPnlDateRange.
     range: () => (typeof getWalmartPnlDateRange === 'function') ? getWalmartPnlDateRange() : { from: null, to: null },
@@ -176,45 +370,47 @@ const ADS_CHANNELS = {
     // Walmart Connect is US-only here, so the Amazon region button must not
     // silently empty this table. Returning true is a DECISION, not a default.
     regionOk: () => true,
-    filters: [{ k: 'type', label: 'Campaign type' }, { k: 'status', label: 'Status' }],
+    // The Custom report has Campaign Type Name. It has no status column, so
+    // Status would be a filter over empty strings (v10.19).
+    filters: [{ k: 'type', label: 'Campaign type' }],
 
-    // /!\ THE GRAIN IS MONTHLY AND THE PERIOD CONTROL IS DAILY.
-    // The export carries no reporting date at all, so reporting_month is
-    // stamped by the operator at upload and reporting_date is DERIVED as that
-    // month's last day. Filtering that derived end-date against a daily
-    // window would include or drop a WHOLE month on where its last day fell.
-    // Same rule, same reason, as ADS_VIEWS.amazon.keywords - a month is IN
-    // when it OVERLAPS, and the coverage line says which months it resolved
-    // to. See the header comment on supabase_v11_25_walmart_ads.sql.
-    inWindow: (raw, from, to) => {
-      const m = String(raw.reporting_month || '').slice(0, 7);
-      if (!m) return false;
-      if (from && m < String(from).slice(0, 7)) return false;
-      if (to && m > String(to).slice(0, 7)) return false;
-      return true;
-    },
-    monthOf: (raw) => String(raw.reporting_month || '').slice(0, 7),
+    // /!\ NO monthOf AND NO inWindow ANY MORE, and that is the whole point of
+    // this release. `typeof ch.monthOf === 'function'` is what pinned every
+    // Walmart ads chart to a monthly grain, refused the D and W buttons and
+    // made the coverage line read "monthly grain". The rows carry a real date
+    // now, so the default daily window compare on ch.dateField applies.
+
+    // No budget and no bidding strategy in this export - they were the monthly
+    // feed's. Declared empty rather than omitted: a view inheriting this
+    // prototype must not pick up fields the rows do not have.
+    stateFields: [],
 
     map: (r) => ({
       campaign: r.campaign || null,
       type:     r.campaign_type || '',
-      status:   r.campaign_status || '',
-      // The campaign export has no item dimension at all - Walmart puts that
-      // in a separate Item report. Left null rather than faked, so the SKUs
-      // column is simply absent from this registry.
+      status:   '',
+      // Walmart puts the item dimension in a separate Item report, so there
+      // is no SKU column here. Left null rather than faked.
       sku:      null,
+      // /!\ FROM THE CAMPAIGN NAME at upload, not from Walmart's own Brand
+      // dimension - which splits Sponsored Brand Video across the brand and an
+      // `unknown` bucket, so it is not a key (v12.05).
       brand:    r.advertiser_brand || null,
       impressions: +r.impressions || 0,
       clicks:      +r.clicks || 0,
       spend:       +r.spend || 0,
       orders:      +r.orders || 0,
-      units:       +r.units || 0,
+      units:       r.units == null ? null : +r.units || 0,
       sales:       +r.sales || 0,
+      // /!\ NTB COUNTS ORDERS HERE AND CUSTOMERS ON CHEWY, so it is never
+      // mapped onto `ntb` and its columns name their own operand (rule 3a).
       ntb:         null,
       signups:     null,
-      // /!\ null, not 0, when the column is absent - the three has* flags in
-      // the rollup are what keep an export without omni columns from reading
-      // as "nothing sold in store".
+      ntbOrders:   r.ntb_orders == null ? null : +r.ntb_orders || 0,
+      ntbSales:    r.ntb_sales  == null ? null : +r.ntb_sales  || 0,
+      // /!\ null, not 0, when the column is absent - the has* flags in the
+      // rollup are what keep an export without these from reading as
+      // "nothing sold in store" / "nobody viewed the page".
       inStoreSales: r.in_store_sales == null ? null : +r.in_store_sales || 0,
       dpv:          r.dpv == null ? null : +r.dpv || 0,
       atc:          r.atc == null ? null : +r.atc || 0,
@@ -252,6 +448,43 @@ const ADS_CHANNELS = {
 // always said "no data" would be a live-looking control that can never do
 // anything - the v10.19 rule. ADS_VIEWS is keyed by channel, and a channel
 // with no entry simply has no extra tab.
+// v11.58 - ONE TEXT PER COLUMN. The Walmart ad columns are declared twice,
+// once for the keyword table and once for the campaign table, and NINE of the
+// fifteen shared columns had drifted to different wording - which is how In-Store $
+// ended up with two tips and only one of them carrying the design commentary
+// Jason objected to. Both registries read this now.
+//
+// /!\ A TOOLTIP EXPLAINS THE VALUE, NOT THE DESIGN DECISION. Jason: "explaining
+// how the value is derived = good ... but the meta commentary is not". So these
+// say what the number is, how it is derived and what is excluded from it, and
+// never why the column exists or what it is not folded into. That reasoning
+// belongs in a comment like this one.
+//
+// `campaign` is deliberately NOT here: on the keyword table it names the campaign
+// a keyword spent under, on the campaign table it names the row itself.
+const WM_ADS_TIP = {
+  impressions:  'Impressions over the window.',
+  clicks:       'Clicks over the window.',
+  ctr:          'Clicks / Impressions.',
+  cpc:          'Spend / Clicks.',
+  spend:        'Ad Spend over the window.',
+  orders:       'Ad-attributed ONLINE orders.',
+  units:        'Ad-attributed ONLINE units.',
+  cpa:          'Spend / Orders - what an attributed order cost.',
+  cvr:          'Orders / Clicks.\n\nDerived from the window totals, never averaged across the per-row Conversion Rate the export carries - an average would weight a 3-click row the same as a 3,000-click one.',
+  sales:        'Total Attributed Sales, ONLINE only (Walmart RETAIL dollars, not our revenue).',
+  roas:         'Ad Sales / Spend. Online only - the same basis as Walmart\u2019s own RoAS column.',
+  inStoreSales: 'In-Store Attributed Sales: physical-store purchases Walmart attributed back to an online ad click.',
+  omniRoas:     '(Ad Sales + In-Store $) / Spend.\n\nA SECOND BASIS, not a better ROAS - a wider sales figure over the same spend. Derived from the window totals, never averaged across rows.',
+  acos:         'Spend / Ad Sales. Online only.',
+  roasVsBe:     'ROAS minus break-even ROAS, in ROAS points. Below zero the row spent more than the unit could pay back.\n\nBreak-even = 1 / (our share of Walmart retail \u00d7 our GM on that wholesale), derived per brand from walmart_sales_weekly, walmart_cost_per_each and product_cogs. Online basis, matching the ROAS column. Blank when the break-even could not be derived.',
+};
+
+// v12.03 - null stays null, a figure becomes a figure. `+null || 0` is 0,
+// which on a sales column is the difference between "sold nothing" and "not
+// reported" - the v11.16 distinction, in the one place a map is written.
+function col0(v) { return v == null ? null : (+v || 0); }
+
 const ADS_VIEWS = {
   amazon: {
     keywords: {
@@ -355,6 +588,9 @@ const ADS_VIEWS = {
       noun: 'keyword',
       noneLabel: '(no keyword)',
       filters: [{ k: 'match', label: 'Match type' }, { k: 'campaign', label: 'Campaign' }],
+      // v11.67 - the bid and Walmart's own suggestion are SETTINGS. See the
+      // state block in adsCampaignRollup.
+      stateFields: ['bid', 'suggestedBid'],
 
       // Monthly, for the same reason the campaigns feed is - one aggregate
       // per export, with the month supplied at upload.
@@ -372,6 +608,12 @@ const ADS_VIEWS = {
         match:    String(r.match_type || '').trim().toUpperCase(),
         campaign: String(r.campaign || '').trim(),
         adgroup:  String(r.ad_group || '').trim(),
+        // v11.67 - the levers. All four are populated on every loaded row and
+        // none of them was being rendered, so the table reported what the
+        // keyword DID and showed nothing you could change about it.
+        status:       String(r.status || '').trim(),
+        bid:          r.bid == null ? null : +r.bid || 0,
+        suggestedBid: r.suggested_bid == null ? null : +r.suggested_bid || 0,
         sku:      null,
         brand:    r.advertiser_brand || null,
         // /!\ A NEVER-SERVED KEYWORD HAS NULL METRICS, NOT ZERO - 132 of the
@@ -396,20 +638,26 @@ const ADS_VIEWS = {
         { k: 'term',         label: 'Keyword',     align: 'left',  w: 260, tip: 'The keyword we bid on, from the Walmart Connect keyword export.\n\nThis is TARGETING, not the customer query - Walmart reports search terms separately. Amazon\u2019s equivalent tab shows the query side.' },
         { k: 'match',        label: 'Match',       align: 'left',  w: 84,  tip: 'EXACT / PHRASE / BROAD. Several when one keyword is targeted more than one way in the window.' },
         { k: 'campaign',     label: 'Campaign',    align: 'left',  w: 200, tip: 'The campaign the keyword spent under. Several when one keyword runs in more than one.' },
-        { k: 'impressions',  label: 'Impressions', align: 'right', w: 104, tip: 'Impressions over the window.' },
-        { k: 'clicks',       label: 'Clicks',      align: 'right', w: 80,  tip: 'Clicks over the window.' },
-        { k: 'ctr',          label: 'CTR %',       align: 'right', w: 72,  tip: 'Clicks / Impressions.' },
-        { k: 'cpc',          label: 'CPC',         align: 'right', w: 72,  tip: 'Spend / Clicks.' },
-        { k: 'spend',        label: 'Spend',       align: 'right', w: 96,  tip: 'Ad spend over the window.' },
-        { k: 'orders',       label: 'Orders',      align: 'right', w: 76,  tip: 'Ad-attributed online orders.' },
-        { k: 'units',        label: 'Units',       align: 'right', w: 72,  tip: 'Ad-attributed online units.' },
-        { k: 'cvr',          label: 'CVR %',       align: 'right', w: 76,  tip: 'Orders / Clicks.\n\nDerived from the window totals, never averaged across the per-row conversion rate the export carries - an average would weight a 2-click keyword the same as a 950-click one.' },
-        { k: 'cpa',          label: 'CPA',         align: 'right', w: 76,  tip: 'Spend / Orders - what an attributed order cost.' },
-        { k: 'sales',        label: 'Ad Sales',    align: 'right', w: 104, tip: 'Total Attributed Sales, ONLINE only (Walmart RETAIL dollars, not our revenue).' },
-        { k: 'roas',         label: 'ROAS',        align: 'right', w: 76,  tip: 'Ad Sales / Spend. Online only, which is what Walmart\u2019s own RoAS column reports.' },
-        { k: 'inStoreSales', label: 'In-Store $',  align: 'right', w: 96,  fmt: '$',  tip: 'In-Store Attributed Sales: physical-store purchases Walmart attributed back to an online ad click. Neither Amazon nor Chewy report anything like it.' },
-        { k: 'omniRoas',     label: 'Omni ROAS',   align: 'right', w: 88,  fmt: 'x',  tip: '(Ad Sales + In-Store $) / Spend.\n\nA SECOND BASIS, not a better ROAS - it divides a wider sales figure by the same spend. Walmart\u2019s own word for it, kept verbatim. Derived from the window totals, never averaged across rows.' },
-        { k: 'acos',         label: 'ACOS %',      align: 'right', w: 80,  tip: 'Spend / Ad Sales. Online only, to match ROAS beside it.' },
+        { k: 'adgroup',      label: 'Ad Group',    align: 'left',  w: 160, tip: 'The ad group the keyword sits in. Several when one keyword runs in more than one.' },
+        { k: 'status',       label: 'Status',      align: 'left',  w: 92,  tip: 'The keyword\u2019s own status, from the Walmart Connect keyword export.\n\n\u26a0 The status WHEN THE FILE WAS DOWNLOADED, not during the period it reports. Several when it differed across the periods in the window.' },
+        { k: 'bid',          label: 'Bid',         align: 'right', w: 76,  fmt: '$2', tip: 'What we bid on this keyword.\n\n\u26a0 A SETTING, not a total: the newest period in the window, never the sum or the average of the periods in it.' },
+        { k: 'suggestedBid', label: 'Suggested',   align: 'right', w: 92,  fmt: '$2', tip: 'Walmart Connect\u2019s own suggested bid for this keyword, from the same export.\n\nNewest period in the window, like Bid beside it.' },
+        { k: 'bidVsSugg',    label: 'vs Suggested', align: 'right', w: 112, fmt: '$2s', tip: 'Bid minus Suggested, in dollars.\n\nNegative means we are bidding under Walmart\u2019s suggestion. Blank when either side is missing.' },
+        { k: 'impressions',  label: 'Impressions', align: 'right', w: 104, tip: WM_ADS_TIP.impressions },
+        { k: 'clicks',       label: 'Clicks',      align: 'right', w: 80,  tip: WM_ADS_TIP.clicks },
+        { k: 'ctr',          label: 'CTR %',       align: 'right', w: 72,  tip: WM_ADS_TIP.ctr },
+        { k: 'cpc',          label: 'CPC',         align: 'right', w: 72,  tip: WM_ADS_TIP.cpc },
+        { k: 'spend',        label: 'Spend',       align: 'right', w: 96,  tip: WM_ADS_TIP.spend },
+        { k: 'orders',       label: 'Orders',      align: 'right', w: 76,  tip: WM_ADS_TIP.orders },
+        { k: 'units',        label: 'Units',       align: 'right', w: 72,  tip: WM_ADS_TIP.units },
+        { k: 'cvr',          label: 'CVR %',       align: 'right', w: 76,  tip: WM_ADS_TIP.cvr },
+        { k: 'cpa',          label: 'CPA',         align: 'right', w: 76,  tip: WM_ADS_TIP.cpa },
+        { k: 'sales',        label: 'Ad Sales',    align: 'right', w: 104, tip: WM_ADS_TIP.sales },
+        { k: 'roas',         label: 'ROAS',        align: 'right', w: 76,  tip: WM_ADS_TIP.roas },
+        { k: 'inStoreSales', label: 'In-Store $',  align: 'right', w: 96,  fmt: '$',  tip: WM_ADS_TIP.inStoreSales },
+        { k: 'omniRoas',     label: 'Omni ROAS',   align: 'right', w: 88,  fmt: 'x',  tip: WM_ADS_TIP.omniRoas },
+        { k: 'acos',         label: 'ACOS %',      align: 'right', w: 80,  tip: WM_ADS_TIP.acos },
+        { k: 'roasVsBe',     label: 'vs Break-Even', align: 'right', w: 116, fmt: 'xs',  tip: WM_ADS_TIP.roasVsBe },
       ],
     },
   },
@@ -429,7 +677,7 @@ function adsViewCfg(channel, view) {
 
 const ADS_COLUMNS = {
   amazon: [
-    { k: 'campaign',    label: 'Campaign',    align: 'left',  w: 260, tip: 'Amazon Ads campaign name, from the unified report\'s Campaign name dimension.\n\n"(no campaign)" is spend uploaded before v11.15 added the column — Amazon cannot retrofit the dimension onto a past pull, so re-upload the window to fill it in.' },
+    { k: 'campaign',    label: 'Campaign',    align: 'left',  w: 260, tip: 'Amazon Ads campaign name, from the unified report\'s Campaign name dimension.\n\n"(no campaign)" is spend uploaded without the Campaign name dimension. Amazon cannot retrofit it onto a past pull, so re-upload the window to fill it in.' },
     { k: 'type',        label: 'Type',        align: 'left',  w: 150, tip: 'Ad product: Sponsored Products / Brands / Display / TV / DSP. Several when one campaign name carries more than one.' },
     { k: 'skus',        label: 'SKUs',        align: 'right', w: 62,  tip: 'Distinct advertised products in the campaign over the window.' },
     { k: 'impressions', label: 'Impressions', align: 'right', w: 104, tip: 'Impressions over the window.' },
@@ -465,25 +713,29 @@ const ADS_COLUMNS = {
   // reconciles this table against - and three of these measures (Page Views,
   // Add to Cart, In-Store $) do not exist on the other two channels at all.
   walmart: [
-    { k: 'campaign',     label: 'Campaign',    align: 'left',  w: 240, tip: 'Walmart Connect campaign name, from the Campaigns export.' },
-    { k: 'type',         label: 'Type',        align: 'left',  w: 180, tip: 'Sponsored Products (Auto) / Sponsored Products (Manual) / Sponsored Video, as Walmart names them.' },
-    { k: 'status',       label: 'Status',      align: 'left',  w: 92,  tip: 'Live / Paused / Completed / Proposal.\n\n\u26a0 This is the status WHEN THE FILE WAS DOWNLOADED, not during the month it reports. The feed carries one row per campaign per month and no status history.' },
-    { k: 'impressions',  label: 'Impressions', align: 'right', w: 104, tip: 'Impressions over the window.' },
-    { k: 'clicks',       label: 'Clicks',      align: 'right', w: 80,  tip: 'Clicks over the window.' },
-    { k: 'ctr',          label: 'CTR %',       align: 'right', w: 72,  tip: 'Clicks / Impressions.' },
-    { k: 'cpc',          label: 'CPC',         align: 'right', w: 72,  tip: 'Spend / Clicks.' },
-    { k: 'spend',        label: 'Spend',       align: 'right', w: 96,  tip: 'Ad Spend over the window.' },
-    { k: 'dpv',          label: 'Page Views',  align: 'right', w: 92,  tip: 'Total Product Detail Page Views driven by the ad. Walmart reports this at campaign level; Amazon does not.' },
-    { k: 'atc',          label: 'Add to Cart', align: 'right', w: 96,  tip: 'Total Add To Cart events driven by the ad.\n\nWith Page Views beside it this puts the whole funnel on one row: Impressions \u2192 Clicks \u2192 Page Views \u2192 Add to Cart \u2192 Orders.' },
-    { k: 'orders',       label: 'Orders',      align: 'right', w: 76,  tip: 'Ad-attributed ONLINE orders.' },
-    { k: 'units',        label: 'Units',       align: 'right', w: 72,  tip: 'Ad-attributed ONLINE units.' },
-    { k: 'cvr',          label: 'CVR %',       align: 'right', w: 76,  tip: 'Orders / Clicks.\n\nDerived from the window totals, never averaged across the per-row Conversion Rate the export carries - an average would weight a 137-click campaign the same as a 3,110-click one.' },
-    { k: 'cpa',          label: 'CPA',         align: 'right', w: 76,  tip: 'Spend / Orders - what an attributed order cost.' },
-    { k: 'sales',        label: 'Ad Sales',    align: 'right', w: 104, tip: 'Total Attributed Sales, ONLINE only (Walmart RETAIL dollars, not our revenue).' },
-    { k: 'roas',         label: 'ROAS',        align: 'right', w: 76,  tip: 'Ad Sales / Spend. Online only - the same basis as Walmart\u2019s own RoAS column.' },
-    { k: 'inStoreSales', label: 'In-Store $',  align: 'right', w: 96,  fmt: '$',  tip: 'In-Store Attributed Sales: physical-store purchases Walmart attributed back to an online ad click.\n\nNeither Amazon nor Chewy report anything like it, so it keeps its own column rather than being folded into Ad Sales.' },
-    { k: 'omniRoas',     label: 'Omni ROAS',   align: 'right', w: 88,  fmt: 'x',  tip: '(Ad Sales + In-Store $) / Spend.\n\n\u26a0 A SECOND BASIS, not a better ROAS - a wider sales figure over the same spend. Walmart\u2019s own word for it, reused rather than coined. Derived from the window totals, never averaged across campaigns.' },
-    { k: 'acos',         label: 'ACOS %',      align: 'right', w: 80,  tip: 'Spend / Ad Sales. Online only, so it reads against the ROAS column beside it rather than against Omni.' },
+      { k: 'campaign',     label: 'Campaign',    align: 'left',  w: 240, tip: 'Walmart Connect campaign name, from the Custom report.\n\n\u26a0 The NAME is the key here, not the id - the export carries no Campaign Id. A renamed campaign starts a new row.' },
+      { k: 'type',         label: 'Type',        align: 'left',  w: 170, tip: 'Sponsored Products (Auto) / Sponsored Products (Manual) / Sponsored Videos, as Walmart names them.' },
+      { k: 'impressions',  label: 'Impressions', align: 'right', w: 104, tip: WM_ADS_TIP.impressions },
+      { k: 'clicks',       label: 'Clicks',      align: 'right', w: 80,  tip: WM_ADS_TIP.clicks },
+      { k: 'ctr',          label: 'CTR %',       align: 'right', w: 72,  tip: WM_ADS_TIP.ctr },
+      { k: 'cpc',          label: 'CPC',         align: 'right', w: 72,  tip: WM_ADS_TIP.cpc },
+      { k: 'spend',        label: 'Spend',       align: 'right', w: 96,  tip: WM_ADS_TIP.spend },
+      // v12.06 - the funnel, per campaign per day. Impressions -> Clicks ->
+      // Page Views -> Add to Cart -> Orders on one row.
+      { k: 'dpv',          label: 'Page Views',  align: 'right', w: 92,  tip: 'Total Product Detail Page Views driven by the ad, at the file\u2019s attribution window.\n\n\u26a0 Settles upward for a day or two: the newest day in an export can report 0 against real clicks.' },
+      { k: 'atc',          label: 'Add to Cart', align: 'right', w: 96,  tip: 'Total Add To Cart events driven by the ad.\n\nWith Page Views beside it this puts the whole funnel on one row: Impressions \u2192 Clicks \u2192 Page Views \u2192 Add to Cart \u2192 Orders.' },
+      { k: 'orders',       label: 'Orders',      align: 'right', w: 76,  tip: WM_ADS_TIP.orders },
+      { k: 'units',        label: 'Units',       align: 'right', w: 72,  tip: WM_ADS_TIP.units },
+      { k: 'cvr',          label: 'CVR %',       align: 'right', w: 76,  tip: WM_ADS_TIP.cvr },
+      { k: 'cpa',          label: 'CPA',         align: 'right', w: 76,  tip: WM_ADS_TIP.cpa },
+      { k: 'sales',        label: 'Ad Sales',    align: 'right', w: 104, tip: WM_ADS_TIP.sales },
+      { k: 'roas',         label: 'ROAS',        align: 'right', w: 76,  tip: WM_ADS_TIP.roas },
+      { k: 'ntbOrders',    label: 'NTB Orders',  align: 'right', w: 96,  tip: 'New-to-brand orders at the file\u2019s attribution window.\n\n\u26a0 ORDERS, not customers. The Chewy tab\u2019s NTB column counts CUSTOMERS, so this one is named for its own operand rather than borrowing that word.' },
+      { k: 'ntbSales',     label: 'NTB $',       align: 'right', w: 92,  fmt: '$', tip: 'Sales from new-to-brand orders, at the file\u2019s attribution window.' },
+      { k: 'inStoreSales', label: 'In-Store $',  align: 'right', w: 96,  fmt: '$',  tip: WM_ADS_TIP.inStoreSales },
+      { k: 'omniRoas',     label: 'Omni ROAS',   align: 'right', w: 88,  fmt: 'x',  tip: WM_ADS_TIP.omniRoas },
+      { k: 'acos',         label: 'ACOS %',      align: 'right', w: 80,  tip: WM_ADS_TIP.acos },
+      { k: 'roasVsBe',     label: 'vs Break-Even', align: 'right', w: 116, fmt: 'xs',  tip: WM_ADS_TIP.roasVsBe },
   ],
 };
 
@@ -521,9 +773,15 @@ function adsDeriveRow(c, group) {
   // /!\ Derived from the SUMMED totals like every other ratio here, never
   // averaged across the per-row Omni ROAS the export carries.
   c.omniRoas = c.hasInStore ? adsDiv((c.sales || 0) + (c.inStoreSales || 0), c.spend) : null;
+  // v11.67 - the bid gap. Null unless BOTH sides are known: a keyword with no
+  // suggested bid has no gap, and rendering one as 0.00 would read as "we are
+  // exactly on Walmart's number". Every channel that maps neither field gets
+  // null from the same line, so this is a no-op off Walmart.
+  c.bidVsSugg = (c.bid != null && c.suggestedBid != null) ? c.bid - c.suggestedBid : null;
   if (!c.hasUnits)   c.units        = null;
   if (!c.hasNtb)     c.ntb          = null;
   if (!c.hasInStore) c.inStoreSales = null;
+  if (!c.hasNtbOrders) { c.ntbOrders = null; c.ntbSales = null; }
   if (!c.hasFunnel) { c.dpv = null; c.atc = null; }
   return c;
 }
@@ -592,14 +850,24 @@ function adsBucketFn(ch, grain) {
 // Ad spend is daily, so a 365-day window drawn per day is 365 points of noise
 // and a 14-day window drawn per month is one. Auto-picking is only honest
 // because the subtitle states what it resolved to (the v10.99 rule).
+// v11.74 - the WIDTH rule moved to pnlGrainAuto and the OVERRIDE arrives
+// with it, so these charts gained the control for free. The Walmart feed is
+// stamped per MONTH (v11.67), so it declares monthly and the resolver
+// refuses anything finer rather than inventing a week it does not have.
+// The ONE sentence for a refused ads grain, so both readings say it the same
+// way. Walmart Connect exports carry NO reporting date - the uploader asks
+// which month a file covers and stamps every row with it (v11.67) - so there
+// is no day or week underneath to group by.
+function _adsGrainWhy(ch) {
+  return (ch && typeof ch.monthOf === 'function')
+    ? 'Walmart Connect files carry no reporting date, so every row is stamped with the MONTH the file covers (v11.67). There is no finer grain underneath.'
+    : 'These rows do not carry that grain.';
+}
+function adsGrainAllowed(ch) {
+  return (ch && typeof ch.monthOf === 'function') ? ['month'] : PNL_GRAIN_ORDER;
+}
 function adsGrain(win, ch) {
-  if (ch && typeof ch.monthOf === 'function') return 'month';
-  if (!win || !win.from || !win.to) return 'week';
-  const days = Math.round((new Date(win.to + 'T00:00:00') - new Date(win.from + 'T00:00:00')) / 86400000) + 1;
-  if (!isFinite(days) || days <= 0) return 'week';
-  if (days <= 70) return 'day';
-  if (days <= 400) return 'week';
-  return 'month';
+  return pnlGrainResolve(win, adsGrainAllowed(ch));
 }
 
 // ⚠ THE CHART'S METRIC LIST IS BUILT FROM THE TABLE'S COLUMN REGISTRY, so
@@ -620,10 +888,29 @@ const ADS_METRIC_SPEC = {
   cpc:  { unit: '$', noStack: true, sum: s => adsDiv(s.spend, s.clicks) },
   cpa:  { unit: '$', noStack: true, sum: s => adsDiv(s.spend, s.orders) },
   roas: { unit: 'x', noStack: true, sum: s => adsDiv(s.sales, s.spend) },
+  ntbOrders: { unit: '#', sum: s => s.ntbOrders },
+  ntbSales:  { unit: '$', sum: s => s.ntbSales },
+  // v12.02 - /!\ THE ONLY METRIC HERE WHOSE DENOMINATOR IS NOT IN THE ADS
+  // FEED. `netSales` is attached per bucket from sku_economics, and it is
+  // attached ONLY when this metric is actually plotted - see the chart's
+  // metric branch. A bucket with no sales is a GAP, never 0% (the v11.16
+  // rule): 0.0% TACoS would mean "sold plenty, spent nothing", which is a
+  // different fact from having no sales figure for that week at all.
+  tacos: { unit: '%', isPct: true, noStack: true, needsNetSales: true,
+           sum: s => { const v = adsDiv(s.spend, s.netSales); return v == null ? null : v * 100; } },
 };
-function adsChartMetrics(COLS) {
-  return (COLS || []).filter(c => ADS_METRIC_SPEC[c.k])
+function adsChartMetrics(COLS, channel) {
+  const out = (COLS || []).filter(c => ADS_METRIC_SPEC[c.k])
     .map(c => Object.assign({ k: c.k, label: c.label }, ADS_METRIC_SPEC[c.k]));
+  // v12.02 - /!\ TACoS IS NOT A COLUMN AND CANNOT BE ONE. Sales are not
+  // attributable to a campaign, so there is no per-row TACoS to put in the
+  // table - but there IS a per-WEEK one, because spend and net sales are both
+  // weekly. It is appended for the one channel that has a total-sales feed
+  // behind it rather than derived from COLS like the rest.
+  if (channel === 'amazon') {
+    out.push(Object.assign({ k: 'tacos', label: 'TACoS %' }, ADS_METRIC_SPEC.tacos));
+  }
+  return out;
 }
 
 // ⚠ The rollup is a PURE function of (rows, window, filters) so it can be
@@ -700,7 +987,11 @@ function adsCampaignRollup(opts) {
             // v11.25 - Walmart only. Amazon and Chewy map these to null, so
             // the has* flags stay false and adsDeriveRow nulls them back out.
             inStoreSales: 0, dpv: 0, atc: 0,
+            // v12.05 - Walmart's campaign x day feed. Their own slots rather
+            // than `ntb`, which on Chewy counts CUSTOMERS (rule 3a).
+            ntbOrders: 0, ntbSales: 0,
             hasUnits: false, hasNtb: false, hasInStore: false, hasFunnel: false,
+            hasNtbOrders: false,
             firstDate: d, lastDate: d };
       agg.set(name, c);
     }
@@ -722,11 +1013,27 @@ function adsCampaignRollup(opts) {
     if (r.ntb     != null) { c.ntb     += r.ntb;     c.hasNtb   = true; }
     if (r.signups != null) { c.signups += r.signups; }
     if (r.inStoreSales != null) { c.inStoreSales += r.inStoreSales; c.hasInStore = true; }
+    if (r.ntbOrders != null || r.ntbSales != null) {
+      c.ntbOrders += (r.ntbOrders || 0); c.ntbSales += (r.ntbSales || 0);
+      c.hasNtbOrders = true;
+    }
     if (r.dpv != null || r.atc != null) {
       c.dpv += (r.dpv || 0); c.atc += (r.atc || 0); c.hasFunnel = true;
     }
     if (d && d < c.firstDate) c.firstDate = d;
     if (d && d > c.lastDate)  c.lastDate  = d;
+    // v11.67 - /!\ A BID IS A STATE, NOT A FLOW. Every other number here is
+    // something that HAPPENED over the window and sums; a bid, a suggested
+    // bid and a daily budget are what the setting IS. Summing three months of
+    // a $0.65 bid into $1.95 reports a number nobody ever bid, and averaging
+    // it reports one nobody can act on. The NEWEST period in the window wins,
+    // because that is the only one still standing.
+    //
+    // Declared per view, so a channel that declares none is byte-identical.
+    if (ch.stateFields && d && (!c._stateAt || d >= c._stateAt)) {
+      c._stateAt = d;
+      for (const k of ch.stateFields) c[k] = r[k];
+    }
     if (bucketOf) {
       const bk = bucketOf(raw, d);
       if (bk) {
@@ -734,11 +1041,13 @@ function adsCampaignRollup(opts) {
         const byB = series[name] || (series[name] = {});
         const sl = byB[bk] || (byB[bk] = { impressions: 0, clicks: 0, spend: 0,
                                            orders: 0, units: 0, sales: 0, ntb: 0, signups: 0,
-                                           inStoreSales: 0, dpv: 0, atc: 0 });
+                                           inStoreSales: 0, dpv: 0, atc: 0,
+                                           ntbOrders: 0, ntbSales: 0 });
         sl.impressions += r.impressions; sl.clicks += r.clicks; sl.spend += r.spend;
         sl.orders += r.orders; sl.sales += r.sales;
         sl.units += (r.units || 0); sl.ntb += (r.ntb || 0); sl.signups += (r.signups || 0);
         sl.inStoreSales += (r.inStoreSales || 0); sl.dpv += (r.dpv || 0); sl.atc += (r.atc || 0);
+        sl.ntbOrders += (r.ntbOrders || 0); sl.ntbSales += (r.ntbSales || 0);
       }
     }
   }
@@ -774,6 +1083,87 @@ function adsCampaignRollup(opts) {
   };
 }
 
+// ===========================================================================
+// v11.67 - WHERE A CAMPAIGN NAME GOES WHEN YOU CLICK IT
+// ===========================================================================
+// Jason: "when i click on a campaign name, can that open to the keywords and
+// products view? currently it just selects the row - but that is what the
+// checkbox is for."
+//
+// DECLARED per channel, never inferred, because the journey needs four things
+// to be true at once and only a declaration can state them: a view that lists
+// something below campaign level, a `campaign` filter on that view to receive
+// the pick, the raw column that filter reads, and the channel's own sub-tab
+// switcher to get there.
+//
+// /!\ CHEWY HAS NO ENTRY AND GETS NO LINK. Its feed goes campaign -> promoted
+// SKU -> day with no keyword dimension at all (v11.22), so there is no view to
+// open. A link that cannot honour itself is the v10.19 defect.
+//
+// /!\ AND NEITHER CHANNEL GETS A PRODUCTS LINK. Walmart has exactly two ad
+// tables and neither carries an item dimension - Walmart reports items in a
+// separate export we do not load - so a Products view would be a missing FEED
+// dressed up as a missing screen.
+const ADS_DRILL = {
+  walmart: { view: 'keywords', filter: 'campaign', rawCol: 'campaign',      go: 'switchWalmartAdsView' },
+  amazon:  { view: 'keywords', filter: 'campaign', rawCol: 'campaign_name', go: 'switchPnlAdsView' },
+};
+
+// The campaign names the destination can ACTUALLY show, in this window and
+// under this brand - or null while its feed has not loaded yet.
+//
+// /!\ THIS IS THE HALF THAT MATTERS, and the live data says why: Walmart's
+// biggest spender is `SP - AUTO - CATCH ALL - Kitty` at $1,903 in October, and
+// an auto campaign has no keyword rows at all. Linking it would land you on an
+// empty table having told you nothing. It renders as plain text, with the
+// reason on its tooltip.
+//
+// Scoped to the SAME window and brand the Campaigns table is showing, so the
+// link cannot be offered for a campaign the destination would then filter
+// away - which would leave the control saying one thing and the table another.
+const _adsDrillNames = {};
+function adsDrillNames(channel, from, to, brand) {
+  const d = ADS_DRILL[channel];
+  if (!d) return null;
+  const cfg = adsViewCfg(channel, d.view);
+  if (!cfg || typeof cfg.rows !== 'function') return null;
+  const rows = cfg.rows();
+  if (!rows || !rows.length) return null;
+  const sig = [channel, from || '', to || '', brand || '', rows.length].join('|');
+  const memo = _adsDrillNames[channel];
+  if (memo && memo.sig === sig) return memo.set;
+  const out = new Set();
+  for (const raw of rows) {
+    if (typeof cfg.inWindow === 'function' && !cfg.inWindow(raw, from, to)) continue;
+    if (brand && String(cfg.map(raw).brand || '') !== brand) continue;
+    const v = String(raw[d.rawCol] == null ? '' : raw[d.rawCol]).trim();
+    if (v) out.add(v);
+  }
+  _adsDrillNames[channel] = { sig, set: out };
+  return out;
+}
+
+// /!\ The pick is carried in STATE rather than written onto the control,
+// because the control has no options yet: they are built by the very render
+// the drill is about to trigger, and the loop that builds them resets a value
+// it does not recognise (v11.02). renderAdsCampaigns consumes this once.
+let _adsPendingFilter = null;
+const _adsDrillLoading = {};
+
+// Addressed by INDEX into the rows AS RENDERED - the v11.23 rule. A campaign
+// name is an arbitrary string; interpolating one into an onclick attribute
+// breaks on the first apostrophe and is an injection waiting to happen.
+function adsDrillOpen(channel, i) {
+  const d = ADS_DRILL[channel];
+  if (!d) return;
+  const name = adsSelName(channel, undefined, i);
+  if (!name) return;
+  _adsPendingFilter = { channel, view: d.view, k: d.filter, v: name };
+  const go = window[d.go];
+  if (typeof go !== 'function') { _adsPendingFilter = null; return; }
+  try { go(d.view); } catch (e) { _adsPendingFilter = null; console.warn('[ads] drill failed', e); }
+}
+
 // Sort + search state, per channel so switching P&L pages does not reset the
 // other one. Default: biggest spender first, which is the order anyone opening
 // an ads page is looking for.
@@ -786,7 +1176,18 @@ function adsState(channel, view) {
   // v11.23 - `sel` holds the CHECKED row names for this (channel, view).
   // Keyed the same way as the sort, so the Campaigns and Keywords tables
   // keep their own selection instead of sharing one.
-  return _adsState[k] || (_adsState[k] = { sortK: 'spend', sortDir: -1, sel: new Set() });
+  if (_adsState[k]) return _adsState[k];
+  // v12.03 - a view may declare the column it OPENS on. The Walmart Daily
+  // view is a list of days, and a list of days ranked by spend is a league
+  // table of dates - not a question anyone has. Every existing view declares
+  // none and keeps 'spend' descending, so nothing that exists today moves.
+  let cfg = null;
+  try { cfg = (typeof adsViewCfg === 'function') ? adsViewCfg(channel, view) : null; } catch (_) {}
+  return (_adsState[k] = {
+    sortK: (cfg && cfg.defaultSort) || 'spend',
+    sortDir: (cfg && cfg.defaultSortDir) || -1,
+    sel: new Set(),
+  });
 }
 let _adsExport = {};
 
@@ -845,7 +1246,9 @@ function adsClearSelection(channel, view) {
 // monthly and **dayly**, which the Campaigns reading has rendered since
 // v11.23. One helper, so the Metrics reading added beside it cannot ship a
 // second copy of the same typo (hard rule #1).
-function adsGrainAdv(grain) {
+// v11.74 - renamed from adsGrainAdv: the grain is a chart-wide concept now,
+// not an Ads one, and a shared idea must not keep a tab's prefix (rule #3).
+function pnlGrainAdv(grain) {
   return grain === 'day' ? 'daily' : grain === 'week' ? 'weekly'
        : grain === 'month' ? 'monthly' : (grain + 'ly');
 }
@@ -902,6 +1305,21 @@ function adsChartSel(channel, view) {
   return _adsChartSel[k] || (_adsChartSel[k] = new Set(ADS_CHART_DEFAULT));
 }
 function adsChartBy(channel, view) { return _adsChartBy[_adsKey(channel, view)] || 'metric'; }
+// v12.03 - /!\ A FEED WITH ONE ADVERTISER HAS NOTHING TO BAND.
+// The Campaigns reading splits ONE metric into a line per selected row. On a
+// view whose rows are DAYS that would draw one single-point line per day,
+// along an axis that is already the days - the same reading, scattered. The
+// view declares why, the control renders disabled carrying that sentence, AND
+// the resolver clamps, because a disabled button is bypassable from the
+// console (the v11.74 rule, applied to the other chart control).
+function adsBandWhy(ch) {
+  const w = ch && ch.bandWhy;
+  return (typeof w === 'function') ? (w() || '') : (w || '');
+}
+function adsChartByResolve(ch, channel, view) {
+  const by = adsChartBy(channel, view);
+  return (by === 'campaign' && adsBandWhy(ch)) ? 'metric' : by;
+}
 function adsSetChartBy(channel, view, by) {
   _adsChartBy[_adsKey(channel, view)] = (by === 'campaign') ? 'campaign' : 'metric';
   renderAdsCampaigns(channel, view);
@@ -923,6 +1341,12 @@ const ADS_METRIC_COLOR = {
   ctr: '#ec4899', cvr: '#84cc16', cpc: '#f59e0b', cpa: '#ef4444',
   units: '#14b8a6', ntb: '#d946ef', omniRoas: '#8b5cf6', inStoreSales: '#0ea5e9',
   dpv: '#64748b', atc: '#22c55e',
+  ntbOrders: '#be185d', ntbSales: '#0d9488',
+  // v12.02 - TACoS is ACOS's sibling (same question, two denominators)
+  // but deliberately NOT a shade of ACOS's green: two greens on one
+  // chart are hard to tell apart, and both are good-when-down, so the
+  // pairing has to come from the labels rather than from the hue.
+  tacos: '#92400e',
 };
 function adsMetricColor(k, i) {
   return ADS_METRIC_COLOR[k] || ADS_CHART_COLORS[(i || 0) % ADS_CHART_COLORS.length];
@@ -935,17 +1359,22 @@ function adsMetricColor(k, i) {
 function adsInjectChartBy(ch, channel, view, by) {
   const host = document.getElementById(ch.host + '-chart-by-host');
   if (host) {
-    const btn = (v, label, tip) => {
-      const on = by === v;
-      return `<button type="button" onclick="adsSetChartBy('${channel}','${view || ''}','${v}')" title="${tip}"`
+    const bandWhy = adsBandWhy(ch);
+    const btn = (v, label, tip, dis) => {
+      const on = !dis && by === v;
+      // /!\ Disabled, not hidden - a toggle that vanishes on one tab reads as
+      // a bug, and the onclick is STRIPPED rather than left to be ignored.
+      return `<button type="button"${dis ? ' disabled' : ` onclick="adsSetChartBy('${channel}','${view || ''}','${v}')"`} title="${esc2(tip)}"`
         + ` style="padding:3px 9px;font-size:10px;font-family:var(--display);font-weight:${on ? 700 : 600};`
         + `background:${on ? 'var(--sp-green)' : 'transparent'};color:${on ? '#fff' : 'var(--text2)'};`
-        + `border:none;border-radius:4px;cursor:pointer">${label}</button>`;
+        + `opacity:${dis ? '.45' : '1'};border:none;border-radius:4px;cursor:${dis ? 'not-allowed' : 'pointer'}">${label}</button>`;
     };
     host.innerHTML = '<span style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Compare</span>'
       + '<span style="display:inline-flex;gap:2px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:2px">'
       + btn('metric', 'Metrics', 'Several metrics over time, each on its own axis. Use the + on a scorecard above to add or remove one.')
-      + btn('campaign', 'Campaigns', 'One metric over time, split into a line per selected row. Tick rows in the table below.')
+      + btn('campaign', 'Campaigns',
+            bandWhy || 'One metric over time, split into a line per selected row. Tick rows in the table below.',
+            !!bandWhy)
       + '</span>';
   }
   // v10.19 - a control that cannot bite is hidden, not left looking live.
@@ -955,7 +1384,7 @@ function adsInjectChartBy(ch, channel, view, by) {
   if (mh && by !== 'campaign') mh.innerHTML = '';
 }
 function adsUpdateChart(ctx) {
-  const { ch, channel, view, COLS, res, win, list, sel, grain, totals } = ctx;
+  const { ch, channel, view, COLS, res, win, list, sel, grain, totals, prev } = ctx;
   const panel = document.getElementById(ch.host + '-chart-panel');
   if (!panel) return;
   const key = _adsKey(channel, view);
@@ -963,11 +1392,11 @@ function adsUpdateChart(ctx) {
     panel.style.display = 'none';
     if (_adsChartInstance[key]) { try { _adsChartInstance[key].destroy(); } catch (e) {} _adsChartInstance[key] = null; }
   };
-  const metrics = adsChartMetrics(COLS);
+  const metrics = adsChartMetrics(COLS, channel);
   // v11.33 - which reading the panel is showing. Injected on every paint, like
   // the Line / Stacked toggle, because the shell is built once and only
   // repainted afterwards.
-  const by = adsChartBy(channel, view);
+  const by = adsChartByResolve(ch, channel, view);
   adsInjectChartBy(ch, channel, view, by);
   const picked = (document.getElementById(ch.host + '-chart-metric') || {}).value || 'spend';
   const m = metrics.find(x => x.k === picked) || metrics.find(x => x.k === 'spend') || metrics[0];
@@ -1002,7 +1431,8 @@ function adsUpdateChart(ctx) {
     // $2 campaign the same as a $20,000 one (the v11.23 rule, per bucket).
     const perB = buckets.map(b => {
       const acc = { impressions: 0, clicks: 0, spend: 0, orders: 0, units: 0,
-                    sales: 0, ntb: 0, signups: 0, inStoreSales: 0, dpv: 0, atc: 0 };
+                    sales: 0, ntb: 0, signups: 0, inStoreSales: 0, dpv: 0, atc: 0,
+                    ntbOrders: 0, ntbSales: 0 };
       for (const nm of names) {
         const sl = (res.series || {})[nm] && res.series[nm][b];
         if (!sl) continue;
@@ -1010,6 +1440,25 @@ function adsUpdateChart(ctx) {
       }
       return acc;
     });
+    // v12.02 - /!\ THE DENOMINATOR IS FETCHED PER BUCKET, BY SPAN, NOT BY KEY.
+    // An ads bucket is keyed on the SUNDAY; sku_economics stores the same week
+    // under its MONDAY. Joining the two strings would have put every week's
+    // sales against the previous week's spend. pnlBucketRange turns the bucket
+    // into its own date span and amzFeeAgg - the SAME aggregator the scorecard
+    // uses, so the card and the line cannot disagree - sums the weeks inside it.
+    //
+    // Only when TACoS is actually on the chart: this is a full scan of
+    // sku_economics per bucket, and no other metric needs it.
+    if (plot.some(x => x.needsNetSales) && typeof amzFeeAgg === 'function') {
+      buckets.forEach((b, i) => {
+        const r = (typeof pnlBucketRange === 'function') ? pnlBucketRange(b, grain) : null;
+        if (!r) return;
+        try {
+          const a = amzFeeAgg(r);
+          if (a && a.tot) perB[i].netSales = a.tot.netSales || 0;
+        } catch (e) { /* leave it absent - the metric draws a gap, not a zero */ }
+      });
+    }
     const datasets = plot.map((x, i) => {
       const col = adsMetricColor(x.k, i);
       return { label: x.label, yAxisID: 'y_' + x.k, borderColor: col, backgroundColor: col,
@@ -1021,7 +1470,7 @@ function adsUpdateChart(ctx) {
     });
     const axes = plot.map((x, i) => ({ id: 'y_' + x.k, unit: x.unit, isPct: !!x.isPct,
                                        color: adsMetricColor(x.k, i) }));
-    if (titleEl0) titleEl0.textContent = 'Metrics \u00b7 ' + adsGrainAdv(grain) + ' trend';
+    if (titleEl0) titleEl0.textContent = 'Metrics \u00b7 ' + pnlGrainAdv(grain) + ' trend';
     if (subEl0) subEl0.textContent = pnlTrendSubtitle({
       selectionActive, midCount: names.length, bandCount: 0,
       buckets: buckets.length, from: subFrom, to: subTo, mode: 'line',
@@ -1035,6 +1484,19 @@ function adsUpdateChart(ctx) {
       bucketNoun: grain, noun: ch.noun || 'campaign',
     });
     panel.style.display = 'block';
+    // v11.68 - /!\ this reading never re-injected the toggle at all, so it
+    // sat showing whatever the CAMPAIGN reading had last written. Harmless
+    // while the only control was View; with a Compare button beside it that
+    // is a live control doing nothing, which is the v10.19 case.
+    //
+    // It is always a line (each metric gets its OWN axis, so there is nothing
+    // to stack), and a single dashed line cannot say which of several metrics
+    // it is the previous period OF - so both are reported as unavailable with
+    // the reason rather than left to look live.
+    pnlInjectChartModeToggle(ch.host + '-chart-mode-host', '_adsRe_' + ch.host, true,
+      undefined, { ok: false,
+        why: 'Each metric is on its own axis here, so one comparison line could not say which metric it belongs to. Switch to the per-' + (ch.noun || 'campaign') + ' reading to compare.' },
+      { win, allowed: adsGrainAllowed(ch), why: _adsGrainWhy(ch) });
     pnlTrendRender({
       canvasId: ch.host + '-chart-canvas', instance: _adsChartInstance[key], periodHost: ch.periodHost,
       buckets, datasets, mode: 'line', axes,
@@ -1050,7 +1512,34 @@ function adsUpdateChart(ctx) {
     noun: ch.noun || 'campaign', otherNoun: (ch.noun || 'campaign') + 's',
     labelOf: n => n,
   });
-  pnlInjectChartModeToggle(ch.host + '-chart-mode-host', '_adsRe_' + ch.host, !!m.noStack);
+  // v11.68 - the previous period, over the SAME names and the SAME metric.
+  // `prev` is the rollup the delta chips already read, so the dashed line and
+  // the chips above it cannot describe different windows - and it is bucketed
+  // by the same grain this chart resolved, so the two series are comparable
+  // bucket for bucket.
+  //
+  // /!\ Offered only when there IS a prior rollup. A window with no block
+  // before it (All time, or a monthly view with no earlier months loaded)
+  // leaves the control disabled with the reason rather than live and inert.
+  const _adsCmpOk = !!(prev && prev.buckets && prev.buckets.length);
+  const _adsCmpOn = _adsCmpOk && pnlChartCompare();
+  pnlInjectChartModeToggle(ch.host + '-chart-mode-host', '_adsRe_' + ch.host, !!m.noStack,
+    undefined, { ok: _adsCmpOk,
+      why: 'No earlier block of the same length is loaded to compare this window against.' },
+    { win, allowed: adsGrainAllowed(ch), why: _adsGrainWhy(ch) });
+  if (_adsCmpOn) {
+    const _ov = pnlPrevOverlay(pnlPrevVals(prev.series || {}, prev.buckets, names, m.sum),
+                               buckets, prev.buckets);
+    if (_ov) built.datasets.push(_ov);
+  }
+  // v11.69 - the same legend rule, on the same mechanism. A band here is a
+  // campaign or a keyword rather than a product; the mapping is the renderer's
+  // either way.
+  const _adsSync = _adsCmpOn
+    ? pnlMakeOverlaySync({ bandMids: built.bandMids, prevPerProd: prev.series || {},
+                           prevBuckets: prev.buckets, curBuckets: buckets,
+                           metricOf: m.sum, baseMids: names })
+    : null;
   // What the window RESOLVED to, stated rather than assumed (v10.99): the
   // grain was picked from the window length, and the edge buckets are named
   // when they are partial.
@@ -1061,7 +1550,7 @@ function adsUpdateChart(ctx) {
   }
   const titleEl = document.getElementById(ch.host + '-chart-title');
   const subEl   = document.getElementById(ch.host + '-chart-sub');
-  if (titleEl) titleEl.textContent = m.label + ' · ' + adsGrainAdv(grain) + ' trend';
+  if (titleEl) titleEl.textContent = m.label + ' · ' + pnlGrainAdv(grain) + ' trend';
   if (subEl) subEl.textContent = pnlTrendSubtitle({
     selectionActive, midCount: names.length, bandCount: built.bandCount,
     // A MONTHLY view states the MONTHS it resolved to, not the daily window
@@ -1082,7 +1571,8 @@ function adsUpdateChart(ctx) {
     canvasId: ch.host + '-chart-canvas', instance: _adsChartInstance[key], periodHost: ch.periodHost,
     buckets, datasets: built.datasets, mode: built.mode,
     isPct: !!m.isPct, unit: m.unit,
-  }).then(inst => { _adsChartInstance[key] = inst; })
+  }).then(inst => { _adsChartInstance[key] = inst;
+                    if (inst) inst.$overlaySync = _adsSync; })
     .catch(e => console.warn('ads trend chart:', (e && e.message) || e));
 }
 
@@ -1123,7 +1613,7 @@ function adsEnsureShell(channel, view) {
     +   `<input type="text" id="${ch.host}-search" placeholder="Search…" title="Matches any text column on this table." oninput="adsSearchChanged('${channel}','${view || ''}')" autocomplete="off" style="font-family:var(--mono);font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:5px;padding:5px 10px;width:260px">`
     +   brandPicker
     +   filterPickers
-    +   `<label style="font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer" title="Campaigns with no spend in this window. Hidden by default because a long tail of paused campaigns buries the ones actually running.">`
+    +   `<label style="font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer" title="Campaigns with no spend in this window.">`
     +     `<input type="checkbox" id="${ch.host}-zero" onchange="renderAdsCampaigns('${channel}','${view || ''}')"> show zero-spend</label>`
     +   `<button onclick="downloadAdsCampaignsCSV('${channel}','${view || ''}')" style="font-family:var(--mono);font-size:11px;background:var(--surface2);color:var(--text2);border:1px solid var(--border2);border-radius:6px;padding:5px 12px;cursor:pointer">↓ CSV</button>`
     + `</div>`
@@ -1146,7 +1636,7 @@ function adsEnsureShell(channel, view) {
     +         `<span id="${ch.host}-chart-metric-wrap" style="display:none;gap:6px;align-items:center">`
     +           `<span style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Metric</span>`
     +           `<select id="${ch.host}-chart-metric" onchange="renderAdsCampaigns('${channel}','${view || ''}')" style="font-family:var(--mono);font-size:11px;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:5px;padding:4px 8px;outline:none">`
-    +             adsChartMetrics(COLS).map(m => `<option value="${m.k}"${m.k === 'spend' ? ' selected' : ''}>${esc2(m.label)}</option>`).join('')
+    +             adsChartMetrics(COLS, channel).map(m => `<option value="${m.k}"${m.k === 'spend' ? ' selected' : ''}>${esc2(m.label)}</option>`).join('')
     +           `</select>`
     +         `</span>`
     +       `</div>`
@@ -1166,6 +1656,75 @@ function adsEnsureShell(channel, view) {
   return host;
 }
 
+// ===========================================================================
+// v12.00 - TACoS on the Ads tab: ad spend over TOTAL sales.
+//
+// /!\ ONE DEFINITION, NOT A SECOND SPELLING. `TACoS` already exists on the
+// P&L Page Performance tile as `ad spend / net sales` (renderPnlPerformance).
+// This is that same measure on this tab's scope. Rule 3a: one label, one
+// measure - so the arithmetic here is deliberately identical and the suite
+// pins the two together.
+//
+// /!\ IT CANNOT BE DERIVED FROM SKU ECONOMICS ALONE, and that was the
+// question. That feed carries `sponsored_products_total` and nothing else
+// about ads. Measured on the live table, US, trailing 90 days:
+//
+//     sponsored_products  $44,250  |  sponsored_display  $1,753
+//     sponsored_brands    $10,337  |  sponsored_tv       $1,739
+//
+// SP is 76% of spend, so an SP-only TACoS reads 12.4% against a real 16.5%
+// over 12 full weeks - it would hide a quarter of the spend, silently, on
+// the one card whose job is to say what advertising costs in total.
+// The numerator is this tab's Ad Spend, which is every ad product.
+//
+// /!\ THE DENOMINATOR IS WEEKLY AND THE NUMERATOR IS DAILY. amzFeeAgg sums
+// sku_economics rows whose week_start falls in the window, so a window that
+// does not start on a Monday buys whole weeks only. The card says which days
+// its sales actually cover rather than implying they match the ad window.
+// Proration is NOT used: it would invent daily sales these feeds do not
+// carry, which is the rule v11.74 set.
+//
+// Returns { pct, netSales, why } - `pct` null means NO ANSWER, and `why`
+// says which of the four reasons it is. A wrong TACoS is worse than none.
+// ===========================================================================
+function adsTacosFor(channel, selRows, spend, range) {
+  const no = (why) => ({ pct: null, netSales: null, why });
+
+  // Only the Amazon tab has a total-sales feed behind it on this page.
+  if (channel !== 'amazon') {
+    return no('TACoS needs this channel\u2019s total sales, and only Amazon carries them on this page.');
+  }
+  // v11.xx standing gap: no UK/EU Amazon ad spend is loaded, so an EU TACoS
+  // would divide a blank by a real number and read 0.0%.
+  if (typeof pnlRegion !== 'undefined' && pnlRegion === 'EU') {
+    return no('No EU Amazon ad spend is loaded, so an EU TACoS would read 0.0% against real sales.');
+  }
+  // /!\ A CAMPAIGN SELECTION CANNOT NARROW THE SALES SIDE. Organic sales do
+  // not belong to a campaign. Dividing a few campaigns' spend by the whole
+  // catalogue's sales reads far too low, and it would move every time a row
+  // is ticked - a card that appears to answer a control it cannot honour is
+  // the v10.19 defect.
+  if (selRows && selRows.length) {
+    return no('Organic sales do not belong to a campaign, so selecting campaigns cannot narrow the sales side. Clear the selection for TACoS.');
+  }
+  if (typeof amzFeeAgg !== 'function') return no('Sales totals are not loaded yet.');
+  // /!\ NO RANGE, NO ANSWER. amzFeeAgg falls back to getPnlDateRange() when
+  // it is handed nothing, which would measure sales over a DIFFERENT window
+  // than the ad spend sitting beside it on the same strip - two windows in
+  // one ratio, with nothing on screen saying so.
+  if (!range || !range.from || !range.to) {
+    return no('This window has no date range, so TACoS cannot match its sales to its spend.');
+  }
+
+  let agg = null;
+  try { agg = amzFeeAgg(range); } catch (e) { return no('Sales totals could not be read: ' + e.message); }
+  const ns = (agg && agg.tot) ? (agg.tot.netSales || 0) : 0;
+  if (!(ns > 0)) {
+    return no('No net sales in this window, so TACoS has no denominator. Widen the period.');
+  }
+  return { pct: (spend || 0) / ns * 100, netSales: ns, from: agg.from, to: agg.to, why: null };
+}
+
 function renderAdsCampaigns(channel, view) {
   const ch = adsViewCfg(channel, view); if (!ch) return;
   if (!adsEnsureShell(channel, view)) return;
@@ -1176,12 +1735,35 @@ function renderAdsCampaigns(channel, view) {
 
   const win = ch.range() || {};
   const brand = ch.brand();
+  // v11.67 - the drill, on the CAMPAIGNS view only: `drill` is what this table
+  // can offer, `drillNames` is what the destination can honour.
+  const drill = (!view && ADS_DRILL[channel]) ? ADS_DRILL[channel] : null;
+  const drillNames = drill ? adsDrillNames(channel, win.from, win.to, brand) : null;
+  // The destination feed is what decides whether a name is a link, so it has
+  // to be in hand. Fired ONCE per channel per session; until it lands every
+  // name renders as plain text, which is the honest state rather than a link
+  // we cannot yet promise to honour.
+  if (drill && !drillNames && !_adsDrillLoading[channel]) {
+    const dcfg = adsViewCfg(channel, drill.view);
+    if (dcfg && typeof dcfg.load === 'function') {
+      _adsDrillLoading[channel] = true;
+      Promise.resolve(dcfg.load())
+        .then(() => renderAdsCampaigns(channel, view))
+        .catch(console.warn);
+    }
+  }
   // Read the filter strip into the {dimension: Set} shape the rollup takes.
   const picked = {};
+  // v11.67 - a drill-in arrives BEFORE this view's filter control has options,
+  // so its pick is applied to the ROLLUP here and written onto the control in
+  // the options loop below. One render, no re-entry.
+  const pend = (_adsPendingFilter && _adsPendingFilter.channel === channel
+                && (_adsPendingFilter.view || '') === (view || '')) ? _adsPendingFilter : null;
   for (const f of (ch.filters || [])) {
     const v = (document.getElementById(ch.host + '-f-' + f.k) || {}).value || '';
     if (v) picked[f.k] = new Set([v]);
   }
+  if (pend) picked[pend.k] = new Set([pend.v]);
   // The chart's bucket grain, chosen from the window and STATED in the
   // chart's own subtitle. Asking the rollup for the series here means the
   // chart is built from the same scan, the same window and the same filters
@@ -1199,7 +1781,8 @@ function renderAdsCampaigns(channel, view) {
     const sel = document.getElementById(ch.host + '-f-' + f.k);
     if (!sel) continue;
     const opts = (optsRes.options && optsRes.options[f.k]) || [];
-    const keep = sel.value;
+    // A pending drill-in wins over whatever the control was left on.
+    const keep = (pend && pend.k === f.k) ? pend.v : sel.value;
     const next = '<option value="">All</option>'
       + opts.map(v => `<option value="${esc2(v)}">${esc2(v)}</option>`).join('');
     if (sel.innerHTML !== next) sel.innerHTML = next;
@@ -1207,6 +1790,9 @@ function renderAdsCampaigns(channel, view) {
     // than leaving the control on a value the table cannot show (v11.02).
     sel.value = opts.includes(keep) ? keep : '';
   }
+  // Consumed, whether or not it landed - a pick that outlived its render would
+  // re-apply itself on the next repaint and the filter could never be cleared.
+  if (pend) _adsPendingFilter = null;
   // The comparison basis: the block of the same length immediately before the
   // window. Ad spend has no calendar-twin thesis the way the Program tab does,
   // so prev-period is the only basis offered rather than a toggle that looks
@@ -1229,7 +1815,7 @@ function renderAdsCampaigns(channel, view) {
       const [py, pm] = String(mm[0]).split('-').map(Number);
       const pFrom = new Date(py, pm - 1 - mm.length, 1);
       const pTo   = new Date(py, pm - 1, 0);      // day 0 = last day of the month before
-      prev = adsCampaignRollup({ channel, view, from: adsYmd(pFrom), to: adsYmd(pTo), brand, filters: picked });
+      prev = adsCampaignRollup({ channel, view, from: adsYmd(pFrom), to: adsYmd(pTo), brand, filters: picked, bucket: grain });
     }
   } else if (win.from && win.to && !win.allTime) {
     const d0 = new Date(win.from + 'T00:00:00'), d1 = new Date(win.to + 'T00:00:00');
@@ -1237,13 +1823,19 @@ function renderAdsCampaigns(channel, view) {
     if (len > 0) {
       const pTo = new Date(d0.getTime() - 86400000);
       const pFrom = new Date(pTo.getTime() - (len - 1) * 86400000);
-      prev = adsCampaignRollup({ channel, view, from: adsYmd(pFrom), to: adsYmd(pTo), brand, filters: picked });
+      prev = adsCampaignRollup({ channel, view, from: adsYmd(pFrom), to: adsYmd(pTo), brand, filters: picked, bucket: grain });
     }
   }
   // The export reads this SNAPSHOT, never a recompute (the v8.00 rule), so
   // the selection has to ride along with it.
   _adsExport[_adsKey(channel, view)] = { res, win, brand, channel, view,
     sel: [...adsState(channel, view).sel] };
+
+  // v11.59 - resolved against adsBrandFilterValue(ch), the SAME expression
+  // the sub-floor red colour uses, so the column and the colour can never
+  // disagree about which break-even applies.
+  adsStampBreakEven(res.campaigns, channel, adsBrandFilterValue(ch));
+  if (res.totals) adsStampBreakEven([res.totals], channel, adsBrandFilterValue(ch));
 
   const t = res.totals;
   const $0 = (n) => '$' + Math.round(Number(n) || 0).toLocaleString();
@@ -1271,20 +1863,9 @@ function renderAdsCampaigns(channel, view) {
     if (!q) return true;
     return hay(c).indexOf(q) > -1;
   });
-  const dir = st.sortDir, k = st.sortK;
-  list = list.slice().sort((a, b) => {
-    const av = a[k], bv = b[k];
-    // Nulls sort last in BOTH directions. A campaign with no ROAS is not the
-    // best or the worst performer; floating it to the top of a descending sort
-    // would put the rows with no answer above the rows with one.
-    if (av == null && bv == null) return 0;
-    if (av == null) return 1;
-    if (bv == null) return -1;
-    if (typeof av === 'string' || typeof bv === 'string') {
-      return String(av).localeCompare(String(bv)) * dir;
-    }
-    return (av - bv) * dir;
-  });
+  // v11.71 - the shared comparator. The null rule lives in tableSortCmp now,
+  // so the Fees table cannot disagree with this one about where a blank goes.
+  list = list.slice().sort(tableSortCmp(st.sortK, st.sortDir));
   // The rows AS RENDERED, so a checkbox can address its row by index.
   _adsRendered[_adsKey(channel, view)] = list;
 
@@ -1334,9 +1915,9 @@ function renderAdsCampaigns(channel, view) {
   // the CHART itself reads. A card and its series therefore cannot name the
   // same number differently (rule 3a), and a card whose metric the chart
   // cannot plot gets no control at all rather than a dead one.
-  const chartBy = adsChartBy(channel, view);
+  const chartBy = adsChartByResolve(ch, channel, view);
   const plotSel = adsChartSel(channel, view);
-  const plotMetrics = adsChartMetrics(COLS);
+  const plotMetrics = adsChartMetrics(COLS, channel);
   const colLabel = (k, dflt) => (COLS.find(c => c.k === k) || {}).label || dflt;
   const colTip = (k) => (COLS.find(c => c.k === k) || {}).tip;
   const plotOf = (k) => {
@@ -1345,6 +1926,21 @@ function renderAdsCampaigns(channel, view) {
     if (mi < 0) return null;
     const on = plotSel.has(k);
     const full = !on && plotSel.size >= ADS_CHART_MAX;
+    // v12.02 - /!\ TACoS HAS TWO STATES THE OTHER METRICS DO NOT.
+    // Both render the button DISABLED with the reason on it rather than
+    // hiding it, because a toggle that silently vanishes on some grains
+    // reads as a bug; and pnlCard strips the onclick when disabled, so a
+    // refused control cannot be clicked through.
+    if (k === 'tacos') {
+      if (grain === 'day') {
+        return { on, disabled: true, color: adsMetricColor(k, mi), onclick: '',
+                 tip: 'SKU Economics is stamped one row per WEEK, so there is no daily sales figure to divide spend by. Switch GROUP to W or M.' };
+      }
+      if (sel && sel.size) {
+        return { on, disabled: true, color: adsMetricColor(k, mi), onclick: '',
+                 tip: 'Organic sales do not belong to a campaign, so a selection cannot narrow the sales side. Clear the selection to plot TACoS.' };
+      }
+    }
     return {
       on, disabled: full, color: adsMetricColor(k, mi),
       onclick: `adsToggleChartMetric('${channel}','${view || ''}','${k}')`,
@@ -1353,6 +1949,34 @@ function renderAdsCampaigns(channel, view) {
                       : 'Add this line to the chart below, on its own axis.'),
     };
   };
+
+  // v12.00 - TACoS, on the SCOPE total `t` rather than on the selection-aware
+  // `cardT`: the denominator cannot be narrowed to selected campaigns, so the
+  // numerator must not be either (adsTacosFor refuses outright when rows are
+  // selected, and this keeps the two sides describing one population).
+  // v12.01 - /!\ getPnlPrevDateRange(cur) REQUIRES the current range; it reads
+  // `cur.from` on its third line. v12.00 called it with no argument, so every
+  // render of this tab threw `Cannot read properties of undefined (reading
+  // 'from')` before a single card was drawn - the TACoS card took down the six
+  // that have nothing to do with it.
+  //
+  // /!\ SO THE WHOLE COMPUTATION IS GUARDED, not just the call that was wrong.
+  // A scorecard must not be able to destroy the page it sits on: a throw in
+  // here now costs this one card its number and nothing else, and the reason
+  // lands on its tooltip rather than in the console.
+  let tacos = { pct: null, why: 'TACoS could not be computed for this window.' };
+  let tacosPrev = { pct: null };
+  try {
+    const tacosRange = (win && win.from && win.to) ? { from: win.from, to: win.to } : null;
+    tacos = adsTacosFor(channel, selRows, t && t.spend, tacosRange);
+    if (!selRows && prev && tacosRange && typeof getPnlPrevDateRange === 'function') {
+      tacosPrev = adsTacosFor(channel, null, pt && pt.spend, getPnlPrevDateRange(tacosRange));
+    }
+  } catch (e) {
+    console.warn('TACoS card:', e && e.message);
+    tacos = { pct: null, why: 'TACoS could not be computed: ' + (e && e.message) };
+    tacosPrev = { pct: null };
+  }
 
   const cards = document.getElementById(ch.host + '-cards');
   if (cards && typeof pnlCardStrip === 'function') {
@@ -1391,15 +2015,53 @@ function renderAdsCampaigns(channel, view) {
         color: cardT.acos == null ? 'var(--text3)' : (cardT.acos > 100 ? 'var(--sp-red)' : 'var(--text)'),
         delta: chip(cardT.acos, pt && pt.acos, false, true), src: ch.src,
         tip: colTip('acos'), plot: plotOf('acos') },
+      // v12.00 - /!\ TACoS sits beside ACOS because they are the same
+      // question asked of two denominators: ACOS is spend over AD-ATTRIBUTED
+      // sales, TACoS is spend over ALL sales. Good when DOWN, like ACOS, and
+      // reported in POINTS for the same reason.
       { label: 'Clicks', val: n0(cardT.clicks),
         sub: (cardT.ctr == null ? '—' : cardT.ctr.toFixed(2) + '% CTR') + ' · ' + (cardT.cpc == null ? '—' : '$' + cardT.cpc.toFixed(2) + ' CPC'),
         delta: chip(cardT.clicks, pt && pt.clicks, true), src: ch.src,
         tip: colTip('clicks'), plot: plotOf('clicks') },
-      { label: colLabel('orders', 'Orders'), val: n0(cardT.orders),
-        sub: cardT.cpa == null ? 'no attributed orders' : '$' + cardT.cpa.toFixed(2) + ' per order',
-        delta: chip(cardT.orders, pt && pt.orders, true), src: ch.src,
-        tip: colTip('orders'), plot: plotOf('orders') },
-    ].concat(channel === 'chewy' ? [{
+    // v12.03 - /!\ GATED ON THE COLUMN REGISTRY, which is already what
+    // declares whether a feed reports orders at all. The Walmart Daily export
+    // carries neither orders nor units, so `cardT.orders` accumulates to 0 and
+    // this card would have read "0 - no attributed orders": a measured-looking
+    // zero for something nobody measured, which is the v11.16 rule and the
+    // v10.19 confident-wrong-answer in one card. All five existing views
+    // declare an orders column, so not one of them moves.
+    // v12.07 - /!\ ONLY ON THE CHANNEL THAT CAN COMPUTE IT.
+    // adsTacosFor refuses every channel but Amazon, so on Walmart and
+    // Chewy this card rendered a permanent dash - with `amazon_ad_spend`
+    // and `sku_economics` chips under it, naming another channel's feeds
+    // on this page. Gated on the same channel the helper accepts, so the
+    // two cannot disagree about where it belongs.
+    ].concat(channel === 'amazon' ? [{
+      label: 'TACoS %',
+      val: tacos.pct == null ? '—' : tacos.pct.toFixed(1) + '%',
+      sub: tacos.pct == null
+        ? 'not available'
+        : 'of $' + Math.round(tacos.netSales).toLocaleString() + ' net sales',
+      color: tacos.pct == null ? 'var(--text3)'
+           : (tacos.pct > 30 ? 'var(--sp-red)' : tacos.pct > 20 ? 'var(--sp-orange)' : 'var(--text)'),
+      delta: (tacos.pct == null || tacosPrev.pct == null) ? null
+           : chip(tacos.pct, tacosPrev.pct, false, true),
+      src: ['amazon_ad_spend', 'sku_economics'],
+      plot: plotOf('tacos'),
+      tip: tacos.pct == null
+        ? tacos.why
+        : ('Total Advertising Cost of Sales: ad spend \u00f7 net sales, every ad product '
+           + '(Sponsored Products, Brands, Display and TV), not just the ad-attributed '
+           + 'half that ACOS uses.\n\nSales come from SKU Economics, which is stamped one '
+           + 'row per WEEK, so this window\u2019s sales cover ' + tacos.from + ' to ' + tacos.to
+           + ' \u2014 whole weeks only. Nothing is prorated, because these feeds carry no '
+           + 'daily sales to prorate with.'),
+    }] : []).concat(COLS.some(c => c.k === 'orders') ? [{
+      label: colLabel('orders', 'Orders'), val: n0(cardT.orders),
+      sub: cardT.cpa == null ? 'no attributed orders' : '$' + cardT.cpa.toFixed(2) + ' per order',
+      delta: chip(cardT.orders, pt && pt.orders, true), src: ch.src,
+      tip: colTip('orders'), plot: plotOf('orders'),
+    }] : []).concat(channel === 'chewy' ? [{
       label: 'NTB', val: n0(cardT.ntb), sub: 'new-to-brand customers',
       delta: chip(cardT.ntb, pt && pt.ntb, true), src: ch.src,
       tip: colTip('ntb'), plot: plotOf('ntb'),
@@ -1411,7 +2073,7 @@ function renderAdsCampaigns(channel, view) {
   const selAllTh = `<th style="text-align:center;padding:6px 6px;width:30px;border-bottom:1px solid var(--border2)" title="Select every row currently visible, or clear them."><input type="checkbox" id="${ch.host}-selall" onclick="adsToggleAllVisible('${channel}','${view || ''}')" style="cursor:pointer;margin:0;vertical-align:middle"></th>`;
   const th = document.getElementById(ch.host + '-thead');
   if (th) th.innerHTML = selAllTh + COLS.map(c => {
-    const arrow = st.sortK === c.k ? (st.sortDir < 0 ? ' ▼' : ' ▲') : '';
+    const arrow = tableSortArrow(st.sortK === c.k, st.sortDir);
     return `<th onclick="adsSortBy('${channel}','${c.k}','${view || ''}')" title="${esc2(c.tip || c.label)}"`
       + ` style="text-align:${c.align};padding:6px 8px;min-width:${c.w}px;cursor:pointer;`
       + `font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.5px;`
@@ -1420,16 +2082,30 @@ function renderAdsCampaigns(channel, view) {
 
   // --- rows -------------------------------------------------------------
   const RED = 'var(--sp-red,#d63f2a)';
-  const cellOf = (c, col) => {
+  const cellOf = (c, col, i) => {
     const v = c[col.k];
     const pad = `padding:5px 8px;text-align:${col.align};white-space:nowrap`;
     if (col.k === NAMECOL) {
       // The no-campaign bucket is DIMMED AND NAMED, not hidden, and says why.
       const dim = c.noCampaign ? ';color:var(--text3);font-style:italic' : '';
+      // v11.67 - the drill, offered ONLY where the destination can honour it.
+      // The footer calls cellOf with no index and therefore never drills.
+      const canDrill = !!(drill && drillNames && i >= 0 && !c.noCampaign
+                          && drillNames.has(c[NAMECOL]));
       const tip = c.noCampaign
         ? ' title="Spend uploaded before the Campaign name column existed. Re-upload this window from Amazon Ads → Reports with Campaign name as a dimension to fill it in."'
-        : ` title="${esc2(c[NAMECOL])}"`;
-      return `<td${tip} style="${pad};max-width:${col.w}px;overflow:hidden;text-overflow:ellipsis${dim}">${esc2(c[NAMECOL])}</td>`;
+        : canDrill
+          ? ` title="${esc2(c[NAMECOL])}\nOpen this campaign's keywords."`
+          : (drill && drillNames)
+            ? ` title="${esc2(c[NAMECOL])}\nNo rows for this campaign in the Keywords feed over this window, so there is nothing below it to open."`
+            : ` title="${esc2(c[NAMECOL])}"`;
+      const body = canDrill
+        ? `<span onclick="event.stopPropagation();adsDrillOpen('${channel}',${i})"`
+          + ` style="cursor:pointer;border-bottom:1px dotted var(--text3)"`
+          + ` onmouseover="this.style.color='var(--sp-green)'"`
+          + ` onmouseout="this.style.color=''">${esc2(c[NAMECOL])}</span>`
+        : esc2(c[NAMECOL]);
+      return `<td${tip} style="${pad};max-width:${col.w}px;overflow:hidden;text-overflow:ellipsis${dim}">${body}</td>`;
     }
     // ⚠ TEXT IS DETECTED BY VALUE, NOT BY A LIST OF COLUMN NAMES. The old
     // check named campaign / type / status and sent everything else to the
@@ -1446,7 +2122,14 @@ function renderAdsCampaigns(channel, view) {
     // 'roas', so a second ratio column turns red for the same reason the
     // first one does. Among the pre-v11.25 registries only `roas` resolves to
     // 'x', so this is a no-op for every existing table.
-    const warn = (F === 'x' && v < 1) || (F === '%' && col.k === 'acos' && v > 100);
+    // v11.52 - against the CHANNEL'S break-even, not a flat 1.0. On Amazon
+    // and Chewy the floor is still 1.0 and this is a no-op; on Walmart 1P a
+    // 2.50x is a loss and now reads as one.
+    // v11.59 - a gap column IS the comparison, so its own threshold is zero.
+    // Reusing the 'x' rule would test the gap against the break-even itself.
+    const warn = (F === 'xs' && v < 0)
+      || (F === 'x' && v < adsRoasFloor(channel, adsBrandFilterValue(ch)))
+      || (F === '%' && col.k === 'acos' && v > 100);
     return `<td style="${pad}${warn ? ';color:' + RED : ''}">${out}</td>`;
   };
 
@@ -1461,7 +2144,7 @@ function renderAdsCampaigns(channel, view) {
             + ` onmouseover="if(this.dataset.sel!=='1')this.style.background='var(--surface2)'"`
             + ` onmouseout="this.style.background=this.dataset.sel==='1'?'${SEL_BG}':''">`
             + `<td style="text-align:center;padding:5px 6px;width:30px"><input type="checkbox" ${on ? 'checked' : ''} onclick="event.stopPropagation();adsToggleRow('${channel}',${i},'${view || ''}')" style="cursor:pointer;margin:0;vertical-align:middle"></td>`
-            + COLS.map(col => cellOf(c, col)).join('') + '</tr>';
+            + COLS.map(col => cellOf(c, col, i)).join('') + '</tr>';
         }).join('')
       : `<tr><td colspan="${COLS.length + 1}" style="text-align:center;padding:24px;color:var(--text3);font-family:var(--mono);font-size:11px">`
         + (res.coverage.scanned
@@ -1511,12 +2194,24 @@ function renderAdsCampaigns(channel, view) {
 
   // The trend, through the same engine the four P&L charts use.
   try {
-    adsUpdateChart({ ch, channel, view, COLS, res, win, list, sel, grain, totals: t });
+    adsUpdateChart({ ch, channel, view, COLS, res, win, list, sel, grain, totals: t, prev });
   } catch (e) { console.warn('ads trend chart:', (e && e.message) || e); }
+
+  // v11.52 - derive the break-even once per channel, then repaint so the
+  // colouring and the coverage line pick it up. Guarded on the cache entry,
+  // so this cannot loop: the entry is set to {pending} before the await.
+  if (_adsBreakEven[channel] === undefined) {
+    adsLoadBreakEven(channel).then(() => {
+      try { renderAdsCampaigns(channel, view); } catch (_) {}
+    });
+  }
 
   const cov = document.getElementById(ch.host + '-cov');
   if (cov) {
     const parts = [];
+    // v11.52 - a threshold nobody can see is a threshold nobody can act on.
+    const beNote = adsBreakEvenNote(channel, adsBrandFilterValue(ch));
+    if (beNote) parts.push(beNote);
     // ⚠ A view whose feed is monthly says so, and names the months it
     // actually resolved to. The Campaigns tab is genuinely daily, so the two
     // tabs under one period control CAN resolve different windows - which is
@@ -1530,7 +2225,15 @@ function renderAdsCampaigns(channel, view) {
     } else {
       parts.push((win.from || 'start') + ' → ' + (win.to || 'today'));
     }
-    if (brand) parts.push(brand);
+    // v12.03 - /!\ A VIEW THAT CANNOT HONOUR THE PAGE'S BRAND CONTROL SAYS SO.
+    // The Walmart Daily feed is an ACCOUNT TOTAL with no campaign dimension,
+    // so picking Doggijuana cannot narrow it. Reporting the whole account
+    // while a brand sits selected one row above would be a confident wrong
+    // answer (v10.19) - the one failure this line exists to prevent.
+    if (typeof ch.brandless === 'function') {
+      const bn = ch.brandless();
+      if (bn) parts.push(bn);
+    } else if (brand) parts.push(brand);
     parts.push(res.coverage.campaignCount + ' ' + (ch.noun || 'campaign')
       + (res.coverage.campaignCount === 1 ? '' : 's'));
     parts.push($0(t.spend) + ' spend');
@@ -1576,13 +2279,18 @@ function downloadAdsCampaignsCSV(channel, view) {
   // row of that export carried the literal string NaN in Search term and
   // Match. The table was fixed in v11.22b and this second renderer of the
   // same data was not.
-  const val = (c, k) => {
-    const v = c[k];
+  // v11.59 - the DECIMAL rule now comes from adsColFmt, the same resolver the
+  // table uses, rather than from a hardcoded key list. That list was missing
+  // `omniRoas`, so Walmart's Omni ROAS exported as a rounded integer - 2.08x
+  // written as "2" - while the table rendered it right. Exactly the defect the
+  // comment above describes, one column over.
+  const val = (c, col) => {
+    const k = col.k, v = c[k];
     if (typeof v === 'string') return v;
     if (v == null) return '';
-    if (k === 'spend' || k === 'sales' || k === 'cpc' || k === 'cpa'
-        || k === 'ctr' || k === 'acos' || k === 'roas') return f2(v);
-    return i0(v);
+    const F = adsColFmt(col);
+    return (F === '$' || F === '$2' || F === '%' || F === 'x' || F === 'xs')
+      ? f2(v) : i0(v);
   };
   const lines = [];
   // A file with no stated scope is unreadable three weeks later (v10.79).
@@ -1614,8 +2322,8 @@ function downloadAdsCampaignsCSV(channel, view) {
       + 'before the Campaign name column existed. Included in the TOTAL, not dropped.');
   }
   lines.push(COLS.map(c => c.label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')).join(','));
-  for (const c of res.campaigns) lines.push(COLS.map(col => esc(val(c, col.k))).join(','));
-  lines.push(COLS.map((col, i) => i === 0 ? 'TOTAL' : esc(val(res.totals, col.k))).join(','));
+  for (const c of res.campaigns) lines.push(COLS.map(col => esc(val(c, col))).join(','));
+  lines.push(COLS.map((col, i) => i === 0 ? 'TOTAL' : esc(val(res.totals, col))).join(','));
 
   const name = promptCsvName('smarterpaw-ads-' + channel + '-' + (view || 'campaigns') + '-'
     + new Date().toISOString().slice(0, 10) + '.csv');
@@ -1650,9 +2358,9 @@ async function loadAdsCampaigns(channel, view) {
       adsFillBrands(channel, view);
     }
     if (channel === 'walmart') {
-      // The keywords view has already loaded its own table through ch.load()
-      // above; this is the campaigns feed.
-      if (typeof loadWalmartAdCampaign === 'function') await loadWalmartAdCampaign();
+      // v12.07 - the channel declares its own `load` now (campaign x day), so
+      // the branch above has already run it and there is no second feed to
+      // fetch here. Only the brand picker is Walmart's own.
       adsFillBrands(channel, view);
     }
     renderAdsCampaigns(channel, view);
@@ -1809,6 +2517,11 @@ out.unfiltSpend = unfilt.totals.spend;
 function prevFor(view, win, res) {
   const ch = adsViewCfg('amazon', view);
   const channel = 'amazon', brand = '', picked = {};
+  // v11.68 - the block now asks for the same bucket grain the chart resolved,
+  // so the prior rollup carries a SERIES and not just totals. Supplied here
+  // the way every other local this slice reads is (the v11.51 pattern); what
+  // D asserts is still the monthly prior WINDOW, which the grain cannot move.
+  const grain = adsGrain(win, ch);
   let __out = null;
   (function () {
   let prev = null;
@@ -1823,7 +2536,7 @@ function prevFor(view, win, res) {
       const [py, pm] = String(mm[0]).split('-').map(Number);
       const pFrom = new Date(py, pm - 1 - mm.length, 1);
       const pTo   = new Date(py, pm - 1, 0);      // day 0 = last day of the month before
-      prev = adsCampaignRollup({ channel, view, from: adsYmd(pFrom), to: adsYmd(pTo), brand, filters: picked });
+      prev = adsCampaignRollup({ channel, view, from: adsYmd(pFrom), to: adsYmd(pTo), brand, filters: picked, bucket: grain });
     }
   } else if (win.from && win.to && !win.allTime) {
     const d0 = new Date(win.from + 'T00:00:00'), d1 = new Date(win.to + 'T00:00:00');
@@ -1831,7 +2544,7 @@ function prevFor(view, win, res) {
     if (len > 0) {
       const pTo = new Date(d0.getTime() - 86400000);
       const pFrom = new Date(pTo.getTime() - (len - 1) * 86400000);
-      prev = adsCampaignRollup({ channel, view, from: adsYmd(pFrom), to: adsYmd(pTo), brand, filters: picked });
+      prev = adsCampaignRollup({ channel, view, from: adsYmd(pFrom), to: adsYmd(pTo), brand, filters: picked, bucket: grain });
     }
   }
 

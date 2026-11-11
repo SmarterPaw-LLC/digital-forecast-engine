@@ -35,6 +35,10 @@ const PNL_PERIOD_HOSTS = {
   spnl:  'Shopify P&L',
   wmpnl: 'Walmart P&L',
   chpnl: 'Chewy P&L',
+  // v11.53 - the SEO Traffic bar now carries the same four controls and the
+  // same custom option, so it can join the registry and get v11.28's
+  // click-a-point-to-scope for free rather than growing its own.
+  'seo-tr': 'SEO Traffic',
 };
 function pnlBucketRange(bucket, grain) {
   const m = String(bucket || '').match(/^(\d{4})-(\d{2})(?:-(\d{2}))?$/);

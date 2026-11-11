@@ -178,7 +178,10 @@ const out = {
 
   // a month runs to its own last day, including a short one and a leap one
   mSep:     uploadDataThru('amazon_query_performance_asin', '2026-09'),
-  mOct:     uploadDataThru('walmart_ad_campaign', '2026-10'),
+  // v12.07 - walmart_ad_campaign is retired. walmart_ad_keyword is the
+  // surviving reporting_month feed; the rule under test is that a MONTH
+  // period ends on its own last day, whichever table declares it.
+  mOct:     uploadDataThru('walmart_ad_keyword', '2026-10'),
   mFeb26:   uploadPeriodEnd('2026-02', 'month'),
   mFeb28:   uploadPeriodEnd('2028-02', 'month'),
   mDec:     uploadPeriodEnd('2026-12', 'month'),
@@ -199,7 +202,10 @@ console.log(JSON.stringify(out));
 """)
 
 eq("A1  week_start reads as a WEEK grain", A["grains"]["sku_economics"], "week")
-eq("A2  reporting_month reads as a MONTH grain", A["grains"]["walmart_ad_campaign"], "month")
+# v12.07 - walmart_ad_campaign is retired. walmart_ad_keyword is the
+# surviving reporting_month feed, and the rule under test is about the
+# COLUMN NAME, not about which table carries it.
+eq("A2  reporting_month reads as a MONTH grain", A["grains"]["walmart_ad_keyword"], "month")
 eq("A3  year reads as a YEAR grain", A["grains"]["digital_sales_tracker"], "year")
 eq("A4  snapshot_date reads as a DAY grain", A["grains"]["fba_fee_preview"], "day")
 eq("A5  walmart_calendar_week reads as a WEEK grain",
@@ -213,11 +219,11 @@ ok(set(A["grains"].values()) <= {"day", "week", "month", "year"},
 # so it resolves as a DAY grain and takes v11.75's 10-day daily tolerance -
 # deliberately wider than one cycle, because a one-day tolerance would mark
 # every daily feed late every single day.
-# v12.05 - 25: walmart_ad_campaign_daily joined, also a real DATE grain.
-eq("A7  25 sources registered", len(A["grains"]), 25)
-for t in ("walmart_ad_daily", "walmart_ad_campaign_daily"):
-    eq("A7b /!\\ %s resolves as a DAY, not a period code" % t,
-       A["grains"].get(t), A["grains"].get("shopify_sales_daily"))
+# v12.07 - 23: two Walmart ad feeds retired (walmart_ad_campaign and
+# walmart_ad_daily), one added back in v12.05.
+eq("A7  23 sources registered", len(A["grains"]), 23)
+eq("A7b /!\\ the campaign x day feed resolves as a DAY, not a period code",
+   A["grains"].get("walmart_ad_campaign_daily"), A["grains"].get("shopify_sales_daily"))
 
 eq("A8  Amazon SKU Economics declares Mon+5", A["offAmz"], 5)
 eq("A9  Amazon SKU Economics EU declares Mon+5", A["offAmzEu"], 5)
@@ -269,7 +275,9 @@ console.log(JSON.stringify(out));
 eq("B1  a WEEKLY feed is late one week after the week closes",
    B["sku_economics"], 7)
 eq("B2  ... on every weekly source", B["sku_economics_eu"], 7)
-eq("B3  a MONTHLY feed gets one month", B["walmart_ad_campaign"], 31)
+# v12.07 - walmart_ad_campaign is retired; walmart_ad_keyword is the
+# surviving reporting_month feed.
+eq("B3  a MONTHLY feed gets one month", B["walmart_ad_keyword"], 31)
 eq("B4  a DAILY feed keeps 10 - these are hand uploads on a weekly rhythm",
    B["shopify_sales_daily"], 10)
 eq("B5  a YEAR-keyed feed gets 45 against the UPLOAD date, not 400",
@@ -355,7 +363,6 @@ const LIVE = [
   ['fba_shipments', 'CA', '2026-10-21', '2026-10-26'],
   ['amazon_ads_bulk_upload', 'US', '2026-09-21', '2026-09-21'],
   ['amazon_query_performance_asin', 'US', '2026-09', '2026-10-26'],
-  ['walmart_ad_campaign', 'US', '2026-10', '2026-10-30'],
   ['walmart_ad_keyword', 'US', '2026-10', '2026-10-30'],
   ['amazon_sp_search_term', 'US', '2026-10', '2026-11-02'],
   ['amazon_sp_campaign_snapshot', 'US', '2026-08', '2026-09-20'],
@@ -405,13 +412,20 @@ ok(all(f.endswith("true->false") for f in C["flips"]),
    "C9  every change is a check LOST, never one invented", C["flips"])
 ok(all(f.split("/")[0] in ("sku_economics_eu", "digital_sales_tracker") for f in C["flips"]),
    "C10 and only on the two feeds that are actually behind", C["flips"])
-eq("C11 checks before", C["oldChecks"], 22)
-eq("C12 checks after", C["newChecks"], 15)
+# v12.07 - 21: one source retired out of the fixture above.
+eq("C11 checks before", C["oldChecks"], 21)
+# v12.07 - 14, for the same one retired source. The GUARANTEE this pair
+# protects is unchanged: 21 before, 14 after, and all seven differences are
+# checks LOST on feeds that really are behind.
+eq("C12 checks after", C["newChecks"], 14)
 
 # Every mark that did NOT move is pinned, so this is a measurement rather
 # than a count. A monthly feed holding last month stays fresh; one holding
 # the month before does not.
-ok(rows["walmart_ad_campaign/US"]["nu"] is True,
+# v12.07 - was walmart_ad_campaign, retired with its feed. walmart_ad_keyword
+# carries the same month and the same reporting_month shape, so the case this
+# line protects - a MONTHLY feed holding last month is still fresh - is intact.
+ok(rows["walmart_ad_keyword/US"]["nu"] is True,
    "C13 a monthly feed holding October is fresh on 2026-11-09")
 ok(rows["amazon_query_performance_asin/US"]["nu"] is False,
    "C14 ... and one holding September is not")

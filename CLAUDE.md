@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.06** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.07** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,83 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.07 - the cleanup, done rather than offered
+
+- **Jason:** *"I already asked you to cleanup what wasn't needed. why do i have
+  to point all of this out?"*
+
+He is right. He asked for a cleanup in v12.06 and got an **inventory and two
+rounds of options**: I kept the account feed on an argument he then had to
+overrule, left the monthly feed unexamined until he asked about it, and made
+him find the Amazon chips himself. **A cleanup that hands back a decision list
+is not a cleanup.**
+
+### Four Walmart ad feeds became two
+
+| retired | why |
+|---|---|
+| `walmart_ad_daily` (v12.03, same day) | the account total. Campaign x Day sums to it **exactly**, so it was a second weekly pull to re-prove something the suite already asserts. |
+| `walmart_ad_campaign` (v11.25) | monthly **because its export carries no date** - the operator stamped a month and nothing could check it. Its three settings columns are readable in Ad Center. |
+
+**Walmart P&L → Ads is now Campaigns + Keywords.** One weekly pull.
+
+### ⚠ THE CHANNEL WAS REPLACED, NOT THE VIEW DELETED
+`ADS_CHANNELS.walmart` **is** the prototype every Walmart view inherits from,
+so the monthly feed could not simply be removed - the campaign x day feed took
+its place. That is also what makes Campaigns the default tab carrying **no
+view key at all**, exactly like Amazon's, and it deleted both v12.05's
+`campdaily` view and v12.03's `daily` view in the process.
+
+Its `monthOf` and `inWindow` are **gone rather than shadowed** now. Those two
+are what pinned every Walmart ads chart to a monthly grain and greyed out the
+D and W buttons; the rows carry a real date, so the default window compare
+applies and the chart groups by day.
+
+### ⚠ AND THE TACoS CARD WAS NAMING AMAZON'S FEEDS ON THE WALMART PAGE
+- **Jason:** *"why is amazon ads report showing on walmart ads?"*
+
+Mine, from v12.00. The card went onto the **shared** ads strip with
+`src: ['amazon_ad_spend', 'sku_economics']` **hardcoded**, and `adsTacosFor`
+refuses every channel but Amazon. So on Walmart and Chewy it rendered a
+permanent `—  not available` with two **Amazon** source chips under it: a card
+that can never hold a number on that tab, citing another channel's feeds. The
+v10.19 defect with someone else's provenance attached.
+
+Gated on the same channel the helper accepts, so the card and the helper
+cannot disagree about where it belongs.
+
+### The ADS_COLUMNS registry was LIFTED, not re-typed
+`ADS_COLUMNS.walmart` is the campaign x day column list now, moved verbatim
+out of the deleted view - nineteen columns with their headers, widths and
+tooltips. Re-typing them is how a tooltip goes missing (v10.87).
+
+### Verification
+- `node --check` clean · **153 suites green**.
+- Every reference to the two retired feeds grepped out: no cache, no loader,
+  no parser, no handler, no dropzone, no registry row, no tab, no area. One
+  survivor found that way - `loadAdsCampaigns` still called
+  `loadWalmartAdCampaign` by name after the channel gained its own `load`.
+- **`tests/test_v1203.py` deleted.** It tested a feed that no longer exists;
+  its lessons (the literal-null rule, the found header) live in test_v1205.
+
+### ⚠ THE DATA IS NOT DELETED
+`walmart_ad_daily` and `walmart_ad_campaign` still hold their rows - Nov 1-10
+and March to October. Dropping a table is Jason's call, not a cleanup's. But
+**nothing reads them now**, which is the `amazon_storage_fees` shape and is
+only acceptable because it is transitional: backfilling Campaign x Day from
+2026-03-01 makes both genuinely redundant and they can then be dropped.
+
+### Still open
+- **⚠ BACKFILL `Campaign x Day - 14d` FROM 2026-03-01.** Until then the Ads
+  tab shows **Nov 4 onward only** - March to October is in a table nothing
+  reads any more.
+- **⚠ THE JUNE / JULY KEYWORD DUPLICATE IS NOT FIXED** (v12.06).
+- **⚠ NO CAMPAIGN ID IN THE EXPORT** (v12.05).
+- **⚠ KEYWORDS ARE STILL MONTHLY** (v12.05) - and are now the only monthly
+  Walmart feed.
+- **⚠ CHEWY / WALMART TACoS IS PARKED** (v12.05).
+- Everything else on the v12.06 list.
 
 ## v12.06 - the funnel joins campaign x day, and four tabs stop reading as four equal choices
 

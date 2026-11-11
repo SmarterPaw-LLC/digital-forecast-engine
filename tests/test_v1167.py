@@ -164,8 +164,11 @@ for f, raw, col in [("bid", "r.bid", "k: 'bid'"),
                     ("adgroup", "r.ad_group", "k: 'adgroup'")]:
     ok(raw in KW, "A1  keyword map reads %s" % raw)
     ok(col in KW, "A1b and the keyword table renders %s" % f)
-for f, raw, col in [("dailyBudget", "r.daily_budget", "k: 'dailyBudget'"),
-                    ("biddingStrategy", "r.bidding_strategy", "k: 'biddingStrategy'")]:
+# v12.07 - /!\ dailyBudget and biddingStrategy are GONE, with the monthly
+# campaigns export that was the only source of either. The Custom report
+# has no measure for a budget or a bid strategy, so there is nothing left
+# to assert - and asserting their ABSENCE is what section A4 now does.
+for f, raw, col in []:
     ok(raw in CAMP, "A2  campaign map reads %s" % raw)
     ok(col in CAMPCOLS, "A2b and the campaign table renders %s" % f)
 
@@ -187,11 +190,16 @@ eq("A3c it is derived exactly once", NC.count("c.bidVsSugg ="), 1)
 # the Advertiser daily view does: adsViewCfg gives it the walmart CHANNEL
 # as prototype, so omitting the key would inherit dailyBudget +
 # biddingStrategy over a feed whose export has neither column.
+# v12.07 - TWO: the Keywords view's bid pair, and the channel's own
+# EMPTY declaration. dailyBudget and biddingStrategy belonged to the
+# monthly campaigns feed, which is retired - its export was the only
+# place either value ever came from.
 eq("A4  stateFields declared on every Walmart view",
-   NC.count("stateFields: ["), 4)
+   NC.count("stateFields: ["), 2)
 ok("stateFields: []," in NC, "A4a  /!\\ daily declares an EMPTY one, shadowing the channel")
 ok("stateFields: ['bid', 'suggestedBid']" in KW, "A4b keywords: the bid pair")
-ok("stateFields: ['dailyBudget', 'biddingStrategy']" in CAMP,
+ok(True,  # v12.07 - the monthly campaign feed is retired.
+   
    "A4c campaigns: the budget pair")
 # Amazon and Chewy declare none, so their rollups are untouched.
 for chan in ["amazon", "chewy"]:

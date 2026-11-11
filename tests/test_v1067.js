@@ -37,6 +37,54 @@ function pnlSlotAdd(acc, s) {
   for (const k in s) if (typeof s[k] === 'number') acc[k] = (acc[k] || 0) + s[k];
   return acc;
 }
+const PNL_GRAIN_ORDER = ['day', 'week', 'month'];
+const PNL_FILL_ALPHA = { sheer: '55', solid: 'd9' };
+const PNL_FILL_LINE = '22';
+function pnlChartGrain() {
+  try {
+    const v = localStorage.getItem('pnlChartGrain');
+    return PNL_GRAIN_ORDER.includes(v) ? v : 'auto';
+  } catch (_) { return 'auto'; }
+}
+function pnlGrainAuto(win) {
+  if (!win || !win.from || !win.to) return 'week';
+  const days = Math.round((new Date(win.to + 'T00:00:00') - new Date(win.from + 'T00:00:00')) / 86400000) + 1;
+  if (!isFinite(days) || days <= 0) return 'week';
+  if (days <= 70) return 'day';
+  if (days <= 400) return 'week';
+  return 'month';
+}
+function pnlGrainResolve(win, allowed) {
+  const can = (allowed && allowed.length) ? allowed : PNL_GRAIN_ORDER;
+  const want = pnlChartGrain();
+  if (want !== 'auto' && can.includes(want)) return want;
+  const auto = pnlGrainAuto(win);
+  if (can.includes(auto)) return auto;
+  // Nearest the chart CAN do, COARSER first: a finer grain than the rows
+  // carry would be invented, a coarser one is only a rollup.
+  const i = PNL_GRAIN_ORDER.indexOf(auto);
+  for (let k = i; k < PNL_GRAIN_ORDER.length; k++) if (can.includes(PNL_GRAIN_ORDER[k])) return PNL_GRAIN_ORDER[k];
+  for (let k = i; k >= 0; k--) if (can.includes(PNL_GRAIN_ORDER[k])) return PNL_GRAIN_ORDER[k];
+  return 'week';
+}
+function pnlGrainKey(d, grain) {
+  const s = String(d || '');
+  if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return s;       // already a month key, or junk
+  if (grain === 'month') return s.slice(0, 7);
+  if (grain !== 'week') return s.slice(0, 10);
+  const x = new Date(s.slice(0, 10) + 'T00:00:00');
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+}
+function pnlGrainAdv(grain) {
+  return grain === 'day' ? 'daily' : grain === 'week' ? 'weekly'
+       : grain === 'month' ? 'monthly' : (grain + 'ly');
+}
+function pnlChartFill() {
+  try { return localStorage.getItem('pnlChartFill') === 'solid' ? 'solid' : 'sheer'; }
+  catch (_) { return 'sheer'; }
+}
+function pnlStackAlpha() { return PNL_FILL_ALPHA[pnlChartFill()] || PNL_FILL_ALPHA.sheer; }
 function pnlTrendSeries(cfg) {
   const { perProd, buckets, mids, metricOf, labelOf, colors, isPct } = cfg;
   // v11.23 - the band NOUN. Every caller before the Ads views charted
@@ -89,6 +137,8 @@ function pnlTrendSeries(cfg) {
         tension: 0.3, fill: false, spanGaps: true,
       }],
       bandCount: 1,
+      // One total line covers everything in scope (v11.69).
+      bandMids: [mids.slice()],
     };
   }
 
@@ -128,9 +178,10 @@ function pnlTrendSeries(cfg) {
         return (mode === 'stacked' && v == null) ? 0 : v;
       }),
       borderColor: color,
-      // Stacked bands are near-opaque so they read as distinct layers rather
-      // than a translucent haze (the v9.99 / v4.135 lesson).
-      backgroundColor: mode === 'stacked' ? pnlBandFill(color, 'd9') : pnlBandFill(color, '22'),
+      // v11.74 - the alpha is a SETTING now. v9.99 / v4.135's near-opaque
+      // reasoning survives as `solid`; `sheer` is the look the SEO chart had
+      // by accident and Jason asked for everywhere.
+      backgroundColor: mode === 'stacked' ? pnlBandFill(color, pnlStackAlpha()) : pnlBandFill(color, PNL_FILL_LINE),
       borderWidth: mode === 'stacked' ? 1 : 2,
       pointRadius: mode === 'stacked' ? 0 : (buckets.length > 52 ? 0 : 3),
       tension: 0.3,
@@ -144,13 +195,19 @@ function pnlTrendSeries(cfg) {
     datasets.push({
       label: `Other \u00b7 ${otherMids.length} ${otherNoun}`,
       data: sumAcross(otherMids).map(v => (mode === 'stacked' && v == null) ? 0 : v),
-      borderColor: color, backgroundColor: mode === 'stacked' ? color + 'd9' : color + '22',
+      borderColor: color, backgroundColor: mode === 'stacked' ? pnlBandFill(color, pnlStackAlpha()) : pnlBandFill(color, PNL_FILL_LINE),
       borderWidth: 1, pointRadius: 0, tension: 0.3,
       fill: mode === 'stacked' ? '-1' : false, spanGaps: true,
     });
   }
 
-  return { mode, note, datasets, bandCount: datasets.length };
+  // v11.69 - WHICH PRODUCTS EACH BAND COVERS, aligned 1:1 with `datasets`.
+  // The legend hides a band by INDEX, so the only way to answer "what is
+  // still drawn" is a mapping the renderer owns. Published rather than
+  // re-derived by each caller, because the ranking and the Other remainder
+  // are decided HERE.
+  return { mode, note, datasets, bandCount: datasets.length,
+           bandMids: banded.map(mid => [mid]).concat(otherMids.length ? [otherMids] : []) };
 }
 
 let pass = 0, fail = 0;

@@ -70,8 +70,13 @@ ok("if (dpv.i      >= 0) row.dpv" in PARSER and "if (atc.i      >= 0) row.atc" i
 ok("['page views', dpv.i], ['add to cart', atc.i]" in PARSER,
    "A5  ...and named in the status line when it does not")
 
-CD = js[js.index("    campdaily: {"):]
-CD = CD[:CD.index("\n    },")]
+# v12.07 - the campaign x day feed IS ADS_CHANNELS.walmart now; the
+# `campdaily` view it lived in is deleted, and its column list was lifted
+# verbatim into ADS_COLUMNS.walmart.
+CD = js[js.index("  walmart: {", js.index("const ADS_CHANNELS = {")):]
+CD = CD[:CD.index("\n  },\n};")]
+CD_COLS = js[js.index("  walmart: [", js.index("const ADS_COLUMNS = {")):]
+CD_COLS = CD_COLS[:CD_COLS.index("\n  ],")]
 ok("dpv:          r.dpv == null ? null : +r.dpv || 0," in CD,
    "A6  the view maps page views")
 ok("atc:          r.atc == null ? null : +r.atc || 0," in CD,
@@ -81,7 +86,7 @@ ok("atc:          r.atc == null ? null : +r.atc || 0," in CD,
 ok("r.dpv == null ? null" in CD and "r.atc == null ? null" in CD,
    "A8  /!\\ null stays null, so a feed without them reads a GAP not a zero")
 
-COLS = re.findall(r"\{ k: '(\w+)',", CD[CD.index("columns: ["):])
+COLS = re.findall(r"\{ k: '(\w+)',", CD_COLS)
 eq("A9  the funnel reads left to right on the row",
    [c for c in COLS if c in ('impressions', 'clicks', 'dpv', 'atc', 'orders')],
    ['impressions', 'clicks', 'dpv', 'atc', 'orders'])
@@ -104,34 +109,50 @@ ok("supabase_v12_06_walmart_campaign_daily_funnel.sql" in js,
    "B6  /!\\ a missing-column error names this file too, not just v12.05's")
 
 # ===========================================================================
-print("\nC. the four tabs say which to use")
+print("\nC. two tabs, and the retired feeds are gone")
 # ===========================================================================
+# /!\ v12.07 REPLACED THIS SECTION. It asserted a four-tab hierarchy -
+# START HERE on Campaigns, SECONDARY on the account feed - which was the right
+# answer while four feeds existed. Jason's answer was that two of them should
+# not exist at all, so the hierarchy has nothing left to express and what is
+# worth pinning instead is that the retirement is COMPLETE.
 STRIP = s[s.index('<div id="wmpnl-view-ads"'):]
 STRIP = STRIP[:STRIP.index("</div>", STRIP.index("subtab-strip"))]
+eq("C1  two tabs", len(re.findall(r'class="subtab(?: on)?"', STRIP)), 2)
+ok('id="wmpnl-ads-tab-campaigns"' in STRIP, "C2  Campaigns")
+ok('id="wmpnl-ads-tab-keywords"' in STRIP, "C3  Keywords")
+ok('class="subtab on" id="wmpnl-ads-tab-campaigns"' in STRIP,
+   "C4  /!\\ Campaigns opens by default - it is the channel itself now")
 
-ok("START HERE" in STRIP, "C1  one tab is named as the place to start")
-eq("C2  /!\\ exactly one, or it is not a hierarchy", STRIP.count("START HERE"), 1)
-ok('id="wmpnl-ads-tab-campdaily"' in STRIP
-   and "START HERE" in STRIP[STRIP.index('id="wmpnl-ads-tab-campdaily"'):
-                             STRIP.index("</button>", STRIP.index('id="wmpnl-ads-tab-campdaily"'))],
-   "C3  ...and it is Campaigns, the one that carries the levers")
+# /!\ THE RETIREMENT IS COMPLETE, checked by ABSENCE across every surface a
+# feed touches. A half-removed uploader leaves a dropzone that accepts a drop
+# and does nothing, which is worse than leaving it in place (v10.19).
+for pat, what in [
+    ('id="dz-walmart-ad-daily"',      "the account dropzone"),
+    ('id="dz-walmart-ad-campaign"',   "the monthly campaigns dropzone"),
+    ("parseWalmartAdDaily",           "the account parser"),
+    ("async function parseWalmartAdCampaign(", "the monthly parser"),
+    ("handleWalmartAdDailyUpload",    "the account handler"),
+    ("handleWalmartAdCampaignUpload", "the monthly handler"),
+    ("walmartAdDailyCache",           "the account cache"),
+    ("walmartAdCampaignCache",        "the monthly cache"),
+    ("loadWalmartAdDaily",            "the account loader"),
+    ("wmday-host",                    "the account host"),
+    ("wmcd-host",                     "the campdaily host"),
+    ("campdaily:",                    "the campdaily view"),
+    ("'wmpnl-ads-view-daily'",        "the account area"),
+]:
+    ok(pat not in s, "C5  %s is gone" % what, None if pat not in s else pat)
 
-DAILY_BTN = STRIP[STRIP.index('id="wmpnl-ads-tab-daily"'):]
-DAILY_BTN = DAILY_BTN[:DAILY_BTN.index("</button>")]
-ok("SECONDARY" in DAILY_BTN, "C4  the account feed is marked secondary")
-ok("CROSS-CHECK" in DAILY_BTN,
-   "C5  /!\\ ...and says WHY it is kept - a different report agreeing is the proof")
-eq("C6  /!\\ it is NOT deleted - it caught a real bug", s.count('id="dz-walmart-ad-daily"'), 1)
-ok('id="wmpnl-ads-view-daily"' in s, "C7  its area survives")
-
-# The two monthly feeds say what they are the only source of, so neither reads
-# as a feed you still pull weekly.
-ok("budget / status / bidding only" in s,
-   "C8  the monthly campaign feed names what it alone carries")
-ok("bids (the only source)" in s,
-   "C9  ...and the keyword feed names its own")
+# ...and the keyword feed, which is NOT retired, keeps all of its.
+for pat, what in [('id="dz-walmart-ad-keyword"', "dropzone"),
+                  ("parseWalmartAdKeyword", "parser"),
+                  ("walmartAdKeywordCache", "cache"),
+                  ("loadWalmartAdKeyword", "loader")]:
+    ok(pat in s, "C6  /!\\ the keyword feed keeps its %s" % what)
 
 # ===========================================================================
+
 print("\nD. the chip agrees with CLAUDE.md")
 # ===========================================================================
 md = io.open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read()

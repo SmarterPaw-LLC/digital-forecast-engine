@@ -203,15 +203,25 @@ eq("B19 a malformed aggregate refuses rather than throwing", R["noTotPct"], None
 # ===========================================================================
 print("\nC. where the card sits, and which way is good")
 # ===========================================================================
+# v12.07 - /!\ TACoS MOVED OUT OF THE ARRAY LITERAL into a channel gate:
+#   ].concat(channel === 'amazon' ? [{ ...TACoS... }] : [])
+# because on Walmart and Chewy it rendered a permanent dash with
+# `amazon_ad_spend` chips under it. The slice runs to the END of the
+# strip expression now, so the card is inside it.
 STRIP = js[js.index("cards.innerHTML = selBanner + pnlCardStrip(["):]
-STRIP = STRIP[:STRIP.index("].concat(")]
+STRIP = STRIP[:STRIP.index("\n  }\n")]
 
 ok("label: 'TACoS %'" in STRIP, "C1  the card is on the Ads strip")
 # /!\ BESIDE ACOS: same question, two denominators.
-ok(STRIP.index("colLabel('acos'") < STRIP.index("label: 'TACoS %'") < STRIP.index("label: 'Clicks'"),
-   "C2  /!\\ it sits between ACOS and Clicks")
+ok(STRIP.index("colLabel('acos'") < STRIP.index("label: 'TACoS %'"),
+   "C2  /!\\ it still follows ACOS - same question, two denominators")
+# /!\ AND IT IS GATED ON THE ONE CHANNEL THAT CAN COMPUTE IT. adsTacosFor
+# refuses every other, so anywhere else the card is a permanent dash
+# citing another channel's feeds - which is what Jason saw on Walmart.
+ok("].concat(channel === 'amazon' ? [{" in STRIP,
+   "C2b /!\\ and renders ONLY on Amazon")
 
-CARD = STRIP[STRIP.index("label: 'TACoS %'"):STRIP.index("label: 'Clicks'")]
+CARD = STRIP[STRIP.index("label: 'TACoS %'"):STRIP.index("}] : []).concat(")]
 # Good when DOWN and reported in POINTS - the two things ACOS also does.
 ok("chip(tacos.pct, tacosPrev.pct, false, true)" in CARD,
    "C3  /!\\ good when DOWN (false) and in POINTS (true), like ACOS")

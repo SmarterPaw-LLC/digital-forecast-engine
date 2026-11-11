@@ -18,7 +18,136 @@ function pnlChartMode() {
 // Marker stub so the test can assert the BANDS stepper's presence/absence.
 function pnlBandsStepperHtml(rerenderName) { return '<!--BANDS-->'; }
 
-function pnlInjectChartModeToggle(hostId, rerenderName, noStack, bandNoun) {
+function pnlChartCompare() {
+  try { return localStorage.getItem('pnlChartCompare') === '1'; } catch (_) { return false; }
+}
+function pnlCompareToggleHtml(rerenderName, cmp) {
+  if (!cmp) return '';
+  const off = cmp.ok === false;
+  const on  = !off && pnlChartCompare();
+  const tip = off
+    ? (cmp.why || 'No previous period to compare against.')
+    : 'Draw the block of the same length immediately before this window as a dashed line, paired bucket for bucket. The same previous period the scorecards above compare against.';
+  return `<span style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-left:10px">Compare</span>
+    <span style="display:inline-flex;gap:2px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:2px">
+      <button type="button" ${off ? '' : `onclick="pnlSetChartCompare(${on ? 'false' : 'true'},'${rerenderName}')"`} title="${esc2(tip)}"
+        style="padding:3px 9px;font-size:10px;font-family:var(--display);font-weight:${on ? 700 : 600};
+        background:${on ? 'var(--sp-green)' : 'transparent'};color:${on ? '#fff' : 'var(--text2)'};
+        border:none;border-radius:4px;cursor:${off ? 'not-allowed' : 'pointer'};opacity:${off ? '.4' : '1'}">vs prev period</button>
+    </span>`;
+}
+const PNL_GRAIN_ORDER = ['day', 'week', 'month'];
+const PNL_FILL_ALPHA = { sheer: '55', solid: 'd9' };
+const PNL_FILL_LINE = '22';
+function pnlChartGrain() {
+  try {
+    const v = localStorage.getItem('pnlChartGrain');
+    return PNL_GRAIN_ORDER.includes(v) ? v : 'auto';
+  } catch (_) { return 'auto'; }
+}
+function pnlGrainAuto(win) {
+  if (!win || !win.from || !win.to) return 'week';
+  const days = Math.round((new Date(win.to + 'T00:00:00') - new Date(win.from + 'T00:00:00')) / 86400000) + 1;
+  if (!isFinite(days) || days <= 0) return 'week';
+  if (days <= 70) return 'day';
+  if (days <= 400) return 'week';
+  return 'month';
+}
+function pnlGrainResolve(win, allowed) {
+  const can = (allowed && allowed.length) ? allowed : PNL_GRAIN_ORDER;
+  const want = pnlChartGrain();
+  if (want !== 'auto' && can.includes(want)) return want;
+  const auto = pnlGrainAuto(win);
+  if (can.includes(auto)) return auto;
+  // Nearest the chart CAN do, COARSER first: a finer grain than the rows
+  // carry would be invented, a coarser one is only a rollup.
+  const i = PNL_GRAIN_ORDER.indexOf(auto);
+  for (let k = i; k < PNL_GRAIN_ORDER.length; k++) if (can.includes(PNL_GRAIN_ORDER[k])) return PNL_GRAIN_ORDER[k];
+  for (let k = i; k >= 0; k--) if (can.includes(PNL_GRAIN_ORDER[k])) return PNL_GRAIN_ORDER[k];
+  return 'week';
+}
+function pnlGrainKey(d, grain) {
+  const s = String(d || '');
+  if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return s;       // already a month key, or junk
+  if (grain === 'month') return s.slice(0, 7);
+  if (grain !== 'week') return s.slice(0, 10);
+  const x = new Date(s.slice(0, 10) + 'T00:00:00');
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+}
+function pnlGrainAdv(grain) {
+  return grain === 'day' ? 'daily' : grain === 'week' ? 'weekly'
+       : grain === 'month' ? 'monthly' : (grain + 'ly');
+}
+function pnlChartFill() {
+  try { return localStorage.getItem('pnlChartFill') === 'solid' ? 'solid' : 'sheer'; }
+  catch (_) { return 'sheer'; }
+}
+function pnlStackAlpha() { return PNL_FILL_ALPHA[pnlChartFill()] || PNL_FILL_ALPHA.sheer; }
+function esc2(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function pnlGrainStepperHtml(rerenderName, grain) {
+  if (!grain) return '';
+  const allowed = (grain.allowed && grain.allowed.length) ? grain.allowed : PNL_GRAIN_ORDER;
+  const eff = pnlGrainResolve(grain.win, allowed);
+  const stored = pnlChartGrain();
+  const b = (v, label, tip) => {
+    const off = v !== 'auto' && !allowed.includes(v);
+    // v10.77 - light the EFFECTIVE grain, never the stored one. A stored
+    // 'day' on a chart built from weekly rows must not paint D green while
+    // the chart draws weeks.
+    const on = !off && (v === 'auto' ? stored === 'auto' : (stored !== 'auto' && v === eff));
+    const why = off ? (grain.why || 'These rows do not carry that grain.') : tip;
+    return `<button type="button" ${off ? '' : `onclick="pnlSetChartGrain('${v}','${rerenderName}')"`} title="${esc2(why)}"
+      style="padding:3px 8px;font-size:10px;font-family:var(--display);font-weight:${on ? 700 : 600};
+      background:${on ? 'var(--sp-green)' : 'transparent'};color:${on ? '#fff' : 'var(--text2)'};
+      border:none;border-radius:4px;cursor:${off ? 'not-allowed' : 'pointer'};opacity:${off ? '.35' : '1'}">${label}</button>`;
+  };
+  return `<span style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-left:10px">Group</span>
+    <span style="display:inline-flex;gap:2px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:2px">
+      ${b('auto', 'Auto', 'Pick the grain from the window: daily to 70 days, weekly to 400, monthly beyond. Currently ' + pnlGrainAdv(eff) + '.')}
+      ${b('day', 'D', 'One bucket per day.')}
+      ${b('week', 'W', 'One bucket per week, starting Monday.')}
+      ${b('month', 'M', 'One bucket per calendar month.')}
+    </span>`;
+}
+function pnlFillToggleHtml(rerenderName) {
+  const cur = pnlChartFill();
+  const b = (v, label, tip) => {
+    const on = cur === v;
+    return `<button type="button" onclick="pnlSetChartFill('${v}','${rerenderName}')" title="${esc2(tip)}"
+      style="padding:3px 8px;font-size:10px;font-family:var(--display);font-weight:${on ? 700 : 600};
+      background:${on ? 'var(--sp-green)' : 'transparent'};color:${on ? '#fff' : 'var(--text2)'};
+      border:none;border-radius:4px;cursor:pointer">${label}</button>`;
+  };
+  return `<span style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-left:10px">Fill</span>
+    <span style="display:inline-flex;gap:2px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:2px">
+      ${b('sheer', 'Sheer', 'Bands at 33% opacity, so a band behind another still reads through it.')}
+      ${b('solid', 'Solid', 'Bands at 85% opacity, so each layer reads as its own distinct block.')}
+    </span>`;
+}
+function pnlChartScaleLock() {
+  try { return localStorage.getItem('pnlChartScaleLock') === '1'; } catch (_) { return false; }
+}
+function pnlScaleToggleHtml(rerenderName) {
+  const locked = pnlChartScaleLock();
+  const b = (v, label, tip) => {
+    const on = (v === 'lock') === locked;
+    return `<button type="button" onclick="pnlSetChartScaleLock(${v === 'lock'},'${rerenderName}')" title="${esc2(tip)}"
+      style="padding:3px 8px;font-size:10px;font-family:var(--display);font-weight:${on ? 700 : 600};
+      background:${on ? 'var(--sp-green)' : 'transparent'};color:${on ? '#fff' : 'var(--text2)'};
+      border:none;border-radius:4px;cursor:pointer">${label}</button>`;
+  };
+  return `<span style="font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-left:10px">Scale</span>
+    <span style="display:inline-flex;gap:2px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;padding:2px">
+      ${b('fit', 'Fit', 'The Y axis follows whatever is drawn, so hiding bands in the legend rescales it. Read the shape of what is left.')}
+      ${b('lock', 'Lock', 'The Y axis stays at the full population\'s ceiling however many bands are hidden, so an isolated band keeps the height it had. Read its size against the whole.')}
+    </span>`;
+}
+function pnlInjectChartModeToggle(hostId, rerenderName, noStack, bandNoun, cmp, grain) {
   const host = document.getElementById(hostId);
   if (!host) return;
   // ⚠ v10.77 — render the EFFECTIVE mode, not the stored one.
@@ -53,7 +182,11 @@ function pnlInjectChartModeToggle(hostId, rerenderName, noStack, bandNoun) {
       ${btn('line', '\u2197 Line', 'One line per product, or a single total line when nothing is selected.')}
       ${btn('stacked', '\u25e2 Stacked', 'Filled areas stacked to the total, so you can see which products make it up.')}
     </span>`
-    + (mode === 'stacked' ? pnlBandsStepperHtml(rerenderName, bandNoun) : '');
+    + pnlGrainStepperHtml(rerenderName, grain)
+    + (mode === 'stacked' ? pnlBandsStepperHtml(rerenderName, bandNoun) : '')
+    + (mode === 'stacked' ? pnlFillToggleHtml(rerenderName) : '')
+    + pnlScaleToggleHtml(rerenderName)
+    + pnlCompareToggleHtml(rerenderName, cmp);
 }
 
 // Faithful copy of the PRE-v10.77 body, for the regression guard.

@@ -18,6 +18,24 @@ function parseLocalDate(s) {
 const _salesMonthKey   = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const _salesDaysInMonth = (y, m0) => new Date(y, m0 + 1, 0).getDate();
 
+// v11.97 - salesGoalWeeklyFor now asks the BUCKET how many days it covers,
+// so the span helper is part of what has to be sliced. Sliced, never stubbed:
+// a stand-in here would let the real one drift.
+function salesBucketDays(b) {
+  const s = String(b || '');
+  if (/^\d{4}-\d{2}$/.test(s)) {
+    const y = +s.slice(0, 4), m = +s.slice(5, 7) - 1;
+    const n = _salesDaysInMonth(y, m);
+    const out = [];
+    for (let i = 1; i <= n; i++) out.push(new Date(y, m, i));
+    return out;
+  }
+  const mon = parseLocalDate(s);
+  if (!mon) return null;
+  const out = [];
+  for (let i = 0; i < 7; i++) out.push(new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i));
+  return out;
+}
 const SALES_CHANNELS = {
   amazon_us: { label: 'Amazon US',   color: '#4a9e38' },
   amazon_ca: { label: 'Amazon CA',   color: '#f97316' },
@@ -37,14 +55,19 @@ function salesGoalWeeklyFor(weeks, chanKeys, strict) {
   const covered = (mk) => strict ? chans.every(ch => has(ch, mk)) : chans.some(ch => has(ch, mk));
   let any = false;
   const out = weeks.map(w => {
-    // Local parse — the v9.71 rule. `new Date('2026-09-21')` is UTC midnight
-    // and reads back as the previous day in any UTC-negative timezone, which
-    // would walk the wrong seven days.
-    const mon = parseLocalDate(w);
-    if (!mon) return null;
+    // v11.97 - /!\ THE DAYS THIS BUCKET COVERS, not always seven. The
+    // arithmetic is unchanged - a monthly goal divided by the days in its
+    // month, summed over the days in the bucket - so a WEEK bucket produces
+    // byte-identical numbers and a MONTH bucket is the same rule over that
+    // month's own days. One proration, two spans.
+    //
+    // Local dates throughout: the v9.71 rule. `new Date('2026-09-21')` is UTC
+    // midnight and reads back as the previous day west of Greenwich, which
+    // would walk the wrong days.
+    const days = salesBucketDays(w);
+    if (!days || !days.length) return null;
     let total = 0;
-    for (let i = 0; i < 7; i++) {
-      const d  = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i);
+    for (const d of days) {
       const mk = _salesMonthKey(d);
       if (!covered(mk)) return null;
       const dim = _salesDaysInMonth(d.getFullYear(), d.getMonth());

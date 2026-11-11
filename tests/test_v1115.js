@@ -1,13 +1,15 @@
-function parseCSV(line){
+function parseDelimited(line, delim){
+  const d = delim || ',';
   const res=[]; let cur='',inQ=false;
   for(let i=0;i<(line||'').length;i++){
     const c=line[i];
     if(c==='"'){inQ=!inQ;}
-    else if(c===','&&!inQ){res.push(cur);cur='';}
+    else if(c===d&&!inQ){res.push(cur);cur='';}
     else cur+=c;
   }
   res.push(cur); return res;
 }
+function parseCSV(line){ return parseDelimited(line, ','); }
 function adsProductSlug(label) {
   const s = String(label || '').toLowerCase().trim();
   if (s.includes('sponsored products')) return 'sponsored_products';   // SKIPPED at write
@@ -22,12 +24,27 @@ function adsParseDate(s) {
   const str = String(s).trim();
   // Native ISO already-normal
   if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
+  const months = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
   // Amazon format: "Mar 27, 2026"
   const m = str.match(/^([A-Za-z]{3})\s+(\d{1,2}),\s*(\d{4})$/);
   if (m) {
-    const months = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
     const mo = months[m[1].toLowerCase()]; if (!mo) return null;
     return `${m[3]}-${String(mo).padStart(2,'0')}-${String(+m[2]).padStart(2,'0')}`;
+  }
+  // v12.04 - Walmart Connect CUSTOM report format: "04-Nov-26" / "04-Nov-2026".
+  //
+  // /!\ IT REACHED THE parseLocalDate FALLBACK BEFORE, which is `new Date(str)`
+  // underneath - so the century on a TWO-DIGIT YEAR came from V8's leniency
+  // rather than from a rule anyone wrote down. It happened to return 2026.
+  // A two-digit year is the last input to let an engine guess at, so the rule
+  // is declared here instead: 00-68 -> 2000s, 69-99 -> 1900s, which is POSIX's
+  // own convention and the one every other tool he reconciles against uses.
+  // Four-digit years are taken as written.
+  const d2 = str.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2}|\d{4})$/);
+  if (d2) {
+    const mo = months[d2[2].toLowerCase()]; if (!mo) return null;
+    const yr = d2[3].length === 4 ? +d2[3] : (+d2[3] <= 68 ? 2000 + +d2[3] : 1900 + +d2[3]);
+    return `${yr}-${String(mo).padStart(2,'0')}-${String(+d2[1]).padStart(2,'0')}`;
   }
   // Fallback to existing helper
   if (typeof parseLocalDate === 'function' && typeof fmtLocalYMD === 'function') {

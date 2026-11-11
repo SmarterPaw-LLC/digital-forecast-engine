@@ -258,20 +258,28 @@ __ALLOWED__
 __WHY__
 __BANDWHY__
 const out = {};
-const cd = adsViewCfg('walmart', 'campdaily');
-const c  = adsViewCfg('walmart', undefined);
+// v12.07 - /!\ THE CAMPAIGN x DAY FEED IS THE CHANNEL NOW, so there is no
+// separate view to resolve. `c` is the KEYWORDS view instead, which is
+// what still carries the monthly rules this feed must not have - so the
+// comparisons below still contrast a dated feed with a month-stamped one.
+const cd = adsViewCfg('walmart', undefined);
+const c  = adsViewCfg('walmart', 'keywords');
 out.monthOf  = [typeof cd.monthOf, typeof c.monthOf];
 out.inWindow = typeof cd.inWindow;
 out.grains   = adsGrainAllowed(cd);
 out.chanGrains = adsGrainAllowed(c);
-out.groupBy  = cd.groupBy;
-out.noun     = cd.noun;
+// /!\ The channel declares no groupBy: 'campaign' is the rollup's own
+// default (`ch.groupBy || 'campaign'`), so the fallback is read here the
+// same way rather than asserting a key that is deliberately absent.
+out.groupBy  = cd.groupBy || 'campaign';
+// Same fallback as the rollup's own `ch.noun || 'campaign'`.
+out.noun     = cd.noun || 'campaign';
 out.host     = cd.host;
 out.dateField = cd.dateField;
 out.filters  = (cd.filters || []).map(f => f.k);
 out.stateFields = (cd.stateFields || []).length;
 out.band     = !!adsBandWhy(cd);
-out.cols     = cd.columns.map(x => x.k);
+out.cols     = (cd.columns || ADS_COLUMNS.walmart).map(x => x.k);
 out.mapped   = cd.map({ campaign: 'SP - X', campaign_type: 'Sponsored Videos',
                         advertiser_brand: 'Doggijuana', impressions: '10', clicks: '2',
                         spend: '1.5', orders: '3', units: '4', sales: '9',
@@ -297,7 +305,8 @@ eq("E3  /!\\ so it offers day, week AND month", E["grains"], ["day", "week", "mo
 eq("E4  while the monthly campaigns feed is still month-only", E["chanGrains"], ["month"])
 eq("E5  grouped by campaign, like the monthly one", E["groupBy"], "campaign")
 eq("E6  and counted as campaigns", E["noun"], "campaign")
-eq("E7  its own host", E["host"], "wmcd")
+# v12.07 - the channel's host, which the Campaigns area already used.
+eq("E7  the channel's host", E["host"], "wmads")
 eq("E8  reading the row's own date", E["dateField"], "date")
 # The export has Campaign Type Name but no status column.
 eq("E9  one filter - there is no status in this export", E["filters"], ["type"])
@@ -306,7 +315,7 @@ eq("E9  one filter - there is no status in this export", E["filters"], ["type"])
 # over a feed whose export has neither column.
 eq("E10 /!\\ stateFields declared EMPTY, shadowing the channel's two", E["stateFields"], 0)
 # Unlike the account-total Daily view, a campaign IS something to band by.
-eq("E11 /!\\ the band reading is NOT refused here - campaigns are real rows",
+eq("E11 /!\\ the band reading is NOT refused - campaigns are real rows",
    E["band"], False)
 
 print("\nF. NTB counts ORDERS here and CUSTOMERS on Chewy")
@@ -346,9 +355,12 @@ for pat, label in [
     ('id="st-walmart-ad-camp-daily"', "G6  status line"),
     ('id="last-walmart-ad-camp-daily"', "G7  latest-data line"),
     ("handleWalmartAdCampaignDailyUpload(this)", "G8  handler wired"),
-    ('id="wmpnl-ads-tab-campdaily"', "G9  sub-tab"),
-    ('id="wmpnl-ads-view-campdaily"', "G10 area"),
-    ('id="wmcd-host"', "G11 host"),
+    # v12.07 - /!\ THE FEED IS THE CHANNEL NOW, so it has no view key, no
+    # host and no area of its own: it renders in the Campaigns area the
+    # monthly feed used to occupy. There is nothing `campdaily` left to find.
+    ('id="wmpnl-ads-tab-campaigns"', "G9  sub-tab"),
+    ('id="wmpnl-ads-view-campaigns"', "G10 area"),
+    ('id="wmads-host"', "G11 host"),
     # v12.06 - RE-POINTED: the funnel columns arrived in a SECOND migration, so
     # the schema error names both. The guarantee is that it names this table's
     # migration at all, not that there is exactly one file.
@@ -358,10 +370,14 @@ for pat, label in [
     ok(pat in s, label, None if pat in s else pat)
 
 SW = fn_flat("switchWalmartAdsView")
-eq("G13 four areas, and campdaily among them",
-   len(re.findall(r"'wmpnl-ads-view-\w+'", SW)), 4)
-ok("'daily', 'campdaily', 'campaigns', 'keywords'" in SW,
-   "G14 /!\\ and the validator knows all four, so none falls back silently")
+eq("G13 two areas", len(re.findall(r"'wmpnl-ads-view-\w+'", SW)), 2)
+ok("'campaigns', 'keywords'" in SW,
+   "G14 /!\\ and the validator knows both, so neither falls back silently")
+# /!\ The retired keys must not survive in the validator either - a stale key
+# there is a tab you can still reach from the console, rendering an area that
+# no longer exists.
+for dead in ("'daily'", "'campdaily'"):
+    ok(dead not in SW, "G15 %s is gone from the validator" % dead)
 
 # ===========================================================================
 print("\nH. the migration - RLS, which v12.03 shipped without")

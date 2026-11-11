@@ -45,6 +45,9 @@ function walmartWeekToDate(code) {
 function updateShopifyReportLink() {}
 function dzRecentInvalidate() {}
 function renderAllDzRecentUploads() {}
+// v11.81 - the rollup ends by calling this. Not under test here, and
+// no-op'd exactly like the two rail helpers above it.
+async function renderUploadAttention() {}
 
 let WARNED = [];
 const _consoleWarn = console.warn;
@@ -109,6 +112,102 @@ function skuRows(weeks, region, perWeek, uploadedAt) {
   return rows;
 }
 
+// v11.75 - the card line reads uploadDataThru(table, period) now, the
+// same definition the coverage grid under it uses. Sliced from the
+// shipped file, so E1-E3's 'thru Sat' output proves the real Mon+5
+// convention rather than a fixture of one.
+function uploadGrain(table) {
+  const src = (typeof UH_SOURCES !== 'undefined' && UH_SOURCES[table]) || {};
+  const f = String(src.dateField || '');
+  if (/month/i.test(f)) return 'month';
+  if (/^year$/i.test(f)) return 'year';
+  if (/week/i.test(f)) return 'week';
+  return 'day';
+}
+
+function uploadWeekEndOffset(table) {
+  const src = (typeof UH_SOURCES !== 'undefined' && UH_SOURCES[table]) || {};
+  return src.weekEndOffset == null ? 6 : Number(src.weekEndOffset);
+}
+
+function uploadPeriodEnd(v, grain, weekEndOffset) {
+  const s = String(v == null ? '' : v);
+  if (grain === 'month') {
+    const m = /^(\d{4})-(\d{2})/.exec(s);
+    if (!m) return null;
+    const d = new Date(Date.UTC(Number(m[1]), Number(m[2]), 0));
+    return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10) : null;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}/.test(s)) return null;
+  if (grain === 'day') return s.slice(0, 10);
+  if (grain !== 'week') return null;
+  const d = new Date(s.slice(0, 10) + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + (weekEndOffset == null ? 6 : Number(weekEndOffset)));
+  return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10) : null;
+}
+
+function uploadDataThru(table, period) {
+  return uploadPeriodEnd(period, uploadGrain(table), uploadWeekEndOffset(table));
+}
+const UH_SOURCES = {
+  sku_economics:           { label:'Amazon SKU Economics — US/CA', dateField:'week_start', dateLabel:'Week starts', weekEndOffset:5,
+                             regionField:'region', regionOptions:['US','CA','MX','AU','JP'], brandField:null, masterIdField:'master_id' },
+  sku_economics_eu:        { label:'Amazon SKU Economics — EU/UK', dateField:'week_start', dateLabel:'Week starts', weekEndOffset:5,
+                             regionField:'region', regionOptions:['GB','DE','FR','IT','ES','NL','IE','SE','PL','BE'], brandField:null, masterIdField:'master_id' },
+  chewy_ad_spend:          { label:'Chewy Ads — Promoted Products', dateField:'date',       dateLabel:'Date',
+                             regionField:null, brandField:null, masterIdField:'master_id' },
+  amazon_ad_spend:         { label:'Amazon Ads',                    dateField:'date',         dateLabel:'Date',
+                             regionField:'region', regionOptions:['US','CA','MX','EU/UK','GB','DE','FR','IT','ES','NL'],
+                             brandField:'advertiser_brand', brandOptions:['Meowijuana','Doggijuana','Kitty Ka-Zoom'],
+                             masterIdField:'master_id' },
+  fba_fee_preview:         { label:'FBA Fee Preview',              dateField:'snapshot_date', dateLabel:'Snapshot date',
+                             regionField:'region', regionOptions:['US','CA','MX','GB','DE','FR','IT','ES','NL'],
+                             brandField:'brand', brandOptions:['Meowijuana','Doggijuana','Kitty Ka-Zoom'], masterIdField:'master_id' },
+  fba_inventory_snapshots: { label:'FBA Inventory Snapshots',       dateField:'snapshot_date', dateLabel:'Snapshot date',
+                             regionField:'region', regionOptions:['US','CA','MX','AU','JP','EU/UK'], brandField:null, masterIdField:'master_id' },
+  fba_shipment_summaries:  { label:'FBA Shipment Summaries',        dateField:'created_date',  dateLabel:'Created date',
+                             regionField:'region', regionOptions:['US','CA','MX','AU','JP','EU/UK'], brandField:'brand', brandOptions:['Meowijuana','Doggijuana','Kitty Ka-Zoom'] },
+  walmart_sales_weekly:    { label:'Walmart 1P',                    dateField:'walmart_calendar_week', dateLabel:'Walmart week',
+                             regionField:null, brandField:null, masterIdField:'master_id' },
+  shopify_sales_daily:     { label:'Shopify DTC',                   dateField:'day', dateLabel:'Day',
+                             regionField:null, brandField:null, masterIdField:'master_id' },
+  chewy_forecasts:         { label:'Chewy Forecasts',               dateField:'upload_date', dateLabel:'Upload date',
+                             regionField:null, brandField:null, masterIdField:'master_id' },
+  digital_sales_tracker:   { label:'Digital Sales Tracker',         dateField:'year', dateLabel:'Year/Month',
+                             regionField:null, brandField:'brand', brandOptions:['Meow','Doggi','Kazoom'] },
+  chewy_rebates:           { label:'Chewy Rebate Invoices',         dateField:'invoice_date', dateLabel:'Invoice date',
+                             regionField:null, brandField:'brand', brandOptions:['Meowijuana','Doggijuana','Kitty Ka-Zoom'] },
+  // v10.86 - these tables all carry uploaded_at and were being written by a
+  // live uploader, but were never registered here, so they had no rail AND no
+  // Upload History row (no way to inspect or retroactively fix a bad upload).
+  amazon_sales_traffic:    { label:'Amazon Sales & Traffic — weekly', dateField:'week_start', dateLabel:'Week starts', weekEndOffset:5,
+                             regionField:'region', regionOptions:['US','CA','MX','GB','DE','FR','IT','ES','NL','AU','JP'], brandField:null, masterIdField:'master_id' },
+  amazon_sales_traffic_snapshot:
+                           { label:'Amazon Sales & Traffic — snapshot', dateField:'period_start', dateLabel:'Period start',
+                             regionField:'region', regionOptions:['US','CA','MX','GB','DE','FR','IT','ES','NL','AU','JP'], brandField:null, masterIdField:'master_id' },
+  chewy_sales_weekly:      { label:'Chewy Sales Actuals',            dateField:'week_start', dateLabel:'Week starts',
+                             regionField:null, brandField:null, masterIdField:'master_id' },
+  fba_shipments:           { label:'FBA Shipment Detail',            dateField:'created_date', dateLabel:'Created date',
+                             regionField:'region', regionOptions:['US','CA','MX','AU','JP','EU/UK'], brandField:null, masterIdField:'master_id' },
+  amazon_ads_bulk_upload:  { label:'Amazon Ads — Bulk Sheet',        dateField:'snapshot_date', dateLabel:'Snapshot date',
+                             regionField:'region', regionOptions:['US','CA','MX','EU/UK','GB','DE','FR','IT','ES','NL'],
+                             brandField:null, rowCountField:'row_count' },
+  amazon_query_performance_asin:
+                           { label:'Amazon SQP — ASIN / Brand view', dateField:'reporting_month', dateLabel:'Reporting month',
+                             regionField:'region', regionOptions:['US','CA','MX','GB','DE','FR','IT','ES','NL','AU','JP'], brandField:null, masterIdField:'master_id' },
+  walmart_ad_keyword:      { label:'Walmart Ads — Keywords',           dateField:'reporting_month', dateLabel:'Reporting month',
+                             regionField:'region', regionOptions:['US'], brandField:'advertiser_brand', masterIdField:null },
+  walmart_ad_campaign_daily: { label:'Walmart Ads — Campaign × Day', dateField:'date', dateLabel:'Date',
+                             regionField:'region', regionOptions:['US'], brandField:'advertiser_brand', masterIdField:null },
+  amazon_sp_search_term:   { label:'Amazon Ads — SP Search Term',    dateField:'reporting_month', dateLabel:'Reporting month',
+                             regionField:'region', regionOptions:['US','CA','MX','GB','DE','FR','IT','ES','NL','AU','JP'], brandField:null, masterIdField:'master_id' },
+  amazon_storage_fees:     { label:'Amazon Storage Fees — monthly', dateField:'month_of_charge', dateLabel:'Month of charge',
+                             regionField:'region', regionOptions:['US','CA','MX','GB','DE','FR','IT','ES','NL','AU','JP'], brandField:null, masterIdField:'master_id' },
+  amazon_sp_campaign_snapshot:
+                           { label:'Amazon Ads — SP Campaign',       dateField:'reporting_month', dateLabel:'Reporting month',
+                             regionField:'region', regionOptions:['US','CA','MX','GB','DE','FR','IT','ES','NL','AU','JP'], brandField:null },
+};
+
 async function refreshUploadDataRanges() {
   // ⚠ v10.95 - `sb` MUST live at FUNCTION scope. It used to be declared
   // `const sb = await getSB()` INSIDE the try block below - a nested block
@@ -125,18 +224,10 @@ async function refreshUploadDataRanges() {
   // new range instead of the stale one. Cheap — the cache repopulates on
   // the next resolvePnlLastReport() call.
   if (typeof _pnlLastReportCache !== 'undefined') _pnlLastReportCache.clear();
-  // week_start is always stored as a MONDAY. The data window's END day
-  // depends on the channel's reporting convention:
-  //   • Amazon SKU Economics runs Sunday→Saturday. The parser maps that
-  //     Sun-Sat week onto the Monday of the overlapping Mon-Sun week
-  //     (v4.91), so the report's actual Saturday end = week_start + 5.
-  //   • Shopify genuinely runs Monday→Sunday → end = week_start + 6.
-  const endOfWeek = (mondayStr, offset) => {
-    if (!mondayStr) return '';
-    const d = new Date(mondayStr + 'T00:00:00');
-    d.setDate(d.getDate() + (offset == null ? 6 : offset));
-    return d.toISOString().slice(0, 10);
-  };
+  // v11.75 - this was a local endOfWeek(mondayStr, offset) called at three
+  // sites, all with a hardcoded 5, while the coverage grid under these same
+  // cards measured the same week from its Monday. One definition now:
+  // uploadDataThru(table, period), with the offset declared on the source.
   // Short relative-date for the group-level rollup row.
   const relDays = (dateStr) => {
     if (!dateStr) return null;
@@ -310,15 +401,29 @@ async function refreshUploadDataRanges() {
   };
   // v8.72 — Render a "⚠ N gaps" chip next to the group's Latest Data label
   // when weekly gaps exist. Full missing list surfaces in the hover title.
-  const appendGapChip = (groupId, gaps) => {
+  // v11.78 - the chip was defined inside appendGapChip with gap-counting
+  // baked into it, so the GA4 request row could not reuse it and would have
+  // had to draw a second ⚠ pill of its own. One chip, one glyph
+  // (rule #2). appendGapChip still owns the GAP wording; this owns the pill.
+  const appendWarnChip = (groupId, label, title, cls) => {
     const el = document.getElementById(groupId); if (!el) return;
-    if (!gaps || !gaps.length) return;
-    const preview = gaps.slice(0, 8).join(', ') + (gaps.length > 8 ? `, +${gaps.length - 8} more` : '');
+    if (!label) return;
+    // The EU gap chip guarded itself by class so a second refresh could not
+    // double it up. That guard comes along rather than being dropped on the
+    // way in - callers without a class keep the plain append.
+    if (cls && el.querySelector('.' + cls)) return;
     const chip = document.createElement('span');
+    if (cls) chip.className = cls;
     chip.style.cssText = 'margin-left:8px;padding:2px 7px;background:rgba(232,96,26,.14);color:var(--sp-orange);border:1px solid var(--sp-orange);border-radius:4px;font-family:var(--mono);font-size:10px;font-weight:700;cursor:help';
-    chip.textContent = `⚠ ${gaps.length} gap${gaps.length === 1 ? '' : 's'}`;
-    chip.title = `Missing week_start values in the last 26 weeks (between first + latest data):\n${gaps.join('\n')}\n\nRe-upload the report for these weeks.`;
+    chip.textContent = `⚠ ${label}`;
+    if (title) chip.title = title;
     el.appendChild(chip);
+  };
+  const appendGapChip = (groupId, gaps) => {
+    if (!gaps || !gaps.length) return;
+    appendWarnChip(groupId,
+      `${gaps.length} gap${gaps.length === 1 ? '' : 's'}`,
+      `Missing week_start values in the last 26 weeks (between first + latest data):\n${gaps.join('\n')}\n\nRe-upload the report for these weeks.`);
   };
   try {
     sb = await getSB();
@@ -334,7 +439,7 @@ async function refreshUploadDataRanges() {
     const sePairs = await latestByRegion('sku_economics', 'week_start');
     if (sePairs.length) {
       amzUsCaLatest = sePairs.map(([, wk]) => wk).sort().reverse()[0];
-      const parts = sePairs.map(([reg, wk]) => `${reg}: thru Sat ${endOfWeek(wk, 5)}`);
+      const parts = sePairs.map(([reg, wk]) => `${reg}: thru Sat ${uploadDataThru('sku_economics', wk)}`);
       const lastUp = await latestUploadedAt('sku_economics');
       setLast('last-sales-skuecon', `📅 Data ${parts.join(' · ')} · uploaded ${ago(lastUp) || '—'}`);
       // v8.72 — per-region gap scan for SKU Economics US/CA.
@@ -362,7 +467,7 @@ async function refreshUploadDataRanges() {
       const euPairs = await latestByRegion('sku_economics_eu', 'week_start');
       if (euPairs.length) {
         amzEuLatest = euPairs.map(([, wk]) => wk).sort().reverse()[0];
-        const parts = euPairs.map(([reg, wk]) => `${reg}: thru Sat ${endOfWeek(wk, 5)}`);
+        const parts = euPairs.map(([reg, wk]) => `${reg}: thru Sat ${uploadDataThru('sku_economics_eu', wk)}`);
         const lastUp = await latestUploadedAt('sku_economics_eu');
         setLast('last-sales-skuecon-eu', `📅 ${parts.slice(0,4).join(' · ')}${parts.length>4?` +${parts.length-4} more`:''} · uploaded ${ago(lastUp) || '—'}`);
         // v8.72 — per-country gap scan for SKU Economics EU
@@ -372,17 +477,14 @@ async function refreshUploadDataRanges() {
             const gaps = await findWeeklyGaps('sku_economics_eu', 'week_start', q => q.eq('region', reg));
             if (gaps.missing.length) euGaps.push(...gaps.missing.map(m => `${reg}: ${m}`));
           }
+          // v11.78 - was a hand-rolled copy of the chip, identical to the one
+          // appendGapChip drew 68 lines up. The WORDING is still its own
+          // (by country, EU reports); the pill is not.
           if (euGaps.length) {
-            const el = document.getElementById('last-sales-skuecon-eu');
-            if (el && !el.querySelector('.gap-chip-eu')) {
-              const chip = document.createElement('span');
-              chip.className = 'gap-chip-eu';
-              chip.style.cssText = 'margin-left:8px;padding:2px 7px;background:rgba(232,96,26,.14);color:var(--sp-orange);border:1px solid var(--sp-orange);border-radius:4px;font-family:var(--mono);font-size:10px;font-weight:700;cursor:help';
-              const preview = euGaps.slice(0, 8).join(', ') + (euGaps.length > 8 ? `, +${euGaps.length - 8} more` : '');
-              chip.textContent = `⚠ ${euGaps.length} gap${euGaps.length === 1 ? '' : 's'}`;
-              chip.title = `Missing week_start values in the last 26 weeks by country:\n${euGaps.join('\n')}\n\nRe-upload EU reports for these weeks.`;
-              el.appendChild(chip);
-            }
+            appendWarnChip('last-sales-skuecon-eu',
+              `${euGaps.length} gap${euGaps.length === 1 ? '' : 's'}`,
+              `Missing week_start values in the last 26 weeks by country:\n${euGaps.join('\n')}\n\nRe-upload EU reports for these weeks.`,
+              'gap-chip-eu');
           }
         } catch (_) { /* silent */ }
       } else {
@@ -392,7 +494,7 @@ async function refreshUploadDataRanges() {
     // Amazon group rollup — most recent of US/CA + EU.
     const amzAll = [amzUsCaLatest, amzEuLatest].filter(Boolean).sort().reverse();
     if (amzAll[0]) {
-      const amzSat = endOfWeek(amzAll[0], 5);
+      const amzSat = uploadDataThru('sku_economics', amzAll[0]);
       setLast('last-amz-sales-grp', `thru Sat ${amzSat} (${relDays(amzSat)})`);
     } else {
       setLast('last-amz-sales-grp', '— Never');
@@ -423,6 +525,77 @@ async function refreshUploadDataRanges() {
       setLast('last-sales-shopify', '📅 No Shopify data loaded yet');
       setLast('last-shopify-sales-grp', '— Never');
       if (typeof updateShopifyReportLink === 'function') updateShopifyReportLink(null);
+    }
+    // ── v11.78 — GA4 site traffic. A REQUEST row: nothing uploads
+    // here, so what it reports is whether the two scripts have been run.
+    //
+    // TWO facts, and v11.73 established that they are different questions:
+    // how far the DATA reaches (ga4_by_date) and when it was last PULLED
+    // (ga4_snapshots). A feed that stops on Monday because the loader last ran
+    // on Monday and one that stops there because GA4 had nothing are the same
+    // picture without both.
+    //
+    // Deliberately NOT filtered to property='smarterpaw': the title names no
+    // property, so the newest day in the feed is the answer whatever lands.
+    try {
+      const [g4d, g4s] = await Promise.all([
+        sb.from('ga4_by_date').select('day')
+          .order('day', { ascending: false }).limit(1),
+        sb.from('ga4_snapshots').select('snapshot_date, pulled_at, loaded_at')
+          .order('snapshot_date', { ascending: false }).limit(1),
+      ]);
+      const newest = (g4d.data && g4d.data.length) ? g4d.data[0].day : null;
+      const snap   = (g4s.data && g4s.data.length) ? g4s.data[0] : null;
+      const pulled = snap ? (snap.pulled_at || snap.loaded_at) : null;
+      if (newest) {
+        const settled = ga4SettledThrough(pulled, newest);
+        const pulledTxt = ago(pulled);
+        setLast('last-ga4-grp', `${newest} (${relDays(newest)})`
+          + (pulledTxt ? ` · pulled ${pulledTxt}` : ''));
+        // The settled day is only worth a clause when it DIFFERS - the v11.75
+        // tooltip lesson. Equal, it reads as a second opinion about one date.
+        setLast('last-ga4', `📅 Data thru ${newest}`
+          + ((settled && settled !== newest) ? ` · settled thru ${settled}` : '')
+          + ` · pulled ${pulledTxt || '—'}`);
+        // Behind is measured against TODAY, not against a window: this row
+        // asks whether the scripts have been run, and the calendar is what
+        // they are behind. Below the settle horizon there is nothing to say -
+        // the newest day is not final yet either way.
+        const today = new Date();
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        const behind = Math.max(0, Math.round(
+          (Date.parse(todayStr + 'T00:00:00Z') - Date.parse(String(newest).slice(0,10) + 'T00:00:00Z')) / 864e5));
+        if (behind > GA4_SETTLE_DAYS) {
+          appendWarnChip('last-ga4-grp', `${behind} days behind`,
+            `Newest day in ga4_by_date is ${newest}; today is ${todayStr}.`
+            + ` GA4 settles a day within ~48h, so this row stays quiet at`
+            + ` ${GA4_SETTLE_DAYS} days or fewer - run both scripts to close it.`);
+        }
+      } else {
+        setLast('last-ga4-grp', '— Never');
+        setLast('last-ga4', '📅 No GA4 data loaded yet');
+      }
+    } catch (_) {
+      setLast('last-ga4-grp', '— Never');
+      setLast('last-ga4', '📅 No GA4 data loaded yet');
+    }
+    // ── v11.79 — Amazon storage fees. Monthly, so the newest row's
+    // month IS the data-thru; there is no period end to derive.
+    try {
+      const { data: sfRows } = await sb.from('amazon_storage_fees')
+        .select('month_of_charge, uploaded_at')
+        .order('month_of_charge', { ascending: false }).limit(1);
+      if (sfRows && sfRows.length) {
+        const up = ago(sfRows[0].uploaded_at);
+        setLast('last-amz-storage', `📅 Data thru ${sfRows[0].month_of_charge} · uploaded ${up || '—'}`);
+        setLast('last-amz-storage-grp', `${sfRows[0].month_of_charge}` + (up ? ` · uploaded ${up}` : ''));
+      } else {
+        setLast('last-amz-storage', '📅 No storage fee report loaded yet');
+        setLast('last-amz-storage-grp', '— Never');
+      }
+    } catch (_) {
+      setLast('last-amz-storage', '📅 No storage fee report loaded yet');
+      setLast('last-amz-storage-grp', '— Never');
     }
     // ── Chewy — latest snapshot date + furthest forecast month.
     const { data: cfSnap } = await sb.from('chewy_forecasts')
@@ -601,7 +774,6 @@ async function refreshUploadDataRanges() {
     // same shape as the SP Search Term block above, because both feeds get
     // their month from the operator rather than from the file.
     for (const [tbl, card, grp, what] of [
-      ['walmart_ad_campaign', 'last-walmart-ad-campaign', 'last-walmart-ads-grp', 'Walmart Ads'],
       ['walmart_ad_keyword',  'last-walmart-ad-keyword',  null,                   'Walmart Ads keyword'],
     ]) {
       try {
@@ -616,6 +788,24 @@ async function refreshUploadDataRanges() {
         }
       } catch (_) { /* table not created yet */ }
     }
+
+    // ── v12.03 — Walmart Connect DAILY. Its own block: the loop above
+    // selects `reporting_month`, which this table does not have, so folding it
+    // in would have thrown into a catch that says nothing and left the card
+    // reading as never loaded.
+    //
+    // It claims the GROUP line only when it has rows, so an account that has
+    // never uploaded a daily file keeps the campaign feed's month there.
+    try {
+      const { data: wcdRows } = await sb.from('walmart_ad_campaign_daily')
+        .select('date, uploaded_at').order('date', { ascending: false }).limit(1);
+      if (wcdRows && wcdRows.length) {
+        setLast('last-walmart-ad-camp-daily', `\ud83d\udcc5 Latest day ${wcdRows[0].date} \u00b7 uploaded ${ago(wcdRows[0].uploaded_at) || 'recently'}`);
+        setLast('last-walmart-ads-grp', `${wcdRows[0].date} \u00b7 uploaded ${ago(wcdRows[0].uploaded_at) || 'recently'}`);
+      } else {
+        setLast('last-walmart-ad-camp-daily', '\ud83d\udcc5 No Walmart campaign \u00d7 day data loaded yet');
+      }
+    } catch (_) { /* table not created yet */ }
 
     // ── v8.44 — SP Search Term Report. reporting_month + uploaded_at.
     try {
@@ -803,6 +993,10 @@ async function refreshUploadDataRanges() {
   // v10.85 - a fresh upload must appear in its own recent-uploads rail
   // right away, so drop the cache and re-render.
   try { dzRecentInvalidate(); renderAllDzRecentUploads(); } catch (_) {}
+  // v11.81 - the strip reads the SAME tables these rollups just read, so
+  // it runs after them rather than racing them. Never awaited by the
+  // caller: a slow probe on one feed must not hold up the page.
+  renderUploadAttention().catch(e => console.warn('renderUploadAttention:', e?.message || e));
 }
 
 (async () => {

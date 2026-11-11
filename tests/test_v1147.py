@@ -98,7 +98,7 @@ print("=" * 62)
 # ---------------------------------------------------------------------------
 A = run_node(os.path.join(SP, "a.js"), HARNESS + DEFS + r"""
 const out = {};
-for (const t of ['amazon_ad_spend', 'sku_economics', 'walmart_ad_campaign',
+for (const t of ['amazon_ad_spend', 'sku_economics', 'walmart_ad_keyword',
                  'amazon_ads_bulk_upload', 'chewy_forecasts', 'walmart_sales_weekly']) {
   out[t] = uploadCoverageAxes(t);
 }
@@ -116,7 +116,9 @@ console.log(JSON.stringify(out));
 eq("A1 master_id AND a brand column resolve through BOTH",
    A["amazon_ad_spend"]["brandVia"], "both")
 eq("A1b master_id alone is the catalog", A["sku_economics"]["brandVia"], "catalog")
-eq("A1c a brand column alone is the column", A["walmart_ad_campaign"]["brandVia"], "column")
+# v12.07 - walmart_ad_campaign is retired; walmart_ad_keyword carries the
+# same advertiser_brand column, which is what this case is about.
+eq("A1c a brand column alone is the column", A["walmart_ad_keyword"]["brandVia"], "column")
 eq("A1d neither is no brand axis at all", A["amazon_ads_bulk_upload"]["brandVia"], None)
 ok(all(A["_all"].values()),
    "A2 and ALL 22 sources resolve by that one rule, not case by case",
@@ -140,7 +142,7 @@ B = run_node(os.path.join(SP, "b.js"), HARNESS + DEFS + r"""
 const out = {
   ads:     uploadCoverageSql('amazon_ad_spend', null),
   sku:     uploadCoverageSql('sku_economics', null),
-  wmads:   uploadCoverageSql('walmart_ad_campaign', null),
+  wmads:   uploadCoverageSql('walmart_ad_keyword', null),
   bulk:    uploadCoverageSql('amazon_ads_bulk_upload', null),
   sqp:     uploadCoverageSql('amazon_query_performance_asin', { view_type: 'asin' }),
   nasty:   uploadCoverageSql('amazon_query_performance_asin', { view_type: "a'b" }),

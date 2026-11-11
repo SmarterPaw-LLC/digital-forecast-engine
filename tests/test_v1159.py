@@ -73,8 +73,11 @@ print("\nA. The column exists on BOTH Walmart tables and nowhere else")
 # coming from the one declaration - not that there are two tables. The
 # Advertiser daily view is the third, and it carries break-even for the
 # same reason the other two do: it reports ROAS.
-# v12.05 - four: keywords, monthly campaigns, Advertiser daily, Campaign x Day.
-WM_ADS_TABLES = 4
+# v12.07 - TWO. The Advertiser daily and monthly Campaigns feeds are
+# retired; what is left is the channel's own registry (campaign x day)
+# and Keywords. The guarantee is unchanged: this column is on EVERY
+# Walmart ads table and nowhere else.
+WM_ADS_TABLES = 2
 eq("A1  declared on every Walmart ads table", s.count("k: 'roasVsBe'"), WM_ADS_TABLES)
 eq("A2  all of them read the shared tip", s.count("tip: WM_ADS_TIP.roasVsBe"), WM_ADS_TABLES)
 eq("A3  label is the app's existing words", s.count("label: 'vs Break-Even'"), WM_ADS_TABLES)
