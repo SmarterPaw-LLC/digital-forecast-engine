@@ -112,16 +112,21 @@ eq("A2  ...and none of them twice", len(set(gids)), 18)
 
 # Everything interactive the groups carried before the move is still here.
 # These counts are the ones the extractor took on BOTH sides of the cut.
+# v12.03 - /!\ EACH OF THESE IS +1 FOR ONE NEW DROPZONE (Walmart Ads -
+# Daily), and +2 on A7 because a dropzone carries both a dz-st and a
+# dz-last. The guarantee is that nothing was LOST in the v11.81 move, so a
+# deliberate addition is bumped rather than the assertion loosened - a
+# >= would stop catching the thing this suite exists for.
 eq("A3  /!\\ every dropzone survived the move",
-   len(re.findall(r'id="dz-[a-z0-9-]+"', VIEW)), 20)
-eq("A4  /!\\ every file input survived", len(re.findall(r'type="file"', VIEW)), 24)
-eq("A5  /!\\ every onchange handler survived", len(re.findall(r'onchange="', VIEW)), 23)
+   len(re.findall(r'id="dz-[a-z0-9-]+"', VIEW)), 21)
+eq("A4  /!\\ every file input survived", len(re.findall(r'type="file"', VIEW)), 25)
+eq("A5  /!\\ every onchange handler survived", len(re.findall(r'onchange="', VIEW)), 24)
 # v11.82 swapped the GA4 row's two copy buttons (two tooltips) for one Run
 # button (one), so the page carries one fewer. The count stays pinned: its job
 # is catching a tooltip that falls out of a MOVE, not freezing the page.
-eq("A6  /!\\ every tooltip survived", len(re.findall(r'title="', VIEW)), 50)
+eq("A6  /!\\ every tooltip survived", len(re.findall(r'title="', VIEW)), 51)
 eq("A7  /!\\ every status / last element survived",
-   len(re.findall(r'id="(?:st|last)-[a-z0-9-]+"', VIEW)), 59)
+   len(re.findall(r'id="(?:st|last)-[a-z0-9-]+"', VIEW)), 61)
 ok('id="f-newsku"' in VIEW,
    "A8  /!\\ the legacy hidden hook outside every group is still here")
 

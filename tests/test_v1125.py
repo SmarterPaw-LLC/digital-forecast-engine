@@ -402,8 +402,14 @@ if m_ds and m_ch:
 
 print('\n== I. the uploader asks for what the file cannot say ==')
 ok('function promptWalmartAdMeta(' in js, 'I1a there is a month prompt')
-eq('I1b used by BOTH uploaders, so the two cannot drift about what a month is',
-   js.count('await promptWalmartAdMeta('), 2)
+# v12.03 - RE-POINTED from 2 to 3. The guarantee is that EVERY Walmart ads
+# uploader goes through this one prompt, not that there are two of them.
+# The third is the Daily performance export, which passes {dated: true}:
+# its file carries a Date on every row, so the month input is not rendered
+# at all rather than rendered and ignored (v10.19).
+eq('I1b used by EVERY Walmart ads uploader, so they cannot drift about the account',
+   js.count('await promptWalmartAdMeta('), 3)
+ok('{ dated: true }' in js, 'I1c  /!\\ and the dated one asks for no month')
 # v11.31 - RE-POINTED. v11.25 defaulted to LAST month on the reasoning that a
 # part-month must not be stamped as a whole one on the commonest path. Jason:
 # "this should default to the current month." The commonest path IS the month

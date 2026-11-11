@@ -100,12 +100,16 @@ STRIPS = {
     # v11.25 - Walmart gets an Ads tab, and that tab carries a nested strip
     # of its own. Census 30 -> 33; this going red is the test working.
     'Walmart P&L':        ['wmpnl-tab-sales', 'wmpnl-tab-cost', 'wmpnl-tab-ads'],
-    'Walmart Ads':        ['wmpnl-ads-tab-campaigns', 'wmpnl-ads-tab-keywords'],
+    # v12.03 - the Daily area leads the strip and is the default: it is the
+    # only Walmart ads view that can answer 'how are we doing this week'.
+    'Walmart Ads':        ['wmpnl-ads-tab-daily', 'wmpnl-ads-tab-campaigns',
+                           'wmpnl-ads-tab-keywords'],
 }
 DEFAULT_ON = {'chpnl-tab-sales', 'dst-uploads', 'pnl-amzn-tab-summary',
               'ipv-planning', 'pricing-mode-new', 'ds-view-grid',
               'wmpnl-tab-sales', 'pnl-amzn-ads-tab-campaigns',
-              'wmpnl-ads-tab-campaigns',
+              # v12.03 - was wmpnl-ads-tab-campaigns.
+              'wmpnl-ads-tab-daily',
               # v11.42 - the SEO page opens on Traffic.
               'seo-tab-traffic'}
 

@@ -81,19 +81,41 @@ _wmv = JS.index("  walmart: {", _views)
 kw = JS[JS.index("      columns: [", _wmv):JS.index("\n      ],", _wmv)]
 cp_o = JS.index("  walmart: [", JS.index("const ADS_COLUMNS = {"))
 cp = JS[cp_o:JS.index("\n  ],", cp_o)]
+# v12.03 - the THIRD Walmart ads registry: the Advertiser daily view.
+# /!\ It deliberately omits orders, units, cvr and cpa - that export
+# carries no orders and no units, and a derived 0.0% CVR would be a
+# measured-looking zero for something nobody measured (v11.16). So the
+# per-key expectation below is 3 for the keys it uses and 2 for those four.
+dy_o = JS.index("      columns: [", JS.index("    daily: {"))
+dy = JS[dy_o:JS.index("\n      ],", dy_o)]
 
 for blk, name in ((kw, "keyword"), (cp, "campaign")):
     missing = [k for k in SHARED if ("tip: WM_ADS_TIP." + k) not in blk]
     eq("B1  %-8s table reads the shared tip for all 14" % name, missing, [])
 
-eq("B2  %d references in all (%d x 2)" % (len(SHARED)*2, len(SHARED)), JS.count("tip: WM_ADS_TIP."), len(SHARED)*2)
+# The daily registry reads the SHARED tip for every measure it offers, and
+# declares a literal one only where the measure is its own.
+DAILY_OMITS = ["orders", "units", "cvr", "cpa"]
+dy_missing = [k for k in SHARED
+              if k not in DAILY_OMITS and ("tip: WM_ADS_TIP." + k) not in dy]
+eq("B1b daily    table reads the shared tip for every measure it offers",
+   dy_missing, [])
+eq("B1c /!\\ ...and offers none of the four it cannot derive",
+   [k for k in DAILY_OMITS if ("tip: WM_ADS_TIP." + k) in dy], [])
+
+# v12.03 - RE-POINTED. Two registries x 15 keys, plus the daily one which
+# offers 11 of the 15. Derived rather than typed, so the next registry
+# fails this line for the right reason.
+WANT_REFS = len(SHARED) * 2 + (len(SHARED) - len(DAILY_OMITS))
+eq("B2  %d references in all" % WANT_REFS, JS.count("tip: WM_ADS_TIP."), WANT_REFS)
 
 # No entry in the shared table is dead weight.
 for k in SHARED:
-    eq("B3  %-12s referenced exactly twice" % k,
+    want = 2 if k in DAILY_OMITS else 3
+    eq("B3  %-12s referenced %d time(s)" % (k, want),
        # /!\ `WM_ADS_TIP.roas` is a PREFIX of `WM_ADS_TIP.roasVsBe`, so a
        # substring count reads 4 for roas. Match the whole identifier.
-       len(re.findall(r"tip: WM_ADS_TIP\." + k + r"\b(?!VsBe)", JS)), 2)
+       len(re.findall(r"tip: WM_ADS_TIP\." + k + r"\b(?!VsBe)", JS)), want)
 
 # /!\ The whole failure mode: a literal tip surviving beside a shared one, so
 # the two tables can drift apart again one edit later.
@@ -186,8 +208,11 @@ eq("E1  node --check clean", r.returncode, 0)
 # The In-Store $ text is now ONE string, used twice.
 INSTORE = "In-Store Attributed Sales: physical-store purchases Walmart attributed back to an online ad click."
 eq("E2  the In-Store $ text exists exactly once in the file", JS.count(INSTORE), 1)
-eq("E3  ...and the column that reads it appears twice",
-   JS.count("tip: WM_ADS_TIP.inStoreSales"), 2)
+# v12.03 - RE-POINTED from 2 to 3, the same way B2 was: the guarantee is that
+# the TEXT exists once (E2) and every column that shows In-Store $ reads it,
+# not that there are two such columns. The Advertiser daily view is the third.
+eq("E3  ...and every column that shows it reads that one string",
+   JS.count("tip: WM_ADS_TIP.inStoreSales"), 3)
 
 print("\n%s  %d passed, %d failed" % ("PASS" if not failed else "FAIL", passed, failed))
 sys.exit(1 if failed else 0)

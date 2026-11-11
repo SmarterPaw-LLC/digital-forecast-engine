@@ -388,6 +388,10 @@ C_CORE = '\n\n'.join([
     const_obj('ADS_METRIC_COLOR'),
     fn('adsChartMetrics'),
     fn('adsChartSel'), fn('adsChartBy'), fn('adsSetChartBy'),
+    # v12.03 - adsUpdateChart reads the setting through the RESOLVER now, which
+    # clamps the band reading on a view that has nothing to band. Sliced, never
+    # stubbed: a stub would have let the clamp drift away from what runs.
+    fn('adsBandWhy'), fn('adsChartByResolve'), fn('esc2'),
     fn('adsToggleChartMetric'), fn('adsMetricColor'), fn('adsInjectChartBy'),
     fn('adsUpdateChart'),
     fn('adsDiv'), fn('adsBucketEdges'), fn('pnlGrainAdv'), fn('pnlTrendSubtitle'),
@@ -619,7 +623,9 @@ ok('1 campaign selected' in C['selected']['sub'],
 print('\n== D. static ==')
 
 for name in ('adsChartSel', 'adsChartBy', 'adsSetChartBy', 'adsToggleChartMetric',
-             'adsMetricColor', 'adsInjectChartBy'):
+             'adsMetricColor', 'adsInjectChartBy',
+             # v12.03 - the clamp, and the sentence it clamps on.
+             'adsBandWhy', 'adsChartByResolve'):
     eq('D1 exactly one %s definition' % name,
        len(re.findall(r'function\s+%s\s*\(' % name, js)), 1)
 eq('D1b exactly one ADS_METRIC_COLOR registry', js.count('const ADS_METRIC_COLOR'), 1)

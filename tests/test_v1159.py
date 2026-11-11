@@ -68,10 +68,16 @@ CORE = "\n".join([
 # ===========================================================================
 print("\nA. The column exists on BOTH Walmart tables and nowhere else")
 # ===========================================================================
-eq("A1  declared twice (keyword + campaign)", s.count("k: 'roasVsBe'"), 2)
-eq("A2  both read the shared tip", s.count("tip: WM_ADS_TIP.roasVsBe"), 2)
-eq("A3  label is the app's existing words", s.count("label: 'vs Break-Even'"), 2)
-eq("A4  signed-multiple format", s.count("fmt: 'xs'"), 2)
+# v12.03 - RE-POINTED from 2 to 3. The guarantee is that this column is on
+# EVERY Walmart ads table and nowhere else, with all four of its fields
+# coming from the one declaration - not that there are two tables. The
+# Advertiser daily view is the third, and it carries break-even for the
+# same reason the other two do: it reports ROAS.
+WM_ADS_TABLES = 3
+eq("A1  declared on every Walmart ads table", s.count("k: 'roasVsBe'"), WM_ADS_TABLES)
+eq("A2  all of them read the shared tip", s.count("tip: WM_ADS_TIP.roasVsBe"), WM_ADS_TABLES)
+eq("A3  label is the app's existing words", s.count("label: 'vs Break-Even'"), WM_ADS_TABLES)
+eq("A4  signed-multiple format", s.count("fmt: 'xs'"), WM_ADS_TABLES)
 
 for chan in ["amazon", "chewy"]:
     i = s.index("  %s: [" % chan, s.index("const ADS_COLUMNS = {"))

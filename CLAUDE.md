@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.02** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.03** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,175 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.03 - the Walmart ads feed finally carries its own date
+
+- **Jason:** *"i want to upload walmart ads on a weekly basis. i found a new
+  report here. i need to be able to drive performance for walmart ads"*
+
+Ad Center → Reports → **Advertiser** → Report type: **Daily performance**.
+**One row per day, with the date ON the row** — the single thing v11.25's two
+feeds do not have, and the reason *"the Walmart ad grain is still MONTHLY"*
+has been on the Still-open list since **v11.67**.
+
+| feed | grain | dimension | the question it answers |
+|---|---|---|---|
+| `walmart_ad_campaign` | month | per campaign | what do I change |
+| `walmart_ad_keyword` | month | per keyword | what do I bid |
+| **`walmart_ad_daily`** | **day** | **the account** | **how are we pacing** |
+
+### ⚠ IT HAS NO CAMPAIGN DIMENSION, SO IT DOES NOT ANSWER HIS SECOND SENTENCE
+This is the **advertiser total**. It says how the account is pacing day by
+day; it cannot say which campaign to change. **The levers are still monthly**,
+and that is the honest state of this release — see Still open.
+
+### ⚠ AND THE TWO FEEDS ARE THE SAME DOLLARS AT TWO GRAINS
+Adding them double-counts every one — the **v11.79 storage trap** in a new
+costume. Nothing sums across them, the Daily area is its own sub-tab for
+exactly that reason, and the migration's header says so in the table comment.
+
+⚠ They will also **not tie out exactly** at the same window: the daily report
+is pulled under a stated **attribution setting** (the console's *14 days
+attribution* selector) and the campaign export under whatever that selector
+said when IT was downloaded. A gap there is a fact about attribution windows,
+not a loading error.
+
+### ⚠ THE MONTHLY RULES ARE SHADOWED, NOT INHERITED
+`adsViewCfg` returns an object whose **prototype is the channel**, and
+`typeof ch.monthOf === 'function'` is what pins Walmart to a monthly grain: it
+buckets every row onto its month, **refuses the D and W buttons**, and makes
+the coverage line read *monthly grain*. The view assigns `monthOf: undefined`
+and `inWindow: undefined` as **own** properties, which shadows the prototype.
+
+Measured on the real helpers rather than claimed:
+
+| view | grains offered |
+|---|---|
+| Walmart **Daily** | **day · week · month** |
+| Walmart Campaigns | month |
+| Walmart Keywords | month |
+
+### ⚠ NO ORDERS AND NO UNITS, SO CVR AND CPA ARE NOT OFFERED
+The export carries neither. The shared rollup sums `orders` unguarded, so they
+land as **0** — and a derived `0.0% CVR` / `$0.00 CPA` is a measured-looking
+zero for something nobody measured. **A measure with no denominator is a GAP,
+never a zero** (v11.16), and the way this feed states that is by **not
+offering the column at all**.
+
+The **Orders scorecard** is gated the same way, on `COLS.some(c => c.k ===
+'orders')` — the column registry is already what declares whether a feed
+reports orders. **All five existing views declare one, so not one card moves.**
+
+### ⚠ THE PAGE'S BRAND CONTROL CANNOT NARROW AN ACCOUNT TOTAL
+`walmart_ad_campaign` resolves the brand from the **campaign name**, which is
+why picking Doggijuana works there — the *Kitty Ka-Zoom (SmarterPaw LLC)*
+account carries Doggijuana campaigns inside it. This report has no campaign
+names, so the only brand fact a row carries is the account's own, and
+filtering on it would answer *"Doggijuana"* with either the whole account or
+an empty table. **Both wrong.**
+
+So the filter is not applied **and the coverage line says it is not applied**:
+`⚠ account total · Doggijuana is NOT applied — this report has no campaign or
+brand dimension`. Ignoring it silently is the v10.19 defect and would hand
+back a confident wrong number.
+
+### ⚠ A FEED WITH ONE ADVERTISER HAS NOTHING TO BAND
+The **Campaigns** chart reading splits one metric into a line per selected
+row. Here a row is a **day**, so it would draw one single-point line per day
+along an axis that is already the days. The view declares `bandWhy`, the
+control renders **disabled with that sentence and its onclick stripped**, and
+`adsChartByResolve` **clamps as well** — because a disabled button is
+bypassable from the console (the v11.74 rule, applied to the other control).
+
+### ⚠ UPSERT, BECAUSE THE TRAILING DAYS RESTATE
+In the real file, the newest day reported **243 clicks and $235.70 of sales
+with ZERO page views and ZERO add to cart**. Those are reported zeros, not
+blanks, and they settle upward. A weekly upload overlapping the previous one
+has to be able to **correct** days it already wrote.
+
+Every key column is `NOT NULL`, so the unique index is a plain one PostgREST
+can target — unlike `walmart_ad_campaign`, whose `coalesce()` index is the
+whole reason **Architecture Rule #5** exists.
+
+### ⚠ AND THE DATE PARSER HAD TO BE THE EXISTING ONE
+`_wmcDate` accepts **ISO only** and would have returned null on every single
+row of a file stamped `Nov 10, 2026` — the insert then failing with a message
+naming a column rather than a format. `adsParseDate` already reads both
+shapes and is reused (rule #1).
+
+### ⚠ CTR, CPC AND ROAS ARE IN THE FILE AND ARE NOT STORED
+All three derive from the columns beside them, and a stored copy is a second
+spelling of one number (rule 3a) **that cannot be summed**: a week of daily
+CTRs does not add up to the week's CTR. `adsDeriveRow` derives all three from
+the window totals, exactly as it does for the campaign feed — which stores
+none of them either.
+
+### Two more things found on the way
+- **`_wmcLoad` ordered by `reporting_month`, hardcoded.** This table has no
+  such column, so the select would have errored into a catch that **empties
+  the cache silently** — an empty tab with a console warning as the only
+  statement of it. The order column is a parameter now; both existing callers
+  pass what they always did.
+- **`_wmcTableErr` named the v11.25 migration, hardcoded.** A missing
+  `walmart_ad_daily` would have sent Jason to run a file that does not create
+  it. `_WMC_SQL` maps table → migration.
+
+### Daily is the default area
+It is the only Walmart ads view that can answer *how are we doing this week*,
+which is the question this tab gets opened with. Before the migration is run
+its table is missing and the empty state **names the SQL file** — which is the
+right first thing to see, not a silently empty tab.
+
+### Verification
+- `node --check` clean · **152 suites green** · new `tests/test_v1203.py` (97).
+- **The shipped parser driven over Jason's real 10-day export**: 10 rows,
+  **2026-11-01 → 2026-11-10**, **$1,664.67** spend, **2,601** clicks,
+  **$4,075.36** ad sales, **$178.20** in-store, **0** unreadable dates,
+  upserting on `date,region,account`. That file is **not committed** — it is
+  business data and this repo is served publicly (the v11.87 rule). The suite
+  carries the real **header shape** with invented figures.
+- **The real `adsViewCfg` / `adsGrainAllowed` / `adsBandWhy` driven**, with
+  the grain table above as a measurement and the campaigns and keywords views
+  required to be unchanged.
+- The refusals driven: a Campaigns export dropped on the wrong zone, a
+  header-only file, no spend column, every date unreadable (**the first bad
+  value quoted, not counted**), and a partly-bad file keeping its good rows.
+
+### ⚠ TWO OF MY OWN EXPECTATIONS WERE WRONG
+- **F4b read `c.columns` and got `[]`**, so it passed vacuously: the campaigns
+  view carries no `columns` of its own and falls through to
+  `ADS_COLUMNS[channel]`, which is exactly what the renderer resolves. Reading
+  the real registry now.
+- **G3 asserted zero raw reads of `adsChartBy` and there is one** — inside the
+  resolver, which is the single place the stored setting may be consulted.
+  Pinned at 1 **and** pinned to that function, so a fourth consumer reaching
+  past the clamp fails rather than being absorbed into a count that looked
+  right.
+
+Also: `fn_flat` cannot slice a **one-liner** — `col0` swallowed `ADS_VIEWS`
+whole and node reported a duplicate declaration. `line_of` for those.
+
+### Still open
+- **⚠ THE LEVERS ARE STILL MONTHLY, AND THAT IS THE HALF HE ASKED FOR.** This
+  release makes the account's pacing weekly; *"drive performance"* needs
+  campaign and keyword level at a weekly grain. **The constraint is OURS, not
+  Walmart's** — the Campaigns and Keywords exports have a date picker and the
+  uploader asks for a *month*. Generalising those two to `period_start /
+  period_end` is the next build, and it touches `inWindow` / `monthOf`, the
+  chart grain, the coverage grid and 7 months of loaded rows. **Ask him first
+  whether that Report type dropdown also offers a CAMPAIGN-level daily** — if
+  it does, that is a better door than re-shaping the monthly feeds.
+- **⚠ JASON HAS TO RUN `supabase_v12_03_walmart_ad_daily.sql`** before the
+  first upload. The uploader names the file if the table is missing.
+- **⚠ NO DEEP LINK ON THE DAILY CARD.** The report's URL carries his own
+  advertiser id and **this repo is served publicly**, so the tooltip names the
+  navigation path instead — which is what v11.80 settled on for the storage
+  report. If he wants a link, it needs a form of that URL without the id.
+- **⚠ THE POOLED SNAPSHOT DATE STILL REPORTS A DROPPED ASIN AS STALE** (v11.99).
+- **⚠ THE INVENTORY PLANNING SPARKLINE IS UNDECIDED** (v12.00).
+- **⚠ THE TACoS CARD AND LINE HAVE STILL NOT BEEN SEEN TO RENDER** (v12.02).
+- **⚠ KITTY KA-ZOOM US INVENTORY IS A WEEK BEHIND** (v11.99).
+- Everything else on the v12.02 list.
 
 ## v12.02 - TACoS is plottable
 

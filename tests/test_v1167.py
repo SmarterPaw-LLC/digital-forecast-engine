@@ -178,8 +178,14 @@ eq("A3c it is derived exactly once", NC.count("c.bidVsSugg ="), 1)
 
 # The two state declarations, and nowhere else: a view that sums a setting is
 # the defect this release exists to avoid.
-eq("A4  stateFields declared on exactly the two Walmart views",
-   NC.count("stateFields: ["), 2)
+# v12.03 - RE-POINTED from 2 to 3. The Advertiser daily view declares an
+# EMPTY stateFields, and that is load-bearing rather than tidy: adsViewCfg
+# gives it the walmart CHANNEL as its prototype, so omitting the key would
+# have inherited dailyBudget + biddingStrategy over a feed that carries
+# neither - the rollup would then have read undefined onto every day.
+eq("A4  stateFields declared on every Walmart view",
+   NC.count("stateFields: ["), 3)
+ok("stateFields: []," in NC, "A4a  /!\\ daily declares an EMPTY one, shadowing the channel")
 ok("stateFields: ['bid', 'suggestedBid']" in KW, "A4b keywords: the bid pair")
 ok("stateFields: ['dailyBudget', 'biddingStrategy']" in CAMP,
    "A4c campaigns: the budget pair")

@@ -209,7 +209,13 @@ ok(set(A["grains"].values()) <= {"day", "week", "month", "year"},
    sorted(set(A["grains"].values())))
 # v11.79 - amazon_storage_fees joined the registry. The count is pinned so
 # a feed that lands WITHOUT a rail entry shows up here as a change.
-eq("A7  23 sources registered", len(A["grains"]), 23)
+# v12.03 - 24: walmart_ad_daily joined. /!\ Its dateField is a real DATE,
+# so it resolves as a DAY grain and takes v11.75's 10-day daily tolerance -
+# deliberately wider than one cycle, because a one-day tolerance would mark
+# every daily feed late every single day.
+eq("A7  24 sources registered", len(A["grains"]), 24)
+eq("A7b /!\\ the new one resolves as a DAY, not a period code",
+   A["grains"].get("walmart_ad_daily"), A["grains"].get("shopify_sales_daily"))
 
 eq("A8  Amazon SKU Economics declares Mon+5", A["offAmz"], 5)
 eq("A9  Amazon SKU Economics EU declares Mon+5", A["offAmzEu"], 5)
