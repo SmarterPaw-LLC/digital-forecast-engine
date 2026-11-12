@@ -160,9 +160,11 @@ print("\nB. THE DEFECT REFUSED")
 why = A["month"].get("threw") or ""
 ok(A["month"].get("r") is None, "B1  /!\\ a MONTH split is refused")
 ok("MONTH split" in why, "B2  ...named as what it is", why[:70])
-ok("31 days" in why and "1 distinct date" in why,
-   "B3  /!\\ with the window it claims and the dates it holds", why[:110])
-ok("all on the 1st" in why, "B4  ...and the tell")
+# v12.12 - the message states the TELL (every date a month-start) rather
+# than a density, because density was the wrong test.
+ok("the 1st" in why, "B3  /!\\ it names the tell: every date a month-start", why[:110])
+ok("2026-10-01 to 2026-10-31" in why,
+   "B4  ...and the window the file claims, for context")
 ok("Set Split to Date (Day)" in why, "B5  /!\\ and the fix, in the console's own words")
 # /!\ THE CONSEQUENCE IS NAMED. This is not a tidiness refusal: the two grains
 # land in the SAME table on different keys, so a month row and the daily rows
@@ -203,10 +205,16 @@ ok(PAR.index("MONTH split") < PAR.index("const sb = await getSB();"),
 # ===========================================================================
 print("\nE. the threshold")
 # ===========================================================================
-ok("span >= 3" in PAR,
-   "E1  /!\\ a window under three days cannot be judged, so it is not")
-ok("Math.max(2, span / 3)" in PAR,
-   "E2  under a third of the window is not a day split")
+# v12.12 - /!\ THE RATIO IS GONE. It compared distinct dates against the
+# window the file SAYS it covers, and "Period Requested" is what the
+# operator ASKED for, not what has data - so a real day split over a long
+# window refused itself. See test_v1212.
+ok("Math.max(2, span / 3)" not in PAR,
+   "E1  /!\\ the density ratio is gone - it refused a real day split")
+ok("days.length >= 2 && allFirsts" in PAR,
+   "E2  /!\\ the tell is every date being a month-start")
+ok("span >= 28" in PAR,
+   "E3  ...and a LONE 1st is only a month split across a month-long window")
 
 print("\nF. the chip agrees with CLAUDE.md")
 md = io.open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read()

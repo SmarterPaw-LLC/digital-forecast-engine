@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.11** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.12** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,66 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.12 - sparseness is normal; month-starts are not
+
+Jason dropped two files at once. v12.10's guard was **right about one and
+wrong about the other**, and because one throw aborted the batch, **neither
+loaded**.
+
+| file | rows | dates | |
+|---|---|---|---|
+| `CustomReport_11_12_2026.csv` | 30 | **9, all on the 1st** | a month split. Correctly refused. |
+| `CustomReport_11_12_2026 (1).csv` | 217 | **100, 25-Mar to 02-Jul** | a real DAY split. **Wrongly refused.** |
+
+### ⚠ THE RATIO WAS THE WRONG TEST, AND IT WAS MINE
+v12.10 compared the distinct-date count against the window the file SAYS it
+covers. But **"Period Requested" is the range the operator ASKED for, not the
+range that has data.** Those campaigns did not exist for most of Sep 2025 -
+Nov 2026, so **100 days out of a claimed 436** is a perfectly good day split -
+and 23% tripped a 33% threshold.
+
+**Sparseness is normal.** A campaign starts, pauses, ends. The reliable tell
+for a month split is not how few dates there are, it is that **every one is
+the first of a month**.
+
+    >= 2 distinct dates, every one a month-start      -> month split
+    exactly 1, the 1st, across a window >= 28 days    -> month split
+    anything else                                     -> a day split
+
+The second rule exists because a lone `01-Oct-26` is genuinely ambiguous: it
+is what a month split of October looks like AND what a legitimate one-day pull
+of the 1st looks like. The claimed window is the only thing separating them.
+
+### ⚠ AND ONE BAD FILE TOOK THE WHOLE BATCH DOWN
+The loop sat inside the try, so the first throw abandoned the good file too -
+with nothing on screen saying **which** of the two was the problem. Each file
+succeeds or fails on its own now; the good ones land, the status line **names**
+the refused files rather than counting them, and it renders as an error rather
+than a clean load. All files refused is still a hard error, because then there
+is nothing to report.
+
+### ⚠ AND HIS EXPORT IS TRUNCATED
+Worth recording separately: `(1).csv` asked for **Sep 2025 - Nov 2026** and
+came back with **217 rows ending 2026-07-02**. Walmart capped it. A full
+backfill has to be pulled in chunks, and the uploader's new day count is what
+makes that visible - it reports **100 days**, not just 217 rows.
+
+### Verification
+- `node --check` clean · **158 suites green** · new `tests/test_v1212.py` (21).
+- **Both of Jason's real files driven through the shipped parser**: the day
+  split accepted at 217 rows / 100 days / $4,387.03, the month split refused.
+- The regression pinned as its own case: 58 dates inside a 436-day window,
+  **13% of it**, accepted.
+
+### Still open
+- **⚠ THE MONTH-STAMPED ROWS ARE STILL IN THE TABLE** (v12.10). The delete
+  SQL is with Jason; the harness blocked me from running it as a mass delete.
+  All 65 rows are backed up to `walmart_ad_campaign_daily_backup_2026-11-12.json`.
+- **⚠ THE BACKFILL NEEDS CHUNKING** - one pull does not return the range.
+- **⚠ FETCHING 295,189 ROWS AT ALL** (v12.11) - 13.78s after the 4.4x.
+- **⚠ THE JUNE / JULY KEYWORD DUPLICATE IS NOT FIXED** (v12.06).
+- Everything else on the v12.11 list.
 
 ## v12.11 - one parallel pager
 
