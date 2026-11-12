@@ -639,9 +639,10 @@ for name in ('chartLegendHost', 'chartLegendToggle', 'chartLegendOnly'):
 eq('D1 exactly one CHART_HTML_LEGEND', js.count('const CHART_HTML_LEGEND = {'), 1)
 
 eq('D2 exactly THREE charts opt in (7 surfaces via the shared renderer, '
-   'plus the two on Units Sold)', js.count('CHART_HTML_LEGEND]'), 3)
+   'plus the two on Units Sold)', js.count('CHART_HTML_LEGEND]')
+   + js.count('CHART_HTML_LEGEND, CHART_EVENT_MARKS]'), 3)
 
-ok('plugins: [CHART_HTML_LEGEND],' in js,
+ok('plugins: [CHART_HTML_LEGEND, CHART_EVENT_MARKS],' in js,
    'D3a pnlTrendRender passes it in the chart\'s own plugins array')
 ok('plugins: [salesCoveragePlugin, CHART_HTML_LEGEND],' in js,
    'D3b Units Sold ADDS it beside the coverage plugin rather than replacing it')

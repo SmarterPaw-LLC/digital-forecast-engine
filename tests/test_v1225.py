@@ -63,6 +63,10 @@ ok("const spendForTip" in js, "A1  spendForTip is declared again")
 ok(js.count("const spendForTip") == 1,
    "A2  /!\\ exactly once - two declarations is the next bug", js.count("const spendForTip"))
 RAC = fn_src("renderAdsCampaigns")
+# v12.27 - /!\ adsUpdateChart DRAWS THIS TAB TOO, and the next orphan
+# landed in it. A census that covers one of two renderers is a census
+# with a hole the size of the other.
+AUC = fn_src("adsUpdateChart")
 ok("const spendForTip" in RAC,
    "A3  /!\\ and INSIDE the function that reads it, not a global patched in")
 # /!\ GUARDED. A missing declaration must FAIL section A, never crash
@@ -75,7 +79,7 @@ ok("const spendForTip" in RAC and "Math.round(spendForTip)" in RAC
 print("\nB. /!\\ THE CENSUS - every identifier this renderer reads is declared")
 # Declarations visible to the function: its own locals and params, plus every
 # top-level binding and function in the file.
-body = strip_noise(RAC)
+body = strip_noise(RAC) + "\n" + strip_noise(AUC)
 
 declared = set()
 for m in re.finditer(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)", body):
@@ -101,11 +105,12 @@ for m in re.finditer(r"function\s*\w*\s*\(([^()]*)\)", body):
         if re.fullmatch(r"[A-Za-z_$][\w$]*", t or ""):
             declared.add(t)
 # the function's own parameters
-sig = re.match(r"(?:async\s+)?function\s+renderAdsCampaigns\s*\(([^()]*)\)", RAC)
-for part in (sig.group(1) if sig else "").split(","):
-    t = part.strip()
-    if t:
-        declared.add(t)
+for _fn, _src in (("renderAdsCampaigns", RAC), ("adsUpdateChart", AUC)):
+    sig = re.match(r"(?:async\s+)?function\s+" + _fn + r"\s*\(([^()]*)\)", _src)
+    for part in (sig.group(1) if sig else "").split(","):
+        t = part.strip()
+        if t:
+            declared.add(t)
 
 whole = js  # RAW: see the note above
 for m in re.finditer(r"(?m)^\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)", whole):
@@ -141,7 +146,7 @@ missing = sorted(t for t in used
                  and not re.fullmatch(r"[A-Z][A-Z0-9_]*", t))
 
 ok(not missing,
-   "B1  /!\\ every identifier renderAdsCampaigns reads is declared somewhere",
+   "B1  /!\\ every identifier BOTH ads renderers read is declared somewhere",
    ", ".join(missing[:12]))
 
 print("\n" + "-" * 70)

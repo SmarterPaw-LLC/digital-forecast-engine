@@ -84,6 +84,7 @@ const getChart = async () => Chart;
 const pnlBucketGrain = () => 'day';
 const pnlPickBucket = () => {};
 const CHART_HTML_LEGEND = { id: 'htmlLegend' };
+const CHART_EVENT_MARKS = { id: 'spEventMarks' };   // v12.27 - driven for real in test_v1227
 const CANVAS = { title: '', style: {}, getContext() { return { __canvas: CANVAS }; } };
 global.document = { getElementById: () => CANVAS };
 

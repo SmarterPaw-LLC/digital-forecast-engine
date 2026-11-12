@@ -1569,12 +1569,36 @@ function adsUpdateChart(ctx) {
   panel.style.display = 'block';
   // Fire and forget: pnlTrendRender awaits the Chart.js loader, and the
   // renderer that called us is synchronous (v11.03).
+  // v12.27 - /!\ THE NOTES PANEL AND THE CHART MARKS COME FROM ONE PASS, so
+  // a flag on the timeline and the row under it can never describe different
+  // notes. The note is placed by SPAN (adsNoteBucketIdx), never by matching
+  // the bucket key - the Sunday/Monday trap from v12.15.
+  const _noteCamps = (res.campaigns || []).map(c => c[NAMECOL]).filter(Boolean);
+  const _noteSel = (sel && sel.size) ? [...sel] : null;
+  let _noteEvents = [];
+  try {
+    if (adsNotesEnsure(channel, ch)) {
+      adsNotesRenderList(channel, ch, _noteCamps, _noteSel);
+      _noteEvents = adsNotesFor(channel, _noteSel).map(r => {
+        const k = ADS_NOTE_KINDS[r.kind] || ADS_NOTE_KINDS.observation;
+        return { idx: adsNoteBucketIdx(r.note_date, buckets, grain), color: k.color };
+      }).filter(e => e.idx >= 0);
+    }
+  } catch (e) { console.warn('ads notes panel:', e && e.message); }
+
   pnlTrendRender({
     canvasId: ch.host + '-chart-canvas', instance: _adsChartInstance[key], periodHost: ch.periodHost,
     buckets, datasets: built.datasets, mode: built.mode,
     isPct: !!m.isPct, unit: m.unit,
   }).then(inst => { _adsChartInstance[key] = inst;
-                    if (inst) inst.$overlaySync = _adsSync; })
+                    if (inst) {
+                      inst.$overlaySync = _adsSync;
+                      // /!\ The events ride on the INSTANCE and the chart is
+                      // nudged, because they are attached after the first
+                      // draw and the plugin only runs on a draw.
+                      inst.$spEvents = _noteEvents;
+                      try { inst.update('none'); } catch (_) {}
+                    } })
     .catch(e => console.warn('ads trend chart:', (e && e.message) || e));
 }
 
@@ -1962,6 +1986,234 @@ function _adsDayCount(from, to) {
   return Math.round((b - a) / 86400000) + 1;
 }
 
+// ===========================================================================
+// v12.27 - CAMPAIGN NOTES, and the events they put on the timeline.
+//
+// Jason: "i need a 'notes' section that i can set per campaign level, with an
+// event that appears on the timeline ... i just changed the kitty ka zoom
+// manual campaign to dynamic bidding today, and i want to record that change"
+//
+// /!\ A note with NO campaign is an ACCOUNT-level event and draws on every
+// campaign's timeline. A note WITH one draws only there. That is the whole of
+// the scoping rule, and it is applied in one place (adsNotesFor) so the list
+// and the chart cannot disagree about which notes belong to a view.
+// ===========================================================================
+const ADS_NOTE_KINDS = {
+  change:      { label: 'Setting change', color: '#4a7fe0' },
+  creative:    { label: 'Creative',       color: '#8a63d2' },
+  budget:      { label: 'Budget',         color: '#2e9e6b' },
+  test:        { label: 'Test',           color: '#d98c1f' },
+  external:    { label: 'External',       color: '#b05b9e' },
+  observation: { label: 'Observation',    color: '#7a8088' },
+};
+
+let _adsNotes = {};          // channel -> { pending } | { rows: [...] }
+
+function adsNotesRows(channel) {
+  const e = _adsNotes[channel];
+  return (e && Array.isArray(e.rows)) ? e.rows : [];
+}
+
+// /!\ ONE SCOPING RULE. Account-level notes (campaign null) always apply;
+// a campaign note applies only to its own campaign. With nothing selected the
+// view is the whole account, so every note is in scope.
+function adsNotesFor(channel, campaignNames) {
+  const rows = adsNotesRows(channel);
+  if (!campaignNames || !campaignNames.length) return rows;
+  const want = new Set(campaignNames);
+  return rows.filter(r => !r.campaign || want.has(r.campaign));
+}
+
+async function adsNotesLoad(channel, force) {
+  if (!force && _adsNotes[channel] !== undefined) return;
+  _adsNotes[channel] = { pending: true };
+  try {
+    const sb = await getSB();
+    const { data, error } = await sb.from('ads_campaign_notes')
+      .select('*').eq('channel', channel).order('note_date', { ascending: false });
+    if (error) throw error;
+    _adsNotes[channel] = { rows: (data || []) };
+  } catch (e) {
+    // /!\ The table may not exist yet. Say which file creates it rather than
+    // printing a Postgres message nobody can act on (the v12.03 rule).
+    const msg = String((e && e.message) || e);
+    _adsNotes[channel] = {
+      rows: [],
+      why: /ads_campaign_notes/.test(msg) && /exist|schema|relation/i.test(msg)
+        ? 'Run supabase_v12_27_ads_campaign_notes.sql to enable notes.'
+        : 'Notes could not be read: ' + msg,
+    };
+    console.warn('ads notes:', msg);
+  }
+}
+
+async function adsNoteSave(channel) {
+  const g = id => document.getElementById(id);
+  const date = (g('adsnote-date') || {}).value || '';
+  const kind = (g('adsnote-kind') || {}).value || 'change';
+  const camp = (g('adsnote-camp') || {}).value || '';
+  const text = ((g('adsnote-text') || {}).value || '').trim();
+  const st = g('adsnote-status');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { if (st) st.textContent = 'Pick a date.'; return; }
+  if (!text) { if (st) st.textContent = 'Write the note.'; return; }
+  if (st) st.textContent = 'Saving\u2026';
+  try {
+    const sb = await getSB();
+    const { error } = await sb.from('ads_campaign_notes').insert([{
+      channel, account: null, campaign: camp || null,
+      note_date: date, kind, note: text,
+    }]);
+    if (error) throw error;
+    if (g('adsnote-text')) g('adsnote-text').value = '';
+    await adsNotesLoad(channel, true);
+    if (st) st.textContent = '';
+    adsNotesRepaint(channel);
+  } catch (e) {
+    const msg = String((e && e.message) || e);
+    if (st) st.textContent = /relation|exist|schema/i.test(msg)
+      ? 'Run supabase_v12_27_ads_campaign_notes.sql first.'
+      : 'Could not save: ' + msg;
+  }
+}
+
+async function adsNoteDelete(channel, id) {
+  // /!\ A note is a record of a decision. Deleting one silently would lose
+  // the only account of why a line moved.
+  const row = adsNotesRows(channel).find(r => String(r.id) === String(id));
+  if (!confirm('Delete this note?\n\n' + (row ? (row.note_date + ' \u00b7 ' + row.note) : id)
+               + '\n\nThis cannot be undone.')) return;
+  try {
+    const sb = await getSB();
+    const { error } = await sb.from('ads_campaign_notes').delete().eq('id', id);
+    if (error) throw error;
+    await adsNotesLoad(channel, true);
+    adsNotesRepaint(channel);
+  } catch (e) { console.warn('ads note delete:', (e && e.message) || e); }
+}
+
+// /!\ A NOTE IS PLACED BY SPAN, NOT BY KEY - the Sunday/Monday trap (v12.15).
+// A note dated any day inside a bucket belongs to that bucket, whatever the
+// grain and whichever day the bucket is keyed on.
+function adsNoteBucketIdx(noteDate, buckets, grain) {
+  if (!noteDate || !Array.isArray(buckets) || !buckets.length) return -1;
+  const d = String(noteDate).slice(0, 10);
+  for (let i = 0; i < buckets.length; i++) {
+    let span = null;
+    try { span = (typeof pnlBucketRange === 'function') ? pnlBucketRange(buckets[i], grain) : null; }
+    catch (_) { span = null; }
+    if (span && span.from && span.to) {
+      if (d >= span.from && d <= span.to) return i;
+    } else if (String(buckets[i]).slice(0, 10) === d) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// /!\ ONE PANEL, BUILT ONCE AND THEN REPAINTED - the v10.99 rule. Rewriting
+// the whole block on every render would blow away the note field's focus and
+// caret mid-sentence, which is exactly what that rule exists for: only the
+// LIST is repainted, never the form.
+let _adsNotesChannel = {};   // host -> channel, so the repaint knows its scope
+
+function adsNotesEnsure(channel, ch) {
+  const chartPanel = document.getElementById(ch.host + '-chart-panel');
+  if (!chartPanel || !chartPanel.parentNode) return null;
+  _adsNotesChannel[ch.host] = channel;
+  let box = document.getElementById(ch.host + '-notes');
+  if (box) return box;
+  box = document.createElement('div');
+  box.id = ch.host + '-notes';
+  box.className = 'ds-panel';
+  box.style.cssText = 'margin-top:10px;padding:10px 12px';
+  const opts = Object.entries(ADS_NOTE_KINDS)
+    .map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
+  box.innerHTML =
+    `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+       <span style="font-family:var(--display);font-weight:700;font-size:12px;color:var(--text)">\ud83d\udcdd Notes</span>
+       <span id="${ch.host}-notes-count" style="font-family:var(--mono);font-size:10px;color:var(--text3)"></span>
+       <span style="flex:1"></span>
+       <span id="adsnote-status" style="font-family:var(--mono);font-size:10px;color:var(--text3)"></span>
+     </div>
+     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+       <input type="date" id="adsnote-date" style="font-family:var(--mono);font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;background:var(--surface);color:var(--text)">
+       <select id="adsnote-kind" style="font-family:var(--mono);font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;background:var(--surface);color:var(--text)">${opts}</select>
+       <select id="adsnote-camp" style="font-family:var(--mono);font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;background:var(--surface);color:var(--text);max-width:260px"></select>
+       <input type="text" id="adsnote-text" placeholder="what changed, and why" style="flex:1;min-width:220px;font-family:var(--mono);font-size:11px;padding:4px 8px;border:1px solid var(--border2);border-radius:5px;background:var(--surface);color:var(--text)">
+       <button type="button" onclick="adsNoteSave('${channel}')" style="font-family:var(--display);font-weight:700;font-size:11px;padding:5px 12px;border:1px solid var(--border2);border-radius:5px;background:var(--surface);color:var(--text);cursor:pointer">Save</button>
+     </div>
+     <div id="${ch.host}-notes-list"></div>`;
+  chartPanel.parentNode.insertBefore(box, chartPanel.nextSibling);
+  const d = document.getElementById('adsnote-date');
+  if (d && !d.value) { try { d.value = new Date().toISOString().slice(0, 10); } catch (_) {} }
+  return box;
+}
+
+function adsNotesRenderList(channel, ch, campaignNames, selectedNames) {
+  const list = document.getElementById(ch.host + '-notes-list');
+  const cnt  = document.getElementById(ch.host + '-notes-count');
+  if (!list) return;
+  const entry = _adsNotes[channel];
+  if (entry && entry.pending) { list.innerHTML = ''; if (cnt) cnt.textContent = 'reading\u2026'; return; }
+  if (entry && entry.why) {
+    list.innerHTML = `<div style="font-family:var(--mono);font-size:11px;color:var(--sp-orange,#c2771f)">\u26a0 ${esc2(entry.why)}</div>`;
+    if (cnt) cnt.textContent = '';
+    return;
+  }
+  // The dropdown is rebuilt only when the campaign list changes, so an open
+  // selection is not reset on every repaint.
+  const sel = document.getElementById('adsnote-camp');
+  if (sel) {
+    const want = JSON.stringify(campaignNames);
+    if (sel.dataset.sig !== want) {
+      sel.dataset.sig = want;
+      sel.innerHTML = '<option value="">\u2014 whole account \u2014</option>'
+        + campaignNames.map(n => `<option value="${esc2(n)}">${esc2(n)}</option>`).join('');
+    }
+    // /!\ A SELECTED CAMPAIGN PREFILLS THE FORM. Jason reached for this with
+    // one campaign ticked; making him pick it again in a second control is
+    // the kind of friction that stops a note being written at all.
+    if (selectedNames && selectedNames.length === 1 && !sel.dataset.touched) {
+      sel.value = selectedNames[0];
+    }
+    sel.onchange = () => { sel.dataset.touched = '1'; };
+  }
+  const rows = adsNotesFor(channel, selectedNames);
+  if (cnt) {
+    cnt.textContent = rows.length
+      ? (rows.length + ' in view' + (selectedNames && selectedNames.length ? ' \u00b7 selection' : ''))
+      : 'none yet';
+  }
+  if (!rows.length) {
+    list.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text3)">'
+      + 'Nothing recorded for this view yet.</div>';
+    return;
+  }
+  list.innerHTML = rows.slice(0, 40).map(r => {
+    const k = ADS_NOTE_KINDS[r.kind] || ADS_NOTE_KINDS.observation;
+    const scope = r.campaign ? esc2(r.campaign) : 'whole account';
+    return `<div style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-top:1px solid var(--border2)">
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3);min-width:78px">${esc2(String(r.note_date).slice(0,10))}</span>
+        <span style="font-family:var(--mono);font-size:9px;color:#fff;background:${k.color};border-radius:3px;padding:1px 6px;white-space:nowrap">${k.label}</span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text);flex:1;min-width:0">${esc2(r.note)}
+          <span style="color:var(--text3)"> \u00b7 ${scope}</span></span>
+        <button type="button" title="Delete this note" onclick="adsNoteDelete('${channel}', ${Number(r.id)})"
+          style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;line-height:1">\u00d7</button>
+      </div>`;
+  }).join('');
+}
+
+// /!\ Repaint through the renderer, so the chart marks and the list are built
+// from one pass. A second path that refreshed only the list is how the flag
+// on the chart and the row under it come to disagree.
+function adsNotesRepaint(channel) {
+  for (const [host, chn] of Object.entries(_adsNotesChannel)) {
+    if (chn !== channel) continue;
+    const re = window['_adsRe_' + host];
+    if (typeof re === 'function') { try { re(); } catch (_) {} }
+  }
+}
+
 function adsTacosFor(channel, selRows, spend, range, adSpan, adSales) {
   const no = (why) => ({ pct: null, netSales: null, why });
 
@@ -2102,6 +2354,13 @@ function renderAdsCampaigns(channel, view) {
 
   const win = ch.range() || {};
   const brand = ch.brand();
+
+  // v12.27 - the notes, on the same principle: asked for before anything
+  // draws, and a repaint when they land.
+  if (_adsNotes[channel] === undefined) {
+    adsNotesLoad(channel).then(() => renderAdsCampaigns(channel, view))
+      .catch(e => console.warn('ads notes:', e && e.message));
+  }
 
   // v12.23 - /!\ BEFORE ANY READER, not after every card. The break-even
   // deflator, the Sell-Through card and the TACoS card all read this cache
@@ -2419,16 +2678,25 @@ function renderAdsCampaigns(channel, view) {
       ...(_adsSellThru ? [{
         label: 'Sell-Through',
         val: $0(_adsSellThru.retail),
-        sub: 'everything the channel sold \u00b7 retail'
-          + (t && t.sales > 0 && _adsSellThru.retail > 0
-             ? ' \u00b7 ads claim ' + Math.round(100 * t.sales / _adsSellThru.retail) + '%'
-             : ''),
-        color: 'var(--text)',
+        // v12.26 - /!\ UNDER A SELECTION THIS IS THE CHANNEL, NOT THE ROWS
+        // TICKED. Organic sales do not belong to a campaign, so it cannot be
+        // narrowed - and a card that silently keeps answering a control it
+        // cannot honour is the v10.19 defect.
+        sub: selRows
+          ? ('\u26a0 whole channel \u00b7 selection NOT applied')
+          : ('everything the channel sold \u00b7 retail'
+             + (t && t.sales > 0 && _adsSellThru.retail > 0
+                ? ' \u00b7 ads claim ' + Math.round(100 * t.sales / _adsSellThru.retail) + '%'
+                : '')),
+        color: selRows ? 'var(--text3)' : 'var(--text)',
         delta: null,
         src: TACOS_SRC[channel],
         tip: 'Walmart 1P sell-through over this window\u2019s weeks, at RETAIL.'
-           + '\n\nAd Sales above is the ad-attributed slice of this, on the same basis. '
-           + 'TACoS divides by our revenue, which is this \u00d7 cost-per-each.',
+           + '\n\nAd Sales above is the ad-attributed slice of this, on the same basis.'
+           + (selRows
+              ? '\n\n\u26a0 Sales are not attributable to a campaign, so this stays the '
+                + 'whole channel while the cards around it show your selection.'
+              : ''),
       }] : []),
       { label: colLabel('roas', 'ROAS'),
         val: cardT.roas == null ? '—' : cardT.roas.toFixed(2) + 'x',

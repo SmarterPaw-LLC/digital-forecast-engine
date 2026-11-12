@@ -259,6 +259,7 @@ const getChart = async () => Chart;
 const pnlBucketGrain = () => 'week';
 const pnlPickBucket = () => {};
 const CHART_HTML_LEGEND = { id: 'htmlLegend' };
+const CHART_EVENT_MARKS = { id: 'spEventMarks' };   // v12.27 - driven for real in test_v1227
 const CANVAS = { title: '', style: {}, getContext() { return { __canvas: CANVAS }; } };
 global.document = { getElementById: () => CANVAS };
 """ + re.search(r"const PNL_SCALE_GRACE = '[^']+';", js).group(0) + "\n"
