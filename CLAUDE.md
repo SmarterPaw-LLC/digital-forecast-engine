@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.07** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.08** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,104 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.08 - TACoS on Walmart and Chewy, on OUR revenue
+
+- **Jason:** *"what? i asked for taco measures on walmart and chewy. why did
+  you just undo that? ugh this has been frustrating"*
+
+He asked for this, answered the only question it needed - **our revenue, not
+retail** - and then watched **v12.07 hide the card** on those two tabs. I got
+diverted onto the Custom-report work, never came back, and when the symptom he
+reported (Amazon source chips on the Walmart page) came up I fixed the symptom
+by **gating the card to Amazon**, which is the opposite of what he asked for.
+The fix for a card that cannot compute is to give it its denominator.
+
+### ⚠ THE BASIS IS THE WHOLE POINT
+On Amazon, net sales **is** what we receive. On Walmart and Chewy we are 1P:
+the sales figure those feeds report is **retail**, which this app already
+calls *"a vanity. We never see this money."* Measured live, 2026-08-11 →
+11-09:
+
+| Walmart | |
+|---|---|
+| retail sell-through | **$16,579** |
+| our revenue | **$6,179** |
+| we keep | **~37%** |
+
+Dividing by retail would make Walmart look **roughly twice as efficient as
+Amazon for the same dollars**, under a label that already means something else
+one tab over - rule 3a, at its most expensive.
+
+### ⚠ AND THE FIRST REAL NUMBER IS 180.9%
+On the one week where both feeds cover the same ground (2026-11-04 → 11-10):
+
+    ad spend      $1,179.44
+    our revenue   $651.95
+    TACoS         180.9%        (on retail it would read 70.6%)
+
+**We spent $1.81 for every $1.00 Walmart paid us that week.** That is the
+number this card exists to show, and it is not visible anywhere else in the
+app.
+
+### ⚠ A PARTIAL NUMERATOR OVER A FULL DENOMINATOR READS LOW - AND LOW LOOKS LIKE GOOD NEWS
+**Found by measuring, not by reading the code.** Same channel, same month:
+
+| window | spend | revenue | TACoS |
+|---|---|---|---|
+| 2026-08-11 → 11-09 (91 days) | $1,021 over **6 days** | $6,179 over **13 weeks** | **16.5%** |
+| 2026-11-04 → 11-10 (both feeds) | $1,179 over 7 days | $652 over 1 week | **180.9%** |
+
+An order of magnitude apart, and only the window differs. The ad feed's own
+span is compared against the window now, and below **80% coverage the card
+refuses** and names both counts, the span it does hold, and **which way the
+error would have gone**. Nothing on screen would otherwise have said so.
+
+### ⚠ AN UNPRICED SKU IS NAMED, NOT SWALLOWED
+A SKU that sold with no cost-per-each on record contributes nothing to the
+denominator, so TACoS reads **high**. Chewy has **23 such SKUs, 916 units** in
+the measured window. The card carries the count and says which way it skews.
+Walmart currently has **zero**.
+
+### Chewy's per-each price is the EXISTING helper, not SQL
+`chewyCatalogPricePerEach` is `cost / case_qty` for a CS row and `cost` for an
+EA row, with the UOM test in it. Re-spelling that division in SQL would be a
+second copy of the one number the Cost to Chewy tab is built on, so the units
+are fetched and the price applied in JS (hard rule #1). Walmart's side **is**
+SQL - the same `walmart_sales_weekly × walmart_cost_per_each` join
+`adsLoadBreakEven` already uses, windowed - so the break-even line and this
+denominator cannot disagree.
+
+### ⚠ `exec_sql` WRAPS THE QUERY AS `json_agg(t)`
+So a column aliased **`t`** collides with the subquery's own alias and the
+whole row collapses to that single value. My first cut aliased
+`max(week_start) t`, every row came back as a bare date string, `r.rev` was
+`undefined` → 0, and the card would have read *"no sales in this window"*
+forever. **Caught by running the real SQL before believing the code.** They
+are `span_from` / `span_to` now, and `G5` pins it.
+
+### The sources follow the channel
+`TACOS_SRC` is the registry: a channel absent from it **gets no card at all**,
+so the registry and the helper's own refusal cannot disagree about where TACoS
+belongs. That is what fixes the `amazon_ad_spend` chips Jason saw on Walmart.
+
+### Verification
+- `node --check` clean · **154 suites green** · new `tests/test_v1208.py` (49).
+- **The real `adsTacosFor` driven on the live figures above**, with the retail
+  comparison as an assertion rather than a remark, and the guard required to
+  refuse the exact 16.5% it would otherwise have printed.
+- Every refusal driven: no range, a campaign selection, a channel with no
+  feed, a window nothing has fetched, a fetch **in flight** (which is not a
+  refusal), and zero revenue.
+
+### Still open
+- **⚠ WALMART'S AD FEED COVERS 2026-11-04 ONWARD ONLY**, so TACoS refuses on
+  any wider window until `Campaign x Day - 14d` is backfilled from 2026-03-01.
+  That is the same backfill v12.07 asked for, now with a second consequence.
+- **⚠ CHEWY'S AD FEED STOPS 2026-10-25** and its sales stop 2026-10-26.
+- **⚠ 23 CHEWY SKUs SELL WITH NO CATALOG COST** (916 units in 90 days).
+- **⚠ THE JUNE / JULY KEYWORD DUPLICATE IS NOT FIXED** (v12.06).
+- Everything else on the v12.07 list.
 
 ## v12.07 - the cleanup, done rather than offered
 

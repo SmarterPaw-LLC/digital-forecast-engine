@@ -48,6 +48,13 @@ def nocomment(t):
     return re.sub(r"(?m)^\s*//.*$", "", t)
 
 
+def line_of(pat):
+    for ln in js.split(chr(10)):
+        if pat in ln:
+            return ln
+    raise SystemExit('not found: ' + pat)
+
+
 def fn_flat(name):
     i = js.index("function " + name + "(")
     if js[max(0, i - 6):i] == "async ":
@@ -92,7 +99,16 @@ ok("sponsored" not in nocomment(TAC),
    "A6  /!\\ ...nor any other single ad product: the numerator is total Ad Spend")
 
 # Both source tables are named on the card, because it joins two feeds.
-ok("src: ['amazon_ad_spend', 'sku_economics']" in js,
+# v12.08 - RE-POINTED. The sources are a per-channel registry now: the
+# literal list was Amazon's, and it rendered on every channel, so the
+# Walmart tab cited Amazon's feeds under a card that could never hold a
+# number. The guarantee is unchanged - this card joins TWO feeds and names
+# both - so it is asserted against the registry's Amazon entry.
+ok("src: TACOS_SRC[channel]," in js,
+   "A7a the card's sources follow the channel")
+SRCREG = js[js.index("const TACOS_SRC = {"):]
+SRCREG = SRCREG[:SRCREG.index("\n};") + 3]
+ok("amazon:  ['amazon_ad_spend', 'sku_economics']" in SRCREG,
    "A7  the card names BOTH feeds it joins")
 
 # ===========================================================================
@@ -105,6 +121,8 @@ let aggImpl = () => ({ tot: { netSales: 118023 }, from: '2026-10-12', to: '2026-
 function amzFeeAgg(range) { return aggImpl(range); }
 let seenRange = null;
 
+__COVER__
+__DAYS__
 __TAC__
 
 const R = { from: '2026-10-12', to: '2026-11-09' };
@@ -161,7 +179,9 @@ out.noTotPct = a.pct;
 console.log(JSON.stringify(out));
 """
 
-R = run_node(os.path.join(SP, "_v1200_a.js"), DRIVER.replace("__TAC__", TAC))
+R = run_node(os.path.join(SP, "_v1200_a.js"), DRIVER.replace("__COVER__", line_of("const TACOS_MIN_COVERAGE"))
+                                                     .replace("__DAYS__", fn_flat("_adsDayCount"))
+                                                     .replace("__TAC__", TAC))
 
 # B1 - the live numbers, read off the database on 2026-11-11.
 eq("B1  /!\\ 20,312 spend over 118,023 net sales reads 17.21%", R["pct"], 17.21)
@@ -182,8 +202,14 @@ ok("cannot narrow the sales side" in (R["selWhy"] or ""),
 eq("B8  an EMPTY selection array is not a selection", R["emptySelPct"], 17.21)
 
 # B3/B4 - the two scopes with no feed behind them.
-eq("B9  another channel yields no number", R["chewyPct"], None)
-ok("only Amazon" in (R["chewyWhy"] or ""), "B10 ...and says so", R["chewyWhy"])
+# v12.08 - RE-POINTED. Chewy HAS a denominator now (its own revenue, from
+# chewy_sales_weekly x chewy_catalog), so it no longer refuses for lack of
+# a feed - it refuses because this harness has fetched nothing. The
+# guarantee is unchanged for a channel that genuinely has none.
+eq("B9  a channel with no sales feed yields no number", R["chewyPct"], None)
+ok("not loaded yet" in (R["chewyWhy"] or ""),
+   "B10 /!\\ Chewy is SUPPORTED now - it waits on its denominator rather "
+   "than refusing outright", R["chewyWhy"])
 eq("B11 /!\\ EU yields no number", R["euPct"], None)
 ok("No EU Amazon ad spend" in (R["euWhy"] or ""),
    "B12 ...because a EU TACoS would read 0.0% against real sales", R["euWhy"])
@@ -218,8 +244,15 @@ ok(STRIP.index("colLabel('acos'") < STRIP.index("label: 'TACoS %'"),
 # /!\ AND IT IS GATED ON THE ONE CHANNEL THAT CAN COMPUTE IT. adsTacosFor
 # refuses every other, so anywhere else the card is a permanent dash
 # citing another channel's feeds - which is what Jason saw on Walmart.
-ok("].concat(channel === 'amazon' ? [{" in STRIP,
-   "C2b /!\\ and renders ONLY on Amazon")
+# v12.08 - RE-POINTED. v12.07 gated this card to Amazon because elsewhere
+# it rendered a permanent dash citing `amazon_ad_spend`. That fixed the
+# symptom and removed the feature Jason had asked for. It renders wherever
+# a denominator exists now, and the SOURCES follow the channel - which is
+# what actually fixes the chips.
+ok("].concat(TACOS_SRC[channel] ? [{" in STRIP,
+   "C2b /!\\ it renders on every channel the registry declares")
+ok("channel === 'amazon' ? [{" not in STRIP,
+   "C2c /!\\ ...and the Amazon-only gate is gone")
 
 CARD = STRIP[STRIP.index("label: 'TACoS %'"):STRIP.index("}] : []).concat(")]
 # Good when DOWN and reported in POINTS - the two things ACOS also does.
