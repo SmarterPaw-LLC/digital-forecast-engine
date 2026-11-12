@@ -92,6 +92,7 @@ DRIVER = r"""
 'use strict';
 __DIV__
 __SPEC__
+__TACOSSRC__
 __MET__
 __BRANGE__
 const out = {};
@@ -128,6 +129,7 @@ console.log(JSON.stringify(out));
 """
 R = run_node(os.path.join(SP, "_v1202_a.js"),
              DRIVER.replace("__DIV__", DIV).replace("__SPEC__", SPEC)
+                   .replace("__TACOSSRC__", const_obj("TACOS_SRC"))
                    .replace("__MET__", METFN).replace("__BRANGE__", BRANGE))
 
 eq("B1  20,312 over 118,023 is 17.21%", round(R["normal"], 2), 17.21)
@@ -137,12 +139,16 @@ eq("B4  /!\\ a missing net sales figure is also a gap", R["missing"], None)
 
 print("\nC. offered on Amazon only")
 ok("tacos" in R["amazon"], "C1  Amazon offers tacos", R["amazon"])
-ok("tacos" not in R["chewy"], "C2  Chewy does not", R["chewy"])
-ok("tacos" not in R["walmart"], "C3  Walmart does not", R["walmart"])
+# v12.15 - RE-POINTED. When this was written Amazon was the only channel
+# with a total-sales feed. v12.08 gave Chewy and Walmart one, so they
+# offer tacos too - and the guarantee that survives is that a channel
+# with NO such feed still does not (C4 below).
+ok("tacos" in R["chewy"], "C2  /!\\ Chewy offers it too now", R["chewy"])
+ok("tacos" in R["walmart"], "C3  /!\\ and Walmart", R["walmart"])
 ok("tacos" not in R["noChan"], "C4  and neither does a call with no channel")
 eq("C5  it is labelled TACoS %", R["amazonLabel"], "TACoS %")
 eq("C6  /!\\ the column-derived metrics are unchanged",
-   [k for k in R["chewy"]], ["spend", "acos"])
+   [k for k in R["chewy"] if k != "tacos"], ["spend", "acos"])
 
 print("\nD. the Sunday/Monday trap")
 eq("D1  a Sunday bucket spans Sun to Sat",

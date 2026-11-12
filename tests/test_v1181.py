@@ -128,7 +128,10 @@ eq("A5  /!\\ every onchange handler survived", len(re.findall(r'onchange="', VIE
 # v11.82 swapped the GA4 row's two copy buttons (two tooltips) for one Run
 # button (one), so the page carries one fewer. The count stays pinned: its job
 # is catching a tooltip that falls out of a MOVE, not freezing the page.
-eq("A6  /!\\ every tooltip survived", len(re.findall(r'title="', VIEW)), 49)
+# v12.15 - 50: the Chewy Ads card gained its report link, which carries a
+# tooltip of its own. The guarantee is that nothing was LOST in the v11.81
+# move, so a deliberate addition is bumped rather than the check loosened.
+eq("A6  /!\\ every tooltip survived", len(re.findall(r'title="', VIEW)), 50)
 eq("A7  /!\\ every status / last element survived",
    len(re.findall(r'id="(?:st|last)-[a-z0-9-]+"', VIEW)), 59)
 ok('id="f-newsku"' in VIEW,

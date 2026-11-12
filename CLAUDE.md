@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.13** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.15** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,113 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.15 - TACoS plots on Chewy and Walmart too
+
+- **Jason:** *"i can't add tacos to the line chart for chewy"* - with the card
+  beside it reading **16.2% of $111,226 our revenue**, so the number existed
+  and only the **+** was missing.
+
+Two things kept it off, both v12.02's and both Amazon-shaped:
+
+1. `adsChartMetrics` appended `tacos` only when `channel === 'amazon'`.
+2. The chart's per-bucket denominator came from `amzFeeAgg`, which is
+   Amazon's own aggregate and knows nothing about the 1P sell-through feeds.
+
+v12.02 wrote both when Amazon was the only channel with a total-sales feed.
+v12.08 gave the other two one, and the CARD followed while the **+** did not -
+so a card could appear on a tab the chart refused to plot.
+
+### ⚠ ONE REGISTRY FOR BOTH
+The metric is gated on the same `TACOS_SRC` the card is, so a channel can
+never again have one without the other.
+
+### ⚠ AND THE FIX IS NOT A QUERY PER BUCKET
+These feeds are weekly, so **one** query returns the weeks and every bucket is
+summed from them in the browser - the same shape v12.02 used for Amazon, where
+`amzFeeAgg` reads a cache rather than the network. A round trip per point on a
+line is not a chart.
+
+Both loaders group by week now (`walmart_sales_weekly` by week;
+`chewy_sales_weekly` by week **and** sku, because the per-each price still has
+to be applied per sku in JS). ⚠ **The window TOTAL is the sum of those
+weeks**, not a second aggregate - two ways to total the same rows is two
+numbers that can disagree, and the card and the chart would be the two
+surfaces showing them.
+
+### ⚠ BY SPAN, NOT BY KEY - the Sunday/Monday trap again
+Ads buckets are keyed on the **Sunday**; these sales weeks on the **Monday**.
+`adsOurRevBucket` matches a week to a bucket when its `week_start` falls
+inside the bucket's own date span, so neither side has to know the other's
+convention. `B2`/`B3` require the Sunday bucket of 10-04 to take the Monday
+10-05 and the next Sunday to take the **next** Monday.
+
+### ⚠ A BUCKET WITH NO WEEK IS A GAP, NEVER 0
+0% TACoS reads as *spent nothing*. A bucket with no week in it, a window
+nothing fetched, and a fetch still in flight all return null, and the line
+draws a gap.
+
+### ⚠ AND AN UNPRICED SKU IS COUNTED ONCE
+Not once per week it sold in - the card says *"26 SKU(s) unpriced"* and that
+has to mean SKUs. The per-week rewrite made that a real risk, so it is a set.
+
+### Verification
+- `node --check` clean · **160 suites green** · new `tests/test_v1215.py` (30).
+- **The real `adsChartMetrics`, `adsOurRevBucket` and `pnlBucketRange`
+  driven**, including the Sunday/Monday alignment both ways and all three
+  gap cases.
+
+### ⚠ TWO OF MY OWN EXPECTATIONS WERE WRONG
+- `A7` asserted `channel === 'amazon'` was gone from `adsChartMetrics` and it
+  survives **in the comment explaining what it used to be** - which is the
+  point of the comment. Comments stripped before the check.
+- `C1` wanted `110` and got `110.00000000000001`.
+
+### Still open
+- **⚠ WALMART SELL-THROUGH COVERS 32 OF 667 PRODUCTS** (v12.13) - so the
+  Walmart line will refuse for the same reason its card does.
+- **⚠ FOUR MORE CHEWY PATHS HAVE NO LINK** (v12.14).
+- **⚠ THE MONTH-STAMPED ROWS ARE STILL IN THE TABLE** (v12.10).
+- **⚠ THE BACKFILL NEEDS CHUNKING** (v12.12).
+- **⚠ FETCHING 295,189 ROWS AT ALL** (v12.11).
+- **⚠ THE JUNE / JULY KEYWORD DUPLICATE IS NOT FIXED** (v12.06).
+- Everything else on the v12.14 list.
+
+## v12.14 - the Chewy Ads card gets its report link
+
+- **Jason:** *"also i don't have a link to this report pull"* - and then the
+  URL itself, from his own session: `https://ads.chewy.com/ads/reports`
+
+Every one of the app's fifteen report links was Amazon or Walmart. **This is
+the first Chewy one.**
+
+### ⚠ HIS URL, NOT A GUESS
+v11.80 shipped an **inferred** Amazon storage-fee link that landed on the
+wrong page, and the lesson recorded there is that the right fix is the
+operator pasting the real URL rather than a second guess at a report id. So I
+said I had none and asked. That is the whole of the method here.
+
+### ⚠ AND IT CARRIES NO ACCOUNT ID, which is why it can be committed
+The Walmart **Custom** report's URL ends in his advertiser id and this repo is
+served publicly, so that link is deliberately **absent** and its card names
+the navigation path instead. This one is a bare report path, so it goes in.
+
+The tooltip carries the one thing that is easy to get wrong:
+**Group by = Day.** Anything coarser stamps a whole period on a single date
+and the daily grain is lost - which is exactly what went wrong on the Walmart
+backfill two releases ago.
+
+### Still open
+- **⚠ FOUR MORE CHEWY PATHS HAVE NO LINK** - the weekly Sales Snapshot,
+  Catalog Details, the Vendor Statement and AP Invoices. Their cards name the
+  navigation path; the URLs are Jason's to paste.
+- **⚠ WALMART SELL-THROUGH COVERS 32 OF 667 PRODUCTS** (v12.13) - still the
+  blocker on Walmart TACoS.
+- **⚠ THE MONTH-STAMPED ROWS ARE STILL IN THE TABLE** (v12.10).
+- **⚠ THE BACKFILL NEEDS CHUNKING** (v12.12).
+- **⚠ FETCHING 295,189 ROWS AT ALL** (v12.11).
+- **⚠ THE JUNE / JULY KEYWORD DUPLICATE IS NOT FIXED** (v12.06).
+- Everything else on the v12.13 list.
 
 ## v12.13 - ads cannot sell more than the channel sold
 

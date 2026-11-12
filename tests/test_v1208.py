@@ -263,7 +263,10 @@ ok("_adsIsYmd(range.from)" in LOAD and "_adsIsYmd(range.to)" in LOAD,
 # value. Cost a debugging round; pinned so it cannot come back.
 ok(" t\n" not in LOAD and " t," not in LOAD.replace("row.units", ""),
    "G5  /!\\ no column is aliased `t` - exec_sql wraps as json_agg(t)")
-ok("span_from" in LOAD and "span_to" in LOAD, "G6  ...they are span_from / span_to")
+# v12.15 - the queries group BY WEEK now and select week_start directly,
+# so there is no min()/max() left to alias. G5 above still pins the
+# guarantee: no column is aliased `t`.
+ok("week_start" in LOAD, "G6  ...the week comes back on every row")
 # Chewy's per-each price is NOT re-spelled in SQL.
 ok("chewyCatalogPricePerEach" in LOAD,
    "G7  /!\\ Chewy's per-each price comes from the EXISTING helper, not a "
