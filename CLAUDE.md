@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.27** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.28** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,27 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.28 - the notes panel looks like a panel
+
+- **Jason:** *"i don't see how to add the note"*
+
+**I invented a class.** `ds-panel` appears nowhere else in the file: every
+panel in this app is `<div class="ds">` with a `<div class="ds-hdr">` inside.
+So the block rendered with no background, no border and no header chrome - a
+strip of plain text between the chart and the table, easy to scroll straight
+past.
+
+That is hard rule #1 broken in its simplest form: **find the existing
+implementation first**, which I did not do for the container itself while
+doing it carefully for the table, the cache and the migration.
+
+Built from the real pattern now, with the app's own header, and the control
+reads `+ Add note` in the primary colour rather than a grey `Save`.
+
+### Still open
+- **/!\ JASON HAS TO RUN `supabase_v12_27_ads_campaign_notes.sql`** (v12.27).
+- Everything on the v12.27 list.
 
 ## v12.27 - campaign notes, and the events they put on the timeline
 
