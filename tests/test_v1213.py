@@ -158,11 +158,26 @@ why = A["live"]["why"] or ""
 ok("$32,672" in why, "A2  ...naming the ad-attributed sales", why[:90])
 ok("$16,579" in why, "A3  ...and the total sell-through it exceeds")
 ok("cannot happen" in why, "A4  /!\\ and WHY that is impossible, not merely odd")
-ok("ad sales are part of total sales" in why, "A5  ...in one sentence")
+# v12.16 reworded this: the sentence now says the contradiction in terms of
+# the two feeds measuring the same thing, which is the claim that matters.
+ok("cannot happen if both measure the same thing" in why,
+   "A5  ...in one sentence", why[:120])
 # /!\ WHICH WAY THE ERROR GOES. Too small a denominator reads HIGH, and high
 # looks like a crisis - the opposite of v12.08's partial-numerator case.
-ok("too high" in why, "A6  /!\\ and which direction it would have been wrong in")
-ok("Walmart item number" in why, "A7  /!\\ and the thing to go and fix")
+# /!\ A6 WAS PROTECTING SOMETHING REAL. v12.16 dropped the direction and
+# this caught it, so it went back INTO THE MESSAGE rather than out of the
+# test: understating the denominator reads too HIGH, and high looks like
+# a crisis.
+ok("too HIGH" in why, "A6  /!\\ and which direction it would have been wrong in",
+   why[-160:])
+# /!\ A7 PINNED ADVICE THAT WAS WRONG. Nothing was unmapped - 0 rows
+# without a master_id, 0 without a cost_per_each - so sending him to check
+# Walmart item numbers pointed at a non-problem. v12.16 names the measured
+# cause instead, and its absence is now the thing worth asserting.
+ok("Walmart item number" not in why,
+   "A7  /!\\ and the WRONG advice about item numbers is gone")
+ok("point-of-sale" in why or "narrower than total sales" in why,
+   "A7b ...replaced by what would actually fix it", why[-120:])
 # The number it refused to print.
 eq("A8  /!\\ it would have read 175.3%", A["wouldBe"], 175.3)
 

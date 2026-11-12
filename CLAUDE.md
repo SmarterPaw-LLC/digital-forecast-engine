@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.15** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.16** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,71 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.16 - shipped is not sold
+
+- **Jason:** *"i upload the walmart 1P sales already, what are you talking
+  about"* - and then the file, whose header settles it:
+
+      shipped_based_net_sales_amount_this_year
+      shipped_based_quantity_this_year
+
+### ⚠ IT MEASURES WHAT WE SHIPPED INTO WALMART, NOT WHAT SOLD OUT
+Over one window the two feeds disagree by **2.2x on units** - ads 4,758,
+shipments 2,142 - at the same **~$7 per unit**. Same price, different volume:
+the shape of sell-through exceeding replenishment, because Walmart was selling
+stock it already held.
+
+### ⚠ AND v12.13's REFUSAL GAVE WRONG ADVICE
+It blamed **item coverage** and sent him to check Walmart item numbers.
+Nothing was unmapped: **0 rows without a `master_id`, 0 without a
+`cost_per_each`**, 30 items, all loaded. I had inferred the cause from a
+**tooltip** rather than from the export - the v11.80 mistake exactly, and I
+made it while the app had the upload history sitting right there.
+
+The message names the measured cause now, with the column, and says a
+point-of-sale export is what the card needs. Where the basis is unknown it
+says only what is certain.
+
+### The basis is recorded at upload, not guessed at read time
+The column matcher uses `includes()`, so a shipped column and a POS column
+both land in `net_sales` and nothing downstream could tell them apart. The
+parser sniffs the header and stamps `walmart:shipped` / `walmart:pos` onto
+`source` - an existing column, so no migration, and every pre-existing row
+keeps a value that reads as *not stated* rather than as a claim.
+
+**Verified end to end on the real weekly export**: `basis: "shipped"`, 935
+rows, 33 items, 47 weeks, 10,020 units, $54,693.43 - matching the table.
+
+### ⚠ TWO DEFECTS IN MY OWN PATCH, BOTH CAUGHT BY DRIVING IT
+- **The basis was written in a function that cannot see it.** `wmBasis` is
+  computed in `parseWalmartCSV`; the row object is built in
+  `walmartApplyImport`, a different function. That is a **ReferenceError on
+  every Walmart sales upload** - and `node --check` passes it happily, because
+  **scope is not syntax**. The parser returns it now and the importer reads it
+  off the parse result.
+- **The POS sniff missed `pos_net_sales`.** `pos` needs a non-word
+  character after `pos`, and `_` **is** a word character - so the real column
+  name did not match while `sell_through_` did.
+
+### Verification
+- `node --check` clean · **161 suites green** · new `tests/test_v1216.py` (25).
+- **The real sniff driven on Jason's own header** plus `pos_`, `pos-`, a bare
+  `pos`, `sell_through`, an unmarked header (which must claim nothing), and
+  `position` (which must not be read as pos).
+- `B3` requires the importer **not** to reference the parser's local, which is
+  the bug the driver found.
+
+### Still open
+- **⚠ WALMART TACoS NEEDS A POINT-OF-SALE EXPORT.** The shipped report
+  cannot be its denominator. Whether Retail Link gives Jason a POS /
+  sell-through export is the open question; if it does, that is a new uploader.
+- **⚠ THE WHOLE WALMART P&L TOP LINE IS SHIPPED-BASED**, not just TACoS.
+  Worth saying out loud: every Walmart sales figure in the app measures
+  replenishment, not demand. Not changed here - it is a far wider question
+  than one card.
+- **⚠ THE JUNE / JULY KEYWORD DUPLICATE IS NOT FIXED** (v12.06).
+- Everything else on the v12.15 list.
 
 ## v12.15 - TACoS plots on Chewy and Walmart too
 
