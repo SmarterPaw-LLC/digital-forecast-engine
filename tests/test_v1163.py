@@ -103,7 +103,7 @@ ok(2025 <= y <= 2100 and 1 <= mo <= 12 and 1 <= dy <= 31,
 prov = len(re.findall(r"// v\d+\.\d+ ", s))
 ok(prov >= 40, "D2  source provenance markers survive in bulk", prov)
 ok(re.search(r">v\d+\.\d+ " + re.escape(D) + r" [\d-]+<", s) is not None
-   and s.count("v11." + chip_ver.split(".")[1]) >= 1,
+   and s.count("v" + chip_ver) >= 1,
    "D3  the chip's own version is spelled in the markup")
 
 # ===========================================================================

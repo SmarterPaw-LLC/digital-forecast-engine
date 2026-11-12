@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.23** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.24** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,37 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.24 - the denominator was already in the browser
+
+The card sat on `reading sales...` for minutes. Every write path in
+`adsLoadOurRev` is correct and the SQL returns 47 rows in milliseconds when
+driven directly, so the request simply never settled in the page.
+
+### It never needed a request
+`walmartPnlData` already holds every weekly sell-through row -
+`{master_id, week_start, units, net_sales}` - because **it is what the Sales
+tab renders**. The TACoS denominator is a sum over those rows.
+
+Walmart's denominator is computed **synchronously from memory**, before any
+await, so:
+
+- the cache is populated before the cards are built, on the first render,
+  with no repaint to depend on;
+- there is nothing to hang;
+- and the card and the Sales tab sum **the same rows**, so they cannot report
+  different sell-through for one window. That was the original complaint.
+
+The query still runs behind it for `rev` (our revenue needs `cost_per_each`,
+which is not in memory) and the markdown cap. If it never lands, TACoS is
+already correct and only the tooltip's our-revenue clause is missing - and a
+**failed query may no longer erase the answer memory gave**.
+
+If the Sales tab has never been opened the array is empty, so the rows are
+loaded through the loader that already owns them rather than a second query.
+
+### Still open
+- Everything on the v12.23 list.
 
 ## v12.23 - the sales fetch starts before the cards that read it
 

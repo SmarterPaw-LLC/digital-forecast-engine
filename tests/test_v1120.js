@@ -1753,6 +1753,52 @@ async function adsLoadOurRev(channel, range) {
   }
   _adsOurRev[k] = { pending: true };
   const from = range.from, to = range.to;
+
+  // v12.24 - /!\ THE ROWS ARE ALREADY HERE. `walmartPnlData` is what the
+  // Sales tab renders: one row per product per week, carrying net_sales.
+  // Summing it is the denominator, so this answer is available SYNCHRONOUSLY
+  // - before any await, before the cards are built, with no request to hang
+  // and no repaint to depend on.
+  //
+  // /!\ AND IT IS THE SAME ROWS THE SALES TAB SUMS, so the two surfaces
+  // cannot report different sell-through for one window.
+  if (channel === 'walmart') {
+    try {
+      if (Array.isArray(walmartPnlData) && walmartPnlData.length) {
+        const byWk = new Map();
+        for (const row of walmartPnlData) {
+          const w = String(row.week_start || '').slice(0, 10);
+          if (!w || w < from || w > to) continue;
+          const slot = byWk.get(w) || { w, rev: 0, retail: 0, capped: 0, cappedAmt: 0 };
+          slot.retail += Number(row.net_sales) || 0;
+          byWk.set(w, slot);
+        }
+        const wk0 = [...byWk.values()].sort((x, y) => (x.w < y.w ? -1 : x.w > y.w ? 1 : 0));
+        if (wk0.length) {
+          _adsOurRev[k] = {
+            bases: [], rev: null,
+            retail: wk0.reduce((t, x) => t + x.retail, 0),
+            priced: 0, unpricedSkus: 0, unpricedUnits: 0,
+            cappedRows: 0, cappedAmt: 0, cappedWeeks: [],
+            from: wk0[0].w, to: wk0[wk0.length - 1].w,
+            weeks: wk0, weekly: true, fromMemory: true, why: null,
+          };
+        }
+      }
+    } catch (e) { console.warn('TACoS denominator from memory:', e && e.message); }
+
+    // /!\ AND IF THE SALES TAB HAS NEVER BEEN OPENED the array is empty, so
+    // the rows are loaded through the loader that already owns them rather
+    // than through a second query of my own. It repaints when they land.
+    if (!(Array.isArray(walmartPnlData) && walmartPnlData.length)
+        && typeof loadWalmartPnl === 'function') {
+      Promise.resolve().then(() => loadWalmartPnl()).then(() => {
+        delete _adsOurRev[k];
+        if (typeof renderAdsCampaigns === 'function') renderAdsCampaigns(channel, '');
+      }).catch(e => console.warn('walmart sales load:', e && e.message));
+    }
+  }
+
   try {
     const sb = await getSB();
     if (channel === 'walmart') {
@@ -1809,6 +1855,9 @@ async function adsLoadOurRev(channel, range) {
       // bases would be a worse problem than either one, so they are collected
       // rather than reduced to the first.
       const bases = [...new Set((a.data || []).map(x => x.basis).filter(Boolean))];
+      // /!\ The query ADDS our revenue and the markdown cap to an answer the
+      // page already has. It never replaces a good retail figure with a
+      // pending one, and it cannot un-answer the card.
       _adsOurRev[k] = {
         bases,
         rev: wk.reduce((t, x) => t + x.rev, 0),
@@ -1884,7 +1933,12 @@ async function adsLoadOurRev(channel, range) {
     // useful than a dash, and it must not be retried on every repaint - the
     // entry is written either way, which is what stops the loop.
     console.warn('ads our-revenue unavailable for', channel, e && e.message);
-    _adsOurRev[k] = { rev: null, why: 'Sales could not be read: ' + ((e && e.message) || e) };
+    // v12.24 - /!\ A FAILED QUERY MAY NOT ERASE THE ANSWER MEMORY ALREADY
+    // GAVE. It only ever had our revenue and the cap to add.
+    const had = _adsOurRev[k];
+    _adsOurRev[k] = (had && had.fromMemory && had.retail > 0)
+      ? had
+      : { rev: null, why: 'Sales could not be read: ' + ((e && e.message) || e) };
   }
 }
 
