@@ -142,31 +142,38 @@ ok("source: _wmImport.basis ? ('walmart:' + _wmImport.basis) : 'walmart'," in IM
    "B5  ...and an unmarked file still writes the plain source it always did")
 
 # ===========================================================================
-print("\nC. the refusal names the cause it KNOWS")
+print("\nC. /!\\ v12.17 - the basis is SURFACED, not used to refuse")
 # ===========================================================================
+# This section asserted the shipped-vs-sold explanation the refusal gave. That
+# explanation was wrong - `shipped_based_` is an eComm measure, so it means
+# shipped to the CUSTOMER, and AUTH came back within 0.1% of it. The refusal
+# is gone with the reasoning.
+#
+# What survives, and is worth keeping, is the PROVENANCE: the app records
+# which export the denominator came from, so nobody has to infer it from a
+# column name again - which is how three wrong explanations got shipped.
 TAC = fn_flat("adsTacosFor")
-ok("r.bases || []" in TAC, "C1  it reads the loaded rows' basis")
-ok("/shipped/.test(String(b))" in TAC, "C2  ...and tests for shipped")
-# The sentence is built by concatenation, so it is matched on a contiguous
-# fragment rather than on the whole rendered string.
-ok("INTO Walmart, not what customers bought out of it" in TAC,
-   "C3  /!\\ and says what the feed actually measures")
-ok("SHIPPED-based (shipped_based_net_sales_amount)" in TAC,
-   "C3b ...naming the column, so it can be checked against the export")
-ok("point-of-sale / " in TAC or "point-of-sale" in TAC,
-   "C4  ...and what would fix it")
-# /!\ v12.13's advice is GONE. It sent him to check item numbers, and nothing
-# was unmapped - 0 rows without a master_id, 0 without a cost_per_each.
+ok("r.bases || []" in TAC, "C1  the basis is read off the loaded rows")
+ok("salesBasis" in TAC, "C2  ...and carried on the result")
+ok("Sales basis: " in js,
+   "C3  /!\\ and it reaches the card's tooltip, where a reader can see it")
+ok("recorded when the file was uploaded" in js,
+   "C3b ...said to be recorded rather than inferred")
+# /!\ BOTH WRONG EXPLANATIONS ARE GONE.
 ok("Check that every product sold here has a Walmart item" not in TAC,
-   "C5  /!\\ and the wrong advice about item numbers is gone")
-# Where the basis is unknown the message must not claim shipped.
-ok("measuring something narrower than total sales" in TAC,
-   "C6  /!\\ an unknown basis says only what is certain")
+   "C4  /!\\ v12.13's item-number advice is gone")
+ok("INTO Walmart, not what customers bought out of it" not in TAC,
+   "C5  /!\\ and v12.16's shipped-into-Walmart explanation too")
+# /!\ AND IT NO LONGER REFUSES. TACoS divides by TOTAL sales, so a numerator
+# that over-attributes cannot invalidate it.
+ok("overAttr" in TAC, "C6  /!\\ the contradiction is a note")
+ok("TACoS is not affected" in js,
+   "C7  ...which says explicitly that TACoS is unaffected")
 
 LOAD = fn_flat("adsLoadOurRev")
-ok("max(w.source) basis" in LOAD, "C7  the query returns the basis")
+ok("max(w.source) basis" in LOAD, "C8  the query returns the basis")
 ok("const bases = [...new Set(" in LOAD,
-   "C8  /!\\ bases are COLLECTED, not reduced to the first - a table holding "
+   "C9  /!\\ bases are COLLECTED, not reduced to the first - a table holding "
    "two of them is a worse problem than either")
 
 print("\nD. the chip agrees with CLAUDE.md")

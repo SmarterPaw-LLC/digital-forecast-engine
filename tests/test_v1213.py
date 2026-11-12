@@ -97,7 +97,8 @@ _adsOurRev['walmart|2026-08-14|2026-11-12'] = {
   rev: 6178.56, retail: 16579.07, priced: 30, unpricedSkus: 0, unpricedUnits: 0,
   from: '2026-08-15', to: '2026-11-07', why: null };
 let a = adsTacosFor('walmart', null, 10828.27, W, SP, 32671.64);
-out.live = { pct: a.pct, why: a.why };
+out.live = { pct: a.pct == null ? null : +a.pct.toFixed(1), why: a.why,
+             over: a.overAttr ? Math.round(a.overAttr.pct) : null };
 // What it printed before the guard: 175.3%.
 out.wouldBe = +((10828.27 / 6178.56) * 100).toFixed(1);
 
@@ -127,7 +128,8 @@ out.equal = { pct: a.pct == null ? null : +a.pct.toFixed(1), why: a.why };
 a = adsTacosFor('walmart', null, 500,
                 { from: '2026-04-01', to: '2026-06-30' },
                 { from: '2026-04-01', to: '2026-06-30' }, 5001);
-out.over = { pct: a.pct, why: a.why };
+out.over = { pct: a.pct == null ? null : +a.pct.toFixed(1), why: a.why,
+             over: a.overAttr ? Math.round(a.overAttr.pct) : null };
 
 // --- D no ad-sales figure: the check simply cannot run -------------------
 a = adsTacosFor('walmart', null, 500,
@@ -151,35 +153,35 @@ A = run_node(os.path.join(SP, "_v1213_a.js"),
                    .replace("__TACOS__", fn_flat("adsTacosFor")))
 
 # ===========================================================================
-print("\nA. THE DEFECT, on Jason's own window")
+print("\nA. /!\\ v12.17 - IT COMPUTES, AND THE ODDITY IS A NOTE")
 # ===========================================================================
-eq("A1  /!\\ 175.3% is refused", A["live"]["pct"], None)
-why = A["live"]["why"] or ""
-ok("$32,672" in why, "A2  ...naming the ad-attributed sales", why[:90])
-ok("$16,579" in why, "A3  ...and the total sell-through it exceeds")
-ok("cannot happen" in why, "A4  /!\\ and WHY that is impossible, not merely odd")
-# v12.16 reworded this: the sentence now says the contradiction in terms of
-# the two feeds measuring the same thing, which is the claim that matters.
-ok("cannot happen if both measure the same thing" in why,
-   "A5  ...in one sentence", why[:120])
-# /!\ WHICH WAY THE ERROR GOES. Too small a denominator reads HIGH, and high
-# looks like a crisis - the opposite of v12.08's partial-numerator case.
-# /!\ A6 WAS PROTECTING SOMETHING REAL. v12.16 dropped the direction and
-# this caught it, so it went back INTO THE MESSAGE rather than out of the
-# test: understating the denominator reads too HIGH, and high looks like
-# a crisis.
-ok("too HIGH" in why, "A6  /!\\ and which direction it would have been wrong in",
-   why[-160:])
-# /!\ A7 PINNED ADVICE THAT WAS WRONG. Nothing was unmapped - 0 rows
-# without a master_id, 0 without a cost_per_each - so sending him to check
-# Walmart item numbers pointed at a non-problem. v12.16 names the measured
-# cause instead, and its absence is now the thing worth asserting.
-ok("Walmart item number" not in why,
-   "A7  /!\\ and the WRONG advice about item numbers is gone")
-ok("point-of-sale" in why or "narrower than total sales" in why,
-   "A7b ...replaced by what would actually fix it", why[-120:])
-# The number it refused to print.
-eq("A8  /!\\ it would have read 175.3%", A["wouldBe"], 175.3)
+# This section asserted a REFUSAL. The refusal was my own bad reasoning:
+# ad sales are a subset of total sales, so I took ad sales > sell-through as
+# proof the denominator was incomplete. Measured on Jason's data it is normal
+# here - over the 28 weeks the ads ran, Walmart credited 9,441 units against
+# 8,613 actually sold, and 134% of the dollars. The feed was complete all
+# along: one vendor, 33 items, both brands, 0 unmapped, AUTH within 0.1% of
+# shipped.
+#
+# /!\ AND TACoS NEVER USED THE NUMERATOR. It is spend over TOTAL sales.
+# Withholding a correct number because a different number looked odd is the
+# opposite of the job.
+eq("A1  /!\\ 175.3% is REPORTED, not refused", A["live"]["pct"], 175.3)
+eq("A2  ...with no refusal reason", A["live"]["why"], None)
+ok(A["live"].get("over") is not None,
+   "A3  /!\\ and the over-attribution rides along as a note")
+eq("A4  ...carrying what share of total sales was attributed",
+   A["live"]["over"], 197)
+# The note has to say which numbers it does and does not impugn: TACoS is
+# fine, ROAS and ACOS on the same strip are not comparable to sell-through.
+ok("TACoS is not affected" in js,
+   "A5  /!\\ the tooltip says TACoS is unaffected")
+ok("cannot be " + "reconciled to sell-through" in js.replace("\n", " ")
+   or "reconciled to sell-through" in js,
+   "A6  /!\\ ...and that ROAS and ACOS beside it are not reconcilable")
+# /!\ v12.16's shipped-vs-sold explanation was ALSO wrong and is gone.
+ok("shipped INTO Walmart" not in js and "SHIPPED-based (shipped_based" not in js,
+   "A7  /!\\ and the shipped-vs-sold explanation, also wrong, is gone")
 
 print("\nB. a complete feed still answers")
 eq("B1  sell-through above ad sales is the normal relationship, and it reports",
@@ -187,10 +189,13 @@ eq("B1  sell-through above ad sales is the normal relationship, and it reports",
 eq("B2  ...on our revenue", A["healthy"]["basis"], "ourRev")
 
 print("\nC. the boundary")
-# /!\ EXACTLY EQUAL IS NOT A CONTRADICTION. A small channel's whole sales
-# could be ad-driven; refusing that would be a judgement rather than a proof.
-eq("C1  /!\\ ad sales EQUAL to sell-through is allowed", A["equal"]["pct"], 50.0)
-eq("C2  /!\\ one dollar over is not", A["over"]["pct"], None)
+# ===========================================================================
+# /!\ v12.17 - there is no refusal to have a boundary any more. What is left
+# worth pinning is that the note fires ONLY on a real excess: equal is not an
+# excess, and a dollar over is.
+eq("C1  /!\\ ad sales EQUAL to sell-through raises no note", A["equal"]["pct"], 50.0)
+eq("C2  /!\\ and a dollar over still REPORTS, it does not refuse",
+   A["over"]["pct"], 50.0)
 
 print("\nD. and where it cannot run")
 eq("D1  no ad-sales figure: the check is skipped, not failed",

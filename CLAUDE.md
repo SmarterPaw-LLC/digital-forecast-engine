@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.16** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.17** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,77 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.17 - the guard was wrong: attribution over-counts, the feed is fine
+
+- **Jason:** *"this taco doesn't make sense"* — and after four rounds of me
+  being wrong about why, **the number was right all along.**
+
+### What it actually is
+Over the 28 weeks the ads have run (2026-03-25 → 2026-11-10):
+
+| | units | $ |
+|---|---|---|
+| total eComm sales (AUTH) | 8,613 | $44,862 |
+| **ads claim attributed** | **9,441** | **$60,235** |
+| | **110%** | **134%** |
+
+Walmart's 14-day post-click window credits **more than the channel sold**.
+That is a property of the NUMERATOR.
+
+### ⚠ AND TACoS DOES NOT USE THE NUMERATOR
+It is spend over TOTAL sales. v12.13 refused the card whenever ad sales
+exceeded sell-through, reasoning that ad sales are a subset so the denominator
+had to be incomplete. **Withholding a correct number because a different
+number looked odd is the opposite of the job.** The comparison survives as a
+note, because it does say the ROAS and ACOS on the same strip are on a basis
+that cannot be reconciled to sell-through.
+
+### ⚠ THE FEED WAS COMPLETE THE WHOLE TIME
+Checked every way available: **one vendor number, 33 items, both advertised
+brands, 0 unmapped rows, 0 without a `cost_per_each`**, and AUTH within
+**0.1%** of shipped. Not order-vs-ship, not scope, not item coverage, not the
+fiscal-week mapping.
+
+### ⚠ I WAS WRONG THREE TIMES BEFORE THIS, EACH TIME CONFIDENTLY
+1. **v12.13**: blamed item coverage, sent him to check Walmart item numbers.
+   Nothing was unmapped.
+2. **v12.16**: read `shipped_based_` off the export and called it *shipments
+   into Walmart*. It is an **eComm** dataset — shipped means shipped to the
+   CUSTOMER.
+3. Then predicted AUTH would explain the gap. It is 0.1% from shipped.
+
+Every one of those was asserted before it was measured. The pattern is the
+v11.80 lesson and it cost Jason four rounds: **when the cause is not measured,
+say so instead of naming one.**
+
+### The number, and why it matters
+| window | spend | our revenue | TACoS |
+|---|---|---|---|
+| last 13 weeks | $10,828 | $6,179 | **175.3%** |
+| the full 28 weeks | $17,355 | ~$16,600 | **~105%** |
+
+⚠ **Walmart ads cost about what Walmart pays us, and lately well more.**
+The console reports 3.02x ROAS against a 2.90x break-even, which reads as
+marginally profitable — but that ROAS divides by attributed sales worth 197%
+of the channel's actual sales. Deflated to reality it is nowhere near
+break-even. **That is the finding, and it was invisible until the two feeds
+were put side by side.**
+
+### Verification
+- `node --check` clean · **161 suites green**.
+- The real `adsTacosFor` driven on the live figures: **175.3%**, no refusal,
+  note at **197%**.
+- Every comparison above computed from Jason's own export and the live ads
+  table, not from the earlier window that mixed them.
+
+### Still open
+- **⚠ WALMART ADS LOOK UNPROFITABLE ON OUR REVENUE BASIS.** A decision for
+  Jason, not a bug.
+- **⚠ THE WHOLE WALMART P&L TOP LINE IS eComm ONLY.** Items not flagged
+  ONLINE ONLY also sell in stores, and nothing in the app measures that.
+- **⚠ THE JUNE / JULY KEYWORD DUPLICATE IS NOT FIXED** (v12.06).
+- Everything else on the v12.16 list.
 
 ## v12.16 - shipped is not sold
 
