@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.08** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.09** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,103 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.09 - the product card: vendor cost, the prose, and the grab-bag section
+
+- **Jason**, three things on the product modal:
+  1. *"why is all of this text here? this should be on the tool tip, not
+     taking up space on the card modal."*
+  2. *"there is no costing to vendors here (walmart, chewy)."*
+  3. *"in general, the information on this card could be organized better."*
+
+### ⚠ (1) IS MY OWN STANDING RULE, BROKEN WHERE IT COSTS MOST
+*STOP UI TEXT BLOAT · tooltip it · descriptions only.* A modal is the one
+surface where vertical space is finite, so four lines of explanation under
+Dimensions pushed the fields below the fold. One `data-prose` line now -
+*Read-only · refreshed by the FBA Fee Preview upload* - with **the whole
+paragraph** on the tooltip rather than a trimmed version of it.
+
+⚠ v10.87's caveat checked: collapsing prose must not swallow an **affordance**.
+That paragraph held no link and no button, which is why all of it could move,
+and `A6` pins that so an edit which adds one has to think.
+
+### (2) What each vendor pays us
+The card held MSRP, MAP, wholesale and our COGS - everything about what the
+product costs **us** - and nothing about what the two 1P retailers **pay** us.
+That figure is the top line on both of those channels.
+
+| | |
+|---|---|
+| **Cost to Walmart** | `walmart_cost_per_each`, per unit |
+| **Cost to Chewy** | catalog cost ÷ case qty on a CS row, cost as-is on an EA row |
+| **MSRP** | ours, beside them for comparison |
+
+⚠ **The labels are the app's own words.** `Cost to Walmart` and `Cost to
+Chewy` are the names of the two tabs already built on this number; a third
+name for it here is the rule 3a defect (v10.53).
+
+⚠ **Chewy's is DERIVED, through the existing helper.**
+`chewyCatalogPricePerEach` is what the Cost to Chewy tab and v12.08's TACoS
+denominator both use. Re-spelling that division here is how the modal and the
+tab start disagreeing (hard rule #1).
+
+⚠ **A REASON, NOT A DASH.** When Chewy's price cannot resolve, the card says
+which of the four causes it is - and **`no-case-qty` points at the field that
+fixes it, two sections down on the same modal.**
+
+⚠ And the GM line is drawn **only where a COGS exists to draw it against**: a
+blank COGS must never read as 100% margin.
+
+### (3) Classification was a grab-bag
+It held the category **and** every price **and** the whole COGS builder **and**
+the supplier **and** the case qty **and** five boolean flags, under a heading
+that describes none of those.
+
+    🏷 Classification & flags   category, sub-category, supplier, the flags
+    💰 Pricing & COGS           MSRP, MAP, wholesale, the COGS builder, case qty
+    💵 What each vendor pays us Cost to Walmart, Cost to Chewy, MSRP
+    📏 Dimensions               unchanged
+
+Ordered so each section is a **narrower question than the one before it**: our
+prices, then what the vendors pay us, then what Amazon measured.
+
+⚠ **Every field was MOVED VERBATIM** - cut by its own markup and re-emitted,
+never re-typed. Each of those ids is read **by name** on save, so a dropped one
+writes a null silently (v10.87 / v11.81). `D1` requires all 32 to exist exactly
+once and `D3`/`D4` re-count the seven COGS building blocks and four channel
+totals with their handlers attached.
+
+### ⚠ JS ESCAPES IN HTML RENDER AS LITERAL TEXT
+The non-ASCII trap **in reverse**, and caught by looking at the rendered list
+rather than by a test. index.html holds **real characters** in markup and
+`\uXXXX` escapes only inside JS string literals - and I put the escape form
+into three section TITLES, which are markup. The card would have read
+`🏷 Classification & flags`.
+
+⚠ And a bare find-and-replace would have hit the **JS** occurrence of the money
+bag on `product_cogs`. Anchored on the full title instead.
+
+Both reused glyphs are the same concept they already carry, so rule #2 is
+satisfied by reuse rather than bent: the **banknote** already means *what the
+1P retailer pays us* (`walmart_catalog`, v11.30) and the **money bag** already
+means *COGS* (`product_cogs`). `E3`/`E4` pin both.
+
+### Verification
+- `node --check` clean · **155 suites green** · new `tests/test_v1209.py` (46).
+- **The field census run against the real markup**, which is the only form in
+  which *nothing was lost in the move* is checkable.
+
+### Still open
+- **⚠ TWO DIFFERENT "SUPPLIER" FIELDS SIT ON ONE CARD.** `pf-supplier` is
+  `products.supplier`; `ef-supplier` is the inventory record's. Both render as
+  *Supplier* / *Supplier Name*, two sections apart. Found while reorganising
+  and **deliberately not touched**: deciding which is authoritative is a data
+  question, not a layout one.
+- **⚠ WALMART'S AD FEED STILL COVERS 2026-11-04 ONWARD ONLY** (v12.08).
+- **⚠ 23 CHEWY SKUs SELL WITH NO CATALOG COST** (v12.08) - which this card now
+  names per product.
+- **⚠ THE JUNE / JULY KEYWORD DUPLICATE IS NOT FIXED** (v12.06).
+- Everything else on the v12.08 list.
 
 ## v12.08 - TACoS on Walmart and Chewy, on OUR revenue
 
