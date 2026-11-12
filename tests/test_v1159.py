@@ -81,7 +81,11 @@ WM_ADS_TABLES = 2
 eq("A1  declared on every Walmart ads table", s.count("k: 'roasVsBe'"), WM_ADS_TABLES)
 eq("A2  all of them read the shared tip", s.count("tip: WM_ADS_TIP.roasVsBe"), WM_ADS_TABLES)
 eq("A3  label is the app's existing words", s.count("label: 'vs Break-Even'"), WM_ADS_TABLES)
-eq("A4  signed-multiple format", s.count("fmt: 'xs'"), WM_ADS_TABLES)
+# v12.19 - three signed-multiple columns per table now (vs Break-Even,
+# Adj ROAS, Adj vs BE), so the census is per-table rather than a flat count.
+eq("A4  signed-multiple format, same count on every table",
+   s.count("fmt: 'xs'") % WM_ADS_TABLES, 0)
+ok(s.count("fmt: 'xs'") >= WM_ADS_TABLES, "A4b ...and at least one per table")
 
 for chan in ["amazon", "chewy"]:
     i = s.index("  %s: [" % chan, s.index("const ADS_COLUMNS = {"))
@@ -197,9 +201,12 @@ ok("col.k === 'acos'" in warn, "D3  the ACOS rule is untouched")
 # The stamp resolves the SAME brand expression the colour does, so the number
 # and the colour cannot disagree.
 eq("D4  the stamp uses the colour's own brand expression",
-   s.count("adsStampBreakEven(res.campaigns, channel, adsBrandFilterValue(ch))"), 1)
+   s.count("adsStampBreakEven(res.campaigns, channel, adsBrandFilterValue(ch),"), 1)
 eq("D5  the TOTAL row is stamped too",
-   s.count("adsStampBreakEven([res.totals], channel, adsBrandFilterValue(ch))"), 1)
+   s.count("adsStampBreakEven([res.totals], channel, adsBrandFilterValue(ch),"), 1)
+# /!\ v12.19 - and BOTH take the same deflator, or the footer and the rows
+# would be scaled differently and the table would stop adding up.
+eq("D5b and both take the same deflator", s.count(", _adsDeflate);"), 2)
 
 # ===========================================================================
 print("\nE. The CSV reads the COLUMN REGISTRY, which fixes a real defect")

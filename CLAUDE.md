@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.18** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.19** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,107 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.19 - the number attribution cannot move
+
+- **Jason:** *"i DO NOT understand why the sales figures are different here"*
+  ... *"wtf. i need this data to be usable. stop with the excuses and fix it"*
+
+He is right that it was not usable. Three releases established that Walmart's
+14-day attribution claims **197% of everything the channel sold**, and the
+page went on printing ROAS 3.02x against a 2.90x break-even - a comparison
+with nothing underneath it - while the explanation lived in a tooltip.
+
+### Ceiling ROAS
+The one question that does not depend on attribution at all:
+
+> **If EVERY sale the channel made were ad-driven, what would ROAS be?**
+
+Total sell-through over ad spend. Nothing modelled, nothing apportioned, on
+the **same retail basis** as the break-even floor beside it.
+
+| last 90 days, 2026-08-14 -> 11-12 | |
+|---|---|
+| sell-through (retail) | $16,579 |
+| ad spend | $10,828 |
+| **Ceiling ROAS** | **1.53x** |
+| break-even ROAS | **2.90x** |
+
+**The best case is 47% short of break-even.** Attributed sales can be wrong by
+any factor and this number does not move - which is the whole point of it.
+
+### /!\ RED HERE IS A PROOF, NOT A WARNING
+Every other red on this page says *this looks bad*. Below the floor, this one
+says **no attribution story can make the spend pay**, because it has already
+credited advertising with every sale the channel made including the organic
+ones. An upper bound is the only honest thing to build out of two feeds that
+contradict each other, and the tooltip says it is one.
+
+### And the table: Adj ROAS / Adj vs BE
+The per-campaign ROAS was inflated by the same factor, so every row cleared
+break-even and the table could not answer *which campaign do I change*.
+
+    deflator = channel sell-through / attributed sales = 0.5074
+
+| campaign | ROAS | Adj ROAS | Adj vs BE |
+|---|---|---|---|
+| SP - AUTO - CATCH ALL - Kitty Ka zoom | 3.49x | **1.77x** | **-1.13x** |
+| Kitty Ka Zoom - Manual | 2.83x | 1.43x | -1.47x |
+| SP - AUTO - CATCH ALL - Doggijuana | 2.75x | 1.40x | -1.50x |
+| SP - KW - MIXED - DOGGIJUANA | 2.16x | 1.10x | -1.80x |
+| SBV - KW - Mixed - Kitty Ka Zoom | 2.06x | 1.05x | -1.85x |
+
+**Not one campaign clears break-even.** Before this the whole table read
+green.
+
+- /!\ **A scalar, so the RANKING does not move.** It corrects the LEVEL, which
+  is what `vs Break-Even` is read against.
+- /!\ **Null when attribution claims no more than the channel sold.** There is
+  then nothing to correct, and a second ROAS column would be the same number
+  twice (rule 3a).
+- /!\ **PROPORTIONAL, and the tooltip says so.** It assumes the over-claim is
+  spread evenly across campaigns. The feed has **no item and no order
+  dimension**, so nothing can check that - and saying so is the difference
+  between a stated assumption and a confident wrong answer (v10.19).
+
+### The two sales figures on one strip, which is what he asked about
+They were never the same measure, and nothing on screen said so:
+
+| | $ | basis | scope |
+|---|---|---|---|
+| **Ad Sales** | $32,672 | retail | ad-attributed only, 14-day post-click |
+| sell-through | $16,579 | retail | everything sold |
+| **TACoS denominator** | $6,179 | our revenue | everything sold |
+
+Two conversions separate the top and the bottom - retail to our revenue (we
+keep ~37%), and attributed to total - and the middle row is the one that makes
+the first impossible: **a subset twice the size of the whole.**
+
+### Verification
+- `node --check` clean - **163 suites green** - new `tests/test_v1219.py`.
+- Every figure above read off the live database, and the real
+  `adsStampBreakEven` driven on the five campaigns.
+
+### /!\ AND THE HEREDOC ATE THE ESCAPES, SIXTH SIGHTING
+Two tooltips carrying `\u2019` and `\n` went through a heredoc and landed as
+**real characters and real line breaks inside a single-quoted JS string** - an
+unterminated literal, caught by `node --check` rather than shipped. The rule
+is in this file and has been since v9.77: **anything carrying an escape goes
+through the Write tool.** The repair script asserts the escapes survived
+rather than trusting its own log (the v11.81 rule).
+
+Also: a 6-space-indented anchor is a **substring** of the 8-space one, so a
+count-based assertion on the narrower one read 2 and refused. Anchored on the
+leading newline.
+
+### Still open
+- /!\ **WALMART ADS DO NOT PAY, AND THE CEILING PROVES IT.** 1.53x against a
+  2.90x floor. This is now a decision rather than a measurement problem.
+- /!\ **NO ITEM DIMENSION ON THE ADS FEED**, which is what would replace the
+  proportional deflator with a real one.
+- /!\ **NO VENDOR REMITTANCE FEED** (v12.18).
+- /!\ **ATTRIBUTION IS UNTESTED AT 3-DAY** (v12.18).
+- Everything else on the v12.18 list.
 
 ## v12.18 - a marked-down unit was not replenished at standard cost
 

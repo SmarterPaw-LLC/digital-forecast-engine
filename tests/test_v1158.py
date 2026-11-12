@@ -51,7 +51,10 @@ JS = nocomment(js)
 # v11.59 added roasVsBe to both tables, so this is 15.
 SHARED = ['impressions', 'clicks', 'ctr', 'cpc', 'spend', 'orders', 'units',
           'cpa', 'cvr', 'sales', 'roas', 'inStoreSales', 'omniRoas', 'acos',
-          'roasVsBe']
+          'roasVsBe',
+    # v12.19 - the deflated pair, declared beside the ROAS they correct.
+    'roasAdj', 'roasAdjVsBe',
+]
 
 # ===========================================================================
 print("\nA. ONE TEXT PER COLUMN - the shared table exists and is the only source")

@@ -274,10 +274,12 @@ ok("cardT" not in CARD, "C6  ...and the card never reaches for cardT")
 # The refusal reason becomes the tooltip, so a dash is never unexplained.
 ok("tip: tacos.pct == null\n          ? tacos.why" in CARD or "? tacos.why" in CARD,
    "C7  a dash carries its reason on the tooltip")
-ok("whole weeks only" in CARD,
-   "C8  /!\\ the tooltip says the sales side is whole weeks")
-ok("Nothing is prorated" in CARD,
-   "C9  /!\\ ...and that nothing is prorated, because there are no daily sales")
+# v12.19 - Jason cut the tooltip prose. What a reader needs is the SPAN the
+# sales actually cover, not a sentence about it, so that is what is pinned.
+ok("tacos.from" in CARD and "tacos.to" in CARD,
+   "C8  /!\\ the tooltip names the span the sales side actually covers")
+ok("Sales are weekly" in CARD,
+   "C9  /!\\ ...and says the feed is weekly, which is WHY it is whole weeks")
 
 # ===========================================================================
 print("\nD. the chip agrees with CLAUDE.md (v11.63's rule)")

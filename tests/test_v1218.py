@@ -163,9 +163,13 @@ print("\nD. /!\\ AND THE CARD SAYS IT IS A FLOOR, NOT THE FIGURE")
 # a true LOWER bound. Printing a bounded number as if it were the figure is
 # the v10.19 defect; saying so is the whole difference.
 ok("markdown week" in js, "D1  the sub-line marks a window holding a markdown")
-ok("SO THIS IS A FLOOR" in js, "D2  /!\\ and the tooltip says the real figure is HIGHER")
-ok("vendor remittance feed" in js,
-   "D3  ...and names the feed that would settle it rather than implying this one can")
+# v12.19 - the floor paragraph came off the tooltip with the rest of the
+# prose. What must survive is the DIRECTION of the skew, in a clause, because
+# a reader cannot infer that from the number.
+ok("Markdown week(s) capped at retail \\u2014 reads low" in js,
+   "D2  /!\\ and the tooltip says which way the number is wrong")
+ok("cappedWeeks" in fn_flat("adsTacosFor"),
+   "D3  ...with the weeks themselves on the result")
 # /!\ NO STALE LITERAL. A percentage typed into a tooltip is wrong the next
 # time the data moves - the v11.72 rule.
 ok("131.6%" not in js, "D4  /!\\ no hardcoded percentage in the tooltip")

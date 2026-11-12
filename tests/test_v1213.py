@@ -174,8 +174,12 @@ eq("A4  ...carrying what share of total sales was attributed",
    A["live"]["over"], 197)
 # The note has to say which numbers it does and does not impugn: TACoS is
 # fine, ROAS and ACOS on the same strip are not comparable to sell-through.
-ok("TACoS is not affected" in js,
-   "A5  /!\\ the tooltip says TACoS is unaffected")
+# v12.19 - that sentence explained the cards BESIDE this one, which is the
+# bloat Jason cut. The guarantee underneath it is that the contradiction is a
+# NOTE and never a refusal, and v12.19 answers it properly: Ceiling ROAS is a
+# number attribution cannot move at all.
+ok("ceilRoas" in js,
+   "A5  /!\\ ...and the strip carries a figure attribution cannot move")
 ok("cannot be " + "reconciled to sell-through" in js.replace("\n", " ")
    or "reconciled to sell-through" in js,
    "A6  /!\\ ...and that ROAS and ACOS beside it are not reconcilable")

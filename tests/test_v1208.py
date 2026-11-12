@@ -243,8 +243,11 @@ ok("channel === 'amazon' ? [{" not in js,
 ok("' our revenue' : ' net sales'" in js,
    "F8  /!\\ the sub-line names the basis, because on these two tabs the "
    "denominator is NOT the number their console shows")
-ok("NOT the sales figure this channel" in js, "F9  ...and the tooltip spells it out")
-ok("reads HIGH until they are priced" in js,
+# v12.19 - the paragraph arguing the basis was right is gone (Jason). The
+# tooltip states the ARITHMETIC instead, which is the thing only it can say.
+ok("sell-through units \\u00d7 cost-per-each" in js,
+   "F9  ...and the tooltip gives the denominator's arithmetic")
+ok("SKU(s) unpriced \\u2014 reads high" in js,
    "F10 /!\\ an unpriced SKU is named, with which way it skews the answer")
 
 print("\nG. the loader")

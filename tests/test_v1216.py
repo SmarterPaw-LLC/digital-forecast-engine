@@ -155,10 +155,13 @@ print("\nC. /!\\ v12.17 - the basis is SURFACED, not used to refuse")
 TAC = fn_flat("adsTacosFor")
 ok("r.bases || []" in TAC, "C1  the basis is read off the loaded rows")
 ok("salesBasis" in TAC, "C2  ...and carried on the result")
-ok("Sales basis: " in js,
-   "C3  /!\\ and it reaches the card's tooltip, where a reader can see it")
-ok("recorded when the file was uploaded" in js,
-   "C3b ...said to be recorded rather than inferred")
+# v12.19 - PROVENANCE IS NOT DERIVATION, so it came off the tooltip. It is
+# still recorded at upload and still rides the result; what changed is that a
+# hover no longer spends a paragraph on it.
+ok("salesBasis," in fn_flat("adsTacosFor"),
+   "C3  /!\\ the basis still rides the result, where a consumer can read it")
+ok("basis: wmBasis" in PARSE,
+   "C3b ...stamped at upload rather than inferred at read time")
 # /!\ BOTH WRONG EXPLANATIONS ARE GONE.
 ok("Check that every product sold here has a Walmart item" not in TAC,
    "C4  /!\\ v12.13's item-number advice is gone")
@@ -167,8 +170,8 @@ ok("INTO Walmart, not what customers bought out of it" not in TAC,
 # /!\ AND IT NO LONGER REFUSES. TACoS divides by TOTAL sales, so a numerator
 # that over-attributes cannot invalidate it.
 ok("overAttr" in TAC, "C6  /!\\ the contradiction is a note")
-ok("TACoS is not affected" in js,
-   "C7  ...which says explicitly that TACoS is unaffected")
+ok("overAttr," in fn_flat("adsTacosFor"),
+   "C7  ...carried as a note on the result, never as a refusal")
 
 LOAD = fn_flat("adsLoadOurRev")
 ok("max(w.source) basis" in LOAD, "C8  the query returns the basis")
