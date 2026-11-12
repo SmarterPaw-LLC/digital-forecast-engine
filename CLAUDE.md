@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.12** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.13** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,66 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.13 - ads cannot sell more than the channel sold
+
+- **Jason:** *"this taco doesn't make sense"* - 175.3% on Walmart.
+
+**The arithmetic was right and the denominator was not.** Measured on the
+live database for his exact window, 2026-08-14 → 2026-11-12:
+
+| | |
+|---|---|
+| ad spend | $10,828 |
+| ad-attributed sales (RETAIL) | **$32,672** |
+| TOTAL sell-through (RETAIL) | **$16,579** |
+| our revenue | $6,179 |
+| **TACoS** | **175.3%** |
+
+### ⚠ AD-ATTRIBUTED SALES ARE A SUBSET OF TOTAL SALES
+On the same retail basis. Walmart's own console says the ads produced
+**$32,672**; the sell-through feed says the whole channel did **$16,579**.
+Both cannot be true, and the one that is wrong is the denominator.
+
+### ⚠ AND IT IS NOT A GAP IN THE WEEKS
+All thirteen are present - checked. It is **item coverage**: only **32 of 667
+products carry a `walmart_item_id`**, so `walmart_sales_weekly` is 32 items'
+worth of a larger business. 47 weeks of it total $54,693 of retail, against
+$10,828 of ad spend in thirteen.
+
+### The guard needs no threshold and no model
+v12.08 compared the AD feed against the window. This is the other side of the
+same question, and it is **self-evidencing**: two numbers from two feeds that
+cannot both be right. Ad sales above sell-through → refuse, naming both
+figures, which direction the error goes (**too HIGH**, because the denominator
+is too small), and the thing to go and fix.
+
+⚠ **Exactly equal is allowed.** A small channel's entire sales could be
+ad-driven; refusing that would be a judgement rather than a contradiction. One
+dollar over is refused.
+
+⚠ **Same basis on both sides.** `t.sales` is retail and `r.retail` is
+retail. Comparing ad sales against OUR REVENUE would be apples to oranges and
+would fire on every healthy window, since we keep ~37% of Walmart retail.
+
+### Verification
+- `node --check` clean · **159 suites green** · new `tests/test_v1213.py` (22).
+- **The real `adsTacosFor` driven on Jason's own figures**, with the 175.3% it
+  would otherwise have printed asserted as the number it refuses.
+- A complete feed still reports; the boundary tested a dollar either side; a
+  missing ad-sales figure skips the check rather than failing it; Amazon is
+  required to be untouched.
+
+### Still open
+- **⚠ WALMART SELL-THROUGH COVERS 32 OF 667 PRODUCTS.** Until the 1P sales
+  report covers everything that sells there - and those items carry a Walmart
+  item number - Walmart TACoS has no denominator it can trust. **This is the
+  blocker on that card now**, not the ad feed.
+- **⚠ THE MONTH-STAMPED ROWS ARE STILL IN THE TABLE** (v12.10).
+- **⚠ THE BACKFILL NEEDS CHUNKING** (v12.12) - one pull returns ~100 days.
+- **⚠ FETCHING 295,189 ROWS AT ALL** (v12.11).
+- **⚠ THE JUNE / JULY KEYWORD DUPLICATE IS NOT FIXED** (v12.06).
+- Everything else on the v12.12 list.
 
 ## v12.12 - sparseness is normal; month-starts are not
 
