@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.21** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.22** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,50 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.22 - measure the days the ads ran, do not refuse the window
+
+- **Jason, on All time:** *"i give up"* - with the card reading
+  `not available` and the Sell-Through card beside it reading **$54,693**.
+  The data was all there.
+
+### /!\ v12.08'S COVERAGE GUARD WAS REFUSING A WINDOW IT COULD HAVE MEASURED
+Ads start **2026-03-25**; All time starts **2025-12-13**. 231 ad days out of
+335 is **69%**, under the 80% floor, so the card refused.
+
+The guard was **right about the arithmetic** - spend over 231 days divided by
+sales over 335 reads far too low - and **wrong about the remedy**. The window
+is not the only period the denominator can be taken over. The weekly rows are
+already in hand, so both sides are taken over the span the ads actually ran.
+
+| All time | |
+|---|---|
+| ad spend | **$17,355** |
+| sell-through, 2026-03-25 -> 2026-11-10 | **$49,564** |
+| **TACoS** | **35.0%** |
+
+A real number over a real period, and the card says which period:
+`of $49,564 sell-through · 2026-03-23 to 2026-11-09`.
+
+- /!\ **Only the denominator narrows.** Spend outside the ad span is zero by
+  definition - there are no ad rows - so the numerator is already the ad
+  span's own.
+- /!\ **A window with NO ad days is still a refusal.** Nothing to measure is a
+  different statement from hard to interpret, and v11.16's rule stands.
+- /!\ **The denominator and its span travel together** on the result. A figure
+  without the period it covers is what made this card unreadable in the first
+  place.
+
+### Verification
+- `node --check` clean - **163 suites green**.
+- The narrowed figure read off the live database, not derived from the card.
+
+### Still open
+- /!\ **WALMART ADS DO NOT PAY** - 3.47x against a 3.19x floor on All time,
+  and the floor is the honest one (v12.20). A decision, not a measurement.
+- /!\ **NO ITEM DIMENSION ON THE ADS FEED.**
+- /!\ **NO VENDOR REMITTANCE FEED** (v12.18).
+- Everything else on the v12.21 list.
 
 ## v12.21 - TACoS means the same thing on every tab
 

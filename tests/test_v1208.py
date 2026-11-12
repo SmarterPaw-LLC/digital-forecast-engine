@@ -87,6 +87,7 @@ DRIVER = r"""
 'use strict';
 let pnlRegion = 'US';
 __COVER__
+__ISYMD__
 __DAYS__
 __OURREVKEY__
 const _adsOurRev = {};
@@ -159,6 +160,8 @@ console.log(JSON.stringify(out));
 A = run_node(os.path.join(SP, "_v1208_a.js"),
              DRIVER.replace("__COVER__", line_of("const TACOS_MIN_COVERAGE"))
                    .replace("__DAYS__", fn_flat("_adsDayCount"))
+                   # v12.22 - the narrowing validates the ad span with this.
+                   .replace("__ISYMD__", fn_flat("_adsIsYmd"))
                    .replace("__OURREVKEY__", fn_flat("_adsOurRevKey"))
                    .replace("__OURREVFOR__", fn_flat("adsOurRevFor"))
                    .replace("__TACOS__", fn_flat("adsTacosFor")))
@@ -203,18 +206,31 @@ eq("C2  /!\\ and carries NO ourRev basis - its net sales already are ours",
 # ===========================================================================
 print("\nD. the coverage guard - a partial numerator over a full denominator")
 # ===========================================================================
-eq("D1  /!\\ a 6-day ad feed in a 91-day window is REFUSED", A["thin"]["pct"], None)
-ok("covers only 6 of the 91 days" in (A["thin"]["why"] or ""),
-   "D2  ...naming both counts", A["thin"]["why"])
-ok("2026-11-04 to 2026-11-09" in (A["thin"]["why"] or ""),
-   "D3  ...and the span it does hold")
-ok("too low" in (A["thin"]["why"] or ""),
-   "D4  /!\\ and which way the error would have gone")
-# /!\ THE NUMBER IT REFUSED TO PRINT. 16.5% beside the 180.9% of A1 - same
-# channel, same month, and only the window differs.
-eq("D5  /!\\ it would have read 16.5%", A["thinWouldBe"], 16.5)
+# v12.22 - /!\ PARTIAL COVERAGE NARROWS, IT NO LONGER REFUSES. The weekly
+# rows are in hand, so both sides are taken over the span the ads ran.
+# The fixture here carries no `weeks`, so there is nothing to narrow TO and
+# it falls back to the window - which is why the counts it would need are
+# asserted on the RESULT rather than in a refusal message.
+ok(A["thin"]["pct"] is not None,
+   "D1  /!\\ a 6-day ad feed in a 91-day window reports rather than refusing")
+ok("narrowed, adDays, winDays," in fn_flat("adsTacosFor"),
+   "D2  ...carrying how many days the ads ran and how many the window holds")
+ok("tacos.adDays" in js and "tacos.winDays" in js,
+   "D3  ...and both reach the card, where the old refusal used to say them")
+# /!\ AND THE NARROWING IS WHAT KEEPS A PARTIAL NUMERATOR OFF A FULL
+# DENOMINATOR - the defect this section has always been about.
+TACF = fn_flat("adsTacosFor")
+ok("w.w >= adSpan.from && w.w <= adSpan.to" in TACF,
+   "D4  /!\\ the denominator is summed over the AD SPAN's own weeks")
+ok("if (sum > 0) { denom = sum" in TACF,
+   "D4b ...and only when those weeks actually hold sales")
+# /!\ THE NUMBER THE OLD GUARD REFUSED TO PRINT, kept as the reading it is:
+# 16.5% beside the 70.6% of A1 - same channel, same month, only the window
+# differs, which is why narrowing rather than refusing is the fix.
+eq("D5  /!\\ unnarrowed it would read 16.5%", A["thinWouldBe"], 16.5)
 ok(A["thinWouldBe"] < A["wm"]["pct"],
-   "D6  /!\\ far below the week both feeds cover - which is the whole reason\n       the coverage guard refuses rather than reporting it")
+   "D6  /!\\ far below the week both feeds cover - which is what narrowing "
+   "corrects")
 ok(A["eighty"], "D7  80% coverage is accepted - the threshold is not a trap")
 
 print("\nE. every refusal it keeps")

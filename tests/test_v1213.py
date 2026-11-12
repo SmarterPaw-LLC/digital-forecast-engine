@@ -228,7 +228,7 @@ TAC = fn_flat("adsTacosFor")
 ok("adSales > r.retail" in TAC, "F4  the comparison is against retail, not our revenue")
 ok("r.rev" in TAC.split("adSales > r.retail")[0].split("if (adSales")[-1] or True,
    "F5  and it runs before the ratio is formed")
-ok(TAC.index("adSales > r.retail") < TAC.index("return { pct: (spend || 0) / r.retail"),
+ok(TAC.index("adSales > r.retail") < TAC.index("return { pct: (spend || 0) / denom"),
    "F6  /!\\ refused BEFORE a number is computed")
 
 print("\nG. the chip agrees with CLAUDE.md")

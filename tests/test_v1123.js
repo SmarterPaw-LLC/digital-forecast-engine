@@ -1988,12 +1988,13 @@ function adsTacosFor(channel, selRows, spend, range, adSpan, adSales) {
     // /!\ AND NO ANSWER WHEN THE AD FEED COVERS ONLY PART OF IT.
     const winDays = _adsDayCount(range.from, range.to);
     const adDays  = adSpan ? _adsDayCount(adSpan.from, adSpan.to) : 0;
-    if (winDays > 0 && adDays > 0 && (adDays / winDays) < TACOS_MIN_COVERAGE) {
-      return no('Ad spend here covers only ' + adDays + ' of the ' + winDays
-        + ' days in this window (' + adSpan.from + ' to ' + adSpan.to + '), while sales cover all of it. '
-        + 'TACoS would divide part of the spend by all of the revenue and read far too low. '
-        + 'Narrow the period to the days the ad feed holds, or upload the missing ones.');
-    }
+    // v12.22 - /!\ PARTIAL COVERAGE NARROWS THE DENOMINATOR, it does not
+    // refuse the card. v12.08 was right that spend over 231 days divided by
+    // sales over 335 reads far too low, and wrong that a dash was the answer:
+    // the weekly rows are already in hand, so both sides can be taken over
+    // the span the ads actually ran.
+    const narrow = (winDays > 0 && adDays > 0 && (adDays / winDays) < TACOS_MIN_COVERAGE
+                    && adSpan && _adsIsYmd(adSpan.from) && _adsIsYmd(adSpan.to));
     const r = (typeof adsOurRevFor === 'function') ? adsOurRevFor(channel, range) : null;
     if (!r) return no('Sales are not loaded yet.');
     if (r.pending) return { pct: null, netSales: null, pending: true, why: 'Reading sales\u2026' };
@@ -2003,7 +2004,22 @@ function adsTacosFor(channel, selRows, spend, range, adSpan, adSales) {
     // that is the retailer's own sell-through, NOT what they pay us. Dividing
     // by our revenue made one label mean two things a tab apart (rule 3a) and
     // matched nothing else on the page.
-    if (!(r.retail > 0)) {
+    // /!\ THE DENOMINATOR, AND THE SPAN IT IS TAKEN OVER, TRAVEL TOGETHER.
+    // A figure without the period it covers is the thing that made this card
+    // unreadable in the first place.
+    let denom = r.retail, dFrom = r.from, dTo = r.to, narrowed = false;
+    if (narrow && Array.isArray(r.weeks)) {
+      let sum = 0, lo = null, hi = null;
+      for (const w of r.weeks) {
+        if (w.w >= adSpan.from && w.w <= adSpan.to) {
+          sum += w.retail;
+          if (lo == null || w.w < lo) lo = w.w;
+          if (hi == null || w.w > hi) hi = w.w;
+        }
+      }
+      if (sum > 0) { denom = sum; dFrom = lo; dTo = hi; narrowed = true; }
+    }
+    if (!(denom > 0)) {
       return no('No sales in this window, so TACoS has no denominator. Widen the period.');
     }
     // v12.17 - /!\ ATTRIBUTION OVER-COUNTS, AND THAT IS NOT A REASON TO REFUSE.
@@ -2040,9 +2056,9 @@ function adsTacosFor(channel, selRows, spend, range, adSpan, adSales) {
     // explanations got shipped.
     const salesBasis = (r.bases || []).map(b2 => String(b2).replace(/^walmart:/, ''))
       .filter(Boolean).join(' + ') || null;
-    return { pct: (spend || 0) / r.retail * 100, netSales: r.retail, salesBasis,
-             ourRev: r.rev,
-             from: r.from, to: r.to, basis: 'ourRev',
+    return { pct: (spend || 0) / denom * 100, netSales: denom, salesBasis,
+             ourRev: r.rev, narrowed, adDays, winDays,
+             from: dFrom, to: dTo, basis: 'ourRev',
              retail: r.retail, unpricedSkus: r.unpricedSkus,
              unpricedUnits: r.unpricedUnits, overAttr,
              cappedRows: r.cappedRows || 0, cappedAmt: r.cappedAmt || 0,
@@ -2434,7 +2450,8 @@ function renderAdsCampaigns(channel, view) {
         // show - it is what the retailer pays us, roughly a third of retail -
         // so a reader comparing this with Amazon's TACoS has to be told.
         : 'of $' + Math.round(tacos.netSales).toLocaleString()
-          + (tacos.basis === 'ourRev' ? ' sell-through' : ' net sales'),
+          + (tacos.basis === 'ourRev' ? ' sell-through' : ' net sales')
+          + (tacos.narrowed ? ' \u00b7 ' + tacos.from + ' to ' + tacos.to : ''),
       color: tacos.pct == null ? 'var(--text3)'
            : (tacos.pct > 30 ? 'var(--sp-red)' : tacos.pct > 20 ? 'var(--sp-orange)' : 'var(--text)'),
       delta: (tacos.pct == null || tacosPrev.pct == null) ? null
@@ -2453,6 +2470,11 @@ function renderAdsCampaigns(channel, view) {
            + Math.round(tacos.netSales).toLocaleString() + ', weeks '
            + tacos.from + ' to ' + tacos.to + '.'
            + '\n\nSame basis as the Amazon tab: what the shopper paid.'
+           + (tacos.narrowed
+              ? '\n\n\u26a0 Ads ran on ' + tacos.adDays + ' of this window\u2019s '
+                + tacos.winDays + ' days, so both sides are taken over the weeks they ran. '
+                + 'The whole window would divide part of the spend by all of the sales.'
+              : '')
            + (tacos.ourRev > 0
               ? '\n\nOn what the retailer pays US it is '
                 + ((spendForTip / tacos.ourRev) * 100).toFixed(1) + '%.'
