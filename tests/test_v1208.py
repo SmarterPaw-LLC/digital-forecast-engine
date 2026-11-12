@@ -239,7 +239,10 @@ ok("Organic sales" in (A["selection"] or ""),
    "E2  /!\\ a campaign selection still cannot narrow the sales side")
 ok("no feed carrying them" in (A["otherChan"] or ""),
    "E3  a channel with no sales feed", A["otherChan"])
-ok("not loaded yet" in (A["notLoaded"] or ""), "E4  a window nothing has fetched")
+# v12.23 - never-requested and in-flight are both LOADING. Only a real
+# failure or a real gap may say a number is unavailable.
+ok("Reading sales" in (A["notLoaded"] or ""),
+   "E4  /!\\ a window nothing has fetched reads as LOADING, not as missing")
 eq("E5  /!\\ a FETCH IN FLIGHT is not a refusal - it says so and repaints",
    [A["pending"]["pct"], A["pending"]["pending"]], [None, True])
 ok("no denominator" in (A["zeroRev"] or ""), "E6  zero revenue", A["zeroRev"])

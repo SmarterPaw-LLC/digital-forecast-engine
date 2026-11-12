@@ -207,7 +207,10 @@ eq("B8  an EMPTY selection array is not a selection", R["emptySelPct"], 17.21)
 # a feed - it refuses because this harness has fetched nothing. The
 # guarantee is unchanged for a channel that genuinely has none.
 eq("B9  a channel with no sales feed yields no number", R["chewyPct"], None)
-ok("not loaded yet" in (R["chewyWhy"] or ""),
+# v12.23 - a window nothing has fetched is a LOADING state, not a missing
+# number. "not loaded yet" became "Reading sales...", and the guarantee is
+# that it waits rather than reporting a dash.
+ok("Reading sales" in (R["chewyWhy"] or ""),
    "B10 /!\\ Chewy is SUPPORTED now - it waits on its denominator rather "
    "than refusing outright", R["chewyWhy"])
 eq("B11 /!\\ EU yields no number", R["euPct"], None)

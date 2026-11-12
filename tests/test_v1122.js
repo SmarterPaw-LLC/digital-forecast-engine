@@ -1948,8 +1948,12 @@ function adsTacosFor(channel, selRows, spend, range, adSpan, adSales) {
     const narrow = (winDays > 0 && adDays > 0 && (adDays / winDays) < TACOS_MIN_COVERAGE
                     && adSpan && _adsIsYmd(adSpan.from) && _adsIsYmd(adSpan.to));
     const r = (typeof adsOurRevFor === 'function') ? adsOurRevFor(channel, range) : null;
-    if (!r) return no('Sales are not loaded yet.');
-    if (r.pending) return { pct: null, netSales: null, pending: true, why: 'Reading sales\u2026' };
+    // v12.23 - /!\ NEVER-REQUESTED AND IN-FLIGHT ARE BOTH LOADING, NOT
+    // MISSING. `not available` is a statement about the data; until the fetch
+    // has answered, the only true statement is that it has not answered yet.
+    if (!r || r.pending) {
+      return { pct: null, netSales: null, pending: true, why: 'Reading sales\u2026' };
+    }
     if (r.why) return no(r.why);
     // v12.21 - /!\ SELL-THROUGH, the same basis the Amazon tab divides by.
     // `sku_economics.net_sales` is what the customer paid; on a 1P channel
@@ -2044,6 +2048,22 @@ function renderAdsCampaigns(channel, view) {
 
   const win = ch.range() || {};
   const brand = ch.brand();
+
+  // v12.23 - /!\ BEFORE ANY READER, not after every card. The break-even
+  // deflator, the Sell-Through card and the TACoS card all read this cache
+  // while the strip is being built; kicking the fetch off at the BOTTOM of
+  // this function guaranteed that the first render of every window drew all
+  // three from an empty cache.
+  //
+  // It cannot loop: adsLoadOurRev writes its entry synchronously before the
+  // first await and on every failure path, so the `=== undefined` test is
+  // false from the moment it starts.
+  if (channel !== 'amazon' && TACOS_SRC[channel] && win && win.from && win.to
+      && _adsOurRev[_adsOurRevKey(channel, win)] === undefined) {
+    adsLoadOurRev(channel, { from: win.from, to: win.to }).then(() => {
+      renderAdsCampaigns(channel, view);
+    }).catch(e => console.warn('TACoS sales fetch:', e && e.message));
+  }
   // v11.67 - the drill, on the CAMPAIGNS view only: `drill` is what this table
   // can offer, `drillNames` is what the destination can honour.
   const drill = (!view && ADS_DRILL[channel]) ? ADS_DRILL[channel] : null;
@@ -2588,12 +2608,6 @@ function renderAdsCampaigns(channel, view) {
   // (channel, window) and then repainted. Guarded on the cache entry exactly
   // as the break-even above is, so it cannot loop: the entry is written
   // before the await and on every failure path.
-  if (channel !== 'amazon' && TACOS_SRC[channel] && win && win.from && win.to
-      && _adsOurRev[_adsOurRevKey(channel, win)] === undefined) {
-    adsLoadOurRev(channel, { from: win.from, to: win.to }).then(() => {
-      try { renderAdsCampaigns(channel, view); } catch (_) {}
-    });
-  }
 
   const cov = document.getElementById(ch.host + '-cov');
   if (cov) {
