@@ -411,6 +411,10 @@ CELL = arrow("const cellOf = (c, col, i) => {")
 D = run_node(os.path.join(SP, "_v1167_d.js"), fn("esc2") + "\n"
     + fn("adsColFmt") + "\n" + fn("adsFmtNum") + "\n" + fn("adsDiv") + "\n" + r"""
 const NAMECOL = 'campaign', channel = 'walmart';
+// v12.30 - the name cell offers a note affordance on channels that have
+// a sales feed; the count helper is driven for real in test_v1227.
+const TACOS_SRC = { walmart: ['walmart_sales_weekly'] };
+const adsNoteCountFor = () => 0;
 const RED = 'red';
 const adsRoasFloor = () => 1;
 const adsBrandFilterValue = () => '';

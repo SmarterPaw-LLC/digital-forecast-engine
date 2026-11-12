@@ -1729,14 +1729,11 @@ function adsEnsureShell(channel, view) {
     +     `<span id="adsnote-status" style="font-family:var(--mono);font-size:10px;color:var(--text3)"></span>`
     +   `</div>`
     +   `<div class="ds-body" style="padding:12px 14px">`
-    +     `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">`
-    +       `<input type="date" id="adsnote-date" style="font-family:var(--mono);font-size:11px;padding:5px 7px;border:1px solid var(--border2);border-radius:5px;background:var(--surface2);color:var(--text)">`
-    +       `<select id="adsnote-kind" style="font-family:var(--mono);font-size:11px;padding:5px 7px;border:1px solid var(--border2);border-radius:5px;background:var(--surface2);color:var(--text)">`
-    +         Object.entries(ADS_NOTE_KINDS).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('')
-    +       `</select>`
-    +       `<select id="adsnote-camp" style="font-family:var(--mono);font-size:11px;padding:5px 7px;border:1px solid var(--border2);border-radius:5px;background:var(--surface2);color:var(--text);max-width:280px"></select>`
-    +       `<input type="text" id="adsnote-text" placeholder="what changed, and why" style="flex:1;min-width:220px;font-family:var(--mono);font-size:11px;padding:5px 9px;border:1px solid var(--border2);border-radius:5px;background:var(--surface2);color:var(--text)">`
-    +       `<button type="button" onclick="adsNoteSave('${channel}')" style="font-family:var(--display);font-weight:700;font-size:11px;padding:6px 14px;border:1px solid var(--sp-green,#4a9e38);border-radius:5px;background:var(--sp-green,#4a9e38);color:#fff;cursor:pointer">+ Add note</button>`
+    // v12.30 - /!\ ONE WAY TO WRITE A NOTE, and it is on the row. What is
+    // left here is the account-level note, which no campaign row can own.
+    +     `<div style="margin-bottom:10px">`
+    +       `<button type="button" onclick="adsNoteCompose('${channel}','')" style="font-family:var(--display);font-weight:700;font-size:11px;padding:5px 12px;border:1px solid var(--border2);border-radius:5px;background:var(--surface2);color:var(--text2);cursor:pointer">+ Account-level note</button>`
+    +       `<span style="margin-left:10px;font-family:var(--mono);font-size:10px;color:var(--text3)">for a campaign, use the \ud83d\udcdd on its row</span>`
     +     `</div>`
     +     `<div id="${ch.host}-notes-list"></div>`
     +   `</div></div>`
@@ -2116,34 +2113,7 @@ async function adsNotesLoad(channel, force) {
   }
 }
 
-async function adsNoteSave(channel) {
-  const g = id => document.getElementById(id);
-  const date = (g('adsnote-date') || {}).value || '';
-  const kind = (g('adsnote-kind') || {}).value || 'change';
-  const camp = (g('adsnote-camp') || {}).value || '';
-  const text = ((g('adsnote-text') || {}).value || '').trim();
-  const st = g('adsnote-status');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { if (st) st.textContent = 'Pick a date.'; return; }
-  if (!text) { if (st) st.textContent = 'Write the note.'; return; }
-  if (st) st.textContent = 'Saving\u2026';
-  try {
-    const sb = await getSB();
-    const { error } = await sb.from('ads_campaign_notes').insert([{
-      channel, account: null, campaign: camp || null,
-      note_date: date, kind, note: text,
-    }]);
-    if (error) throw error;
-    if (g('adsnote-text')) g('adsnote-text').value = '';
-    await adsNotesLoad(channel, true);
-    if (st) st.textContent = '';
-    adsNotesRepaint(channel);
-  } catch (e) {
-    const msg = String((e && e.message) || e);
-    if (st) st.textContent = /relation|exist|schema/i.test(msg)
-      ? 'Run supabase_v12_27_ads_campaign_notes.sql first.'
-      : 'Could not save: ' + msg;
-  }
-}
+
 
 async function adsNoteDelete(channel, id) {
   // /!\ A note is a record of a decision. Deleting one silently would lose
@@ -2185,6 +2155,71 @@ function adsNoteBucketIdx(noteDate, buckets, grain) {
 // LIST is repainted, never the form.
 let _adsNotesChannel = {};   // host -> channel, so the repaint knows its scope
 
+// v12.30 - /!\ THE COMPOSER, SCOPED BEFORE IT OPENS. Built in the app's own
+// dialog shape (the uploadGuardDialog pattern, hard rule #1) rather than a
+// tenth bespoke modal. The campaign is SHOWN, never chosen: it is whichever
+// row was clicked, so the note cannot be filed against the wrong one.
+function adsNoteCompose(channel, campaign) {
+  const name = campaign || '';
+  const dlg = document.createElement('div');
+  dlg.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center';
+  const opts = Object.entries(ADS_NOTE_KINDS)
+    .map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
+  let today = '';
+  try { today = new Date().toISOString().slice(0, 10); } catch (_) {}
+  dlg.innerHTML =
+    '<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:22px 26px;max-width:520px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
+    + '<div style="font-family:var(--display);font-weight:800;font-size:15px;color:var(--text);margin-bottom:4px">\ud83d\udcdd Add a note</div>'
+    + `<div style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-bottom:16px">${name ? esc2(name) : 'whole account'}</div>`
+    + '<div style="display:flex;gap:8px;margin-bottom:10px">'
+    +   `<input type="date" id="anc-date" value="${today}" style="font-family:var(--mono);font-size:12px;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text)">`
+    +   `<select id="anc-kind" style="flex:1;font-family:var(--mono);font-size:12px;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text)">${opts}</select>`
+    + '</div>'
+    + '<textarea id="anc-text" rows="3" placeholder="what changed, and why" style="width:100%;box-sizing:border-box;font-family:var(--mono);font-size:12px;padding:8px 10px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text);resize:vertical;margin-bottom:6px"></textarea>'
+    + '<div id="anc-err" style="font-family:var(--mono);font-size:11px;color:var(--sp-red,#d63f2a);min-height:15px;margin-bottom:10px"></div>'
+    + '<div style="display:flex;gap:8px">'
+    +   '<button id="anc-no" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:7px;color:var(--text2);font-family:var(--display);font-weight:700;font-size:12px;padding:9px;cursor:pointer">Cancel</button>'
+    +   '<button id="anc-yes" style="flex:1;background:var(--sp-green,#4a9e38);border:1px solid var(--sp-green,#4a9e38);border-radius:7px;color:#fff;font-family:var(--display);font-weight:700;font-size:12px;padding:9px;cursor:pointer">Save note</button>'
+    + '</div></div>';
+  document.body.appendChild(dlg);
+  const g = id => dlg.querySelector('#' + id);
+  const close = () => { try { dlg.remove(); } catch (_) {} };
+  g('anc-no').onclick = close;
+  dlg.onclick = e => { if (e.target === dlg) close(); };
+  setTimeout(() => { try { g('anc-text').focus(); } catch (_) {} }, 0);
+  g('anc-yes').onclick = async () => {
+    const date = g('anc-date').value || '';
+    const text = (g('anc-text').value || '').trim();
+    const err = g('anc-err');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { err.textContent = 'Pick a date.'; return; }
+    if (!text) { err.textContent = 'Write the note.'; return; }
+    err.textContent = '';
+    g('anc-yes').disabled = true; g('anc-yes').textContent = 'Saving\u2026';
+    try {
+      const sb = await getSB();
+      const { error } = await sb.from('ads_campaign_notes').insert([{
+        channel, account: null, campaign: name || null,
+        note_date: date, kind: g('anc-kind').value || 'change', note: text,
+      }]);
+      if (error) throw error;
+      close();
+      await adsNotesLoad(channel, true);
+      adsNotesRepaint(channel);
+    } catch (e) {
+      g('anc-yes').disabled = false; g('anc-yes').textContent = 'Save note';
+      err.textContent = 'Could not save: ' + ((e && e.message) || e);
+    }
+  };
+}
+
+// How many notes this campaign carries. Account-level notes are deliberately
+// NOT counted here: they belong to every row, so adding them to each count
+// would report the same note five times.
+function adsNoteCountFor(channel, campaign) {
+  if (!campaign) return 0;
+  return adsNotesRows(channel).filter(r => r.campaign === campaign).length;
+}
+
 function adsNotesEnsure(channel, ch) {
   // v12.29 - /!\ THE PANEL IS IN THE SHELL NOW. This only finds it, records
   // the scope for the repaint, and seeds the date field once. Creating it by
@@ -2193,8 +2228,6 @@ function adsNotesEnsure(channel, ch) {
   const box = document.getElementById(ch.host + '-notes');
   if (!box) return null;
   _adsNotesChannel[ch.host] = channel;
-  const d = document.getElementById('adsnote-date');
-  if (d && !d.value) { try { d.value = new Date().toISOString().slice(0, 10); } catch (_) {} }
   return box;
 }
 
@@ -2210,39 +2243,17 @@ function adsNotesRenderList(channel, ch, campaignNames, selectedNames) {
     if (cnt) cnt.textContent = '';
     return;
   }
-  // The dropdown is rebuilt only when the campaign list changes, so an open
-  // selection is not reset on every repaint.
-  const sel = document.getElementById('adsnote-camp');
-  if (sel) {
-    const want = JSON.stringify(campaignNames);
-    if (sel.dataset.sig !== want) {
-      sel.dataset.sig = want;
-      sel.innerHTML = '<option value="">\u2014 whole account \u2014</option>'
-        + campaignNames.map(n => `<option value="${esc2(n)}">${esc2(n)}</option>`).join('');
-    }
-    // /!\ A SELECTED CAMPAIGN PREFILLS THE FORM. Jason reached for this with
-    // one campaign ticked; making him pick it again in a second control is
-    // the kind of friction that stops a note being written at all.
-    if (selectedNames && selectedNames.length === 1 && !sel.dataset.touched) {
-      sel.value = selectedNames[0];
-    }
-    sel.onchange = () => { sel.dataset.touched = '1'; };
-  }
   const rows = adsNotesFor(channel, selectedNames);
   if (cnt) {
     cnt.textContent = rows.length
       ? (rows.length + ' in view' + (selectedNames && selectedNames.length ? ' \u00b7 selection' : ''))
-      : 'none yet';
+      : 'nothing recorded yet \u00b7 use the \ud83d\udcdd on a campaign row';
   }
-  if (!rows.length) {
-    list.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text3)">'
-      + 'Nothing recorded for this view yet.</div>';
-    return;
-  }
+  if (!rows.length) { list.innerHTML = ''; return; }
   list.innerHTML = rows.slice(0, 40).map(r => {
     const k = ADS_NOTE_KINDS[r.kind] || ADS_NOTE_KINDS.observation;
     const scope = r.campaign ? esc2(r.campaign) : 'whole account';
-    return `<div style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-top:1px solid var(--border2)">
+    return `<div style="display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-top:1px solid var(--border2)">
         <span style="font-family:var(--mono);font-size:10px;color:var(--text3);min-width:78px">${esc2(String(r.note_date).slice(0,10))}</span>
         <span style="font-family:var(--mono);font-size:9px;color:#fff;background:${k.color};border-radius:3px;padding:1px 6px;white-space:nowrap">${k.label}</span>
         <span style="font-family:var(--mono);font-size:11px;color:var(--text);flex:1;min-width:0">${esc2(r.note)}
@@ -2252,6 +2263,7 @@ function adsNotesRenderList(channel, ch, campaignNames, selectedNames) {
       </div>`;
   }).join('');
 }
+
 
 // /!\ Repaint through the renderer, so the chart marks and the list are built
 // from one pass. A second path that refreshed only the list is how the flag
@@ -2879,7 +2891,23 @@ function renderAdsCampaigns(channel, view) {
           + ` onmouseover="this.style.color='var(--sp-green)'"`
           + ` onmouseout="this.style.color=''">${esc2(c[NAMECOL])}</span>`
         : esc2(c[NAMECOL]);
-      return `<td${tip} style="${pad};max-width:${col.w}px;overflow:hidden;text-overflow:ellipsis${dim}">${body}</td>`;
+      // v12.30 - /!\ THE NOTE IS WRITTEN WHERE THE CAMPAIGN IS. A count when
+      // the row has notes, a faint + when it does not, and the composer opens
+      // already scoped to this name - never a dropdown to re-pick it in.
+      //
+      // /!\ The FOOTER calls cellOf with no index (i < 0) and is not a
+      // campaign, so it gets no affordance - the same guard the drill uses.
+      let noteBtn = '';
+      if (i >= 0 && !c.noCampaign && TACOS_SRC[channel] && c[NAMECOL]) {
+        const n = (typeof adsNoteCountFor === 'function') ? adsNoteCountFor(channel, c[NAMECOL]) : 0;
+        const _nm = String(c[NAMECOL]).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        noteBtn = `<span onclick="event.stopPropagation();adsNoteCompose('${channel}','${esc2(_nm)}')"`
+          + ` title="${n ? (n + ' note' + (n === 1 ? '' : 's') + ' on this campaign. Click to add another.') : 'Add a note to this campaign'}"`
+          + ` style="margin-left:7px;cursor:pointer;font-size:10px;font-family:var(--mono);`
+          + `color:${n ? 'var(--sp-green,#4a9e38)' : 'var(--text3)'};opacity:${n ? 1 : .55}">`
+          + `${n ? '\ud83d\udcdd' + n : '\ud83d\udcdd+'}</span>`;
+      }
+      return `<td${tip} style="${pad};max-width:${col.w}px;overflow:hidden;text-overflow:ellipsis${dim}">${body}${noteBtn}</td>`;
     }
     // ⚠ TEXT IS DETECTED BY VALUE, NOT BY A LIST OF COLUMN NAMES. The old
     // check named campaign / type / status and sent everything else to the

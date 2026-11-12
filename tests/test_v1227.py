@@ -164,26 +164,38 @@ ok("CHART_HTML_LEGEND, CHART_EVENT_MARKS" in js,
    "D6  registered beside the legend, on the one shared renderer")
 
 # ===========================================================================
-print("\nE. the panel is built ONCE and only its list repaints")
+print("\nE. /!\\ THE NOTE IS WRITTEN WHERE THE CAMPAIGN IS")
 # ===========================================================================
-# /!\ The v10.99 rule: rewriting the form on every render would blow away the
-# note field's focus and caret mid-sentence.
-ENS = fn_flat("adsNotesEnsure")
-# v12.29 - /!\ THE FORM IS PART OF THE SHELL, which adsEnsureShell builds once
-# per host and then only repaints. Stronger than the old insertion guard: there
-# is no creation path left to run twice.
-ok("createElement" not in ENS,
-   "E1  /!\\ the form is built once, in the shell - ensure() only FINDS it")
-ok('id="${ch.host}-notes"' in js and 'id="adsnote-text"' in js,
-   "E1b ...and the markup lives in adsEnsureShell beside every other panel")
-LIST = fn_flat("adsNotesRenderList")
-ok("adsnote-text" not in LIST, "E2  /!\\ and the repaint never touches the text field")
-ok("sel.dataset.sig !== want" in LIST,
-   "E3  the campaign dropdown is rebuilt only when the campaigns change")
-ok("selectedNames.length === 1 && !sel.dataset.touched" in LIST,
-   "E4  /!\\ a single selected campaign PREFILLS the form, until it is touched")
+# Jason: "i should be able to click 'add note' on any campaign. i need the
+# notes to associate with the campaign."
+#
+# v12.30 moved the affordance onto the NAME CELL and deleted the bottom form.
+# A panel at the bottom with a campaign dropdown made the operator scroll away
+# from the row they were reading and then re-identify it in a second control.
+ok("adsNoteCompose" in js, "E1  a composer exists")
+ok("adsnote-camp" not in js,
+   "E2  /!\\ and the campaign DROPDOWN is gone - the row already knows which one")
+ok("adsNoteSave" not in js,
+   "E3  /!\\ ...along with the form it read, so there is ONE way to write a note")
+CELL = js[js.index("if (col.k === NAMECOL) {"):]
+CELL = CELL[:CELL.index("return `<td")] + CELL[CELL.index("return `<td"):CELL.index("\n    }")]
+ok("adsNoteCompose('${channel}'" in CELL,
+   "E4  /!\\ the affordance is on the campaign's own cell")
+ok("i >= 0 && !c.noCampaign" in CELL,
+   "E4b /!\\ and not on the footer row, which is not a campaign (the drill's own guard)")
+ok("event.stopPropagation()" in CELL,
+   "E4c clicking it does not also toggle the row's selection")
+COMP = fn_flat("adsNoteCompose")
+ok("campaign: name || null" in COMP,
+   "E5  /!\\ the note is filed against the row that was clicked")
+ok("esc2(name)" in COMP,
+   "E5b ...and the dialog SHOWS that name rather than asking for it")
+CNT = fn_flat("adsNoteCountFor")
+ok("r.campaign === campaign" in CNT,
+   "E6  /!\\ an account-level note is NOT counted per row - it belongs to every "
+   "row, and counting it would report one note five times")
 ok("cannot be undone" in fn_flat("adsNoteDelete"),
-   "E5  /!\\ deleting a note confirms - it is the only record of why a line moved")
+   "E7  /!\\ deleting a note confirms - it is the only record of why a line moved")
 
 print("\nF. the chip agrees with CLAUDE.md")
 md = io.open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read()

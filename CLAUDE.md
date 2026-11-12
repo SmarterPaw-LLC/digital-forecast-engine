@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.29** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.30** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,40 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.30 - the note is written where the campaign is
+
+- **Jason:** *"this implementation is bad. i should be able to click 'add
+  note' on any campaign. i need the notes to associate with the campaign"*
+
+### /!\ THE FORM WAS IN THE WRONG PLACE AND ASKED THE WRONG QUESTION
+A panel at the bottom with a campaign **dropdown** makes the operator scroll
+away from the row they are reading and then re-identify it in a second
+control. The campaign is already the thing under the cursor.
+
+Every campaign row carries the affordance on its **name cell** now: `/!\ 2`
+when it has notes, a faint `+` when it does not. Clicking opens a composer
+**already scoped** to that campaign - the name is shown, never chosen, so a
+note cannot be filed against the wrong row.
+
+- The composer is the app's own dialog shape (`uploadGuardDialog`), not a
+  tenth bespoke modal.
+- It is **not** offered on the footer row, which is not a campaign - the same
+  `i >= 0` guard the drill uses.
+- The click **stops propagation**, so writing a note does not also tick the
+  row.
+- An **account-level** note is not counted per row: it belongs to every row,
+  and counting it would report one note five times.
+
+### One way to write a note
+The bottom panel keeps the **list** - which is what the timeline flags are
+built from and what you read to see why a line moved - and loses its form
+entirely. The only thing left there is `+ Account-level note`, for the note no
+campaign row can own.
+
+### Still open
+- Everything on the v12.27 list. The migration is **RUN** - table, policy and
+  grants verified on the live database.
 
 ## v12.29 - the notes panel is part of the shell, not inserted into it
 
