@@ -112,6 +112,9 @@ PIECES = "\n".join([
     fn_flat("_wmcCi"),
     fn_flat("_wmcHeaderIdx"),
     fn_flat("_wmcAttrCol"),
+    # v12.10 - the parser reads the file’s own stated window to tell a day
+    # split from a month split. Sliced, never stubbed.
+    fn_flat("_wmcPeriodRequested"),
     const_obj("_WMC_SQL"),
     fn_flat("_wmcTableErr"),
     fn_flat("parseLocalDate"),

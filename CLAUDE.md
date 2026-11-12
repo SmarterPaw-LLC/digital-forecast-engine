@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.09** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.11** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,146 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.11 - one parallel pager
+
+- **Jason:** *"it takes SO LONG whenever i refresh"*
+
+Supabase caps an un-ranged select at 1,000 rows, so every large table is
+walked a page at a time - and **each page waited for the one before it**.
+Measured against the live REST API, the same endpoint and page size the app
+uses, sequential against a six-wide burst:
+
+| table | rows | seq | par | |
+|---|---|---|---|---|
+| **`amazon_ad_spend`** | **295,189** | **60.55s** | **13.78s** | **4.4x** |
+| `sku_economics` | 41,236 | 10.16s | 3.13s | 3.3x |
+| `chewy_forecasts` | 25,641 | 4.83s | 1.17s | 4.1x |
+| `sales_weekly` | 11,814 | 1.92s | 0.59s | 3.2x |
+| `chewy_sales_weekly` | 9,304 | 2.02s | 0.72s | 2.8x |
+| **TOTAL** | | **80.89s** | **20.71s** | **3.9x** |
+
+### ⚠ ONE TABLE IS 75% OF THE WAIT
+`amazon_ad_spend` is **296 sequential round trips**, each one waiting. That is
+a minute of a refresh, on its own.
+
+### ⚠ AND THIS IS v11.72'S FINDING, NINE RELEASES LATE
+That release measured **5.8-7.3x** from parallel paging and never built it.
+It has sat on the Still-open list ever since while the table grew. The
+measurement above is fresh, not that one repeated.
+
+### No count query
+Asking for an exact count first costs a round trip **and** a full scan on 295k
+rows. The first page is fetched instead, and if it came back full the next six
+are fired together; bursting continues while the **last** page of a burst is
+still full. Overshooting the end costs a few empty requests, which is cheaper
+than counting - and `B3`/`B4` pin that a short or empty table still costs
+exactly **one**.
+
+### ⚠ SIX IS A CHOICE, NOT A LIMIT TO RAISE
+Browsers cap concurrent connections per host at six, so a wider burst queues
+inside the browser, buys nothing, and makes a failure take longer to surface.
+
+### ⚠ THE RISK IS ROWS, NOT SPEED
+A pager that is fast and drops a page is far worse than a slow one. The suite
+drives the real helper against a stand-in client and compares it **row for
+row** with the sequential loop it replaces, at **eleven boundaries**: empty,
+one row, a short page, exactly one page, one past a page, exactly a burst, one
+past a burst, and sizes landing mid-burst. `Promise.all` resolves in ARGUMENT
+order, so the rows arrive in the same sequence as before and nothing
+downstream can tell.
+
+`amazon_ad_spend`'s **ordering is unchanged** (date descending) because
+downstream readers rely on it, and `D5`/`D6` require the loops it replaced to
+be **gone**, not left standing beside it.
+
+### Verification
+- `node --check` clean · **157 suites green** · new `tests/test_v1211.py` (30).
+- Every timing above read off the live API, not estimated.
+
+### Still open
+- **⚠ PAGING HAS NO DETERMINISTIC TIE-BREAKER.** `amazon_ad_spend` orders by
+  `date` alone, and 295k rows carry far fewer distinct dates - so rows tied on
+  a date can in principle repeat or be skipped across page boundaries. **This
+  is not new and parallelism does not make it worse**, but it is real, and the
+  fix is a secondary sort on a unique column. Not done here: it needs a column
+  audit per table, and this release deliberately changes nothing about what
+  comes back.
+- **⚠ FETCHING 295,189 ROWS AT ALL IS THE DEEPER PROBLEM.** 13.78s is four
+  times better and still thirteen seconds. The real answer is to stop pulling
+  the whole table into the browser - a windowed fetch, or a server-side
+  aggregate through `exec_sql`. A bigger change than this one, and next.
+- **⚠ THE MONTH-STAMPED WALMART ROWS ARE STILL IN THE TABLE** (v12.10).
+- **⚠ THE JUNE / JULY KEYWORD DUPLICATE IS NOT FIXED** (v12.06).
+- Everything else on the v12.10 list.
+
+## v12.10 - a month split is not daily data
+
+- **Jason:** *"also the taco isn't populating for walmart"*
+
+**The card was right and the data was wrong.** Read off the live table the
+moment he said it:
+
+| dates | what landed |
+|---|---|
+| 2026-03-01 … 2026-10-01 | **one row per campaign per MONTH**, stamped on the 1st |
+| 2026-11-01 | **$1,664.67** - the whole Nov 1-10 period |
+| 2026-11-04 … 11-10 | **$1,179.44** - the real daily rows |
+
+### ⚠ SO NOVEMBER WAS DOUBLE-COUNTED BY $1,179.44
+The `2026-11-01` row is a Nov 1-10 aggregate and the daily rows repeat seven
+of those ten days. **Nothing refused it, because every row DID carry a date.**
+Just not a day.
+
+Ad Center's Custom builder offers **Date (Day)** and **Date (Month)**; both
+produce a Date column and both parse cleanly. The only thing that can tell
+them apart is the file's own preamble:
+
+    "Period Requested: Oct 01, 2026 - Oct 31, 2026 "
+
+So that is what it is checked against - the file's own statement of its
+window - rather than a guess about what the dates look like.
+
+### ⚠ AND THE NAIVE RULE WOULD HAVE BROKEN A GOOD FILE
+*"every date is the 1st"* refuses a legitimate **one-day pull of the 1st**,
+which is a perfectly good export. The stated window is what distinguishes
+them: 31 days holding 1 date is a month split; 1 day holding 1 date is a day.
+
+Three things it deliberately does **not** refuse: a one-day pull, a file with
+**no preamble** (the check simply cannot run), and a window with **holes** -
+7 days of a 10-day window is a coverage question, and v12.08's TACoS guard is
+what reports that.
+
+### ⚠ AND THE TACoS CARD WAS ALREADY TELLING HIM
+v12.08's coverage guard refused October because the ad rows spanned **1 of 31
+days**. That was correct, and the reason sat on the tooltip while the card
+face read *"not available"*. The data is the thing to fix.
+
+### The day count now reaches the operator
+The status line says **how many DAYS landed**, not just how many rows - which
+is the number that would have shown this at upload time. The refusal runs
+**before** the write, so nothing lands to clean up.
+
+### Verification
+- `node --check` clean · **156 suites green** · new `tests/test_v1210.py` (22).
+- **The real parser driven over a reconstruction of what actually landed** -
+  five campaigns, one row each, every date on the 1st, a full-month preamble -
+  beside a one-day pull, a preamble-less file, a real week, and a
+  half-covered window, all four of which must pass.
+
+### Still open
+- **⚠ THE MONTH-STAMPED ROWS ARE STILL IN THE TABLE.** 23 rows across
+  2026-03-01 … 2026-10-01 plus the 2026-11-01 aggregate. They cannot be fixed
+  by re-pulling: the key is `(date, region, account, campaign)`, so a daily
+  October pull ADDS 31 dates and leaves 10-01 standing. **They have to be
+  deleted, and that is Jason's call.**
+- **⚠ CHEWY'S AD FEED STOPS 2026-10-25** (v12.08).
+- **⚠ 23 CHEWY SKUs SELL WITH NO CATALOG COST** (v12.08).
+- **⚠ THE JUNE / JULY KEYWORD DUPLICATE IS NOT FIXED** (v12.06).
+- **⚠ LOAD TIME.** Jason: *"it takes SO LONG whenever i refresh"*.
+  Measured at v11.72 as a **5.8-7.3x** win from parallel paging and never
+  built; `sbGet` still pages sequentially. In flight.
+- Everything else on the v12.09 list.
 
 ## v12.09 - the product card: vendor cost, the prose, and the grab-bag section
 
