@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.17** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.18** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,83 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.18 - a marked-down unit was not replenished at standard cost
+
+- **Jason:** *"these numbers still don't make sense"* ... *"when i change the
+  reporting period the TACOS % looks more correct"* ... *"i'm not changing any
+  more reports until you get to the bottom of this"*
+
+He was right on all three counts, and the wider window looking better was the
+clue rather than the answer.
+
+### The whole 47-week history runs $6-8 a unit. Two weeks do not.
+
+| week | units | retail/unit |
+|---|---|---|
+| every other week, 2025-12-13 -> 2026-11-07 | 100-330 | **$6-8** |
+| **2026-07-25** | **3,021** | **$2.00** |
+| **2026-08-01** | **710** | **$3.12** |
+
+SP-0204 and SP-0352 sold at **$6.99 in every single week** of the feed except
+those two, where they went to **$1.14**. A return the following week came back
+at $1.12, so these are real transactions, not a parse error. **A clearance.**
+
+Those 3,731 units are **37% of every unit the feed has ever recorded.**
+
+### The model assumes replenishment, and a clearance is not replenishment
+`our revenue = sell-through units x cost_per_each` assumes every unit sold out
+was bought from us at the agreement price. On a clearance Walmart is
+liquidating stock **it already paid for months earlier**, so the model credits
+us again for goods already invoiced.
+
+**And the tell is self-evident: the modelled revenue came out ABOVE the retail
+it sold for.** $13,205 of "our revenue" against $8,255 of retail. On 1P that
+cannot happen - we are paid a fraction of retail, never more than it.
+
+### What it was doing to the card
+
+| window 2026-06-01 -> 11-12 | our revenue | TACoS |
+|---|---|---|
+| as it read | $24,829 | **64.4%** |
+| excluding the two clearance weeks | $11,624 | **131.6%** |
+
+**The wider period looked healthier only because it swallowed the clearance.**
+43% of that denominator was phantom. The 175.3% on the recent window, which
+holds no markdown, was the honest number the whole time.
+
+### The guard
+A row where `units * cost_per_each > net_sales` is impossible on 1P, so the
+revenue is **capped at what the units actually sold for**. 25 such rows exist
+table-wide and every one is in those two weeks.
+
+- Capped **per row**, inside the SQL, so the weekly figures the chart buckets
+  and the window total the card prints come through one derivation.
+- **Only when `net_sales > 0`.** A return carries negative units and negative
+  sales; capping it would make the refund larger than it was.
+- The shortfall is **carried, not swallowed** - `cappedRows`, `cappedAmt` and
+  `cappedWeeks` ride the result, the card's sub-line says `/!\ markdown
+  week(s)`, and the tooltip names the weeks, the dollars removed, and that
+  uncapped the number would read LOW.
+
+### /!\ THIS IS A MODEL, AND NOW IT SAYS SO
+The deeper fact is that **nothing in the app measures what Walmart actually
+pays us.** Sell-through x cost-per-each is a proxy that holds only while
+sell-through and replenishment track each other. The cap stops the proxy
+reporting the impossible; it does not turn it into a measurement. A real
+answer needs the **vendor remittance / PO feed**, which is not loaded.
+
+### Still open
+- **/!\ WALMART ADS ARE UNDERWATER IN EVERY WINDOW** once the clearance is
+  removed - 131.6% over 24 weeks, 175.3% over 13. A decision for Jason.
+- **/!\ NO ITEM DIMENSION ON THE ADS FEED.** The Custom builder's campaign
+  split cannot say which SKUs the spend buys, so per-item ROAS on our revenue
+  is not computable. The biggest gap for "what do I change".
+- **/!\ NO VENDOR REMITTANCE FEED**, which is what would replace the proxy
+  above.
+- **/!\ ATTRIBUTION IS UNTESTED AT 3-DAY.** Everything loaded is 14-day
+  post-click, and ad-attributed units run 2.2x the channel's sell-through.
+- Everything else on the v12.17 list.
 
 ## v12.17 - the guard was wrong: attribution over-counts, the feed is fine
 
