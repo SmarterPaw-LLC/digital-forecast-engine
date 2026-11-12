@@ -1671,6 +1671,27 @@ function adsEnsureShell(channel, view) {
     +       `<canvas id="${ch.host}-chart-canvas" style="width:100%;height:100%;display:block"></canvas>`
     +     `</div>`
     +   `</div></div>`
+    // v12.29 - /!\ NOTES ARE PART OF THE SHELL. Built once with the host,
+    // between the chart and the table, exactly like every other panel here.
+    + `<div id="${ch.host}-notes" class="ds" style="margin-bottom:14px">`
+    +   `<div class="ds-hdr">`
+    +     `<div style="flex:1;min-width:0">`
+    +       `<div class="ds-title">\ud83d\udcdd Notes &amp; events</div>`
+    +       `<div class="ds-sub" id="${ch.host}-notes-count"></div></div>`
+    +     `<span id="adsnote-status" style="font-family:var(--mono);font-size:10px;color:var(--text3)"></span>`
+    +   `</div>`
+    +   `<div class="ds-body" style="padding:12px 14px">`
+    +     `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">`
+    +       `<input type="date" id="adsnote-date" style="font-family:var(--mono);font-size:11px;padding:5px 7px;border:1px solid var(--border2);border-radius:5px;background:var(--surface2);color:var(--text)">`
+    +       `<select id="adsnote-kind" style="font-family:var(--mono);font-size:11px;padding:5px 7px;border:1px solid var(--border2);border-radius:5px;background:var(--surface2);color:var(--text)">`
+    +         Object.entries(ADS_NOTE_KINDS).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('')
+    +       `</select>`
+    +       `<select id="adsnote-camp" style="font-family:var(--mono);font-size:11px;padding:5px 7px;border:1px solid var(--border2);border-radius:5px;background:var(--surface2);color:var(--text);max-width:280px"></select>`
+    +       `<input type="text" id="adsnote-text" placeholder="what changed, and why" style="flex:1;min-width:220px;font-family:var(--mono);font-size:11px;padding:5px 9px;border:1px solid var(--border2);border-radius:5px;background:var(--surface2);color:var(--text)">`
+    +       `<button type="button" onclick="adsNoteSave('${channel}')" style="font-family:var(--display);font-weight:700;font-size:11px;padding:6px 14px;border:1px solid var(--sp-green,#4a9e38);border-radius:5px;background:var(--sp-green,#4a9e38);color:#fff;cursor:pointer">+ Add note</button>`
+    +     `</div>`
+    +     `<div id="${ch.host}-notes-list"></div>`
+    +   `</div></div>`
     + `<div id="${ch.host}-cov" style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-bottom:8px"></div>`
     + `<div class="tbl-wrap" style="max-height:560px;overflow:auto">`
     +   `<table style="width:100%;border-collapse:collapse;font-size:12px">`
@@ -2117,37 +2138,18 @@ function adsNoteBucketIdx(noteDate, buckets, grain) {
 let _adsNotesChannel = {};   // host -> channel, so the repaint knows its scope
 
 function adsNotesEnsure(channel, ch) {
-  const chartPanel = document.getElementById(ch.host + '-chart-panel');
-  if (!chartPanel || !chartPanel.parentNode) return null;
+  // v12.29 - /!\ THE PANEL IS IN THE SHELL NOW. This only finds it, records
+  // the scope for the repaint, and seeds the date field once. Creating it by
+  // DOM insertion was a mechanism this page uses nowhere else, and it did not
+  // survive contact with the live render.
+  const box = document.getElementById(ch.host + '-notes');
+  if (!box) return null;
   _adsNotesChannel[ch.host] = channel;
-  let box = document.getElementById(ch.host + '-notes');
-  if (box) return box;
-  box = document.createElement('div');
-  box.id = ch.host + '-notes';
-  box.className = 'ds-panel';
-  box.style.cssText = 'margin-top:10px;padding:10px 12px';
-  const opts = Object.entries(ADS_NOTE_KINDS)
-    .map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
-  box.innerHTML =
-    `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-       <span style="font-family:var(--display);font-weight:700;font-size:12px;color:var(--text)">\ud83d\udcdd Notes</span>
-       <span id="${ch.host}-notes-count" style="font-family:var(--mono);font-size:10px;color:var(--text3)"></span>
-       <span style="flex:1"></span>
-       <span id="adsnote-status" style="font-family:var(--mono);font-size:10px;color:var(--text3)"></span>
-     </div>
-     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-       <input type="date" id="adsnote-date" style="font-family:var(--mono);font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;background:var(--surface);color:var(--text)">
-       <select id="adsnote-kind" style="font-family:var(--mono);font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;background:var(--surface);color:var(--text)">${opts}</select>
-       <select id="adsnote-camp" style="font-family:var(--mono);font-size:11px;padding:4px 6px;border:1px solid var(--border2);border-radius:5px;background:var(--surface);color:var(--text);max-width:260px"></select>
-       <input type="text" id="adsnote-text" placeholder="what changed, and why" style="flex:1;min-width:220px;font-family:var(--mono);font-size:11px;padding:4px 8px;border:1px solid var(--border2);border-radius:5px;background:var(--surface);color:var(--text)">
-       <button type="button" onclick="adsNoteSave('${channel}')" style="font-family:var(--display);font-weight:700;font-size:11px;padding:5px 12px;border:1px solid var(--border2);border-radius:5px;background:var(--surface);color:var(--text);cursor:pointer">Save</button>
-     </div>
-     <div id="${ch.host}-notes-list"></div>`;
-  chartPanel.parentNode.insertBefore(box, chartPanel.nextSibling);
   const d = document.getElementById('adsnote-date');
   if (d && !d.value) { try { d.value = new Date().toISOString().slice(0, 10); } catch (_) {} }
   return box;
 }
+
 
 function adsNotesRenderList(channel, ch, campaignNames, selectedNames) {
   const list = document.getElementById(ch.host + '-notes-list');

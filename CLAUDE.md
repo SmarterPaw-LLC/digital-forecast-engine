@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.28** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.29** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,31 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.29 - the notes panel is part of the shell, not inserted into it
+
+- **Jason:** *"omg what. IS ISNT HERE."*
+
+### /!\ I BUILT IT WITH DOM INSERTION. EVERY OTHER PANEL HERE IS A STRING.
+`adsNotesEnsure` drove correctly in node, the code was in the deployed file,
+and the panel still was not on the page - so the mechanism itself was the
+problem, and it is a mechanism this page uses **nowhere else**.
+
+It is in `adsEnsureShell`'s markup now, between the chart panel and the
+coverage line, built once with the rest of the host. No insertion to fail, no
+`parentNode` to be missing, no ordering to get wrong.
+
+`adsNotesEnsure` survives as the function that **finds** it and seeds the
+date field, so the repaint still knows its scope.
+
+**This is hard rule #1 twice in two releases on one small panel** - v12.28 was
+the invented CSS class, v12.29 is the invented construction path. Both times I
+reused the pattern carefully for the table, the cache and the migration, and
+improvised the container.
+
+### Still open
+- Everything on the v12.27 list. The migration is **RUN** - table, policy and
+  grants verified on the live database.
 
 ## v12.28 - the notes panel looks like a panel
 

@@ -169,7 +169,13 @@ print("\nE. the panel is built ONCE and only its list repaints")
 # /!\ The v10.99 rule: rewriting the form on every render would blow away the
 # note field's focus and caret mid-sentence.
 ENS = fn_flat("adsNotesEnsure")
-ok("if (box) return box;" in ENS, "E1  /!\\ the form is built once")
+# v12.29 - /!\ THE FORM IS PART OF THE SHELL, which adsEnsureShell builds once
+# per host and then only repaints. Stronger than the old insertion guard: there
+# is no creation path left to run twice.
+ok("createElement" not in ENS,
+   "E1  /!\\ the form is built once, in the shell - ensure() only FINDS it")
+ok('id="${ch.host}-notes"' in js and 'id="adsnote-text"' in js,
+   "E1b ...and the markup lives in adsEnsureShell beside every other panel")
 LIST = fn_flat("adsNotesRenderList")
 ok("adsnote-text" not in LIST, "E2  /!\\ and the repaint never touches the text field")
 ok("sel.dataset.sig !== want" in LIST,
