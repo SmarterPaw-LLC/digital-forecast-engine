@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.25** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.26** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,32 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.26 - a card that cannot honour the selection says so
+
+- **Jason**, with one campaign ticked: *"clicking a campaign does not filter
+  the graph"*
+
+**The chart IS filtered** - the spend axis falls from $300 to $120 and the
+peaks halve. What is not filtered is the **Sell-Through card** sitting in the
+middle of that strip, reading the whole channel's $42,369 while every card
+around it reads one campaign.
+
+It cannot be narrowed: organic sales do not belong to a campaign, which is
+the same reason TACoS refuses outright on a selection.
+
+### /!\ AND THAT IS THE v10.19 DEFECT, MINE FROM v12.20
+A card that looks like it answers a control and does not. The v12.03
+precedent is the fix: keep the number, which is still true for the channel,
+and **say the filter is not applied** - dimmed, with
+`/!\ whole channel - selection NOT applied` on the sub-line.
+
+The `ads claim 129%` comparison goes with it. It measured the whole channel's
+attributed sales against the whole channel's sell-through; under a selection
+one side would be the campaign and the other the channel.
+
+### Still open
+- Everything on the v12.25 list.
 
 ## v12.25 - a local deleted with the block that declared it
 
