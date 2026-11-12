@@ -57,7 +57,7 @@ def run(body):
 
 
 CORE = "\n".join([
-    "let _adsBreakEven = {};",
+    "let _adsBreakEven = {}, _adsAttribDeflate = {};",
     fn("adsRoasFloor"),
     fn("adsRoasFloorKnown"),
     fn("adsStampBreakEven"),
@@ -201,12 +201,12 @@ ok("col.k === 'acos'" in warn, "D3  the ACOS rule is untouched")
 # The stamp resolves the SAME brand expression the colour does, so the number
 # and the colour cannot disagree.
 eq("D4  the stamp uses the colour's own brand expression",
-   s.count("adsStampBreakEven(res.campaigns, channel, adsBrandFilterValue(ch),"), 1)
+   s.count("adsStampBreakEven(res.campaigns, channel, adsBrandFilterValue(ch))"), 1)
 eq("D5  the TOTAL row is stamped too",
-   s.count("adsStampBreakEven([res.totals], channel, adsBrandFilterValue(ch),"), 1)
-# /!\ v12.19 - and BOTH take the same deflator, or the footer and the rows
-# would be scaled differently and the table would stop adding up.
-eq("D5b and both take the same deflator", s.count(", _adsDeflate);"), 2)
+   s.count("adsStampBreakEven([res.totals], channel, adsBrandFilterValue(ch))"), 1)
+# /!\ v12.20 - the deflator moved ONTO THE FLOOR (adsRoasFloor), so every
+# reader of the floor follows it and the stamp needs no fourth argument.
+ok("_adsAttribDeflate" in s, "D5b the over-claim is applied to the FLOOR, not per row")
 
 # ===========================================================================
 print("\nE. The CSV reads the COLUMN REGISTRY, which fixes a real defect")

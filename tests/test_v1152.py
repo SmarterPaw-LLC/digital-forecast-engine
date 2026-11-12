@@ -79,6 +79,8 @@ print("=" * 62)
 
 A = run_node(os.path.join(SP, "a.js"), """
 globalThis._adsBreakEven = {};
+// v12.20 - adsRoasFloor reads this to put the floor on the ROAS's own basis.
+globalThis._adsAttribDeflate = {};
 const ROWS = """ + json.dumps(ROWS) + r""";
 let FAIL = false, CALLS = 0;
 globalThis.getSB = async () => ({

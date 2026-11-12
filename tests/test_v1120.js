@@ -52,7 +52,7 @@ function adsColFmt(col) {
 // Amazon and Chewy keep a floor of 1.0: on those channels the reported sales
 // ARE our revenue, so the old line is the right one. Absent an entry here a
 // channel is byte-identical to v11.51.
-let _adsBreakEven = {};
+let _adsBreakEven = {}, _adsAttribDeflate = {};
 
 // The brand the ads panel is currently scoped to, or '' for all. The
 // break-even differs materially by brand - Kitty Ka-Zoom keeps 52.6% of
@@ -62,11 +62,25 @@ function adsBrandFilterValue(ch) {
   catch (_) { return ''; }
 }
 
+// v12.20 - /!\ THE FLOOR IS EXPRESSED ON THE BASIS THE ROAS IS MEASURED ON.
+//
+// The break-even is derived from REAL sales: 2.90x means we need $2.90 of
+// actual retail for every $1 of spend. The ROAS beside it divides by
+// ATTRIBUTED sales, which on Walmart run ~197% of what the channel sold. So
+// the two were never comparable, and `vs Break-Even` read green on a table
+// where nothing cleared.
+//
+// Dividing the floor by the over-claim puts both on the attributed basis:
+// 2.90 / 0.5074 = 5.72x. ONE ROAS, ONE floor, and the comparison means
+// something. The ratio itself is untouched - it is Walmart's own number and
+// has to keep matching their console.
 function adsRoasFloor(channel, brand) {
   const be = _adsBreakEven[channel];
   if (!be || be.pending) return 1;
   const row = (brand && be.byBrand && be.byBrand[brand]) || be.overall;
-  return (row && row.roas > 0) ? row.roas : 1;
+  if (!(row && row.roas > 0)) return 1;
+  const d = _adsAttribDeflate[channel];
+  return (d != null && d > 0 && d < 1) ? row.roas / d : row.roas;
 }
 
 // /!\ A FLOOR OF 1.0 IS THE FALLBACK, NOT AN ANSWER. adsLoadBreakEven fails
@@ -90,6 +104,8 @@ function adsRoasFloorKnown(channel, brand) {
 // and the CSV cannot disagree about it (the v8.00 rule).
 function adsStampBreakEven(rows, channel, brand) {
   const known = adsRoasFloorKnown(channel, brand);
+  // v12.20 - already on the ROAS's own basis (see adsRoasFloor), so there is
+  // nothing to correct per row and no second ROAS column.
   const floor = adsRoasFloor(channel, brand);
   for (const c of (rows || [])) {
     if (!c) continue;
@@ -103,8 +119,13 @@ function adsBreakEvenNote(channel, brand) {
   if (!be || be.pending) return '';
   const row = (brand && be.byBrand && be.byBrand[brand]) || be.overall;
   if (!row || !(row.roas > 0)) return '';
-  return `break-even ROAS ${row.roas.toFixed(2)}x`
-    + ` (we keep ${row.sharePct.toFixed(0)}% of retail, ${row.gmPct.toFixed(0)}% GM on that)`;
+  const d = _adsAttribDeflate[channel];
+  const adj = (d != null && d > 0 && d < 1);
+  return `break-even ROAS ${(adj ? row.roas / d : row.roas).toFixed(2)}x`
+    + ` (we keep ${row.sharePct.toFixed(0)}% of retail, ${row.gmPct.toFixed(0)}% GM on that`
+    + (adj ? `, and attribution claims ${Math.round(100 / d)}% of what the channel sold`
+             + ` \u2014 ${row.roas.toFixed(2)}x on actual sales` : '')
+    + ')';
 }
 
 // Only Walmart needs one today. The shape is per-channel so a second 1P
@@ -429,7 +450,7 @@ const WM_ADS_TIP = {
   inStoreSales: 'In-Store Attributed Sales: physical-store purchases Walmart attributed back to an online ad click.',
   omniRoas:     '(Ad Sales + In-Store $) / Spend.\n\nA SECOND BASIS, not a better ROAS - a wider sales figure over the same spend. Derived from the window totals, never averaged across rows.',
   acos:         'Spend / Ad Sales. Online only.',
-  roasVsBe:     'ROAS minus break-even ROAS, in ROAS points. Below zero the row spent more than the unit could pay back.\n\nBreak-even = 1 / (our share of Walmart retail \u00d7 our GM on that wholesale), derived per brand from walmart_sales_weekly, walmart_cost_per_each and product_cogs. Online basis, matching the ROAS column. Blank when the break-even could not be derived.',
+  roasVsBe:     'ROAS minus break-even ROAS, in ROAS points. Below zero the row spent more than the unit could pay back.\n\nBreak-even = 1 / (our share of Walmart retail \u00d7 our GM on that wholesale), derived per brand from walmart_sales_weekly, walmart_cost_per_each and product_cogs. Scaled onto the ROAS column\u2019s own ATTRIBUTED basis when attribution claims more than the channel sold, so the two sides are comparable. Blank when the break-even could not be derived.',
 };
 
 // v12.03 - null stays null, a figure becomes a figure. `+null || 0` is 0,
@@ -859,7 +880,11 @@ function adsChartMetrics(COLS, channel) {
   // table - but there IS a per-WEEK one, because spend and net sales are both
   // weekly. It is appended for the one channel that has a total-sales feed
   // behind it rather than derived from COLS like the rest.
-  if (channel === 'amazon') {
+  // v12.15 - /!\ WHEREVER IT CAN BE COMPUTED, which is the same registry the
+  // CARD is gated on. v12.02 wrote `channel === 'amazon'` when Amazon was the
+  // only channel with a total-sales feed; since v12.08 the two 1P channels
+  // have one too, and the card appeared on them while the + did not.
+  if (typeof TACOS_SRC !== 'undefined' && TACOS_SRC[channel]) {
     out.push(Object.assign({ k: 'tacos', label: 'TACoS %' }, ADS_METRIC_SPEC.tacos));
   }
   return out;
@@ -1248,6 +1273,17 @@ const ADS_CHART_COLORS = ['#4a9e38','#f97316','#3b82f6','#a855f7','#ef4444','#ea
 // what a 340px plot can label without the ticks colliding. The fifth card's
 // control renders DISABLED and says why, rather than accepting a click and
 // silently dropping it (the v10.19 rule).
+// v12.08 - /!\ THE CARD'S SOURCES FOLLOW THE CHANNEL. They were hardcoded to
+// Amazon's two feeds, so the Walmart tab cited `amazon_ad_spend` under a card
+// that could never hold a number - which is what Jason caught. A channel
+// absent from this map gets no card at all, so the registry and the helper's
+// own refusal cannot disagree about where TACoS belongs.
+const TACOS_SRC = {
+  amazon:  ['amazon_ad_spend', 'sku_economics'],
+  walmart: ['walmart_ad_campaign_daily', 'walmart_sales_weekly', 'walmart_cost_per_each'],
+  chewy:   ['chewy_ad_spend', 'chewy_sales_weekly', 'chewy_catalog'],
+};
+
 const ADS_CHART_MAX = 4;
 const ADS_CHART_DEFAULT = ['spend', 'sales'];
 const _adsChartSel = {};
@@ -1401,13 +1437,27 @@ function adsUpdateChart(ctx) {
     //
     // Only when TACoS is actually on the chart: this is a full scan of
     // sku_economics per bucket, and no other metric needs it.
-    if (plot.some(x => x.needsNetSales) && typeof amzFeeAgg === 'function') {
+    // v12.15 - /!\ THE DENOMINATOR COMES FROM THE CHANNEL'S OWN FEED.
+    // v12.02 reached straight for amzFeeAgg, which is Amazon's aggregate and
+    // knows nothing about the 1P sell-through feeds - so TACoS could not be
+    // plotted anywhere else even once the card worked there.
+    //
+    // Amazon reads a cache, so a call per bucket is cheap. The 1P channels
+    // read the WEEKS their window's single fetch already returned, which is
+    // why this is not a round trip per point on the line.
+    if (plot.some(x => x.needsNetSales)) {
       buckets.forEach((b, i) => {
         const r = (typeof pnlBucketRange === 'function') ? pnlBucketRange(b, grain) : null;
         if (!r) return;
         try {
-          const a = amzFeeAgg(r);
-          if (a && a.tot) perB[i].netSales = a.tot.netSales || 0;
+          if (channel === 'amazon') {
+            if (typeof amzFeeAgg !== 'function') return;
+            const a = amzFeeAgg(r);
+            if (a && a.tot) perB[i].netSales = a.tot.netSales || 0;
+          } else if (win && win.from && win.to) {
+            const v = adsOurRevBucket(channel, { from: win.from, to: win.to }, r.from, r.to);
+            if (v != null) perB[i].netSales = v;
+          }
         } catch (e) { /* leave it absent - the metric draws a gap, not a zero */ }
       });
     }
@@ -1639,12 +1689,231 @@ function adsEnsureShell(channel, view) {
 // Returns { pct, netSales, why } - `pct` null means NO ANSWER, and `why`
 // says which of the four reasons it is. A wrong TACoS is worse than none.
 // ===========================================================================
-function adsTacosFor(channel, selRows, spend, range) {
+// ===========================================================================
+// v12.08 - OUR REVENUE, PER CHANNEL, FOR A WINDOW
+// ===========================================================================
+// The denominator TACoS needs on a 1P channel.
+//
+// /!\ IT IS NOT THE SALES FIGURE THOSE FEEDS REPORT. On Amazon, net sales IS
+// what we receive. On Walmart and Chewy we are 1P: the sales number in the
+// feed is RETAIL - what the shopper paid Walmart or Chewy - and the app
+// already calls Chewy's "a vanity. We never see this money."
+//
+// Measured on the live database, 2026-08-11 -> 2026-11-09:
+//     Walmart retail $16,579   our revenue $6,179   (we keep ~37%)
+// Dividing ad spend by retail would make Walmart look roughly TWICE as
+// efficient as Amazon for the same dollars, under a label that already means
+// something else one tab over. Jason picked our revenue.
+//
+// /!\ AND AN UNPRICED SKU IS REPORTED, NOT SWALLOWED. A SKU that sold but has
+// no cost-per-each contributes nothing to the denominator, which makes TACoS
+// read HIGH. Silently that is a confident wrong answer; the card names the
+// gap instead.
+const _adsOurRev = {};
+
+function _adsOurRevKey(channel, range) {
+  return [channel, (range && range.from) || '', (range && range.to) || ''].join('|');
+}
+
+function adsOurRevFor(channel, range) {
+  return _adsOurRev[_adsOurRevKey(channel, range)];
+}
+
+// v12.15 - the denominator for ONE bucket of the chart, summed from the weeks
+// the window's fetch already returned.
+//
+// /!\ BY SPAN, NOT BY KEY - the same rule v12.02 settled for Amazon. A week
+// is in a bucket when its week_start falls inside the bucket's own date span,
+// so a Sunday-keyed ads bucket and a Monday-keyed sales week line up without
+// either side knowing about the other's convention.
+function adsOurRevBucket(channel, range, from, to) {
+  const r = adsOurRevFor(channel, range);
+  if (!r || r.pending || !r.weeks || !from || !to) return null;
+  let rev = 0, any = false;
+  for (const w of r.weeks) {
+    if (w.w >= from && w.w <= to) { rev += w.rev; any = true; }
+  }
+  // /!\ A BUCKET WITH NO WEEK IN IT IS A GAP, NEVER 0 (v11.16). Returning 0
+  // would draw a point at zero TACoS, which reads as "spent nothing".
+  return any ? rev : null;
+}
+
+// A window is only ever built by the period controls, but it reaches a SQL
+// string here, so the shape is checked rather than trusted.
+function _adsIsYmd(d) { return /^\d{4}-\d{2}-\d{2}$/.test(String(d || '')); }
+
+async function adsLoadOurRev(channel, range) {
+  const k = _adsOurRevKey(channel, range);
+  if (_adsOurRev[k] !== undefined) return;
+  if (!range || !_adsIsYmd(range.from) || !_adsIsYmd(range.to)) {
+    _adsOurRev[k] = { rev: null, why: 'This window has no date range.' };
+    return;
+  }
+  _adsOurRev[k] = { pending: true };
+  const from = range.from, to = range.to;
+  try {
+    const sb = await getSB();
+    if (channel === 'walmart') {
+      // /!\ THE SAME JOIN adsLoadBreakEven USES, windowed. One definition of
+      // "what Walmart pays us" - units x the per-each cost on our agreement -
+      // so the break-even line and this denominator cannot disagree.
+      // v12.15 - /!\ PER WEEK, not one total. The chart needs a denominator
+      // per bucket, and these feeds are weekly - so one query returns the
+      // weeks and every bucket is summed from them in the browser. A query
+      // per bucket would be a round trip per point on the line.
+      // v12.18 - /!\ A MARKED-DOWN UNIT WAS NOT REPLENISHED AT STANDARD COST.
+      // units x cost_per_each models our revenue by assuming every unit sold
+      // out was bought from us at the agreement price. On a clearance Walmart
+      // is liquidating stock it ALREADY paid for, so the model credits us for
+      // goods paid for months earlier - and the tell is self-evident: the
+      // modelled revenue comes out ABOVE the retail it sold for, which is
+      // impossible on 1P. Capped at the retail, and the shortfall is carried
+      // so the card can say the window holds a markdown.
+      const sql = `select w.week_start,
+          sum(case when w.net_sales > 0 and w.units * c.cost_per_each > w.net_sales
+                   then w.net_sales else w.units * c.cost_per_each end) rev,
+          sum(w.units * c.cost_per_each) rev_raw,
+          sum(case when w.net_sales > 0 and w.units * c.cost_per_each > w.net_sales
+                   then 1 else 0 end) capped,
+          sum(w.net_sales) retail,
+          count(distinct w.master_id) priced,
+          max(w.source) basis
+        from public.walmart_sales_weekly w
+        join public.walmart_cost_per_each c on c.master_id = w.master_id
+        where w.week_start >= '${from}' and w.week_start <= '${to}'
+        group by 1 order by 1`;
+      const gapSql = `select count(distinct w.master_id) skus, sum(w.units) units
+        from public.walmart_sales_weekly w
+        left join public.walmart_cost_per_each c on c.master_id = w.master_id
+        where c.master_id is null
+          and w.week_start >= '${from}' and w.week_start <= '${to}'`;
+      const [a, b] = await Promise.all([
+        sb.rpc('exec_sql', { query: sql }),
+        sb.rpc('exec_sql', { query: gapSql }),
+      ]);
+      if (a.error) throw a.error;
+      const wk = (a.data || []).map(x => ({
+        w: String(x.week_start).slice(0, 10),
+        rev: Number(x.rev) || 0, retail: Number(x.retail) || 0,
+        capped: Number(x.capped) || 0,
+        cappedAmt: Math.max(0, (Number(x.rev_raw) || 0) - (Number(x.rev) || 0)),
+      }));
+      const g = (b.error ? {} : ((b.data || [])[0] || {}));
+      // /!\ THE TOTAL IS THE SUM OF THE WEEKS, not a second aggregate. Two
+      // ways to total the same rows is two numbers that can disagree, and
+      // the card and the chart would be the two surfaces showing them.
+      const priced = (a.data || []).reduce((m, x) => Math.max(m, Number(x.priced) || 0), 0);
+      // v12.16 - whichever basis the loaded rows were uploaded under. Mixed
+      // bases would be a worse problem than either one, so they are collected
+      // rather than reduced to the first.
+      const bases = [...new Set((a.data || []).map(x => x.basis).filter(Boolean))];
+      _adsOurRev[k] = {
+        bases,
+        rev: wk.reduce((t, x) => t + x.rev, 0),
+        retail: wk.reduce((t, x) => t + x.retail, 0),
+        priced,
+        unpricedSkus: Number(g.skus) || 0, unpricedUnits: Number(g.units) || 0,
+        cappedRows: wk.reduce((t, x) => t + x.capped, 0),
+        cappedAmt: wk.reduce((t, x) => t + x.cappedAmt, 0),
+        cappedWeeks: wk.filter(x => x.capped > 0).map(x => x.w),
+        from: wk.length ? wk[0].w : from, to: wk.length ? wk[wk.length - 1].w : to,
+        weeks: wk, weekly: true, why: null,
+      };
+      return;
+    }
+    if (channel === 'chewy') {
+      // /!\ CHEWY'S PER-EACH PRICE IS NOT A COLUMN. It is cost / case_qty for
+      // a CS row and cost as-is for an EA row, and the UOM test lives in
+      // chewyCatalogPricePerEach. Doing that division in SQL would be a
+      // SECOND spelling of the one number the Cost to Chewy tab is built on,
+      // so the units are fetched and the price applied through the EXISTING
+      // helper (hard rule #1).
+      if (typeof loadChewyCatalog === 'function') { try { await loadChewyCatalog(); } catch (_) {} }
+      if (typeof loadProducts === 'function' && (typeof allProducts === 'undefined' || !allProducts.length)) {
+        try { await loadProducts(); } catch (_) {}
+      }
+      // v12.15 - by WEEK and sku, so the chart can bucket it. The per-each
+      // price still has to be applied per sku in JS (it is cost / case_qty
+      // on a CS row), so the week comes back on every row rather than the
+      // rows being pre-aggregated.
+      const sql = `select week_start, master_id, sum(units_sold) units, sum(merch_sales) retail
+        from public.chewy_sales_weekly
+        where week_start >= '${from}' and week_start <= '${to}'
+          and master_id is not null
+        group by 1, 2 order by 1`;
+      const [a] = await Promise.all([sb.rpc('exec_sql', { query: sql })]);
+      if (a.error) throw a.error;
+      const byMid = {};
+      (typeof allProducts !== 'undefined' ? allProducts : []).forEach(p => { byMid[p.master_id] = p; });
+      let rev = 0, retail = 0, unpricedUnits = 0;
+      const byWeek = new Map();
+      const pricedSet = new Set(), unpricedSet = new Set();
+      for (const row of (a.data || [])) {
+        const units = Number(row.units) || 0;
+        const ret = Number(row.retail) || 0;
+        const w = String(row.week_start).slice(0, 10);
+        retail += ret;
+        const cat = (typeof chewyCatalogFor === 'function') ? chewyCatalogFor(row.master_id) : null;
+        const pe = (typeof chewyCatalogPricePerEach === 'function')
+          ? chewyCatalogPricePerEach(cat, (byMid[row.master_id] || {}).case_qty) : { price: null };
+        const slot = byWeek.get(w) || { w, rev: 0, retail: 0 };
+        slot.retail += ret;
+        if (pe && pe.price != null) {
+          const v = pe.price * units;
+          rev += v; slot.rev += v;
+          pricedSet.add(row.master_id);
+        } else {
+          // /!\ COUNTED ONCE PER SKU, not once per week it sold in - the card
+          // says "26 SKU(s) unpriced" and that has to mean SKUs.
+          unpricedSet.add(row.master_id); unpricedUnits += units;
+        }
+        byWeek.set(w, slot);
+      }
+      const wk = [...byWeek.values()].sort((x, y) => x.w < y.w ? -1 : 1);
+      _adsOurRev[k] = { rev, retail, priced: pricedSet.size,
+                        unpricedSkus: unpricedSet.size, unpricedUnits,
+                        from: wk.length ? wk[0].w : from, to: wk.length ? wk[wk.length - 1].w : to,
+                        weeks: wk, weekly: true, why: null };
+      return;
+    }
+    _adsOurRev[k] = { rev: null, why: 'No total-sales feed is wired for this channel.' };
+  } catch (e) {
+    // /!\ A FAILED DERIVATION REPORTS ITS REASON. "statement timeout" is more
+    // useful than a dash, and it must not be retried on every repaint - the
+    // entry is written either way, which is what stops the loop.
+    console.warn('ads our-revenue unavailable for', channel, e && e.message);
+    _adsOurRev[k] = { rev: null, why: 'Sales could not be read: ' + ((e && e.message) || e) };
+  }
+}
+
+// v12.08 - /!\ HOW MUCH OF THE WINDOW THE AD FEED ACTUALLY COVERS.
+// TACoS divides spend by sales over THE SAME window. If the spend feed only
+// reaches part of it, the ratio is a partial numerator over a full
+// denominator - and it reads LOW, which is the direction that looks like good
+// news. Measured on the live data the day this shipped: Walmart's ad feed
+// covered 6 of the 91 days in a 90-day window, and TACoS would have read
+// 16.5% where the one fully-covered week reads 181%.
+//
+// The span is used rather than a day count because a feed with a hole in the
+// middle is a different problem (the coverage line already reports row counts);
+// this catches the one that silently halves a ratio.
+const TACOS_MIN_COVERAGE = 0.8;
+
+function _adsDayCount(from, to) {
+  if (!from || !to) return 0;
+  const a = Date.parse(from + 'T00:00:00'), b = Date.parse(to + 'T00:00:00');
+  if (isNaN(a) || isNaN(b) || b < a) return 0;
+  return Math.round((b - a) / 86400000) + 1;
+}
+
+function adsTacosFor(channel, selRows, spend, range, adSpan, adSales) {
   const no = (why) => ({ pct: null, netSales: null, why });
 
-  // Only the Amazon tab has a total-sales feed behind it on this page.
-  if (channel !== 'amazon') {
-    return no('TACoS needs this channel\u2019s total sales, and only Amazon carries them on this page.');
+  // v12.08 - three channels have a total-sales feed now. The two 1P ones
+  // divide by OUR REVENUE rather than by the retail figure their feeds
+  // report - see the header on adsLoadOurRev.
+  if (channel !== 'amazon' && channel !== 'walmart' && channel !== 'chewy') {
+    return no('TACoS needs this channel\u2019s total sales, and this one has no feed carrying them.');
   }
   // v11.xx standing gap: no UK/EU Amazon ad spend is loaded, so an EU TACoS
   // would divide a blank by a real number and read 0.0%.
@@ -1658,6 +1927,70 @@ function adsTacosFor(channel, selRows, spend, range) {
   // the v10.19 defect.
   if (selRows && selRows.length) {
     return no('Organic sales do not belong to a campaign, so selecting campaigns cannot narrow the sales side. Clear the selection for TACoS.');
+  }
+  if (channel !== 'amazon') {
+    // /!\ NO RANGE, NO ANSWER - the same rule as the Amazon branch below, for
+    // the same reason: a denominator fetched over a different window than the
+    // spend beside it is two windows in one ratio.
+    if (!range || !range.from || !range.to) {
+      return no('This window has no date range, so TACoS cannot match its sales to its spend.');
+    }
+    // /!\ AND NO ANSWER WHEN THE AD FEED COVERS ONLY PART OF IT.
+    const winDays = _adsDayCount(range.from, range.to);
+    const adDays  = adSpan ? _adsDayCount(adSpan.from, adSpan.to) : 0;
+    if (winDays > 0 && adDays > 0 && (adDays / winDays) < TACOS_MIN_COVERAGE) {
+      return no('Ad spend here covers only ' + adDays + ' of the ' + winDays
+        + ' days in this window (' + adSpan.from + ' to ' + adSpan.to + '), while sales cover all of it. '
+        + 'TACoS would divide part of the spend by all of the revenue and read far too low. '
+        + 'Narrow the period to the days the ad feed holds, or upload the missing ones.');
+    }
+    const r = (typeof adsOurRevFor === 'function') ? adsOurRevFor(channel, range) : null;
+    if (!r) return no('Sales are not loaded yet.');
+    if (r.pending) return { pct: null, netSales: null, pending: true, why: 'Reading sales\u2026' };
+    if (r.why) return no(r.why);
+    if (!(r.rev > 0)) {
+      return no('No sales in this window, so TACoS has no denominator. Widen the period.');
+    }
+    // v12.17 - /!\ ATTRIBUTION OVER-COUNTS, AND THAT IS NOT A REASON TO REFUSE.
+    //
+    // v12.13 refused whenever ad-attributed sales exceeded total sell-through,
+    // reasoning that ad sales are a SUBSET of total sales so the denominator
+    // had to be incomplete. Measured on the real data, that is wrong here:
+    //
+    //     28 weeks, 2026-03-25 -> 2026-11-10
+    //     total eComm sales (AUTH)   8,613 units   $44,862
+    //     ads claim attributed       9,441 units   $60,235
+    //
+    // The feed is complete - one vendor number, 33 items, both advertised
+    // brands, 0 unmapped rows, 0 without a cost_per_each, and AUTH within
+    // 0.1% of shipped. It is Walmart's 14-day post-click window crediting
+    // more than the channel sold.
+    //
+    // /!\ AND TACoS DOES NOT USE THE NUMERATOR. It is spend over TOTAL sales.
+    // Withholding a correct number because a DIFFERENT number looks odd is
+    // the opposite of the job. The comparison survives as a note, because it
+    // does say the ROAS and ACOS beside it are on a basis that cannot be
+    // reconciled to sell-through.
+    const overAttr = (adSales != null && r.retail > 0 && adSales > r.retail)
+      ? { adSales, retail: r.retail, pct: (adSales / r.retail) * 100 }
+      : null;
+
+    // /!\ THE BASIS IS NAMED ON THE RESULT, because on these two channels it
+    // is NOT the number their own console shows. 1P sales are retail; this is
+    // what the retailer pays us.
+    // v12.17 - which export the denominator came from, carried so the card
+    // can say it. The app stamps walmart:shipped / walmart:pos at upload
+    // (v12.16); a figure whose provenance is on the tooltip is one nobody
+    // has to guess at from a column name - which is how three wrong
+    // explanations got shipped.
+    const salesBasis = (r.bases || []).map(b2 => String(b2).replace(/^walmart:/, ''))
+      .filter(Boolean).join(' + ') || null;
+    return { pct: (spend || 0) / r.rev * 100, netSales: r.rev, salesBasis,
+             from: r.from, to: r.to, basis: 'ourRev',
+             retail: r.retail, unpricedSkus: r.unpricedSkus,
+             unpricedUnits: r.unpricedUnits, overAttr,
+             cappedRows: r.cappedRows || 0, cappedAmt: r.cappedAmt || 0,
+             cappedWeeks: r.cappedWeeks || [], why: null };
   }
   if (typeof amzFeeAgg !== 'function') return no('Sales totals are not loaded yet.');
   // /!\ NO RANGE, NO ANSWER. amzFeeAgg falls back to getPnlDateRange() when
@@ -1786,6 +2119,25 @@ function renderAdsCampaigns(channel, view) {
   // v11.59 - resolved against adsBrandFilterValue(ch), the SAME expression
   // the sub-floor red colour uses, so the column and the colour can never
   // disagree about which break-even applies.
+  let _adsSellThru = null;
+  // v12.20 - the over-attribution factor, measured rather than assumed: the
+  // channel's own sell-through over the attributed sales claimed against it.
+  // Only below 1 - attribution claiming LESS than the channel sold is normal
+  // and nothing to correct.
+  //
+  // /!\ IT IS SET BEFORE THE STAMP, because adsRoasFloor reads it and FOUR
+  // things read adsRoasFloor: the stamp, the TOTAL row, the sub-floor red
+  // colour and the break-even note. Setting it in one place converts all
+  // four (rule #5).
+  _adsAttribDeflate[channel] = null;
+  try {
+    const _r = (typeof adsOurRevFor === 'function' && TACOS_SRC[channel] && win && win.from && win.to)
+      ? adsOurRevFor(channel, { from: win.from, to: win.to }) : null;
+    if (_r && !_r.pending && _r.retail > 0 && res.totals && res.totals.sales > _r.retail) {
+      _adsAttribDeflate[channel] = _r.retail / res.totals.sales;
+    }
+    _adsSellThru = (_r && !_r.pending && _r.retail > 0) ? _r : null;
+  } catch (_) { _adsAttribDeflate[channel] = null; _adsSellThru = null; }
   adsStampBreakEven(res.campaigns, channel, adsBrandFilterValue(ch));
   if (res.totals) adsStampBreakEven([res.totals], channel, adsBrandFilterValue(ch));
 
@@ -1920,9 +2272,18 @@ function renderAdsCampaigns(channel, view) {
   let tacosPrev = { pct: null };
   try {
     const tacosRange = (win && win.from && win.to) ? { from: win.from, to: win.to } : null;
-    tacos = adsTacosFor(channel, selRows, t && t.spend, tacosRange);
+    // /!\ `t` is the window's own rollup, so firstDate / lastDate are the
+    // AD rows' actual span - not the window's, and not the selection's.
+    // /!\ `t.sales` is the window's ad-attributed sales on the SAME retail
+    // basis the sell-through feed reports, which is what makes the comparison
+    // inside adsTacosFor legitimate rather than apples-to-oranges.
+    tacos = adsTacosFor(channel, selRows, t && t.spend, tacosRange,
+                        t ? { from: t.firstDate, to: t.lastDate } : null,
+                        t ? t.sales : null);
     if (!selRows && prev && tacosRange && typeof getPnlPrevDateRange === 'function') {
-      tacosPrev = adsTacosFor(channel, null, pt && pt.spend, getPnlPrevDateRange(tacosRange));
+      tacosPrev = adsTacosFor(channel, null, pt && pt.spend, getPnlPrevDateRange(tacosRange),
+                              pt ? { from: pt.firstDate, to: pt.lastDate } : null,
+                              pt ? pt.sales : null);
     }
   } catch (e) {
     console.warn('TACoS card:', e && e.message);
@@ -1948,6 +2309,25 @@ function renderAdsCampaigns(channel, view) {
       { label: colLabel('sales', 'Ad Sales'), val: $0(cardT.sales),
         sub: 'attributed to a click', delta: chip(cardT.sales, pt && pt.sales, true), src: ch.src,
         tip: colTip('sales'), plot: plotOf('sales') },
+      // v12.20 - /!\ THE MISSING RUNG. Jason: "the tacos number STILL does not
+      // match sales". Ad Sales is ATTRIBUTED and retail; the TACoS denominator
+      // is TOTAL and our revenue. With nothing between them the strip showed
+      // two figures 5x apart under one word. This is the channel's own
+      // sell-through, which both of them are derived from.
+      ...(_adsSellThru ? [{
+        label: 'Sell-Through',
+        val: $0(_adsSellThru.retail),
+        sub: 'everything the channel sold \u00b7 retail'
+          + (t && t.sales > 0 && _adsSellThru.retail > 0
+             ? ' \u00b7 ads claim ' + Math.round(100 * t.sales / _adsSellThru.retail) + '%'
+             : ''),
+        color: 'var(--text)',
+        delta: null,
+        src: TACOS_SRC[channel],
+        tip: 'Walmart 1P sell-through over this window\u2019s weeks, at RETAIL.'
+           + '\n\nAd Sales above is the ad-attributed slice of this, on the same basis. '
+           + 'TACoS divides by our revenue, which is this \u00d7 cost-per-each.',
+      }] : []),
       { label: colLabel('roas', 'ROAS'),
         val: cardT.roas == null ? '—' : cardT.roas.toFixed(2) + 'x',
         // ⚠ The ACOS that used to live on this line now has its own card
@@ -1982,32 +2362,51 @@ function renderAdsCampaigns(channel, view) {
     // zero for something nobody measured, which is the v11.16 rule and the
     // v10.19 confident-wrong-answer in one card. All five existing views
     // declare an orders column, so not one of them moves.
-    // v12.07 - /!\ ONLY ON THE CHANNEL THAT CAN COMPUTE IT.
-    // adsTacosFor refuses every channel but Amazon, so on Walmart and
-    // Chewy this card rendered a permanent dash - with `amazon_ad_spend`
-    // and `sku_economics` chips under it, naming another channel's feeds
-    // on this page. Gated on the same channel the helper accepts, so the
-    // two cannot disagree about where it belongs.
-    ].concat(channel === 'amazon' ? [{
+    // v12.08 - /!\ ON EVERY CHANNEL THAT HAS A DENOMINATOR, which is now all
+    // three. v12.07 gated this to Amazon because on the other two it rendered
+    // a permanent dash citing `amazon_ad_spend` - but the fix for a card that
+    // cannot compute is to GIVE IT ITS DENOMINATOR, not to hide it. The
+    // sources follow the channel, so no tab cites another's feeds.
+    ].concat(TACOS_SRC[channel] ? [{
       label: 'TACoS %',
       val: tacos.pct == null ? '—' : tacos.pct.toFixed(1) + '%',
-      sub: tacos.pct == null
+      sub: tacos.pending ? 'reading sales\u2026'
+        : tacos.pct == null
         ? 'not available'
-        : 'of $' + Math.round(tacos.netSales).toLocaleString() + ' net sales',
+        // /!\ THE BASIS IS IN THE SUB-LINE, not only the tooltip. On Walmart
+        // and Chewy this denominator is NOT the sales figure their consoles
+        // show - it is what the retailer pays us, roughly a third of retail -
+        // so a reader comparing this with Amazon's TACoS has to be told.
+        : 'of $' + Math.round(tacos.netSales).toLocaleString()
+          + (tacos.basis === 'ourRev' ? ' our revenue' : ' net sales')
+          + ((tacos.unpricedSkus || 0) ? ' \u00b7 \u26a0 ' + tacos.unpricedSkus + ' SKU(s) unpriced' : '')
+          + ((tacos.cappedRows || 0) ? ' \u00b7 \u26a0 markdown week' + (((tacos.cappedWeeks || []).length > 1) ? 's' : '') : ''),
       color: tacos.pct == null ? 'var(--text3)'
            : (tacos.pct > 30 ? 'var(--sp-red)' : tacos.pct > 20 ? 'var(--sp-orange)' : 'var(--text)'),
       delta: (tacos.pct == null || tacosPrev.pct == null) ? null
            : chip(tacos.pct, tacosPrev.pct, false, true),
-      src: ['amazon_ad_spend', 'sku_economics'],
+      src: TACOS_SRC[channel],
       plot: plotOf('tacos'),
+      // /!\ DERIVATION ONLY. The operands, the window, and anything that
+      // makes the number read high or low. Not why the basis is right, not
+      // how it compares with another tab, not what attribution does to the
+      // cards beside it - that belongs in CLAUDE.md, not on a hover.
       tip: tacos.pct == null
         ? tacos.why
-        : ('Total Advertising Cost of Sales: ad spend \u00f7 net sales, every ad product '
-           + '(Sponsored Products, Brands, Display and TV), not just the ad-attributed '
-           + 'half that ACOS uses.\n\nSales come from SKU Economics, which is stamped one '
-           + 'row per WEEK, so this window\u2019s sales cover ' + tacos.from + ' to ' + tacos.to
-           + ' \u2014 whole weeks only. Nothing is prorated, because these feeds carry no '
-           + 'daily sales to prorate with.'),
+        : tacos.basis === 'ourRev'
+        ? ('Ad spend \u00f7 our revenue: $' + Math.round(spendForTip).toLocaleString()
+           + ' \u00f7 $' + Math.round(tacos.netSales).toLocaleString() + '.'
+           + '\n\nOur revenue = sell-through units \u00d7 cost-per-each, whole weeks '
+           + tacos.from + ' to ' + tacos.to + '.'
+           + ((tacos.unpricedSkus || 0)
+              ? '\n\n\u26a0 ' + tacos.unpricedSkus + ' SKU(s) unpriced \u2014 reads high.'
+              : '')
+           + ((tacos.cappedRows || 0)
+              ? '\n\n\u26a0 Markdown week(s) capped at retail \u2014 reads low.'
+              : ''))
+        : ('Ad spend \u00f7 net sales, every ad product.'
+           + '\n\nSales are weekly, so this window covers ' + tacos.from + ' to '
+           + tacos.to + '.'),
     }] : []).concat(COLS.some(c => c.k === 'orders') ? [{
       label: colLabel('orders', 'Orders'), val: n0(cardT.orders),
       sub: cardT.cpa == null ? 'no attributed orders' : '$' + cardT.cpa.toFixed(2) + ' per order',
@@ -2154,6 +2553,17 @@ function renderAdsCampaigns(channel, view) {
   // so this cannot loop: the entry is set to {pending} before the await.
   if (_adsBreakEven[channel] === undefined) {
     adsLoadBreakEven(channel).then(() => {
+      try { renderAdsCampaigns(channel, view); } catch (_) {}
+    });
+  }
+
+  // v12.08 - the TACoS denominator for the 1P channels, fetched once per
+  // (channel, window) and then repainted. Guarded on the cache entry exactly
+  // as the break-even above is, so it cannot loop: the entry is written
+  // before the await and on every failure path.
+  if (channel !== 'amazon' && TACOS_SRC[channel] && win && win.from && win.to
+      && _adsOurRev[_adsOurRevKey(channel, win)] === undefined) {
+    adsLoadOurRev(channel, { from: win.from, to: win.to }).then(() => {
       try { renderAdsCampaigns(channel, view); } catch (_) {}
     });
   }

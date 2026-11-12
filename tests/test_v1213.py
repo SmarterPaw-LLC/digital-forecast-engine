@@ -174,15 +174,15 @@ eq("A4  ...carrying what share of total sales was attributed",
    A["live"]["over"], 197)
 # The note has to say which numbers it does and does not impugn: TACoS is
 # fine, ROAS and ACOS on the same strip are not comparable to sell-through.
-# v12.19 - that sentence explained the cards BESIDE this one, which is the
-# bloat Jason cut. The guarantee underneath it is that the contradiction is a
-# NOTE and never a refusal, and v12.19 answers it properly: Ceiling ROAS is a
-# number attribution cannot move at all.
-ok("ceilRoas" in js,
-   "A5  /!\\ ...and the strip carries a figure attribution cannot move")
-ok("cannot be " + "reconciled to sell-through" in js.replace("\n", " ")
-   or "reconciled to sell-through" in js,
-   "A6  /!\\ ...and that ROAS and ACOS beside it are not reconcilable")
+# v12.20 - those two sentences explained the cards BESIDE this one, which is
+# the bloat Jason cut, and v12.19's Ceiling ROAS was a SECOND ratio, which he
+# cut too. The guarantee underneath all of it is that the over-claim is
+# MEASURED and ACTED ON rather than explained: the break-even floor is moved
+# onto the ratio's own attributed basis, so ONE ROAS can be judged against it.
+ok("_adsAttribDeflate" in js,
+   "A5  /!\\ the over-claim moves the FLOOR, so ROAS has something real to beat")
+ok("row.roas / d" in js,
+   "A6  /!\\ ...by dividing the floor by it, never by restating Walmart's ratio")
 # /!\ v12.16's shipped-vs-sold explanation was ALSO wrong and is gone.
 ok("shipped INTO Walmart" not in js and "SHIPPED-based (shipped_based" not in js,
    "A7  /!\\ and the shipped-vs-sold explanation, also wrong, is gone")

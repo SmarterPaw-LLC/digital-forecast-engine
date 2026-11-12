@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.19** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.20** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,77 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.20 - one ROAS. The floor moves, not the ratio.
+
+- **Jason, on v12.19:** *"there are now two ROAS numbers here - the ROAS is
+  already an ad driven result, so why include ceiling roas? the tacos number
+  STILL does not match sales"* ... *"this is becoming infuriating"*
+
+### /!\ I ANSWERED AN INFLATED RATIO BY ADDING MORE RATIOS
+Ceiling ROAS on the strip, Adj ROAS and Adj vs BE in the table. **Three more
+numbers for one question**, shipped by the release whose whole job was to make
+the page usable. That is rule 3a broken at its most expensive, by the person
+who wrote it down.
+
+All three are **gone**, not left standing beside the fix (hard rule #1).
+
+### The ratio was never the broken thing
+ROAS is Walmart's own number and has to keep matching their console. What was
+broken is the **comparison**: it was being measured on ATTRIBUTED sales and
+compared against a break-even derived from REAL ones.
+
+| | |
+|---|---|
+| break-even on actual sales | **2.90x** |
+| attribution claims | **197%** of what the channel sold |
+| **break-even on the ROAS's own basis** | **5.72x** |
+
+| | ROAS | vs Break-Even |
+|---|---|---|
+| the window | 3.02x | **-2.70x** (was +0.12x) |
+| campaigns clearing the floor | | **0 of 5** (was 1 of 5) |
+
+**One ROAS, one floor, and `vs Break-Even` finally means something.**
+
+### /!\ ONE SETTING, FOUR CONSUMERS
+`adsRoasFloor` is read by the stamp, the TOTAL row, the sub-floor red colour
+and the break-even note. The over-claim is applied **inside it**, so all four
+convert together (rule #5) - converting them one at a time is how the colour
+and the column come to disagree. It is **reset per render**, or a factor from
+the last window would scale this one.
+
+And the note carries **both** figures, so the 2.90x is not lost:
+
+    break-even ROAS 5.72x (we keep 57% of retail, 61% GM on that, and
+    attribution claims 197% of what the channel sold - 2.90x on actual sales)
+
+### The missing rung: Sell-Through
+*"the tacos number STILL does not match sales"* - and it could not, because
+the strip showed **$32,672** of attributed sales and **$6,179** of our revenue
+with nothing between them. The channel's own sell-through is what both are
+derived from:
+
+    Ad Sales      $32,672   attributed, RETAIL
+    Sell-Through  $16,579   everything sold, RETAIL   <- ads claim 197%
+    TACoS denom    $6,179   everything sold, OUR REVENUE
+
+A spread rather than a `.concat`, so a missing feed costs the card and not the
+strip.
+
+### Verification
+- `node --check` clean - **163 suites green** - `tests/test_v1220.py` replaces
+  `test_v1219.py`, which tested surfaces that no longer exist (the v12.07
+  precedent).
+- Every figure read off the live database.
+
+### Still open
+- /!\ **WALMART ADS DO NOT PAY.** 3.02x against a 5.72x floor, and not one
+  campaign clears it. A decision, not a measurement problem.
+- /!\ **NO ITEM DIMENSION ON THE ADS FEED.**
+- /!\ **NO VENDOR REMITTANCE FEED** (v12.18).
+- /!\ **ATTRIBUTION IS UNTESTED AT 3-DAY** (v12.18).
+- Everything else on the v12.19 list.
 
 ## v12.19 - the number attribution cannot move
 

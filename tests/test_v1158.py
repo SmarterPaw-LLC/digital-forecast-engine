@@ -52,8 +52,6 @@ JS = nocomment(js)
 SHARED = ['impressions', 'clicks', 'ctr', 'cpc', 'spend', 'orders', 'units',
           'cpa', 'cvr', 'sales', 'roas', 'inStoreSales', 'omniRoas', 'acos',
           'roasVsBe',
-    # v12.19 - the deflated pair, declared beside the ROAS they correct.
-    'roasAdj', 'roasAdjVsBe',
 ]
 
 # ===========================================================================
