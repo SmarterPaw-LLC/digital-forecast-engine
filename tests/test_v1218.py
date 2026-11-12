@@ -157,22 +157,19 @@ ok("cappedRows: r.cappedRows || 0" in TAC and "cappedWeeks: r.cappedWeeks || []"
    "C3  all three ride the TACoS result")
 
 # ===========================================================================
-print("\nD. /!\\ AND THE CARD SAYS IT IS A FLOOR, NOT THE FIGURE")
+print("\nD. /!\\ THE CAP IS CARRIED, AND NO LONGER CAVEATS THE CARD")
 # ===========================================================================
-# Capping at RETAIL is a true upper bound on revenue, so the printed TACoS is
-# a true LOWER bound. Printing a bounded number as if it were the figure is
-# the v10.19 defect; saying so is the whole difference.
-ok("markdown week" in js, "D1  the sub-line marks a window holding a markdown")
-# v12.19 - the floor paragraph came off the tooltip with the rest of the
-# prose. What must survive is the DIRECTION of the skew, in a clause, because
-# a reader cannot infer that from the number.
-ok("Markdown week(s) capped at retail \\u2014 reads low" in js,
-   "D2  /!\\ and the tooltip says which way the number is wrong")
-ok("cappedWeeks" in fn_flat("adsTacosFor"),
-   "D3  ...with the weeks themselves on the result")
-# /!\ NO STALE LITERAL. A percentage typed into a tooltip is wrong the next
-# time the data moves - the v11.72 rule.
-ok("131.6%" not in js, "D4  /!\\ no hardcoded percentage in the tooltip")
+# v12.21 - TACoS divides by RETAIL now, the same basis the Amazon tab uses.
+# Retail does not use cost_per_each at all, so a markdown cannot skew it and
+# caveating the card about one would be noise (STOP UI TEXT BLOAT).
+#
+# The cap still matters: it guards the OUR-REVENUE figure, which is what the
+# tooltip reports beside the headline and what decides whether to spend.
+ok("cappedWeeks: wk.filter" in js,
+   "D1  /!\\ the markdown weeks are still named on the result")
+ok("ourRev: r.rev" in js,
+   "D2  /!\\ and the capped figure is what the our-revenue clause divides by")
+ok("cappedAmt" in js, "D3  ...with the dollars it removed still carried")
 
 print("\nE. the chip agrees with CLAUDE.md")
 md = io.open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read()

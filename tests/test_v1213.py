@@ -166,7 +166,8 @@ print("\nA. /!\\ v12.17 - IT COMPUTES, AND THE ODDITY IS A NOTE")
 # /!\ AND TACoS NEVER USED THE NUMERATOR. It is spend over TOTAL sales.
 # Withholding a correct number because a different number looked odd is the
 # opposite of the job.
-eq("A1  /!\\ 175.3% is REPORTED, not refused", A["live"]["pct"], 175.3)
+eq("A1  /!\\ v12.21 - 65.3% on sell-through, REPORTED and not refused",
+   A["live"]["pct"], 65.3)
 eq("A2  ...with no refusal reason", A["live"]["why"], None)
 ok(A["live"].get("over") is not None,
    "A3  /!\\ and the over-attribution rides along as a note")
@@ -188,8 +189,9 @@ ok("shipped INTO Walmart" not in js and "SHIPPED-based (shipped_based" not in js
    "A7  /!\\ and the shipped-vs-sold explanation, also wrong, is gone")
 
 print("\nB. a complete feed still answers")
+# /!\ v12.21 - the fixture's retail is $50,000, so 10,828 / 50,000 = 21.7%.
 eq("B1  sell-through above ad sales is the normal relationship, and it reports",
-   A["healthy"]["pct"], 175.3)
+   A["healthy"]["pct"], 21.7)
 eq("B2  ...on our revenue", A["healthy"]["basis"], "ourRev")
 
 print("\nC. the boundary")
@@ -197,13 +199,14 @@ print("\nC. the boundary")
 # /!\ v12.17 - there is no refusal to have a boundary any more. What is left
 # worth pinning is that the note fires ONLY on a real excess: equal is not an
 # excess, and a dollar over is.
-eq("C1  /!\\ ad sales EQUAL to sell-through raises no note", A["equal"]["pct"], 50.0)
+# /!\ v12.21 - $500 over the fixture's $5,000 of sell-through.
+eq("C1  /!\\ ad sales EQUAL to sell-through raises no note", A["equal"]["pct"], 10.0)
 eq("C2  /!\\ and a dollar over still REPORTS, it does not refuse",
-   A["over"]["pct"], 50.0)
+   A["over"]["pct"], 10.0)
 
 print("\nD. and where it cannot run")
 eq("D1  no ad-sales figure: the check is skipped, not failed",
-   A["noAdSales"]["pct"], 50.0)
+   A["noAdSales"]["pct"], 10.0)
 
 print("\nE. Amazon is untouched")
 # /!\ The guard lives in the 1P branch only. Amazon's net sales ARE ours and
@@ -225,7 +228,7 @@ TAC = fn_flat("adsTacosFor")
 ok("adSales > r.retail" in TAC, "F4  the comparison is against retail, not our revenue")
 ok("r.rev" in TAC.split("adSales > r.retail")[0].split("if (adSales")[-1] or True,
    "F5  and it runs before the ratio is formed")
-ok(TAC.index("adSales > r.retail") < TAC.index("return { pct: (spend || 0) / r.rev"),
+ok(TAC.index("adSales > r.retail") < TAC.index("return { pct: (spend || 0) / r.retail"),
    "F6  /!\\ refused BEFORE a number is computed")
 
 print("\nG. the chip agrees with CLAUDE.md")

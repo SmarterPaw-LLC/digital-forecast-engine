@@ -166,18 +166,28 @@ A = run_node(os.path.join(SP, "_v1208_a.js"),
 # ===========================================================================
 print("\nA. Walmart, on the live week where both feeds cover the same ground")
 # ===========================================================================
-eq("A1  $1,179.44 of spend over $651.95 of OUR revenue is 180.9%", A["wm"]["pct"], 180.9)
+eq("A1  /!\\ v12.21 - $1,179.44 over $1,669.89 of SELL-THROUGH is 70.6%",
+   A["wm"]["pct"], 70.6)
 eq("A2  the denominator is our revenue, and says so", A["wm"]["basis"], "ourRev")
-eq("A3  ...which is $651.95, not the $1,669.89 of retail", A["wm"]["ns"], 651.95)
+eq("A3  ...the channel's own sell-through, $1,669.89", A["wm"]["ns"], 1669.89)
+# /!\ AND OUR REVENUE IS NOT LOST - it decides whether to spend, so it
+# rides the result and reaches the tooltip.
+ok("ourRev: r.rev" in fn_flat("adsTacosFor"),
+   "A3b /!\\ ...with our revenue still carried on the result")
 eq("A4  and the retail figure is carried for the tooltip", A["wm"]["retail"], 1669.89)
 # /!\ THE WHOLE REASON FOR THE BASIS. Retail would have said 70.6% - a number
 # that is not comparable with the Amazon tab's TACoS of the same name.
 eq("A5  /!\\ retail would have reported 70.6% for the same dollars", A["wmOnRetail"], 70.6)
-ok(A["wm"]["pct"] > A["wmOnRetail"],
-   "A6  /!\\ ...so retail flatters this channel, which is the trap")
+# /!\ The gap is the point, whichever way round the card reports it: the
+# two bases are 2.6x apart, so a label meaning one on Amazon and the
+# other here is the rule 3a defect v12.21 fixed.
+ok(round((1179.44 / 651.9482) * 100, 1) > A["wm"]["pct"] * 2,
+   "A6  /!\\ the two bases are more than 2x apart - which is why one label "
+   "could not carry both")
 
 print("\nB. Chewy, same basis, and the unpriced gap surfaced")
-eq("B1  $15,977 over $106,327 of our revenue is 15.0%", A["chewy"]["pct"], 15.0)
+eq("B1  /!\\ Chewy on the same basis: $15,977 over $236,283 of sell-through",
+   A["chewy"]["pct"], 6.8)
 eq("B2  on our revenue", A["chewy"]["basis"], "ourRev")
 # /!\ 23 SKUs sold in that window with no cost-per-each on record. Their sales
 # are NOT in the denominator, so TACoS reads HIGH - and the card says so
@@ -203,8 +213,8 @@ ok("too low" in (A["thin"]["why"] or ""),
 # /!\ THE NUMBER IT REFUSED TO PRINT. 16.5% beside the 180.9% of A1 - same
 # channel, same month, and only the window differs.
 eq("D5  /!\\ it would have read 16.5%", A["thinWouldBe"], 16.5)
-ok(A["thinWouldBe"] < A["wm"]["pct"] / 10,
-   "D6  /!\\ an order of magnitude below the week both feeds cover")
+ok(A["thinWouldBe"] < A["wm"]["pct"],
+   "D6  /!\\ far below the week both feeds cover - which is the whole reason\n       the coverage guard refuses rather than reporting it")
 ok(A["eighty"], "D7  80% coverage is accepted - the threshold is not a trap")
 
 print("\nE. every refusal it keeps")
@@ -240,15 +250,20 @@ ok("channel === 'amazon' ? [{" not in js,
    "F7  /!\\ v12.07's Amazon-only gate is gone")
 
 # The basis has to be visible on the card itself, not only the tooltip.
-ok("' our revenue' : ' net sales'" in js,
-   "F8  /!\\ the sub-line names the basis, because on these two tabs the "
-   "denominator is NOT the number their console shows")
+ok("' sell-through' : ' net sales'" in js,
+   "F8  /!\\ the sub-line names the basis - sell-through on 1P, net sales on "
+   "Amazon, which are the same measure under each channel's own word")
 # v12.19 - the paragraph arguing the basis was right is gone (Jason). The
 # tooltip states the ARITHMETIC instead, which is the thing only it can say.
-ok("sell-through units \\u00d7 cost-per-each" in js,
-   "F9  ...and the tooltip gives the denominator's arithmetic")
-ok("SKU(s) unpriced \\u2014 reads high" in js,
-   "F10 /!\\ an unpriced SKU is named, with which way it skews the answer")
+ok("the channel\\u2019s own sell-through" in js,
+   "F9  ...and the tooltip names the denominator in the channel's own word")
+# /!\ v12.21 - an unpriced SKU no longer skews TACoS: the retail
+# denominator does not use cost_per_each at all. It still skews the
+# our-revenue clause the tooltip reports, so the count still rides the
+# result - what changed is that it stopped caveating a number it cannot
+# affect.
+ok("unpricedSkus: r.unpricedSkus" in js,
+   "F10 /!\\ the unpriced count still rides the result, for the figure it does skew")
 
 print("\nG. the loader")
 LOAD = fn_flat("adsLoadOurRev")

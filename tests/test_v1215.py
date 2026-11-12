@@ -172,11 +172,13 @@ eq("B1  a Sunday bucket spans Sun to Sat", A["sunSpan"],
    {"from": "2026-10-04", "to": "2026-10-10"})
 # /!\ ads buckets are keyed on the SUNDAY and these sales weeks on the MONDAY.
 # Matching by string would pair every week with the wrong one.
-eq("B2  /!\\ and picks up the Monday inside it", A["sunBucket"], 100)
+# v12.21 - the bucket sums RETAIL now, matching the card. 2026-10-05's
+# retail is 220; the alignment it proves is unchanged.
+eq("B2  /!\\ and picks up the Monday inside it", A["sunBucket"], 220)
 eq("B3  /!\\ the next Sunday picks up the NEXT Monday, not the same one",
-   A["sun2Bucket"], 110)
+   A["sun2Bucket"], 230)
 eq("B4  a month bucket gathers every week starting inside it",
-   A["monthBucket"], 400)
+   A["monthBucket"], 900)
 eq("B5  ...over its own span", A["monthSpan"], {"from": "2026-10-01", "to": "2026-10-31"})
 # /!\ v11.16: a bucket with no denominator is a GAP. Zero would draw a point
 # at 0% TACoS, which reads as "spent nothing".

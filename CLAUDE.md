@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.20** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.21** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,70 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.21 - TACoS means the same thing on every tab
+
+- **Jason, after five rounds:** *"YOU KEEP REMOVING THE TACOS... I've asked
+  you at least 5 times this session to get to a correct TACOS and you keep
+  going around it"* ... *"what is it going to take?"*
+
+**The definition was wrong, and it was mine.** Everything since v12.08 was
+built on top of a denominator that did not mean what the same label means one
+tab over, and every release went around that rather than at it.
+
+### /!\ MEASURED, NOT RECALLED
+The Amazon tab's TACoS divides by `sku_economics.net_sales` - what the
+**customer paid**, after returns and **before** Amazon's fees. The app says so
+itself: the Fees strip reports every fee as a percentage **of net sales**, so
+net sales is the figure fees come out of, not what is left after them.
+
+v12.08 gave Walmart and Chewy a different denominator - **our revenue**, what
+the retailer pays us.
+
+| | Amazon | Walmart |
+|---|---|---|
+| spend / what the **customer paid** | **17.2%** | **65.3%** |
+| spend / what **we are paid** | not offered | 175.3% |
+
+**One label, two measures, one tab apart** - rule 3a, broken by the release
+that cited rule 3a as its reason. Walmart read **2.7x worse than Amazon for
+reasons of definition alone**, and the number reconciled to nothing else on
+the page, least of all the Sales tab, whose top line is this same retail
+sell-through.
+
+### The fix is the basis, not another card
+**TACoS = ad spend / the channel's own sell-through, on all three tabs.**
+
+    Walmart, 2026-08-14 -> 11-12
+    $10,828 / $16,579  =  65.3%
+
+- The **chart** divides by the same thing (`adsOurRevBucket` now sums
+  `w.retail`). Two surfaces of one measure may not use two denominators
+  (rule #5).
+- **What we are paid still decides whether to spend**, so it is on the
+  tooltip in one clause: *"On what the retailer pays US it is 175.3%."*
+- The **unpriced-SKU** and **markdown-week** warnings came off the sub-line.
+  Both describe `cost_per_each`, which the retail denominator does not use -
+  a caveat about a number no longer in the calculation is noise.
+
+### /!\ AND IT CHANGES THE VERDICT'S SHAPE, NOT THE VERDICT
+65.3% TACoS is still extraordinary - Amazon runs 17%. And the ROAS comparison
+v12.20 fixed is untouched: **3.02x against a 5.71x floor, 0 of 5 campaigns
+clearing it.** The spend still does not pay. What changed is that the number
+on the card can now be compared with the one beside it and with the Sales
+tab.
+
+### Verification
+- `node --check` clean - **163 suites green**.
+- Amazon's denominator read out of the code rather than remembered, which is
+  the step every one of the five previous rounds skipped.
+
+### Still open
+- /!\ **WALMART ADS DO NOT PAY** (v12.20).
+- /!\ **NO ITEM DIMENSION ON THE ADS FEED.**
+- /!\ **NO VENDOR REMITTANCE FEED** (v12.18).
+- /!\ **ATTRIBUTION IS UNTESTED AT 3-DAY** (v12.18).
+- Everything else on the v12.20 list.
 
 ## v12.20 - one ROAS. The floor moves, not the ratio.
 

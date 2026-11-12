@@ -1777,9 +1777,11 @@ function adsOurRevFor(channel, range) {
 function adsOurRevBucket(channel, range, from, to) {
   const r = adsOurRevFor(channel, range);
   if (!r || r.pending || !r.weeks || !from || !to) return null;
+  // v12.21 - /!\ RETAIL, matching the card. Two surfaces of one measure may
+  // not divide by two different numbers (rule #5).
   let rev = 0, any = false;
   for (const w of r.weeks) {
-    if (w.w >= from && w.w <= to) { rev += w.rev; any = true; }
+    if (w.w >= from && w.w <= to) { rev += w.retail; any = true; }
   }
   // /!\ A BUCKET WITH NO WEEK IN IT IS A GAP, NEVER 0 (v11.16). Returning 0
   // would draw a point at zero TACoS, which reads as "spent nothing".
@@ -1996,7 +1998,12 @@ function adsTacosFor(channel, selRows, spend, range, adSpan, adSales) {
     if (!r) return no('Sales are not loaded yet.');
     if (r.pending) return { pct: null, netSales: null, pending: true, why: 'Reading sales\u2026' };
     if (r.why) return no(r.why);
-    if (!(r.rev > 0)) {
+    // v12.21 - /!\ SELL-THROUGH, the same basis the Amazon tab divides by.
+    // `sku_economics.net_sales` is what the customer paid; on a 1P channel
+    // that is the retailer's own sell-through, NOT what they pay us. Dividing
+    // by our revenue made one label mean two things a tab apart (rule 3a) and
+    // matched nothing else on the page.
+    if (!(r.retail > 0)) {
       return no('No sales in this window, so TACoS has no denominator. Widen the period.');
     }
     // v12.17 - /!\ ATTRIBUTION OVER-COUNTS, AND THAT IS NOT A REASON TO REFUSE.
@@ -2033,7 +2040,8 @@ function adsTacosFor(channel, selRows, spend, range, adSpan, adSales) {
     // explanations got shipped.
     const salesBasis = (r.bases || []).map(b2 => String(b2).replace(/^walmart:/, ''))
       .filter(Boolean).join(' + ') || null;
-    return { pct: (spend || 0) / r.rev * 100, netSales: r.rev, salesBasis,
+    return { pct: (spend || 0) / r.retail * 100, netSales: r.retail, salesBasis,
+             ourRev: r.rev,
              from: r.from, to: r.to, basis: 'ourRev',
              retail: r.retail, unpricedSkus: r.unpricedSkus,
              unpricedUnits: r.unpricedUnits, overAttr,
@@ -2426,9 +2434,7 @@ function renderAdsCampaigns(channel, view) {
         // show - it is what the retailer pays us, roughly a third of retail -
         // so a reader comparing this with Amazon's TACoS has to be told.
         : 'of $' + Math.round(tacos.netSales).toLocaleString()
-          + (tacos.basis === 'ourRev' ? ' our revenue' : ' net sales')
-          + ((tacos.unpricedSkus || 0) ? ' \u00b7 \u26a0 ' + tacos.unpricedSkus + ' SKU(s) unpriced' : '')
-          + ((tacos.cappedRows || 0) ? ' \u00b7 \u26a0 markdown week' + (((tacos.cappedWeeks || []).length > 1) ? 's' : '') : ''),
+          + (tacos.basis === 'ourRev' ? ' sell-through' : ' net sales'),
       color: tacos.pct == null ? 'var(--text3)'
            : (tacos.pct > 30 ? 'var(--sp-red)' : tacos.pct > 20 ? 'var(--sp-orange)' : 'var(--text)'),
       delta: (tacos.pct == null || tacosPrev.pct == null) ? null
@@ -2442,15 +2448,14 @@ function renderAdsCampaigns(channel, view) {
       tip: tacos.pct == null
         ? tacos.why
         : tacos.basis === 'ourRev'
-        ? ('Ad spend \u00f7 our revenue: $' + Math.round(spendForTip).toLocaleString()
-           + ' \u00f7 $' + Math.round(tacos.netSales).toLocaleString() + '.'
-           + '\n\nOur revenue = sell-through units \u00d7 cost-per-each, whole weeks '
+        ? ('Ad spend \u00f7 the channel\u2019s own sell-through: $'
+           + Math.round(spendForTip).toLocaleString() + ' \u00f7 $'
+           + Math.round(tacos.netSales).toLocaleString() + ', weeks '
            + tacos.from + ' to ' + tacos.to + '.'
-           + ((tacos.unpricedSkus || 0)
-              ? '\n\n\u26a0 ' + tacos.unpricedSkus + ' SKU(s) unpriced \u2014 reads high.'
-              : '')
-           + ((tacos.cappedRows || 0)
-              ? '\n\n\u26a0 Markdown week(s) capped at retail \u2014 reads low.'
+           + '\n\nSame basis as the Amazon tab: what the shopper paid.'
+           + (tacos.ourRev > 0
+              ? '\n\nOn what the retailer pays US it is '
+                + ((spendForTip / tacos.ourRev) * 100).toFixed(1) + '%.'
               : ''))
         : ('Ad spend \u00f7 net sales, every ad product.'
            + '\n\nSales are weekly, so this window covers ' + tacos.from + ' to '
