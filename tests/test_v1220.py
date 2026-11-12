@@ -75,7 +75,11 @@ print("=" * 70)
 print("\nA. /!\\ v12.19's EXTRA RATIOS ARE GONE, not left standing beside it")
 # ===========================================================================
 # A cleanup that leaves copies behind is not a cleanup (hard rule #1).
-ok("Ceiling ROAS" not in js, "A1  /!\\ no Ceiling ROAS card")
+# /!\ CODE, NOT COMMENTS. v12.25 records why the block was deleted in a
+# comment that names it, and that note is worth keeping (test_v1215 A7).
+import re as _re
+_code = _re.sub(r"(?m)//.*$", " ", _re.sub(r"/\*[\s\S]*?\*/", " ", js))
+ok("Ceiling ROAS" not in _code, "A1  /!\\ no Ceiling ROAS card")
 ok("ceilRoas" not in js, "A2  ...and none of its machinery survives")
 ok("roasAdj" not in js, "A3  /!\\ no Adj ROAS column")
 ok("roasAdjVsBe" not in js, "A4  ...and no Adj vs BE")

@@ -2437,6 +2437,10 @@ function renderAdsCampaigns(channel, view) {
     tacosPrev = { pct: null };
   }
 
+  // v12.25 - the TACoS tooltip prints the numerator, and its declaration was
+  // deleted with v12.19's Ceiling ROAS block. A ReferenceError that took the
+  // whole tab down, and `node --check` passed it: scope is not syntax.
+  const spendForTip = (t && t.spend) || 0;
   const cards = document.getElementById(ch.host + '-cards');
   if (cards && typeof pnlCardStrip === 'function') {
     cards.innerHTML = selBanner + pnlCardStrip([

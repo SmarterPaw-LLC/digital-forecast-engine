@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.24** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.25** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,35 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.25 - a local deleted with the block that declared it
+
+    X spendForTip is not defined
+
+...and the whole Walmart Ads tab rendered as that one line.
+
+v12.20 removed v12.19's Ceiling ROAS block and took `const spendForTip` out
+with it, because the declaration happened to sit inside the deleted span while
+two READS of it survived in the TACoS tooltip below.
+
+**`node --check` passed it.** Scope is not syntax - the v12.16 lesson, and the
+same cost: a crash in the only thing no test executed.
+
+### The structural answer
+`tests/test_v1225.py` walks `renderAdsCampaigns`, collects every identifier it
+READS, and fails the build on any declared neither inside it nor anywhere in
+the file. **Verified by removing the declaration and watching it fire** - a
+deletion that orphans a reference cannot ship again.
+
+Two things the census itself got wrong first:
+- Stripping strings across a 5MB file with regexes **swallows real code**; a
+  greedy template-literal match deleted most top-level declarations and it
+  reported every one of them missing. The global scan reads the raw source.
+- An unguarded `.index()` **crashed** in exactly the case the suite exists to
+  catch, so the general census never ran.
+
+### Still open
+- Everything on the v12.24 list.
 
 ## v12.24 - the denominator was already in the browser
 
