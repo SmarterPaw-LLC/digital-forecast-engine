@@ -243,31 +243,79 @@ print("\nI. /!\\ ADD AND REMOVE SURVIVE A REBUILD")
 # throw them away - which is the one thing an operator cannot forgive.
 ok("let _ipOrderRemoved = new Set();" in js and "let _ipOrderAdded   = new Map();" in js,
    "I1  the edits are overlays, keyed on master_id")
-ok("if (_ipOrderRemoved.has(r.master_id)) continue;" in BUILD,
-   "I2  a removed product stays out of every rebuild")
-ok("for (const [mid, qty] of _ipOrderAdded)" in BUILD,
+ok("if (_ipOrderRemoved.has(ipOrderKey(r.master_id, reg))) continue;" in BUILD,
+   "I2  /!\\ a removed product stays out of every rebuild, keyed on its REGION too")
+ok("for (const [key, add] of _ipOrderAdded)" in BUILD,
    "I3  /!\\ and adds are REPLAYED over the build, not written into it")
 ok("row.manual = true;" in BUILD, "I4  a hand-entered quantity is marked")
-ok("hit.qty = ipRoundShipQty(qty)" in BUILD,
+ok("hit.qty = ipRoundShipQty(add.qty)" in BUILD,
    "I5  /!\\ an override on a product already in the box replaces its qty "
    "rather than adding the row twice")
 ADD = fn_flat("ipOrderAdd")
 ok("if (!(n > 0))" in ADD, "I6  a zero or blank quantity is refused")
-ok("_ipOrderRemoved.delete(mid)" in ADD,
+ok("_ipOrderRemoved.delete(key)" in ADD,
    "I7  /!\\ adding back something removed un-removes it")
 PRE = fn_flat("ipOrderPrefillQty")
 ok("qty.value = row ? row.qty : '';" in PRE,
    "I8  /!\\ prefilled from the model where there is one, BLANK where there "
    "is not - a made-up number in a quantity box is the worst default")
 PICK = fn_flat("ipOrderFillPicker")
-ok("if (inBox.has(r.master_id)) continue;" in PICK,
-   "I9  the picker offers only products not already in the box")
+ok("if (inBox.has(ipOrderKey(r.master_id, reg))) continue;" in PICK,
+   "I9  /!\\ the picker offers only products not already in THIS region's box - a SKU in the US box is still a legitimate add to the CA one")
 ok("pick.dataset.sig === sig" in PICK,
    "I10 /!\\ and is rebuilt only when the SET changes, or a repaint would "
    "drop the selection mid-add (v10.99)")
 ok("id=\"ol-reset\"" in s, "I11 the edits can be reset")
 ok("rstBtn.style.display = edited ? '' : 'none'" in REND,
    "I12 ...and that control is hidden when there is nothing to reset")
+
+# ===========================================================================
+print("\nJ. /!\\ ONE MARKETPLACE PER ROW - US+CA IS NOT A SHIPMENT")
+# ===========================================================================
+# Jason: "WHY are you making a US+CA list? they need to be either in US or CA"
+#
+# `US+CA` is the POOLED record. Pooling is right for PLANNING - one cover
+# figure across both marketplaces - and wrong for a shipment: a box goes to
+# one of them, and "US+CA 35 units" is not a line anyone can order.
+REG = fn_flat("ipOrderRegionsFor")
+R = run_node(os.path.join(SP, "_v1231_j.js"), REG + r"""
+console.log(JSON.stringify({
+  pooled: ipOrderRegionsFor({ region: 'US+CA' }, ''),
+  us:     ipOrderRegionsFor({ region: 'US' }, ''),
+  ca:     ipOrderRegionsFor({ region: 'CA' }, ''),
+  spaced: ipOrderRegionsFor({ region: 'US + CA' }, ''),
+  narrow: ipOrderRegionsFor({ region: 'US+CA' }, 'CA'),
+  blank:  ipOrderRegionsFor({ region: '' }, ''),
+  none:   ipOrderRegionsFor({}, ''),
+  three:  ipOrderRegionsFor({ region: 'US+CA+MX' }, ''),
+}));
+""")
+eq("J1  /!\\ a POOLED record becomes two rows", R["pooled"], ["US", "CA"])
+eq("J2  ...and whitespace does not defeat the split", R["spaced"], ["US", "CA"])
+eq("J3  a single-region record stays one row", R["us"], ["US"])
+eq("J4  ...either way round", R["ca"], ["CA"])
+eq("J5  /!\\ a narrowed page filter DECIDES it", R["narrow"], ["CA"])
+eq("J6  a blank region falls back to US rather than vanishing", R["blank"], ["US"])
+eq("J7  ...and so does a record with no region at all", R["none"], ["US"])
+eq("J8  /!\\ a third marketplace would follow with no code change",
+   R["three"], ["US", "CA", "MX"])
+
+ok("region: region || (r.region || 'US')" in ROW,
+   "J9  /!\\ the row is stamped with the REQUESTED region, never the pooled label")
+ok("ipOrderRegionsFor(r, region)" in BUILD, "J10 the build splits before it asks")
+# /!\ the key has to carry the region or one remove takes out two rows
+KEY = fn_flat("ipOrderKey")
+ok("String(mid) + '\\u0000' + String(region)" in KEY,
+   "J11 /!\\ the overlay key is product AND region")
+ok("ipOrderRemove(mid, region)" in js,
+   "J12 ...and remove is handed both")
+ok("ipOrderRemove('${esc2(mid)}','${esc2(x.region)}')" in REND_,
+   "J13 ...from the row's own button")
+ADDREG = fn_flat("ipOrderAddRegion")
+ok("picked || (el && el.value) || 'US'" in ADDREG,
+   "J14 /!\\ a narrowed page filter decides the add's region; otherwise the "
+   "operator does, in a control rather than a silent default")
+ok('id="ol-add-region"' in s, "J15 and that control exists")
 
 print("\nG. the chip agrees with CLAUDE.md")
 md = io.open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read()

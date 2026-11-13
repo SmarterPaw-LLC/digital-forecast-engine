@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.33** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.34** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,42 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.34 - a shipment goes to ONE marketplace, so US+CA is not a group
+
+- **Jason:** *"WHY are you making a US+CA list? they need to be either in US
+  or CA"*
+
+`US+CA` is the **pooled record**. Pooling is right for PLANNING - one cover
+figure across both marketplaces - and wrong for a **shipment**: a box goes to
+US or to CA, and a line reading *"Doggijuana - US+CA, 35 units"* is not
+something anyone can order.
+
+`inventoryNeedBreakdown(r, X, region)` already takes a region and already has
+an empty shape for *"this record has no data in that region"* (v5.1), so the
+list asks it **once per real marketplace** and emits a row per region that
+has an event. A narrowed page filter decides it; otherwise a pooled record
+becomes two rows.
+
+### /!\ AND THE EDIT OVERLAYS HAD TO FOLLOW
+One product can now appear twice, so `master_id` alone is no longer a key -
+**removing Meowi CA would have taken Meowi US with it**. Remove and add are
+keyed on product AND region, the row's own `x` button passes both, and the
+add bar gained a region control that the page filter disables when it has
+already answered the question. There is no sensible default between two
+marketplaces, so it is never guessed silently.
+
+The picker is keyed the same way: a SKU already in the US box is still a
+legitimate add to the CA one.
+
+### Verification
+- `node --check` clean - **166 suites green** - `tests/test_v1231.py` grew to
+  91, with `ipOrderRegionsFor` driven over eight shapes including a spaced
+  `US + CA`, a blank region, and a hypothetical third marketplace (which
+  follows with no code change).
+
+### Still open
+- Everything on the v12.32 list.
 
 ## v12.33 - one group per brand AND region
 
