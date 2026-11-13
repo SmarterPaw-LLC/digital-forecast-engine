@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.38** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.39** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,58 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.39 - a month bucket is the row's OWN month, not its Monday's
+
+- **Jason:** *"i have year to date selected, so why is december in view?"*
+
+### /!\ MEASURED, NOT REASONED ABOUT
+That December column held **$2,125**, and on the live database every dollar
+of it is January:
+
+| | |
+|---|---|
+| `shopify_sales_daily` 1-4 Jan | **$2,102** |
+| `walmart_sales_weekly` week starting **Sat 3 Jan** | the rest |
+
+This page buckets a row by first shifting its date back to the preceding
+**Monday**. That is right for a WEEK bucket and wrong for a MONTH one,
+because **two of the five feeds are not stamped on a Monday** - measured:
+
+| feed | day of week | rows |
+|---|---|---|
+| `sales_weekly` | Monday | 11,814 |
+| `chewy_sales_weekly` | Monday | 9,304 |
+| **`walmart_sales_weekly`** | **Saturday** (Walmart's retail calendar) | 935 |
+| **`shopify_sales_daily`** | **every day** | 21,935 |
+
+Shopify's 1-4 January (a Thursday to a Sunday) all shift to Mon 29 December;
+Walmart's Saturday week shifts back five days to the same Monday. Collapse
+`2025-12-29` to a month and a Year-to-date window grows a December column.
+
+A month bucket now comes from the row's **own** date. The Monday-stamped
+feeds - 21,118 of the rows - are unaffected.
+
+### /!\ THE WEEK GRAIN IS DELIBERATELY UNTOUCHED
+The week of 29 December genuinely *does* contain 1-4 January, and the
+bucket's label says which week it is, so drawing it at the edge of a window
+is honest. Changing it would move every point on every weekly chart this
+page draws.
+
+### Verification
+- `node --check` clean - **171 suites green** - new `tests/test_v1239.py` (21).
+- **The real `bucketOf` sliced out of `updateSalesChart`** - it is a closure,
+  so it is lifted verbatim rather than re-typed - and driven over the four
+  days in question, both month boundaries, a genuinely-December day, a
+  Monday-stamped row and two unparseable ones, at both grains.
+
+### Still open
+- /!\ **A WALMART WEEK IS MONDAYED BACKWARDS FIVE DAYS** on the WEEK grain.
+  Sat 3 Jan - Fri 9 Jan overlaps Mon 5 Jan - Sun 11 Jan far more than it
+  overlaps the week it is filed under. Rounding those forward would be the
+  better alignment and would move every Walmart point on every weekly chart,
+  so it is recorded rather than done.
+- Everything on the v12.38 list.
 
 ## v12.38 - the chart's own numbers, as a table, exportable
 
