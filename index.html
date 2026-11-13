@@ -43921,6 +43921,7 @@ let chewyPnlSalesSelectedMids = new Set();
 let chewyPnlSalesVisibleMids  = [];
 let chewyCatalogData = [];              // chewy_catalog rows
 let chewyCatalogByMaster = {};          // master_id -> row
+let chewyCatalogBySku = {};             // v12.36 - chewy_sku -> row (UNIQUE in the table)
 let chewyCatalogLoaded = false;
 
 // v10.11 — catalog lookup by product. One current row per Chewy SKU; when a
@@ -43928,8 +43929,29 @@ let chewyCatalogLoaded = false;
 // Cost tab's unmatched count surfaces the leftovers).
 function chewyCatalogFor(mid) {
   if (!mid) return null;
+  const prod = (typeof allProducts !== 'undefined' ? (allProducts || []) : []).find(x => x.master_id === mid) || null;
+  // v12.36 - /!\\ OUR OWN CHEWY SKU DECIDES, and the upload's guess is the
+  // fallback. `chewy_catalog.master_id` is resolved at UPLOAD time by
+  // matching, while `products.chewy_sku` is the fact Jason maintains - and
+  // two rows are currently filed against the wrong product because of it:
+  //
+  //   5168934  Rudolph's Rollies  filed under SP-0244 (Fall Favorites Bundle)
+  //   5168942  Frosticles         filed under SP-0258 (Knock 'n' Nibble)
+  //
+  // Measured: 127 products match by the catalog's master_id, 121 by
+  // chewy_sku, 129 by either - so this GAINS exactly those two and loses
+  // none.
+  const sku = prod ? String(prod.chewy_sku || '').trim() : '';
+  if (sku && chewyCatalogBySku[sku]) return chewyCatalogBySku[sku];
   const row = chewyCatalogByMaster[mid];
-  if (row) return row;
+  // /!\\ AND WHERE WE CARRY A SKU THAT DID NOT MATCH, the catalog's
+  // guess about this master_id is the thing that is wrong, so it is not
+  // used. Where we carry NO sku the guess is all there is and it stands -
+  // 8 products are matched that way today, so refusing it would cost six
+  // real costs to fix two strays that have no Chewy sales at all. Those
+  // two are a data cleanup (CLAUDE.md), not a lookup rule.
+  if (row && !sku) return row;
+  if (row && String(row.chewy_sku || '').trim() === sku) return row;
   // v12.36 - /!\ OUR OWN ENTRY, SHAPED LIKE A CATALOG ROW.
   //
   // 35 SKUs still selling on Chewy are absent from the Catalog Details
@@ -43946,12 +43968,11 @@ function chewyCatalogFor(mid) {
   // chewyCatalogFor is the ONE lookup every consumer already goes through,
   // so the fallback reaches all of them without a tenth spelling of the
   // cost-to-per-each division (hard rule #1).
-  const p = (typeof allProducts !== 'undefined' ? (allProducts || []) : []).find(x => x.master_id === mid);
-  const cost = p ? Number(p.chewy_cost) : NaN;
+  const cost = prod ? Number(prod.chewy_cost) : NaN;
   if (!(cost > 0)) return null;
   return {
-    master_id: mid, chewy_sku: p.chewy_sku || '',
-    cost, purchase_uom: String(p.chewy_cost_uom || 'CS').toUpperCase(),
+    master_id: mid, chewy_sku: sku,
+    cost, purchase_uom: String(prod.chewy_cost_uom || 'CS').toUpperCase(),
     _manual: true,
   };
 }
@@ -45910,7 +45931,12 @@ async function loadChewyCatalog(force) {
   }
   chewyCatalogData = all;
   chewyCatalogByMaster = {};
-  for (const r of all) if (r.master_id && !chewyCatalogByMaster[r.master_id]) chewyCatalogByMaster[r.master_id] = r;
+  chewyCatalogBySku = {};
+  for (const r of all) {
+    if (r.master_id && !chewyCatalogByMaster[r.master_id]) chewyCatalogByMaster[r.master_id] = r;
+    // v12.36 - chewy_sku is UNIQUE in this table, so this index is total.
+    if (r.chewy_sku && !chewyCatalogBySku[r.chewy_sku]) chewyCatalogBySku[r.chewy_sku] = r;
+  }
   chewyCatalogLoaded = true;
   return all;
 }

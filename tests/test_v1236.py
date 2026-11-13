@@ -65,7 +65,16 @@ PX = fn_flat("chewyCatalogPricePerEach")
 
 A = run_node(os.path.join(SP, "_v1236_a.js"), CF + "\n" + PX + r"""
 const chewyCatalogByMaster = {
-  EXPORTED: { cost: 24, purchase_uom: 'CS', item_name: 'From Chewy', msrp: 9.99 },
+  EXPORTED: { cost: 24, purchase_uom: 'CS', item_name: 'From Chewy', msrp: 9.99, chewy_sku: '111' },
+  // /!\ THE LIVE MISMAP: this row IS Rudolph's Rollies (chewy_sku 5168934)
+  // and the upload filed it under SP-0244, a bundle with no Chewy SKU and no
+  // Chewy sales at all.
+  BUNDLE:   { cost: 73.20, purchase_uom: 'CS', item_name: 'Rudolph Rollies', chewy_sku: '5168934' },
+  LEGACY:   { cost: 60, purchase_uom: 'CS', item_name: 'No sku on the row' },
+};
+const chewyCatalogBySku = {
+  '111': chewyCatalogByMaster.EXPORTED,
+  '5168934': chewyCatalogByMaster.BUNDLE,
 };
 const allProducts = [
   { master_id: 'EXPORTED', chewy_sku: '111', case_qty: 12, chewy_cost: 99, chewy_cost_uom: 'CS' },
@@ -77,6 +86,10 @@ const allProducts = [
   { master_id: 'ZERO',     chewy_sku: '777', case_qty: 3,  chewy_cost: 0 },
   { master_id: 'NEG',      chewy_sku: '888', case_qty: 3,  chewy_cost: -5 },
   { master_id: 'NONE',     chewy_sku: '999', case_qty: 3 },
+  // v12.36 - the live mismap, both sides of it.
+  { master_id: 'ROLLIES',  chewy_sku: '5168934', case_qty: 12 },   // owns the row
+  { master_id: 'BUNDLE',   chewy_sku: null, case_qty: 6 },         // the upload's wrong guess
+  { master_id: 'LEGACY',   chewy_sku: null, case_qty: 10 },        // no sku either side
 ];
 const by = (mid) => {
   const p = allProducts.find(x => x.master_id === mid);
@@ -89,6 +102,7 @@ console.log(JSON.stringify({
   exported: by('EXPORTED'), cs: by('TYPED_CS'), ea: by('TYPED_EA'),
   lower: by('TYPED_LC'), noQty: by('TYPED_NQ'), noUom: by('NO_UOM'),
   zero: by('ZERO'), neg: by('NEG'), none: by('NONE'),
+  rollies: by('ROLLIES'), bundle: by('BUNDLE'), legacy: by('LEGACY'),
   missing: chewyCatalogFor('NOT_A_PRODUCT'), blank: chewyCatalogFor(''),
 }));
 """)
@@ -113,7 +127,36 @@ eq("A11 and a product with nothing typed falls through unchanged",
 eq("A12 an unknown master_id is still null", A["missing"], None)
 eq("A13 ...and so is a blank one", A["blank"], None)
 
+# v12.36 - /!\ OUR CHEWY SKU DECIDES WHICH ROW A PRODUCT GETS.
+# `chewy_catalog.master_id` is resolved at UPLOAD time by matching;
+# `products.chewy_sku` is the fact Jason maintains. Two rows are currently
+# filed against the wrong product because of it. Measured on the live
+# database: 127 match by master_id, 121 by chewy_sku, 129 by either - so the
+# two-step lookup gains exactly those two and loses none.
+eq("A13a /!\\ THE LIVE MISMAP, FIXED: Rudolph's Rollies finds its own row by "
+   "chewy_sku - 73.20/12", round(A["rollies"]["price"], 4), 6.1)
+# /!\ AND THE OTHER HALF IS DELIBERATELY NOT FIXED HERE. SP-0244 carries no
+# chewy_sku, so we have no basis of our own and the upload's guess is all
+# there is - 8 products are matched that way today, and refusing it would
+# cost six real costs to clear two strays that have no Chewy sales at all.
+# Those two are a data cleanup, recorded in CLAUDE.md.
+eq("A13b a product with NO chewy_sku of its own still takes the catalog's "
+   "guess - refusing it would cost 6 real matches to clear 2 harmless strays",
+   round(A["bundle"]["price"], 4), 12.2)
+eq("A13c ...and so does a catalog row carrying no chewy_sku",
+   A["legacy"]["price"], 6)
+ok("8 products are matched that way today" in CF,
+   "A13d /!\\ and the code says WHY it is not refused, with the count")
+
 ok(js.count("function chewyCatalogFor") == 1, "A14 one lookup")
+ok("chewyCatalogBySku[sku]" in CF
+   and CF.index("chewyCatalogBySku[sku]") < CF.index("chewyCatalogByMaster[mid]"),
+   "A14b /!\\ the SKU is consulted before the upload's master_id guess")
+ok("if (r.chewy_sku && !chewyCatalogBySku[r.chewy_sku])" in js,
+   "A14c and the index is built where the catalog is loaded")
+ok(js.count("chewyCatalogBySku = {}") == 2,
+   "A14d /!\\ declared and RESET on every load - a stale index would serve a "
+   "deleted row for ever")
 ok("_manual: true" in CF, "A15 the synthesized row is marked at birth")
 ok("chewyCatalogByMaster[mid]" in CF
    and CF.index("chewyCatalogByMaster[mid]") < CF.index("chewy_cost"),

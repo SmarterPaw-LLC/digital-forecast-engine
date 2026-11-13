@@ -160,6 +160,7 @@ const chewyCatalogByMaster = {
   CHW: { cost: 24, purchase_uom: 'CS' },
   CHX: { cost: 18, purchase_uom: 'CS' },
 };
+const chewyCatalogBySku = {};   // v12.36 - the sku index chewyCatalogFor reads first
 const salesData = {
   AMZ: [ { channel: 'amazon_us', region: 'US', week_start: '2026-01-05', units_ordered: 10 },
          { channel: 'amazon_ca', region: 'CA', week_start: '2026-01-05', units_ordered:  5 } ],

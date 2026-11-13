@@ -95,8 +95,28 @@ rule.** All of it is on the label's tooltip now, the way v12.09 collapsed the
 Dimensions paragraph; v10.87's check applies and the paragraph held no link
 and no button, which is why all of it could move.
 
+### /!\ AND OUR OWN CHEWY SKU NOW DECIDES WHICH CATALOG ROW A PRODUCT GETS
+Found while listing the 37. Two rows are filed against the wrong product,
+because `chewy_catalog.master_id` is resolved at UPLOAD time by matching
+while `products.chewy_sku` is the fact Jason maintains:
+
+| chewy_sku | really is | catalog says |
+|---|---|---|
+| `5168934` | Rudolph's Rollies `SP-0560` | `SP-0244` Fall Favorites Bundle |
+| `5168942` | Frosticles `SP-0555` | `SP-0258` Knock 'n' Nibble Pumpkin |
+
+Measured: **127** products match by the catalog's master_id, **121** by
+chewy_sku, **129** by either - so sku-first-then-master_id **gains exactly
+those two and loses none**.
+
+/!\ **The other half is deliberately NOT fixed in code.** SP-0244 carries no
+chewy_sku, so there is no basis of our own and the upload's guess is all
+there is - 8 products are matched that way today, and refusing it would cost
+six real costs to clear two strays with **no Chewy sales at all**. A data
+cleanup, below.
+
 ### Verification
-- `node --check` clean - **168 suites green** - new `tests/test_v1236.py` (45).
+- `node --check` clean - **168 suites green** - new `tests/test_v1236.py` (52).
 - **The real `chewyCatalogFor` and `chewyCatalogPricePerEach` driven** over
   nine shapes: the export winning, a typed case cost, a typed each cost, a
   lower-case UOM, a missing case qty, a missing UOM, zero, negative, and
@@ -113,12 +133,12 @@ and no button, which is why all of it could move.
   Twisted Pretzel 758 - Pepperoni Pizza 504 - Catnip Cigar 412. The full list
   is `chewy_unpriced_skus_2026-11-13.csv`, deliberately **not committed** -
   business data, public repo.
-- /!\ **TWO CATALOG ROWS POINT AT A DEAD master_id.** `5168934` (Rudolph's
-  Rollies) is filed under `SP-0244` and `5168942` (Frosticles) under
-  `SP-0258`, both from the 2026-11-10 merges - so a *different* product is
-  being priced with their cost. The merge reassignment missed
-  `chewy_catalog`, and that is worth checking against
-  `MERGE_MASTER_ID_TABLES`.
+- /!\ **TWO CATALOG ROWS ARE FILED UNDER THE WRONG PRODUCT.** `5168934`
+  (Rudolph's Rollies) under `SP-0244` and `5168942` (Frosticles) under
+  `SP-0258`. Both products now find their row by chewy_sku, so the app is
+  right - but the ROWS are still wrong, and both bundles still carry a cost
+  that is not theirs (harmless today: neither has a single Chewy sales row).
+  A one-line update per row, or the next Catalog Details upload.
 - /!\ **3 SKUs NEED ONLY A CASE QTY** - Jiggly Jellyfish, High Tides
   Jellyfish, Squiggly Snake. They are in the catalog as CS rows.
 - Everything on the v12.35 list.
