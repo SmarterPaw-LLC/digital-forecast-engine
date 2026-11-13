@@ -131,10 +131,13 @@ eq("A11 /!\\ the Other band is named for what the bands ARE",
 # ===========================================================================
 print("\nB. /!\\ OUR REVENUE - the money that reaches us, never the retail")
 # ===========================================================================
+# v12.36 - chewyCatalogFor is sliced in, never stubbed: the revenue pass goes
+# through it now, which is what carries a hand-typed Chewy cost into Our
+# Revenue. A stub would have proved nothing about that path.
 REV = fn_flat("salesRevFx") + "\n" + fn_flat("salesRowVal") + "\n" \
     + fn_flat("salesFmtVal") + "\n" + fn_flat("salesMeasureUnit") + "\n" \
-    + fn_flat("chewyCatalogPricePerEach") + "\n" + fn_flat("salesEnsureRevenue") + "\n" \
-    + fn_flat("salesRevNote")
+    + fn_flat("chewyCatalogPricePerEach") + "\n" + fn_flat("chewyCatalogFor") + "\n" \
+    + fn_flat("salesEnsureRevenue") + "\n" + fn_flat("salesRevNote")
 
 HARNESS = r"""
 let pnlFxRate = 1.40, pnlFxGbp = 1.25, pnlFxEur = 1.10;   // CAD per USD; USD per unit
@@ -150,6 +153,8 @@ const allProducts = [
   { master_id: 'CHX', case_qty: null },   // a CASE row with NO case qty
   { master_id: 'SHP', case_qty: null },
   { master_id: 'GB',  case_qty: null },
+  // v12.36 - not in the catalog export at all, priced by hand on the card.
+  { master_id: 'CHM', case_qty: 6, chewy_sku: '999', chewy_cost: 30, chewy_cost_uom: 'CS' },
 ];
 const chewyCatalogByMaster = {
   CHW: { cost: 24, purchase_uom: 'CS' },
@@ -161,6 +166,7 @@ const salesData = {
   WMT: [ { channel: 'walmart',   region: 'US', week_start: '2026-01-05', units_ordered: 100 } ],
   CHW: [ { channel: 'chewy',     region: 'US', week_start: '2026-01-05', units_ordered: 50, retailSales: 400 } ],
   CHX: [ { channel: 'chewy',     region: 'US', week_start: '2026-01-05', units_ordered:  7, retailSales:  60 } ],
+  CHM: [ { channel: 'chewy',     region: 'US', week_start: '2026-01-05', units_ordered: 20, retailSales: 200 } ],
   SHP: [ { channel: 'shopify',   region: 'US', week_start: '2026-01-05', units_ordered:  3, revenue: 42.5 } ],
   GB:  [ { channel: 'amazon_gb', region: 'GB', week_start: '2026-01-05', units_ordered:  2, revenue: 20 } ],
 };
@@ -188,6 +194,7 @@ B = run_node(os.path.join(SP, "_v1235_b.js"), REV + HARNESS + r"""
     walmart: pick('WMT', 0),
     chewy: pick('CHW', 0),
     chewyGap: pick('CHX', 0),
+    chewyManual: pick('CHM', 0),
     shopify: pick('SHP', 0),
     gb: pick('GB', 0),
     chewyMids: [...st.gap.chewyMids],
@@ -219,6 +226,11 @@ eq("B5  /!\\ Chewy is units x the CASE price per each - 50 x (24/12)",
    B["chewy"], 100)
 eq("B6  /!\\ a Chewy SKU with no case qty is null, NEVER 0 - a zero would read "
    "as 'sold for nothing' and quietly deflate its band", B["chewyGap"], None)
+# v12.36 - the hand-typed fallback has to reach Our Revenue, or the 35 SKUs
+# missing from Chewy's export stay worth nothing however carefully they are
+# priced on the card.
+eq("B6b /!\\ a cost typed on the CARD prices the units too - 20 x (30/6)",
+   B["chewyManual"], 100)
 eq("B7  Shopify is its own net sales, already USD", B["shopify"], 42.5)
 eq("B8  an EU row converts at the GBP rate - 20 x 1.25", B["gb"], 25)
 eq("B9  /!\\ the unpriced Chewy SKU is NAMED, not swallowed", B["chewyMids"], ["CHX"])

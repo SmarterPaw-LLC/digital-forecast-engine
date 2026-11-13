@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.35** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.36** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,91 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.36 - a Chewy cost you can type, and the note becomes a tooltip
+
+- **Jason:** *"wtf? i can't set the cost per case for chewy on the 'cost to
+  chewy' tab. when i click on the row it opens the card. the card has no
+  place to set this"* ... *"also goddamnit why is this note here"*
+
+### /!\ AND THE DEEPER FACT IS THAT THE APP HAD NO WAY TO ENTER ONE AT ALL
+v12.35 reported 35 Chewy SKUs as *missing from the Catalog Details export* as
+though an upload were the only remedy. The real state was worse: the uploaded
+`chewy_catalog` was the **sole** source of a Chewy cost, so those 35 priced at
+**nothing** on the Cost to Chewy tab, in the Chewy P&L and in Our Revenue -
+about **7,800 units and $92k of retail** over the trailing year - and no
+screen in the app would take the number.
+
+### /!\ ONE LOOKUP, NINE CONSUMERS
+`chewyCatalogFor(mid)` is the single lookup every one of the nine
+`chewyCatalogPricePerEach` call sites already goes through, so the fallback is
+synthesized **there**, shaped like a catalog row. A tenth spelling of the
+cost-to-per-each division at each call site is how the card and the tab come
+to disagree about one number (hard rule #1).
+
+    products.chewy_cost + products.chewy_cost_uom   ->   { cost, purchase_uom, _manual: true }
+
+- /!\ **THE EXPORT ALWAYS WINS.** The fallback is reached only when Chewy's
+  own file has no row for the SKU, so the next upload takes over on its own
+  and nothing has to be un-typed. `A1` drives a $99 hand entry against
+  Chewy's $24 and requires the $24.
+- /!\ **IT LIVES ON `products`, NOT IN `chewy_catalog`.** Writing our number
+  into the upload table would be erased by the next upload **with no trace**,
+  and would destroy the Cost to Chewy tab's catalog-coverage audit.
+- /!\ **AND THAT AUDIT DOES NOT SILENTLY HEAL.** Typing a cost does not put
+  the SKU in Chewy's export, so the `no-catalog` gap **stands** - the SKU just
+  stops being unpriced. The Cost cell carries a pencil mark, and so does the
+  card, because a hand-typed figure must never pass for an exported one.
+- **`no-case-qty` is the EXISTING reason**, not a new one, and the card's own
+  Case qty box two sections down is what fixes it.
+
+### The card
+Two fields under Cost to Chewy - cost and per case / per each - with a live
+per-unit preview that drives **the real helper** against the case-qty box on
+the same card. **Disabled with the reason** when Chewy's export is answering
+the question or when the product carries no Chewy SKU, handler stripped
+rather than left to be ignored (v10.19).
+
+/!\ **ABSENT MEANS UNTOUCHED, NOT NULL.** The field is disabled while the
+export answers, and writing `null` then would wipe a figure typed before the
+export caught up. The key is omitted from the payload, so PostgREST never
+sees the column (the v12.04 rule).
+
+### (2) "why is this note here"
+`v7.27 - units per case for production pack-out. Drives the **Cases Needed**
+column...` - three sentences, a version number and two bold words, under an
+input, on the one card where vertical space is finite. **My own standing
+rule.** All of it is on the label's tooltip now, the way v12.09 collapsed the
+Dimensions paragraph; v10.87's check applies and the paragraph held no link
+and no button, which is why all of it could move.
+
+### Verification
+- `node --check` clean - **168 suites green** - new `tests/test_v1236.py` (45).
+- **The real `chewyCatalogFor` and `chewyCatalogPricePerEach` driven** over
+  nine shapes: the export winning, a typed case cost, a typed each cost, a
+  lower-case UOM, a missing case qty, a missing UOM, zero, negative, and
+  nothing typed.
+- `test_v1235` grew to **100**, with a hand-priced SKU required to reach Our
+  Revenue - the gap this release exists to close.
+
+### Still open
+- **/!\ JASON HAS TO RUN `supabase_v12_36_chewy_manual_cost.sql`.** Two
+  columns on `products`, additive, no RLS change. Until then the two fields
+  save nothing.
+- /!\ **35 SKUs STILL NEED A COST TYPED** (or a fresh Catalog Details pull).
+  Biggest by trailing-year units: Winter Lift 3,121 - Tomahawk Steak 1,368 -
+  Twisted Pretzel 758 - Pepperoni Pizza 504 - Catnip Cigar 412. The full list
+  is `chewy_unpriced_skus_2026-11-13.csv`, deliberately **not committed** -
+  business data, public repo.
+- /!\ **TWO CATALOG ROWS POINT AT A DEAD master_id.** `5168934` (Rudolph's
+  Rollies) is filed under `SP-0244` and `5168942` (Frosticles) under
+  `SP-0258`, both from the 2026-11-10 merges - so a *different* product is
+  being priced with their cost. The merge reassignment missed
+  `chewy_catalog`, and that is worth checking against
+  `MERGE_MASTER_ID_TABLES`.
+- /!\ **3 SKUs NEED ONLY A CASE QTY** - Jiggly Jellyfish, High Tides
+  Jellyfish, Squiggly Snake. They are in the catalog as CS rows.
+- Everything on the v12.35 list.
 
 ## v12.35 - the Units Sold chart bands by CATEGORY, and measures OUR REVENUE
 
