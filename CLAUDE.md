@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.36** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.37** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,93 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.37 - one set of date windows, and the scorecards leave the picker
+
+- **Jason:** *"units sold doesn't have the same date windows as other
+  charts"* ... *"also why are the scorecards in the product picker? if i hide
+  the product picker it hides the scorecards"*
+
+### /!\ SIX PICKERS, HAND-WRITTEN SEPARATELY, ALREADY DRIFTED
+| picker | keys | |
+|---|---|---|
+| `pnl-period` | 17 | the full set |
+| `chpnl-period` | 16 | the same |
+| `spnl-period` | 11 | no wtd / qtd / last-week / last-quarter / last-year |
+| `wmpnl-period` | 10 | the same, and no 7-day |
+| `seo-tr-period` | 10 | the same again |
+| `salesPeriod` | **6** | **and different VALUES** |
+
+Units Sold used `'0'` for all time and *"Last 12 months"* for what everyone
+else calls *"Last 365 days"*. Two others said `this-month` where two said
+`mtd` - **one window under two names**, which is rule 3a.
+
+### The registry is the enforcement
+`PNL_PERIODS` is the one declaration and `tests/test_v1237.py` fails the
+build on any picker whose keys are not that list. The markup stays static -
+five live controls with five different defaults are not worth re-plumbing
+through a generator - except the SEO one, which is built in JS and therefore
+takes `pnlPeriodOptionsHtml` directly.
+
+`this-month` and `'0'` are **aliases**, so a saved view holding either still
+resolves rather than falling through to the rolling-day branch.
+
+### /!\ AND THE ARITHMETIC EXISTED FIVE TIMES
+`computePnlDateRange` knew every one of these windows, and Shopify, Walmart,
+Units Sold and the SEO page each carried their own copy of the month /
+quarter / rolling-day math. All four go through it now, each handing it **its
+own feed** for all-time - Shopify starts on a different day from Amazon, and
+Units Sold spans four channels, so the shared default would have silently
+moved their left edge.
+
+Two documented exceptions stay, both on the SEO page: all-time floors at
+2000-01-01 (deliberately earlier than any GA4 data, so an over-wide floor
+cannot overstate what is on record) and its rolling window is **inclusive**
+of today, which GA4's own day counts are.
+
+### /!\ AN UNRECOGNISED KEY WAS AN INVALID DATE
+Found by `test_v1153`'s own `nonsense-value` case. The resolver's last branch
+is `parseInt(v)` with no guard, so a stale saved view or a hand-edited
+localStorage produced `Invalid Date` and `toISOString()` **threw out of the
+resolver**, taking the whole render with it. Thirty days and a
+`console.warn` is a far better failure, and the warning is what makes it
+findable. Pre-existing; this release only made it reachable from six pickers
+instead of four.
+
+### Four label builders on one page
+Three of them hardcoded `` `Last ${p} days` `` - which prints *"Last mtd
+days"* the moment the picker offers anything but a rolling window, and that
+is exactly what this release gave it. One `salesPeriodLabel()`, reading the
+registry. The two P&L label maps - one of which carried a *"keep in sync
+with"* comment - both delegate to it too.
+
+### (2) The scorecards
+They summarise the **page** - the period, all time, how many products sold -
+and they follow the **filters**, not the product list. They were inside
+`sales-picker-area`, so *"Hide product picker"* took the page's headline
+numbers with it. Above the bar now, and the button no longer claims to hide
+them.
+
+### Verification
+- `node --check` clean - **169 suites green** - new `tests/test_v1237.py` (55).
+- **The real `computePnlDateRange` driven** over seven windows plus the junk
+  key, with "today" pinned.
+
+### /!\ SIX SUITES WENT RED AND EVERY ONE WAS RIGHT TO
+`test_v1153` had already asserted *"the SEO options are the P&L options,
+value for value"* - so widening the P&L set widened the obligation, and that
+is how the sixth picker was found at all. The others were censuses of the
+things that moved: `test_v1013`'s picker vocabulary and its resolver census,
+`test_v1197`'s compare gate, `test_v1128`'s custom-range check, and the
+`seoTrWindow` harnesses in `test_v1141` / `test_v1173`, which needed the
+registry sliced in. Each was re-pointed to the guarantee, not loosened.
+
+### Still open
+- /!\ **`fPeriod` AND `fba-ship-window` STILL SPEAK '0'.** Two more pickers,
+  on the Forecast and shipment pages, with their own short lists. They are
+  not charts and Jason did not name them, so they are left declared as their
+  own vocabularies in `test_v1013` rather than quietly converted.
+- Everything on the v12.36 list.
 
 ## v12.36 - a Chewy cost you can type, and the note becomes a tooltip
 

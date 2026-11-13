@@ -105,6 +105,13 @@ def _bal(i):
     raise SystemExit("unbalanced at %d" % i)
 
 
+# v12.37 - seoTrWindow resolves its period key through the shared
+# registry now, so the harness needs the registry too.
+def const_src(name):
+    i = s.index("const " + name + " = ")
+    close = "];" if s.startswith("const " + name + " = [", i) else "};"
+    return s[i:s.index(close, i) + 2]
+
 def fn(name, kw="function"):
     pat = kw + " " + name + "("
     i = js.index(pat)
@@ -196,7 +203,10 @@ global.document = { getElementById: (id) =>
     id === 'seo-tr-period' ? { value: PERIOD }
   : id === 'seo-tr-from'   ? { value: FROM }
   : id === 'seo-tr-to'     ? { value: TO } : null };
-""" + fn("seoTrWindow") + r"""
+""" + fn("seoTrWindow") + "\n"
+   + fn("pnlPeriodKey") + "\n" + fn("pnlPeriodLabelOf") + "\n"
+   + fn("computePnlDateRange") + "\n" + const_src("PNL_PERIODS") + "\n"
+   + const_src("PNL_PERIOD_ALIAS") + r"""
 const RealDate = Date;
 const FIXED = new RealDate(2026, 10, 6);     // 2026-11-06
 globalThis.Date = class extends RealDate {

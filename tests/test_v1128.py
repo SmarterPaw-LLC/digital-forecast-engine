@@ -390,7 +390,10 @@ for host in R['hosts']:
            % ('PNL_PERIOD_HOSTS', host, host, suffix))
     i = s.index('id="%s-period"' % host)
     blk = s[i:s.index('</select>', i)]
-    ok('value="custom"' in blk,
+    # v12.37 - one picker is BUILT from PNL_PERIODS rather than written out,
+    # so "offers a custom range" is satisfied either by the literal option or
+    # by calling the generator whose registry declares it.
+    ok('value="custom"' in blk or 'pnlPeriodOptionsHtml(' in blk,
        'E3b and its period control offers a custom range to put them behind')
 
 used = set(re.findall(r"periodHost: '([a-z]+)'", js))

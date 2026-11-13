@@ -31,6 +31,13 @@ def nocomment(t):
     return re.sub(r"(?m)^\s*//.*$", "", t)
 
 
+# v12.37 - PNL_PERIODS and PNL_PERIOD_ALIAS are top-level literals, not
+# functions, so they need their own slicer. Sliced, never stubbed.
+def const_block(name):
+    i = s.index("const " + name + " = ")
+    close = "];" if s.startswith("const " + name + " = [", i) else "};"
+    return s[i:s.index(close, i) + 2]
+
 def fn(name):
     i = js.index("function " + name + "(")
     d, started, k = 0, False, js.index("{", i)
@@ -61,18 +68,27 @@ print("=" * 62)
 # ---------------------------------------------------------------------------
 # A. THE DIVERGENCE, closed.  Same values, same order, same vocabulary.
 # ---------------------------------------------------------------------------
-ref = re.search(r'id="wmpnl-period"[\s\S]*?</select>', s).group(0)
-ref_vals = re.findall(r'<option value="([^"]*)"', ref)
-ref_labels = [x.strip() for x in re.findall(r'<option[^>]*>([^<]*)</option>', ref)]
+# v12.37 - /!\ THE DIVERGENCE IS NOW CLOSED BY A REGISTRY, not by two lists
+# happening to match. PNL_PERIODS is the one declaration; the SEO picker is
+# the only one built in JS, so it is the only one that can take the
+# generator, and the static four are pinned against the same registry in
+# test_v1237. Scraping literal <option> strings out of a generated control
+# finds none - the guarantee moved, it did not weaken.
+reg = s[s.index("const PNL_PERIODS = ["):s.index("];", s.index("const PNL_PERIODS = ["))]
+ref_vals = re.findall(r"v: '([^']*)'", reg)
+ref_labels = [x for x in re.findall(r"label: '([^']*)'", reg)]
 
 seo_block = s[s.index("seo-tr-period"):s.index("seo-tr-custom-wrap")]
-seo_vals = re.findall(r'<option value="([^"]*)"', seo_block)
-seo_labels = [x.strip() for x in re.findall(r'<option[^>]*>([^<]*)</option>', seo_block)]
-
-eq("A1 the SEO options are the P&L options, value for value", seo_vals, ref_vals)
-eq("A1b and label for label", seo_labels, ref_labels)
-ok("custom" in seo_vals, "A2 including a custom range, which it had none of")
-eq("A3 ten options, not five", len(seo_vals), 10)
+eq("A1 the SEO picker is built FROM the registry, not from a second list",
+   "pnlPeriodOptionsHtml('90')" in seo_block, True)
+ok("<option value=" not in seo_block,
+   "A1b /!\\ ...and no hand-written option survives beside it")
+ok("custom" in ref_vals, "A2 including a custom range, which it had none of")
+ok(len(ref_vals) == 16 and len(ref_labels) == 16,
+   "A3 sixteen windows, not five", len(ref_vals))
+ok(ref_vals == list(dict.fromkeys(ref_vals)), "A3b no key declared twice")
+ok(ref_labels == list(dict.fromkeys(ref_labels)),
+   "A3c and no two windows share a label - one label, one measure")
 
 # All four controls the shared v11.02 bar shape requires.
 for ident in ("seo-tr-period", "seo-tr-custom-wrap", "seo-tr-from", "seo-tr-to"):
@@ -82,13 +98,18 @@ for ident in ("seo-tr-period", "seo-tr-custom-wrap", "seo-tr-from", "seo-tr-to")
 # B. seoTrWindow resolves every one of them.
 # ---------------------------------------------------------------------------
 B = run_node(os.path.join(SP, "b.js"), """
-const VALS = """ + json.dumps(ref_vals) + r""";
+// v12.37 - the sixteen declared windows PLUS the two retired spellings,
+// which saved views still hold and which must keep resolving.
+const VALS = """ + json.dumps(ref_vals + ["this-month", "0"]) + r""";
 let PERIOD = '90', FROM = '', TO = '';
 globalThis.document = { getElementById: (id) =>
   id === 'seo-tr-period' ? { value: PERIOD }
   : id === 'seo-tr-from' ? { value: FROM }
   : id === 'seo-tr-to' ? { value: TO } : null };
-""" + fn("seoTrWindow") + r"""
+""" + fn("seoTrWindow") + "\n"
+   + fn("computePnlDateRange") + "\n" + fn("pnlPeriodLabelOf") + "\n"
+   + fn("pnlPeriodKey") + "\n" + const_block("PNL_PERIODS") + "\n"
+   + const_block("PNL_PERIOD_ALIAS") + r"""
 // Pin "today" so the suite is not date-dependent.
 const RealDate = Date;
 const FIXED = new RealDate(2026, 10, 3);     // 2026-11-03
@@ -108,6 +129,8 @@ FROM = '2026-03-01'; TO = '2026-03-31';
 out.custom_full = seoTrWindow();
 FROM = '2026-05-01'; TO = '2026-04-01';          // inverted
 out.custom_inverted = seoTrWindow();
+PERIOD = 'mtd';
+out.mtd = seoTrWindow();
 PERIOD = 'nonsense-value';
 out.unknown = seoTrWindow();
 console.log(JSON.stringify(out));
@@ -118,7 +141,13 @@ eq("B1 30 days spans 30 days inclusive", B["30"]["from"], "2026-10-05")
 eq("B1b 365", B["365"]["from"], "2025-11-04")
 eq("B2 Year to date starts Jan 1 of the CURRENT year", B["ytd"]["from"], "2026-01-01")
 eq("B2b labelled", B["ytd"]["label"], "Year to date")
+# v12.37 - `this-month` is `mtd` now, aliased so an old saved view still
+# resolves. Both spellings must land on the 1st.
 eq("B3 This month starts on the 1st", B["this-month"]["from"], "2026-11-01")
+eq("B3b /!\\ ...and so does the name every other page uses for it",
+   B["mtd"]["from"], "2026-11-01")
+eq("B3c /!\\ ...and the retired '0' still means all time",
+   B["0"]["from"], B["all"]["from"])
 eq("B4 Last month is the WHOLE previous month", B["last-month"]["from"], "2026-10-01")
 eq("B4b and ends on its last day, not today", B["last-month"]["to"], "2026-10-31")
 ok(B["all"]["from"] < "2015-01-01",
@@ -151,7 +180,10 @@ globalThis.document = { getElementById: (id) =>
   : id === 'seo-tr-from' ? { value: FROM }
   : id === 'seo-tr-to' ? { value: TO } : null };
 globalThis.loadSeoTraffic = () => { LOADS++; };
-""" + fn("seoTrWindow") + "\n" + fn("seoTrPeriodChange") + r"""
+""" + fn("seoTrWindow") + "\n" + fn("seoTrPeriodChange") + "\n"
+   + fn("computePnlDateRange") + "\n" + fn("pnlPeriodLabelOf") + "\n"
+   + fn("pnlPeriodKey") + "\n" + const_block("PNL_PERIODS") + "\n"
+   + const_block("PNL_PERIOD_ALIAS") + r"""
 const out = {};
 PERIOD = '180'; seoTrPeriodChange();
 out.plain = { display: DISPLAY, loads: LOADS };

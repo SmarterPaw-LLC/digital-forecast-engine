@@ -108,7 +108,12 @@ ok("_bandsHost.style.display = 'inline-flex';" in SALES,
    "A9  the control row is always rendered")
 
 # The compare state is decided ONCE and read twice.
-ok("const _salesCmp = (from && to)" in SALES, "A10 the compare state is decided once")
+# v12.37 - all time now RESOLVES a `from` (the earliest row this page can
+# draw), so "is there a start" stopped being the test. The guarantee is
+# unchanged: decided once, read twice, and refused where there is nothing
+# before the window to measure against.
+ok("const _salesCmp = (from && to && !_salesWin.allTime)" in SALES,
+   "A10 the compare state is decided once")
 ok(SALES.count("_salesCmp.ok") == 1 and SALES.count("_salesCmp)") == 1,
    "A11 /!\\ ...and the control and the overlay read the same answer")
 ok("getPnlPrevDateRange({ from: salesIsoOf(from), to: salesIsoOf(to) })" in SALES,

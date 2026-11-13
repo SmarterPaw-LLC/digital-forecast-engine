@@ -157,7 +157,9 @@ def options_of(select_id):
 PICKERS = {
     'pnl-period': 'all', 'spnl-period': 'all', 'wmpnl-period': 'all',
     'chpnl-period': 'all',          # v11.02: the ONE Chewy picker
-    'fPeriod': '0', 'salesPeriod': '0', 'fba-ship-window': '0',   # pre-existing
+    # v12.37 - salesPeriod joined the shared vocabulary: 'all', not '0'.
+    'salesPeriod': 'all',
+    'fPeriod': '0', 'fba-ship-window': '0',   # pre-existing, own vocabularies
 }
 RETIRED_PICKERS = ('chpnl-sales-period', 'chpnl-cost-period', 'chpnl-be-period')
 for sid, val in PICKERS.items():
@@ -171,7 +173,9 @@ for sid, val in PICKERS.items():
 # Rebates picker had no custom-range option at all, so it could not be held
 # to the ordering rule; the shared control carries the full option list, so
 # the re-point TIGHTENS rather than loosens.
-for sid in ('pnl-period', 'spnl-period', 'wmpnl-period', 'chpnl-period'):
+# v12.37 - salesPeriod joins this ordering check too, now that it carries
+# the shared list.
+for sid in ('pnl-period', 'spnl-period', 'wmpnl-period', 'chpnl-period', 'salesPeriod'):
     opts = options_of(sid)
     sok(opts is not None and opts.index('all') == len(opts) - 2 and opts[-1] == 'custom',
         '%s puts All time just before Custom range' % sid)
@@ -186,13 +190,25 @@ sok(len(re.findall(r'<select[^>]*id="chpnl-period"', src)) == 1,
     'exactly one Chewy period <select> in the markup')
 
 # Each resolver has an all-time branch that reads the real earliest date.
-for fname, data in (('getPnlDateRange', 'src.rows'),
-                    ('getShopifyPnlDateRange', 'shopifyPnlData'),
-                    ('getWalmartPnlDateRange', 'walmartPnlData')):
+# v12.37 re-point - Shopify and Walmart are THIN WRAPPERS now, the way the
+# Chewy ones already were, so the check FOLLOWS THE CALL rather than being
+# dropped. They each carried their own copy of the week / month / rolling-day
+# arithmetic, which is how two of them came to offer `this-month` where the
+# others offer `mtd` - one window under two names (rule 3a).
+for fname, data in (('getPnlDateRange', 'src.rows'),):
     body = fn(fname)
     sok('pnlAllTimeFrom(' in body, '%s derives all-time from real data' % fname)
     sok(data in body, '%s reads %s' % (fname, data))
     sok('allTime: true' in body, '%s flags the range as all-time' % fname)
+for fname, data in (('getShopifyPnlDateRange', 'shopifyPnlData'),
+                    ('getWalmartPnlDateRange', 'walmartPnlData'),
+                    ('getSalesPeriodDates',    '_salesAllTimeRows()')):
+    body = fn(fname)
+    sok('computePnlDateRange(' in body, '%s goes through the one resolver' % fname)
+    sok('allRows: ' + data in body,
+        '%s hands it ITS OWN feed, so all-time is that feed\'s floor' % fname)
+    sok('pnlAllTimeFrom(' not in body,
+        '/!\\ %s no longer carries its own copy of the arithmetic' % fname)
 
 # v11.02 re-point - the Chewy resolvers are thin wrappers now, so the check
 # FOLLOWS THE CALL rather than being dropped. Same guarantee in three hops:
@@ -239,8 +255,14 @@ sok(js.count('if (_pnlSuppressDeltas) return \'\';') == 1, 'suppression guard li
 sok(js.count('let _pnlSuppressDeltas = false;') == 1, 'one suppression flag')
 
 # Period label maps know the new key, or the UI prints a raw "all".
-sok(js.count("'all': 'All time'") + js.count("'all':'All time'") == 2,
-    'both Amazon period-label maps know the all-time key')
+# v12.37 - there is ONE map now. Both label functions delegate to it, so
+# the pair that carried a "keep in sync with" comment cannot drift.
+sok(js.count("v: 'all',") == 1 and "label: 'All time'" in js,
+    'the registry knows the all-time key')
+sok(js.count('function pnlPeriodLabelOf') == 1,
+    'one label resolver')
+sok('return pnlPeriodLabelOf(k);' in js and 'return pnlPeriodLabelOf(v);' in js,
+    '/!\ both Amazon label functions delegate to it')
 
 # ── Units Sold default trend.
 sales = fn('updateSalesChart')

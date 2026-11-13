@@ -89,6 +89,13 @@ def _balance(i):
     raise RuntimeError('unbalanced slice at %d' % i)
 
 
+# v12.37 - seoTrWindow resolves its period key through the shared
+# registry now, so the harness needs the registry too.
+def const_src(name):
+    i = s.index("const " + name + " = ")
+    close = "];" if s.startswith("const " + name + " = [", i) else "};"
+    return s[i:s.index(close, i) + 2]
+
 def fn(name):
     i = js.index('function %s(' % name)
     head = 'async ' if js[max(0, i - 6):i] == 'async ' else ''
@@ -169,7 +176,10 @@ B = run_node(os.path.join(SP, '_v1141_b.js'),
     'let PICK = "90";\n'
     'function mkEl(v){ return { value: v }; }\n'
     'const document = { getElementById: (id) => id === "seo-tr-period" ? mkEl(PICK) : null };\n'
-    + fn('seoTrWindow') + r"""
+    + fn('seoTrWindow') + "\n"
+   + fn("pnlPeriodKey") + "\n" + fn("pnlPeriodLabelOf") + "\n"
+   + fn("computePnlDateRange") + "\n" + const_src("PNL_PERIODS") + "\n"
+   + const_src("PNL_PERIOD_ALIAS") + r"""
 const out = {};
 const days = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5) + 1;
 for (const p of ['28', '90', '180', '365']) { PICK = p; const w = seoTrWindow();
