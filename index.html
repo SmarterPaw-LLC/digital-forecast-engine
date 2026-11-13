@@ -1273,6 +1273,7 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
       <button class="subtab on" id="ipv-planning" onclick="setIpView('planning')">📦 Planning</button>
       <button class="subtab" id="ipv-inhouse" onclick="setIpView('inhouse')">🏭 In-House Production</button>
       <button class="subtab" id="ipv-reorder" onclick="setIpView('reorder')">⚙ Reorder Setup</button>
+      <button class="subtab" id="ipv-orderlist" onclick="setIpView('orderlist')">🚚 Order List</button>
     </div>
     <div id="ip-planning-container">
     <!-- v7.13 — Data currency bar (Inventory Planning sources). -->
@@ -1473,6 +1474,19 @@ code { font-family: var(--mono); font-size: 11px; background: var(--surface2); p
          trigger (threshold, days) + reorder qty (days). Inline edit + bulk
          select/edit. Amazon US/CA/EU-UK come from inventory (per region);
          Shopify + Chewy from products.* (master-level). -->
+    <!-- v12.31 - Order List. The NEXT Amazon reorder event per product,
+         grouped by brand then region, with the quantity rounded up for a
+         real shipment. Built ON DEMAND: the simulation is the same one the
+         Planning grid runs, so it is not re-run on every unrelated paint. -->
+    <div id="ip-orderlist-container" style="display:none;padding:0">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--surface)">
+        <button onclick="renderOrderList(true)" style="font-family:var(--display);font-weight:700;font-size:12px;padding:7px 16px;border:1px solid var(--sp-green,#4a9e38);border-radius:6px;background:var(--sp-green,#4a9e38);color:#fff;cursor:pointer">🚚 Build order list</button>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">uses the Brand / Region / Category filters above</span>
+        <span style="flex:1"></span>
+        <button id="ol-csv" onclick="downloadOrderListCSV()" style="display:none;font-family:var(--mono);font-size:11px;padding:6px 12px;border:1px solid var(--border2);border-radius:6px;background:var(--surface2);color:var(--text2);cursor:pointer">↓ CSV</button>
+      </div>
+      <div id="ip-orderlist-body" style="padding:12px"></div>
+    </div>
     <div id="ip-reorder-container" style="display:none;padding:0">
       <!-- v6.26 — Inventory Events manager. Define demand spikes (e.g. Prime
            Day) that require extra stock; the extra drain folds into the
@@ -55294,10 +55308,16 @@ function setIpView(v) {
   // makes it a different view is getStatusMode() answering 'in_house' while it
   // is active, which is one line rather than a second table.
   const onPlanning = v === 'planning' || v === 'inhouse';
+  // v12.31 - /!\ THREE CONTAINERS, ONE DECISION. Order List is its own
+  // surface rather than a reading of the Planning grid, because it answers a
+  // different question: not "what is the plan" but "what do I ship now".
+  const onOrder = v === 'orderlist';
   const pc = document.getElementById('ip-planning-container');
   const rc = document.getElementById('ip-reorder-container');
+  const oc = document.getElementById('ip-orderlist-container');
   if (pc) pc.style.display = onPlanning ? '' : 'none';
-  if (rc) rc.style.display = onPlanning ? 'none' : '';
+  if (rc) rc.style.display = (!onPlanning && !onOrder) ? '' : 'none';
+  if (oc) oc.style.display = onOrder ? '' : 'none';
   // v11.64 — swap the column set with the view. ipLoadVisibleFor returns
   // null the first time a view is entered, and the set already on screen is
   // then saved under it - so a first visit changes nothing visible.
@@ -55305,8 +55325,13 @@ function setIpView(v) {
   if (nextCols) ipVisibleCols = nextCols;
   ipSaveVisible();
   ipSyncInhouseControls();
-  subtabApply([['ipv-planning', 'planning'], ['ipv-inhouse', 'inhouse'], ['ipv-reorder', 'reorder']], v);
+  subtabApply([['ipv-planning', 'planning'], ['ipv-inhouse', 'inhouse'],
+               ['ipv-reorder', 'reorder'], ['ipv-orderlist', 'orderlist']], v);
   if (onPlanning) renderInventoryTbl();
+  // /!\ ON DEMAND. Entering the tab paints whatever was last built (or the
+  // empty state); it does not re-run the simulation behind the operator's
+  // back. The button is the trigger, which is what "on demand" means.
+  else if (onOrder) renderOrderList(false);
   else { renderEventsList(); renderReorderGrid(); }
 }
 
@@ -58761,6 +58786,180 @@ function ipShowOnlySelected() {
 
 // Helper — current visible records under the active filter set (excluding
 // the "show only selected" toggle), used by select-all sync.
+// ===========================================================================
+// v12.31 - ORDER LIST. The next Amazon shipment, by brand and region.
+//
+// Jason: "i want a new tab for 'order list' by brand, by region. On demand,
+// it should pull numbers for an amazon shipment. the numbers should be
+// rounded to the next 5 or 10 unit"
+//
+// /!\ THE QUANTITY IS NOT A NEW CALCULATION. `inventoryNeedBreakdown` already
+// simulates every Amazon reorder event in the horizon - its order-by day, the
+// lead time, the arrival, and the seasonal demand over that event's OWN
+// arrival window. This reads events[0], the NEXT one, which is what one
+// shipment is. A second quantity model here would be rule 3a on the single
+// number this whole page exists to produce.
+//
+// /!\ AND THE FILTERS ARE THE PAGE'S OWN. `inventoryVisibleRecords()` already
+// applies brand, region, category, status, search, bundles, inactive and the
+// in-house pick. Re-spelling that is how two tabs on one page come to
+// disagree about which products exist (hard rule #1).
+// ===========================================================================
+
+// Jason's rule: UP to the next 5 below 100 units, UP to the next 10 at 100+.
+// /!\ A positive quantity never rounds to zero - a shipment of 1 unit is a
+// shipment, and rounding it away would silently drop a line from the list.
+function ipRoundShipQty(q) {
+  const n = Number(q);
+  if (!isFinite(n) || n <= 0) return 0;
+  const step = n < 100 ? 5 : 10;
+  return Math.max(step, Math.ceil(n / step) * step);
+}
+
+let _ipOrderList = null;   // null = never built; [] = built and empty
+
+// /!\ A DAY OFFSET IS NOT A DATE. The simulation counts days from today, so
+// the list converts once, here, rather than leaving four call sites to each
+// add a number to a Date.
+function ipDayToYmd(offset) {
+  if (offset == null || !isFinite(offset)) return null;
+  const d = new Date();
+  d.setDate(d.getDate() + Math.round(offset));
+  return (typeof fmtLocalYMD === 'function') ? fmtLocalYMD(d) : d.toISOString().slice(0, 10);
+}
+
+function ipBuildOrderList() {
+  const horizon = parseInt(document.getElementById('ip-horizon')?.value || '90');
+  const region  = document.getElementById('ip-region')?.value || '';
+  const out = [];
+  for (const r of inventoryVisibleRecords()) {
+    let nb;
+    try { nb = inventoryNeedBreakdown(r, horizon, region || undefined); }
+    catch (e) { continue; }
+    const meta = nb && nb.amazon && nb.amazon.meta;
+    const ev   = meta && meta.events && meta.events[0];
+    // /!\ NO EVENT IS NOT A ZERO. A product whose cover reaches past the
+    // horizon has nothing to ship, and a row of zeros would read as a
+    // decision rather than as its absence (v11.16).
+    if (!ev || !(ev.qty > 0)) continue;
+    out.push({
+      master_id: r.master_id,
+      title:  r.title || r.master_id || '',
+      sku:    r.sp_sku || '',
+      asin:   r.asin || '',
+      brand:  r.brand || '(no brand)',
+      region: (r.region || 'US'),
+      coverDays: (meta.dos != null && isFinite(meta.dos)) ? Math.round(meta.dos) : null,
+      leadTime:  r.lead_time || 60,
+      orderBy: ipDayToYmd(ev.orderDay),
+      arrives: ipDayToYmd(ev.arrival),
+      raw:  Math.round(ev.qty),
+      qty:  ipRoundShipQty(ev.qty),
+      seaMult: ev.seaMult,
+      events: meta.events.length,
+    });
+  }
+  // Brand, then region, then the biggest shipment first inside each group.
+  out.sort((a, b) => (a.brand || '').localeCompare(b.brand || '')
+                  || (a.region || '').localeCompare(b.region || '')
+                  || (b.qty - a.qty));
+  return out;
+}
+
+function renderOrderList(build) {
+  const body = document.getElementById('ip-orderlist-body');
+  if (!body) return;
+  if (build) _ipOrderList = ipBuildOrderList();
+  const csvBtn = document.getElementById('ol-csv');
+  const rows = _ipOrderList;
+  if (rows === null) {
+    if (csvBtn) csvBtn.style.display = 'none';
+    body.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text3);padding:18px 2px">'
+      + 'Set the Brand / Region / Category filters above, then Build order list.</div>';
+    return;
+  }
+  if (csvBtn) csvBtn.style.display = rows.length ? '' : 'none';
+  const horizon = parseInt(document.getElementById('ip-horizon')?.value || '90');
+  if (!rows.length) {
+    body.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--text3);padding:18px 2px">'
+      + 'No Amazon reorder fires inside the ' + horizon + '-day horizon for these filters. '
+      + 'Widen the horizon or clear a filter.</div>';
+    return;
+  }
+  // group: brand -> region
+  const byBrand = new Map();
+  for (const x of rows) {
+    if (!byBrand.has(x.brand)) byBrand.set(x.brand, new Map());
+    const br = byBrand.get(x.brand);
+    if (!br.has(x.region)) br.set(x.region, []);
+    br.get(x.region).push(x);
+  }
+  const n0 = n => Math.round(Number(n) || 0).toLocaleString();
+  const grand = rows.reduce((t, x) => t + x.qty, 0);
+  const TH = (t, a) => `<th style="text-align:${a || 'left'};padding:5px 8px;font-family:var(--mono);font-size:10px;`
+    + `color:var(--text3);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap">${t}</th>`;
+  let html = `<div style="font-family:var(--mono);font-size:11px;color:var(--text2);margin-bottom:10px">`
+    + `<b>${n0(grand)}</b> units across <b>${rows.length}</b> product${rows.length === 1 ? '' : 's'}`
+    + ` \u00b7 next reorder inside ${horizon} days \u00b7 rounded up to 5 under 100 units, 10 at 100+</div>`;
+  for (const [brand, regions] of byBrand) {
+    const bTot = [...regions.values()].flat().reduce((t, x) => t + x.qty, 0);
+    html += `<div style="font-family:var(--display);font-weight:800;font-size:13px;color:var(--text);margin:14px 0 4px">`
+      + `${esc2(brand)} <span style="font-family:var(--mono);font-weight:400;font-size:11px;color:var(--text3)">`
+      + `${n0(bTot)} units</span></div>`;
+    for (const [reg, list] of regions) {
+      const rTot = list.reduce((t, x) => t + x.qty, 0);
+      html += `<div style="font-family:var(--mono);font-size:11px;color:var(--text2);margin:8px 0 2px">`
+        + `${esc2(reg)} \u00b7 <b>${n0(rTot)}</b> units \u00b7 ${list.length} SKU${list.length === 1 ? '' : 's'}</div>`
+        + `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:6px">`
+        + `<thead><tr style="border-bottom:1px solid var(--border)">`
+        + TH('Product') + TH('SKU') + TH('ASIN') + TH('Cover', 'right')
+        + TH('Order by') + TH('Arrives') + TH('Modelled', 'right') + TH('Ship', 'right')
+        + `</tr></thead><tbody>`;
+      for (const x of list) {
+        html += `<tr style="border-bottom:1px solid var(--border2)">`
+          + `<td style="padding:5px 8px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc2(x.title)}">${esc2(x.title)}</td>`
+          + `<td style="padding:5px 8px;font-family:var(--mono);font-size:11px;color:var(--text3)">${esc2(x.sku)}</td>`
+          + `<td style="padding:5px 8px;font-family:var(--mono);font-size:11px;color:var(--text3)">${esc2(x.asin)}</td>`
+          + `<td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px;color:var(--text3)">${x.coverDays == null ? '\u2014' : x.coverDays + 'd'}</td>`
+          + `<td style="padding:5px 8px;font-family:var(--mono);font-size:11px">${x.orderBy || '\u2014'}</td>`
+          + `<td style="padding:5px 8px;font-family:var(--mono);font-size:11px;color:var(--text3)">${x.arrives || '\u2014'}</td>`
+          + `<td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11px;color:var(--text3)" title="The simulation's own figure, before rounding.">${n0(x.raw)}</td>`
+          + `<td style="padding:5px 8px;text-align:right;font-family:var(--mono);font-weight:700;color:var(--text)">${n0(x.qty)}</td>`
+          + `</tr>`;
+      }
+      html += `</tbody></table>`;
+    }
+  }
+  body.innerHTML = html;
+}
+
+// /!\ EVERY DATA-BEARING VIEW IS EXPORTABLE. Standing rule, and this one is a
+// list somebody retypes into Seller Central if it is not.
+function downloadOrderListCSV() {
+  const rows = _ipOrderList || [];
+  if (!rows.length) return;
+  const esc = v => {
+    const t = String(v == null ? '' : v);
+    return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  };
+  const head = ['Brand', 'Region', 'Product', 'SKU', 'ASIN', 'Cover days',
+                'Lead time days', 'Order by', 'Arrives', 'Modelled qty', 'Ship qty'];
+  const lines = [head.join(',')];
+  for (const x of rows) {
+    lines.push([x.brand, x.region, x.title, x.sku, x.asin,
+                x.coverDays == null ? '' : x.coverDays, x.leadTime,
+                x.orderBy || '', x.arrives || '', x.raw, x.qty].map(esc).join(','));
+  }
+  lines.push(['TOTAL', '', '', '', '', '', '', '', '', '',
+              rows.reduce((t, x) => t + x.qty, 0)].map(esc).join(','));
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'amazon-order-list-' + (new Date()).toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { try { URL.revokeObjectURL(a.href); a.remove(); } catch (_) {} }, 0);
+}
+
 function inventoryVisibleRecords() {
   const brand   = document.getElementById('ip-brand')?.value    || '';
   const region  = document.getElementById('ip-region')?.value   || '';

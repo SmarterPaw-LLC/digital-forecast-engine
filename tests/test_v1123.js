@@ -2197,14 +2197,25 @@ function adsNoteCompose(channel, campaign) {
     g('anc-yes').disabled = true; g('anc-yes').textContent = 'Saving\u2026';
     try {
       const sb = await getSB();
-      const { error } = await sb.from('ads_campaign_notes').insert([{
+      const { data, error } = await sb.from('ads_campaign_notes').insert([{
         channel, account: null, campaign: name || null,
         note_date: date, kind: g('anc-kind').value || 'change', note: text,
-      }]);
+      }]).select();
       if (error) throw error;
       close();
-      await adsNotesLoad(channel, true);
+      // v12.31 - /!\ THE SAVED ROW GOES STRAIGHT INTO THE CACHE. The re-fetch
+      // still runs behind it, but the note is on screen whether or not that
+      // round trip lands. A note that is saved and invisible is a worse
+      // failure than a save that refuses (v12.24's lesson).
+      const saved = (data || [])[0];
+      if (saved) {
+        const cur = _adsNotes[channel];
+        if (cur && Array.isArray(cur.rows)) cur.rows.unshift(saved);
+        else _adsNotes[channel] = { rows: [saved] };
+      }
       adsNotesRepaint(channel);
+      adsNotesLoad(channel, true).then(() => adsNotesRepaint(channel))
+        .catch(e => console.warn('ads notes reload:', e && e.message));
     } catch (e) {
       g('anc-yes').disabled = false; g('anc-yes').textContent = 'Save note';
       err.textContent = 'Could not save: ' + ((e && e.message) || e);
@@ -2237,17 +2248,30 @@ function adsNotesRenderList(channel, ch, campaignNames, selectedNames) {
   const cnt  = document.getElementById(ch.host + '-notes-count');
   if (!list) return;
   const entry = _adsNotes[channel];
+  // v12.31 - /!\ IT ALWAYS SAYS WHAT IT KNOWS. A silent empty panel cannot be
+  // told apart from a broken one, which is exactly what cost a round trip:
+  // the row was in the table and the screen said nothing at all.
+  if (entry === undefined) {
+    list.innerHTML = '';
+    if (cnt) cnt.textContent = 'not loaded yet';
+    return;
+  }
   if (entry && entry.pending) { list.innerHTML = ''; if (cnt) cnt.textContent = 'reading\u2026'; return; }
   if (entry && entry.why) {
     list.innerHTML = `<div style="font-family:var(--mono);font-size:11px;color:var(--sp-orange,#c2771f)">\u26a0 ${esc2(entry.why)}</div>`;
-    if (cnt) cnt.textContent = '';
+    if (cnt) cnt.textContent = 'could not read';
     return;
   }
   const rows = adsNotesFor(channel, selectedNames);
+  const all = adsNotesRows(channel).length;
   if (cnt) {
     cnt.textContent = rows.length
-      ? (rows.length + ' in view' + (selectedNames && selectedNames.length ? ' \u00b7 selection' : ''))
-      : 'nothing recorded yet \u00b7 use the \ud83d\udcdd on a campaign row';
+      ? (rows.length + ' in view'
+         + (all !== rows.length ? ' of ' + all : '')
+         + (selectedNames && selectedNames.length ? ' \u00b7 selection' : ''))
+      : (all
+         ? (all + ' on this channel, none in view \u00b7 clear the selection or widen the period')
+         : 'nothing recorded yet \u00b7 use the \ud83d\udcdd on a campaign row');
   }
   if (!rows.length) { list.innerHTML = ''; return; }
   list.innerHTML = rows.slice(0, 40).map(r => {
@@ -2898,7 +2922,10 @@ function renderAdsCampaigns(channel, view) {
       // /!\ The FOOTER calls cellOf with no index (i < 0) and is not a
       // campaign, so it gets no affordance - the same guard the drill uses.
       let noteBtn = '';
-      if (i >= 0 && !c.noCampaign && TACOS_SRC[channel] && c[NAMECOL]) {
+      // v12.31 - /!\ NO TACoS GATE. Notes have nothing to do with whether a
+      // channel has a sales feed; that condition was copied and would make
+      // the affordance silently absent on a tab for an unrelated reason.
+      if (i >= 0 && !c.noCampaign && c[NAMECOL]) {
         const n = (typeof adsNoteCountFor === 'function') ? adsNoteCountFor(channel, c[NAMECOL]) : 0;
         const _nm = String(c[NAMECOL]).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         noteBtn = `<span onclick="event.stopPropagation();adsNoteCompose('${channel}','${esc2(_nm)}')"`

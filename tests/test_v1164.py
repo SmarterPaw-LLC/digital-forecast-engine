@@ -115,8 +115,12 @@ ih_sel = re.search(r'<select id="ip-in-house-filter".*?</select>', s, re.S)
 ok(ih_sel is not None and 'value="in_house"' in ih_sel.group(0),
    "A8  the production-origin filter keeps its own in_house option")
 
-eq("A9  all three views are handed to subtabApply, once",
-   NC.count("[['ipv-planning', 'planning'], ['ipv-inhouse', 'inhouse'], ['ipv-reorder', 'reorder']]"), 1)
+# v12.31 - a fourth view (Order List) joined, so the list wraps. The
+# guarantee is that every view reaches subtabApply exactly once, not the
+# whitespace of one literal.
+for _v in ("['ipv-planning', 'planning']", "['ipv-inhouse', 'inhouse']",
+           "['ipv-reorder', 'reorder']", "['ipv-orderlist', 'orderlist']"):
+    eq("A9  %s is handed to subtabApply, once" % _v, NC.count(_v), 1)
 eq("A9b and the two-view list is gone, not left beside it",
    NC.count("[['ipv-planning', 'planning'], ['ipv-reorder', 'reorder']]"), 0)
 

@@ -82,7 +82,9 @@ STRIPS = {
                            'pnl-amzn-ads-tab-activity', 'pnl-amzn-ads-tab-uploads'],
     # v11.64 - In-House Production left the Status-by dropdown and became a
     # tab. Census 35 -> 36; this going red is the test doing its job.
-    'Inventory Planning': ['ipv-planning', 'ipv-inhouse', 'ipv-reorder'],
+    # v12.31 - the Order List tab. Census 37 -> 38; this going red is the
+    # test doing its job, same as v11.64's 35 -> 36.
+    'Inventory Planning': ['ipv-planning', 'ipv-inhouse', 'ipv-reorder', 'ipv-orderlist'],
     'Pricing Scenarios':  ['pricing-mode-new', 'pricing-mode-existing', 'pricing-mode-chewy'],
     # v11.70 - the Amazon Fees tab. Census 36 -> 37; this going red is the
     # test doing its job, same as v11.64's 35 -> 36.

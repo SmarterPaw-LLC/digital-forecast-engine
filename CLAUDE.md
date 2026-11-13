@@ -38,6 +38,59 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
 
+## v12.31 - Order List: the next Amazon shipment, by brand and region
+
+- **Jason:** *"On the Inventory planning page, i want a new tab for 'order
+  list' by brand, by region. On demand, it should pull numbers for an amazon
+  shipment. the numbers should be rounded to the next 5 or 10 unit"*
+
+### /!\ THE QUANTITY IS NOT A NEW CALCULATION
+`inventoryNeedBreakdown` already simulates every Amazon reorder event: its
+order-by day, the lead time, the arrival, and the **seasonal demand over that
+event's own arrival window**. The list reads `amazon.meta.events[0]` - the
+NEXT one, which is what a shipment is. A second quantity model here would be
+rule 3a on the single number this page exists to produce.
+
+Jason chose **next shipment only** over the horizon total, and **up to 5
+below 100 units, up to 10 at 100+** over a flat 10 or case packs.
+
+### /!\ AND THE FILTERS ARE THE PAGE'S OWN
+`inventoryVisibleRecords()` already applies brand, region, category, status,
+search, bundles, inactive and the in-house pick. Re-spelling that filter is
+how two tabs on one page come to disagree about which products exist.
+
+### The rules that are not obvious
+- **A positive quantity never rounds to zero.** 1 unit rounds UP to 5;
+  rounding it away would silently drop a line.
+- **No event is an ABSENCE, not a zero row** (v11.16). A product whose cover
+  reaches past the horizon has nothing to ship.
+- **The unrounded figure is carried beside the rounded one**, on screen and
+  in the CSV, so the rounding is auditable.
+- **Never-built and built-empty are different states.** The empty one names
+  the horizon and says to widen it.
+- **On demand means on demand**: entering the tab paints what was last built;
+  only the button re-runs the simulation.
+- **A day offset is not a date.** The simulation counts days from today;
+  `ipDayToYmd` converts once rather than at four call sites.
+- The CSV button is **hidden when there is nothing to export** - a control
+  that would download an empty file is the v10.19 defect.
+
+### Verification
+- `node --check` clean - **166 suites green** - new `tests/test_v1231.py` (53).
+- **The real `ipRoundShipQty` driven** over 17 values including both sides of
+  the 100 boundary, a fraction, a negative, null and a non-number.
+
+Two censuses went red and both were right to: `test_v1017`'s sub-tab count
+(37 -> 38) and `test_v1164`'s `subtabApply` literal, which now wraps across
+two lines with a fourth view. Re-pointed to the guarantee - every view
+reaches `subtabApply` exactly once - rather than to the whitespace.
+
+### Still open
+- **/!\ SHOPIFY NOTES.** Jason asked for notes on Amazon and Shopify. Amazon
+  and Chewy follow from v12.31's un-gating; **Shopify has no ads tab**, so its
+  notes belong on the Shopify P&L chart - a different surface, not built.
+- Everything on the v12.27 list.
+
 ## v12.31 - the saved note reaches the page
 
 - **Jason:** *"also i added a note, but i don't see where it applied"*
