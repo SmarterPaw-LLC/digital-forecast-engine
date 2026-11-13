@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.39** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.40** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,42 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.40 - the scorecard and the chart disagreed by one day
+
+Spotted in Jason's Year-to-date screenshot rather than reported. The
+scorecard read **$1,931,213** and the table under the chart read
+**$1,931,747** - and the **$534** between them is, to the dollar, Shopify's
+1 January on the live database.
+
+### /!\ TWO PARSERS, ONE WINDOW
+The chart's `inRange` uses `parseLocalDate`; `sumUnits` used
+`new Date(r.week_start)`, a **UTC** parse. West of Greenwich a row stamped
+`2026-01-01` reads back as 31 December 18:00 local and falls **outside** a
+window that starts on 1 January - so the scorecard dropped a day the chart
+counted. That is the v9.71 rule, written on this very page, and `sumUnits`
+was the last reader still breaking it.
+
+### /!\ AND MY FIRST READ OF IT WAS WRONG - THE HARNESS CAUGHT IT
+It does not only drop the FIRST day. **East** of Greenwich it drops the
+**last**: `new Date('2026-11-13')` is 01:00 in Berlin, past a `to` of local
+midnight. Only a box running in UTC itself sees neither end move - which is
+exactly why a UTC CI would never have caught this, and why the suite forces
+`TZ` rather than trusting the machine.
+
+A third thing fell out: `new Date('not-a-date')` is Invalid, and every
+comparison against it is `false`, so an unparseable date used to **slip
+through every window**. It is dropped now.
+
+### Verification
+- `node --check` clean - **172 suites green** - new `tests/test_v1240.py` (19).
+- **The pre-v12.40 filter reproduced verbatim beside the shipped one**, over
+  the same rows and window, under three forced time zones: Chicago (the old
+  one loses the first day), Berlin (it loses the last) and UTC (it looks
+  fine).
+
+### Still open
+- Everything on the v12.39 list.
 
 ## v12.39 - a month bucket is the row's OWN month, not its Monday's
 
