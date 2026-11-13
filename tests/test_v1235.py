@@ -396,6 +396,20 @@ ok("await salesEnsureRevenue();" in SALES
    "reload can land on Our Revenue with nothing fetched (the v12.23 defect)")
 ok("r.ourRevUsd = null;" in ENS,
    "I6  /!\\ a row with no price basis is null, never 0 (v11.16)")
+# /!\ FOUND BY DRIVING THE LIVE PAGE: `permission denied for view
+# walmart_cost_per_each` killed the whole pass and took Amazon, Shopify and
+# Chewy with it - ~97% of the money that WAS readable.
+ok("onError: (e) => { wmErr = (e && e.message) || String(e); return []; }" in ENS,
+   "I7  /!\\ an unreadable Walmart cost feed costs WALMART its dollars, "
+   "not the other three channels")
+ok("cyErr = (e && e.message) || String(e)" in ENS,
+   "I8  ...and the Chewy catalog the same")
+ok("onError" not in ENS.split("sbPageAll('walmart_cost_per_each'")[0],
+   "I9  /!\\ ...but sku_economics stays FATAL - it is most of the money, and "
+   "a total printed without it would be confidently wrong (v10.19)")
+NOTE = fn_flat("salesRevNote")
+ok("Walmart cost feed unreadable" in NOTE and "Chewy catalog unreadable" in NOTE,
+   "I10 and an unreadable FEED is a different sentence from an unpriced SKU")
 
 # ===========================================================================
 print("\nJ. /!\\ THE WHOLE PAGE READS IN ONE MEASURE")

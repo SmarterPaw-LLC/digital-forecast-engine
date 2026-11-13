@@ -150,8 +150,28 @@ previous setting. All of them pass `refreshSalesChart` now, which runs the
 Total build and then the channel repaint. `switchSalesChartTab` goes through
 it too.
 
+### /!\ ONE UNREADABLE FEED WAS TAKING THE WHOLE MEASURE DOWN
+Found by driving the live page, not by reading the code. The pass died on
+
+    Supabase walmart_cost_per_each: permission denied for view
+
+and took **Amazon, Shopify and Chewy with it** - about 97% of the money that
+*was* readable - because `sbPageAll` throws by default and the whole pass sits
+in one `try`.
+
+Walmart is under 1% of our revenue and Chewy's catalog is a separate upload,
+so both degrade to a **named gap** now, the way an unpriced SKU already does,
+and the sentence names the table so it can be fixed. `sku_economics` stays
+**fatal**: it is most of the money, and a total printed without it would be
+confidently wrong (v10.19).
+
 ### Verification
-- `node --check` clean - **167 suites green** - new `tests/test_v1235.py` (95).
+- `node --check` clean - **167 suites green** - new `tests/test_v1235.py` (99).
+- **Driven in the live browser**: the chip reads v12.35, `renderSalesTbl`
+  re-renders without throwing, the scorecard label follows the measure, the
+  failure path prints `⚠ revenue could not be read — …` and the Goals
+  control goes disabled with its reason. The pane is not signed in, so the
+  rendered chart itself is still Jason's screen to check.
 - **The real `salesChartBands` driven** over six products in four categories
   including a deliberately duplicated sub-category name and an uncategorised
   product; **the real `salesEnsureRevenue` driven** end to end against a
@@ -185,6 +205,13 @@ read as two orphans.
 - /!\ **AMAZON NET SALES IS PRE-FEE.** Our Revenue is the top line that
   reaches us, not what we keep. A net-proceeds measure is a different
   question and would need a third setting.
+- /!\ **RETURN-ONLY AMAZON WEEKS ARE UNREACHABLE.** The dollars hang on the
+  `sales_weekly` rows, and that feed skips zero-unit weeks - so **23,372
+  (master_id, region, week) keys carrying a net -$7,889** have nowhere to
+  land. Our Revenue therefore reads **$7,889 high all-time, 0.28%**. Closing
+  it means deriving the Amazon series from `sku_economics` directly rather
+  than hanging it on the units rows, which is a change to the chart's whole
+  row model.
 - /!\ **13 `sku_economics` ROWS ARE STAMPED `CAD` IN REGION `US`.** The
   stored currency is trusted (which is what `pnlRowFx` does), so those 13
   convert. Almost certainly a data error, not worth a guard.

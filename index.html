@@ -74159,14 +74159,25 @@ async function salesEnsureRevenue() {
     // week's revenue. `id` is the unique PK, so the pages cannot overlap.
     // (v12.11 left exactly this open for the tables it already paged; this
     // fetch is new and starts correct.)
+    //
+    // /!\ ONE UNREADABLE FEED MAY NOT TAKE THE WHOLE MEASURE DOWN. Found by
+    // driving the live page: `permission denied for view
+    // walmart_cost_per_each` killed the pass and took Amazon, Shopify and
+    // Chewy with it - about 97% of the money that WAS readable.
+    //
+    // Walmart is under 1% of our revenue and Chewy's catalog is a separate
+    // upload, so both degrade to a NAMED gap, exactly the way an unpriced
+    // SKU does. `sku_economics` stays FATAL: it is most of the money, and a
+    // total printed without it would be confidently wrong (v10.19).
+    let wmErr = null, cyErr = null;
     const [se, wm] = await Promise.all([
       sbPageAll('sku_economics',        { select: 'master_id, region, week_start, net_sales, currency',
                                           order: { column: 'id', ascending: true } }),
-      sbPageAll('walmart_cost_per_each', { select: 'master_id, cost_per_each' }),
+      sbPageAll('walmart_cost_per_each', { select: 'master_id, cost_per_each',
+                                           onError: (e) => { wmErr = (e && e.message) || String(e); return []; } }),
     ]);
-    let catalogOk = true;
     try { if (typeof loadChewyCatalog === 'function') await loadChewyCatalog(); }
-    catch (e) { catalogOk = false; console.warn('[sales] chewy catalog:', e && e.message); }
+    catch (e) { cyErr = (e && e.message) || String(e); console.warn('[sales] chewy catalog:', cyErr); }
 
     // /!\ SUMMED, NOT SET. sku_economics is one row per SKU, and several SKUs
     // can resolve to one master_id in a week - 41,236 rows over 35,028 keys.
@@ -74198,6 +74209,7 @@ async function salesEnsureRevenue() {
       wmMids: new Set(),    wmUnits: 0,
       amzMiss: 0,
       otherChannels: new Set(), otherUnits: 0,
+      wmErr, cyErr,
     };
     for (const mid of Object.keys(salesData || {})) {
       for (const r of (salesData[mid] || [])) {
@@ -74227,7 +74239,7 @@ async function salesEnsureRevenue() {
         }
       }
     }
-    _salesRev = { ok: true, gap, catalogOk, seKeys: seByKey.size, wmPriced: wmCost.size, cyPriced: cyPx.size };
+    _salesRev = { ok: true, gap, seKeys: seByKey.size, wmPriced: wmCost.size, cyPriced: cyPx.size };
   } catch (e) {
     console.warn('[sales] salesEnsureRevenue:', e && e.message);
     _salesRev = { err: (e && e.message) || String(e) };
@@ -74249,6 +74261,10 @@ function salesRevNote() {
   if (g.wmMids && g.wmMids.size)
     bits.push(`Walmart ${g.wmMids.size} SKU${g.wmMids.size === 1 ? '' : 's'} unpriced (${(g.wmUnits || 0).toLocaleString()} units)`);
   if (g.amzMiss) bits.push(`${g.amzMiss.toLocaleString()} Amazon week(s) with no SKU Economics row`);
+  // /!\ A FEED THAT COULD NOT BE READ AT ALL is a different statement from a
+  // SKU that has no price, and it names the table so it can be fixed.
+  if (g.wmErr) bits.push(`Walmart cost feed unreadable \u2014 ${g.wmErr}`);
+  if (g.cyErr) bits.push(`Chewy catalog unreadable \u2014 ${g.cyErr}`);
   if (g.otherChannels && g.otherChannels.size)
     bits.push(`${(g.otherUnits || 0).toLocaleString()} units on ${[...g.otherChannels].join('/')} with no price basis`);
   return bits.length ? ' \u00b7 \u26a0 excluded: ' + bits.join(' \u00b7 ') : '';
