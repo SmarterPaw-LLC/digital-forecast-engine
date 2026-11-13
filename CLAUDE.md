@@ -205,6 +205,12 @@ read as two orphans.
 - /!\ **AMAZON NET SALES IS PRE-FEE.** Our Revenue is the top line that
   reaches us, not what we keep. A net-proceeds measure is a different
   question and would need a third setting.
+- /!\ **GBP AND EUR ARE ALWAYS THE HARDCODED FALLBACKS** (1.27 / 1.08).
+  `fetchEuFxRates` calls `api.frankfurter.app`, which is **CORS-blocked from
+  the GitHub Pages origin** - measured in the live browser. Pre-existing and
+  app-wide (the EU P&L reads the same globals), and worth about $9,800 of
+  $4M here, so not fixed in this release - but nothing on screen says the
+  rate is a fallback. CAD is fine: Bank of Canada returns 1.4255 live.
 - /!\ **RETURN-ONLY AMAZON WEEKS ARE UNREACHABLE.** The dollars hang on the
   `sales_weekly` rows, and that feed skips zero-unit weeks - so **23,372
   (master_id, region, week) keys carrying a net -$7,889** have nowhere to
