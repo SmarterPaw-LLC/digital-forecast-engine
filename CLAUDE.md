@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.31** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.32** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,60 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.32 - Amazon Reorder: a ship date decides what is in the box
+
+- **Jason**, on v12.31: *"1. should be for amazon (by region). the tab should
+  say Amazon Reorder. 2. I should be able to pick the ship date, which defines
+  what goes in the shipment. 3. I should be able to add/remove products"*
+
+### /!\ (2) CHANGES WHAT THE LIST IS
+v12.31 asked *"what fires inside the horizon"* - a **planning** question. A
+ship date asks *"I am sending a box on this day, what belongs in it"* - an
+**operational** one. Every Amazon product whose next reorder must be ordered
+**on or before** that date is in. The horizon stops being the selector and
+becomes only how far the simulation looks.
+
+- **ON OR BEFORE.** A product due the same day the box ships belongs in it;
+  excluding it would send a box already late for that SKU.
+- **The default is TODAY**, not a horizon. Moving the date forward is how the
+  operator pulls more in, and that is a decision rather than a default.
+
+### /!\ (3) MEANS THE LIST IS NO LONGER A PURE DERIVATION
+An add or a remove has to survive a rebuild, or changing the ship date throws
+the operator's edits away - the one thing that cannot be forgiven here. They
+are **overlays** keyed on `master_id`, replayed over each build and never
+written into the computed rows, so:
+
+- a removed product stays out of every rebuild;
+- a hand-entered quantity is **marked manual**, tinted, and carried into the
+  CSV's `Source` column, so nobody has to wonder which figure is modelled;
+- an override on a product already in the box **replaces its quantity**
+  rather than adding the row twice;
+- the picker offers only products **not already in the box**, and is rebuilt
+  only when that set changes - a repaint must not drop a selection mid-add
+  (v10.99);
+- the quantity prefills from the model where there is one and stays **blank**
+  where there is not. A made-up number in a quantity box is the worst default.
+
+### One row shape
+`ipOrderRowFor` is the only place a product becomes a row, so the scheduled
+path and the manual-add path cannot describe one two different ways.
+
+### (1) Region leads
+Grouping is **region**, then brand, then the biggest shipment. Brand stays a
+column and the page's own Brand filter still narrows the set.
+
+### Verification
+- `node --check` clean - **166 suites green** - `tests/test_v1231.py` grew to
+  71, with the ship-date boundary and all eleven edit-overlay guarantees.
+
+### Still open
+- The edits are **session state**, not a saved document. A reload clears them.
+  That is the right default for a working list; persisting a shipment is a
+  bigger question than this tab.
+- **/!\ SHOPIFY NOTES** (v12.31).
+- Everything on the v12.27 list.
 
 ## v12.31 - Order List: the next Amazon shipment, by brand and region
 

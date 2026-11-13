@@ -102,27 +102,30 @@ eq("A16 a non-number is zero", A["nan"],  0)
 print("\nB. /!\\ IT READS THE EXISTING SIMULATION, NOT A NEW ONE")
 # ===========================================================================
 BUILD = fn_flat("ipBuildOrderList")
-ok("inventoryNeedBreakdown(r, horizon, region" in BUILD,
+ROW   = fn_flat("ipOrderRowFor")
+# v12.32 - /!\ ONE ROW SHAPE. The scheduled path and the manual-add path both
+# go through ipOrderRowFor, so they cannot describe a product two ways.
+ok("inventoryNeedBreakdown(r, horizon, region" in ROW,
    "B1  /!\\ the quantity comes from the page's own breakdown")
-ok("meta.events && meta.events[0]" in BUILD,
+ok("meta.events && meta.events[0]" in ROW,
    "B2  /!\\ ...and from the NEXT event, which is what one shipment is")
 ok("inventoryVisibleRecords()" in BUILD,
    "B3  /!\\ the filters are the page's own - brand, region, category, status, "
    "search, bundles, inactive, in-house")
-ok("if (!ev || !(ev.qty > 0)) continue;" in BUILD,
+ok("if (!ev || !(ev.qty > 0)) return null;" in ROW,
    "B4  /!\\ no event is an ABSENCE, not a zero row (v11.16)")
-ok("ipRoundShipQty(ev.qty)" in BUILD, "B5  the rounding is applied once, here")
-ok("raw:  Math.round(ev.qty)" in BUILD,
+ok("ipRoundShipQty(ev.qty)" in ROW, "B5  the rounding is applied once, here")
+ok("raw:  Math.round(ev.qty)" in ROW,
    "B6  /!\\ and the UNROUNDED figure is carried, so the rounding is auditable")
 # /!\ no second velocity, cover or lead-time arithmetic in this file's new code
-ok("reorder_qty_days" not in BUILD and "blended_daily" not in BUILD,
+ok("reorder_qty_days" not in (BUILD + ROW) and "blended_daily" not in (BUILD + ROW),
    "B7  /!\\ it re-derives NOTHING - no second velocity or reorder model")
 
 # ===========================================================================
 print("\nC. grouping, ordering and the totals")
 # ===========================================================================
 C = run_node(os.path.join(SP, "_v1231_c.js"), r"""
-// the shipped sort comparator, lifted from ipBuildOrderList
+// v12.32 - REGION first. Jason: "should be for amazon (by region)".
 const rows = [
   { brand: 'Meowijuana', region: 'US', title: 'b', qty: 50 },
   { brand: 'Kitty Ka-Zoom', region: 'US', title: 'c', qty: 10 },
@@ -130,27 +133,24 @@ const rows = [
   { brand: 'Meowijuana', region: 'US', title: 'a', qty: 200 },
   { brand: 'Kitty Ka-Zoom', region: 'CA', title: 'e', qty: 30 },
 ];
-rows.sort((a, b) => (a.brand || '').localeCompare(b.brand || '')
-                 || (a.region || '').localeCompare(b.region || '')
+rows.sort((a, b) => (a.region || '').localeCompare(b.region || '')
+                 || (a.brand  || '').localeCompare(b.brand  || '')
                  || (b.qty - a.qty));
-const byBrand = new Map();
+const byRegion = new Map();
 for (const x of rows) {
-  if (!byBrand.has(x.brand)) byBrand.set(x.brand, new Map());
-  const br = byBrand.get(x.brand);
-  if (!br.has(x.region)) br.set(x.region, []);
-  br.get(x.region).push(x);
+  if (!byRegion.has(x.region)) byRegion.set(x.region, []);
+  byRegion.get(x.region).push(x);
 }
 console.log(JSON.stringify({
-  order: rows.map(r => r.brand[0] + r.region + r.qty),
-  brands: [...byBrand.keys()],
-  kkRegions: [...byBrand.get('Kitty Ka-Zoom').keys()],
-  meowiUS: byBrand.get('Meowijuana').get('US').map(r => r.qty),
+  regions: [...byRegion.keys()],
+  caOrder: byRegion.get('CA').map(r => r.brand[0] + r.qty),
+  usQtys:  byRegion.get('US').map(r => r.qty),
   grand: rows.reduce((t, x) => t + x.qty, 0),
 }));
 """)
-eq("C1  brands sort alphabetically", C["brands"], ["Kitty Ka-Zoom", "Meowijuana"])
-eq("C2  regions sort inside the brand", C["kkRegions"], ["CA", "US"])
-eq("C3  /!\\ and the biggest shipment leads its region", C["meowiUS"], [200, 50])
+eq("C1  /!\\ REGION is the top grouping", C["regions"], ["CA", "US"])
+eq("C2  brands sort inside the region", C["caOrder"], ["K30", "M90"])
+eq("C3  /!\\ and the biggest shipment leads its brand", C["usQtys"], [10, 200, 50])
 eq("C4  the grand total is every row", C["grand"], 380)
 
 # ===========================================================================
@@ -165,13 +165,17 @@ ok("renderOrderList(true)" in s,
    "D3  the button in the markup is the trigger")
 ok("rows === null" in REND,
    "D4  /!\\ never-built and built-empty are DIFFERENT states")
-ok("No Amazon reorder fires inside" in REND,
-   "D5  ...and built-empty says why, with the horizon named")
+ok("Nothing has to be ordered by" in REND,
+   "D5  ...and built-empty says why, naming the SHIP DATE that selects")
+ok("Move the ship date forward, or add a product" in REND,
+   "D5b ...and what to do about it")
 
 # ===========================================================================
 print("\nE. the tab joins the existing strip")
 # ===========================================================================
 ok("id=\"ipv-orderlist\"" in s, "E1  the tab button exists")
+# v12.32 - Jason named it. The app uses his word.
+ok("Amazon Reorder</button>" in s, "E1b and it reads Amazon Reorder")
 ok("['ipv-orderlist', 'orderlist']" in js,
    "E2  /!\\ through subtabApply, not a second strip mechanism")
 ok("id=\"ip-orderlist-container\"" in s, "E3  its container exists")
@@ -192,6 +196,9 @@ print("\nF. /!\\ IT IS EXPORTABLE - the standing rule")
 CSV = fn_flat("downloadOrderListCSV")
 ok("'Ship qty'" in CSV, "F1  the rounded quantity is on the export")
 ok("'Modelled qty'" in CSV, "F2  /!\\ and the unrounded one beside it")
+ok("'Source'" in CSV,
+   "F2b /!\\ and whether each line was modelled or typed by hand")
+ok("'Ship date'" in CSV, "F2c with the ship date on every row")
 for col in ("Brand", "Region", "Product", "SKU", "ASIN", "Order by", "Arrives"):
     ok("'%s'" % col in CSV, "F-  %s is exported" % col)
 ok("TOTAL" in CSV, "F3  with a total row")
@@ -201,6 +208,55 @@ ok("id=\"ol-csv\"" in s, "F5  and the button exists on the tab")
 ok("csvBtn.style.display = rows.length ? '' : 'none'" in REND,
    "F6  /!\\ hidden when there is nothing to export - a control that would "
    "download an empty file is the v10.19 defect")
+
+# ===========================================================================
+print("\nH. /!\\ THE SHIP DATE DECIDES WHAT IS IN THE BOX")
+# ===========================================================================
+# v12.31 asked "what fires inside the horizon" - a planning question. A ship
+# date asks "I am sending a box that day, what belongs in it".
+ok("ipOrderShipDate()" in BUILD, "H1  the build reads the ship date")
+ok("row.orderBy > ship" in BUILD,
+   "H2  /!\\ ON OR BEFORE - a product due the day the box ships is IN it, "
+   "or the box leaves already late for that SKU")
+SHIP = fn_flat("ipOrderShipDate")
+ok("new Date()" in SHIP,
+   "H3  /!\\ the default is TODAY, not a horizon - moving it forward is a "
+   "decision, not a default")
+ok("id=\"ol-shipdate\"" in s, "H4  the control exists")
+ok("onchange=\"renderOrderList(true)\"" in s, "H5  ...and rebuilds on change")
+
+# ===========================================================================
+print("\nI. /!\\ ADD AND REMOVE SURVIVE A REBUILD")
+# ===========================================================================
+# If the edits lived inside the computed list, changing the ship date would
+# throw them away - which is the one thing an operator cannot forgive.
+ok("let _ipOrderRemoved = new Set();" in js and "let _ipOrderAdded   = new Map();" in js,
+   "I1  the edits are overlays, keyed on master_id")
+ok("if (_ipOrderRemoved.has(r.master_id)) continue;" in BUILD,
+   "I2  a removed product stays out of every rebuild")
+ok("for (const [mid, qty] of _ipOrderAdded)" in BUILD,
+   "I3  /!\\ and adds are REPLAYED over the build, not written into it")
+ok("row.manual = true;" in BUILD, "I4  a hand-entered quantity is marked")
+ok("hit.qty = ipRoundShipQty(qty)" in BUILD,
+   "I5  /!\\ an override on a product already in the box replaces its qty "
+   "rather than adding the row twice")
+ADD = fn_flat("ipOrderAdd")
+ok("if (!(n > 0))" in ADD, "I6  a zero or blank quantity is refused")
+ok("_ipOrderRemoved.delete(mid)" in ADD,
+   "I7  /!\\ adding back something removed un-removes it")
+PRE = fn_flat("ipOrderPrefillQty")
+ok("qty.value = row ? row.qty : '';" in PRE,
+   "I8  /!\\ prefilled from the model where there is one, BLANK where there "
+   "is not - a made-up number in a quantity box is the worst default")
+PICK = fn_flat("ipOrderFillPicker")
+ok("if (inBox.has(r.master_id)) continue;" in PICK,
+   "I9  the picker offers only products not already in the box")
+ok("pick.dataset.sig === sig" in PICK,
+   "I10 /!\\ and is rebuilt only when the SET changes, or a repaint would "
+   "drop the selection mid-add (v10.99)")
+ok("id=\"ol-reset\"" in s, "I11 the edits can be reset")
+ok("rstBtn.style.display = edited ? '' : 'none'" in REND,
+   "I12 ...and that control is hidden when there is nothing to reset")
 
 print("\nG. the chip agrees with CLAUDE.md")
 md = io.open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read()
