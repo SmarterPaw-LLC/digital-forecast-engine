@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.37** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.38** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,57 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.38 - the chart's own numbers, as a table, exportable
+
+- **Jason:** *"i would also like a table below the graph that filters the way
+  the page filters, that i can export"*
+
+### /!\ THE PRODUCT TABLE ALREADY DID BOTH, WHICH IS THE CLUE
+It filters the way the page filters and it exports, and he had just hidden
+it. So what he is describing is a table of what the **chart** draws: the
+bands he picked, over the buckets he picked, in the measure he picked.
+
+It filters the way the page filters **by construction** - it is built from
+the datasets the chart was just handed, never from a second pass over the
+rows. Every filter, the rollup, the grain, the measure and the Other rollup
+are already baked into what was drawn; re-deriving any of them here is how a
+table and the chart above it come to disagree (hard rule #1).
+
+| | |
+|---|---|
+| rows | the chart's bands, **biggest first** - the order a stacked chart draws them in, so reading the table against the chart needs no search |
+| columns | Total, then one per bucket |
+| the footer | each bucket's total, and the grand total both ways round |
+
+- /!\ **A GOAL IS NOT AN ACTUAL**, and a previous-period line is not this
+  period. Both ride in `datasets` so the chart can draw them, and summing
+  either into a total is the trap `stack:'_goal'` was added for in v10.76.
+  Both are dropped.
+- /!\ **DRAWN AFTER THE CHART**, so a throw inside Chart.js cannot leave the
+  table describing something that was never rendered.
+- /!\ **AN EMPTY WINDOW HIDES THE PANEL** rather than drawing an empty
+  table, and clears the grid, so a stale CSV cannot be exported from it.
+- A zero bucket renders as a **dash**: the band drew nothing there.
+- **One renderer, filled by whichever tab is showing** - By Channel gets the
+  same table with Channel down the side. Two would be two answers to *what
+  is on the chart*.
+
+### The export
+Written from the grid **that was last rendered**, not re-derived, so there is
+no window in which the file and the table can disagree. The header names the
+measure (`Units` / `Our_Revenue_USD`) the way v12.35's export does, the
+column headers are the chart's own bucket labels, and it goes through the
+app's own filename prompt.
+
+### Verification
+- `node --check` clean - **170 suites green** - new `tests/test_v1238.py` (32).
+- **The real `renderSalesChartGrid` driven** against a stand-in DOM: the
+  ordering, both sets of totals, the dollar format, the dash for a zero
+  bucket, and the empty window hiding the panel and clearing the grid.
+
+### Still open
+- Everything on the v12.37 list.
 
 ## v12.37 - one set of date windows, and the scorecards leave the picker
 
