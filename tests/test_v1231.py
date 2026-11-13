@@ -148,7 +148,18 @@ console.log(JSON.stringify({
   grand: rows.reduce((t, x) => t + x.qty, 0),
 }));
 """)
-eq("C1  /!\\ REGION is the top grouping", C["regions"], ["CA", "US"])
+eq("C1  /!\\ REGION is the outer sort", C["regions"], ["CA", "US"])
+# v12.33 - /!\ A GROUP IS A BRAND AND A REGION. v12.32 grouped by region
+# alone, so a CA shipment carried two brands under one subtotal - and that
+# subtotal is not a number anyone orders against.
+REND_ = fn_flat("renderOrderList")
+ok("x.region + '\\u0000' + x.brand" in REND_,
+   "C1b /!\\ the groups are keyed on the PAIR")
+ok("key.split('\\u0000')[0]" in REND_ and "key.split('\\u0000')[1]" in REND_,
+   "C1c ...and the heading names both")
+ok("TH('Product') + TH('SKU')" in REND_,
+   "C1d /!\\ and the Brand COLUMN is gone - it is the heading now, and "
+   "repeating it down every row is the same word twice")
 eq("C2  brands sort inside the region", C["caOrder"], ["K30", "M90"])
 eq("C3  /!\\ and the biggest shipment leads its brand", C["usQtys"], [10, 200, 50])
 eq("C4  the grand total is every row", C["grand"], 380)
