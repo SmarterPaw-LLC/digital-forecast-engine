@@ -248,17 +248,25 @@ sok('salesSelectionActive' in sales, 'Units Sold tracks whether a selection is a
 sok('salesVisibleRows' in sales, 'Units Sold falls back to the visible rows')
 sok('if (salesSelected.size === 0) { closeSalesDrill(); return; }' not in sales,
     'Units Sold no longer closes the panel when nothing is selected')
-# /!\ FIVE SINCE v11.97, which added the previous-period sweep. The guarantee
-# this assertion exists for is that EVERY per-product loop walks chartMids
-# rather than the raw selection (the v10.13 defect), not how many there are.
-sok(sales.count('chartMids.forEach(mid => {') == 5,
-    'every per-product loop walks chartMids, including the prev-period sweep')
+# /!\ THE GUARANTEE IS THE POPULATION, NOT THE LOOP COUNT. v10.13's defect
+# was a loop walking the raw SELECTION, so the chart went blank with nothing
+# ticked. v11.97 made it five loops; v12.35 made it four plus a band loop,
+# because the datasets are built per BAND now and a band gets its mids from
+# salesChartBands(chartMids, ...). Pinned to what that defect was.
+sok(sales.count('chartMids.forEach(mid => {') >= 3,
+    'the per-product loops walk chartMids')
+sok('const bands = salesChartBands(chartMids, rollup);' in sales,
+    '/!\ and the dataset loop takes its population from chartMids too')
+sok('band.mids.forEach(mid => {' in sales,
+    '/!\ ...through the band, which is the only thing that changed')
 sok(sales.count('salesSelected.forEach(mid => {') == 0,
     'no loop still walks the raw selection')
 sok('Total \\u00b7 ${chartMids.length} product' in sales or 'Total · ${chartMids.length} product' in sales,
     'Units Sold builds a Total series')
-sok("Other \\u00b7 ${tail.length} SKUs" in sales or 'Other · ${tail.length} SKUs' in sales,
-    'Units Sold rolls the tail into Other when stacked')
+# v12.35 - the noun follows the ROLLUP ('SKUs' / 'categories' /
+# 'sub-categories'), so an Other band of categories cannot read "SKUs".
+sok('Other \\u00b7 ${tail.length} ${(SALES_ROLLUPS[rollup] || SALES_ROLLUPS.product).tail}' in sales or 'Other · ${tail.length} ${(SALES_ROLLUPS[rollup] || SALES_ROLLUPS.product).tail}' in sales,
+    'Units Sold rolls the tail into Other, named for what the bands ARE')
 sok("d.fill = i === 0 ? 'origin' : '-1'" in sales,
     'Units Sold re-chains the area fills after reordering (the v4.135 bug)')
 sok("_salesPanel.style.display = 'block'" in sales, 'the render opens the panel itself')

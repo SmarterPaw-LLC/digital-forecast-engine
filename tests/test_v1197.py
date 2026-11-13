@@ -71,10 +71,19 @@ SALES = nocomment(fn_flat("updateSalesChart"))
 # ===========================================================================
 print("\nA. the controls come from the shared helpers")
 # ===========================================================================
-for h in ("pnlGrainStepperHtml('updateSalesChart'", "pnlBandsStepperHtml('updateSalesChart')",
-          "pnlFillToggleHtml('updateSalesChart')", "pnlScaleToggleHtml('updateSalesChart')",
-          "pnlCompareToggleHtml('updateSalesChart', _salesCmp)"):
+# v12.35 - the rerender ARGUMENT is refreshSalesChart now, because
+# updateSalesChart is what BUILDS salesRawWeekData: repainting only the
+# visible tab left By Channel drawing the PREVIOUS setting's buckets. The
+# guarantee is that all five come from the SHARED helpers and that every
+# one passes THE SAME rerender name - stronger than pinning the literal,
+# and it is what keeps the strip coherent.
+for h in ("pnlGrainStepperHtml('refreshSalesChart'", "pnlBandsStepperHtml('refreshSalesChart')",
+          "pnlFillToggleHtml('refreshSalesChart')", "pnlScaleToggleHtml('refreshSalesChart')",
+          "pnlCompareToggleHtml('refreshSalesChart', _salesCmp)"):
     ok(h in SALES, "A1  %s" % h.split("(")[0])
+_names = set(re.findall(r"pnl(?:GrainStepper|BandsStepper|FillToggle|ScaleToggle|CompareToggle)Html\('([A-Za-z]+)'", SALES))
+ok(_names == {'refreshSalesChart'},
+   'A1b /!\\ every control in this strip passes the SAME rerender name', sorted(_names))
 
 # /!\ VIEW IS DELIBERATELY ABSENT. This page's own chart-type picker is a
 # SUPERSET of Line / Stacked, and injecting the shared toggle beside it would

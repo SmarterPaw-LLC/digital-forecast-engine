@@ -55,18 +55,25 @@ def strip_noise(src):
 
 
 print("\n" + "=" * 70)
-print("  v12.25  no orphaned reference in the ads renderer")
+print("  v12.25  no orphaned reference in the app's big renderers")
 print("=" * 70)
 
 print("\nA. the defect, fixed")
 ok("const spendForTip" in js, "A1  spendForTip is declared again")
 ok(js.count("const spendForTip") == 1,
    "A2  /!\\ exactly once - two declarations is the next bug", js.count("const spendForTip"))
-RAC = fn_src("renderAdsCampaigns")
-# v12.27 - /!\ adsUpdateChart DRAWS THIS TAB TOO, and the next orphan
-# landed in it. A census that covers one of two renderers is a census
-# with a hole the size of the other.
-AUC = fn_src("adsUpdateChart")
+# /!\ THE CENSUS POPULATION, in one list.
+# v12.27 - adsUpdateChart DRAWS THE ADS TAB TOO, and the next orphan landed
+#          in it. A census covering one of two renderers has a hole the size
+#          of the other.
+# v12.35 - the two Units Sold renderers join it. That release rewrote the
+#          dataset loop and the control strip in both, which is precisely the
+#          shape of edit that deletes a declaration and leaves its reads
+#          behind. A SECOND census would be the hard-rule-#1 defect.
+CENSUS_FNS = ["renderAdsCampaigns", "adsUpdateChart",
+              "updateSalesChart", "updateChannelChart"]
+SRCS = {n: fn_src(n) for n in CENSUS_FNS}
+RAC = SRCS["renderAdsCampaigns"]
 ok("const spendForTip" in RAC,
    "A3  /!\\ and INSIDE the function that reads it, not a global patched in")
 # /!\ GUARDED. A missing declaration must FAIL section A, never crash
@@ -76,53 +83,84 @@ ok("const spendForTip" in RAC and "Math.round(spendForTip)" in RAC
    and RAC.index("const spendForTip") < RAC.index("Math.round(spendForTip)"),
    "A4  /!\\ declared BEFORE its first read")
 
-print("\nB. /!\\ THE CENSUS - every identifier this renderer reads is declared")
-# Declarations visible to the function: its own locals and params, plus every
-# top-level binding and function in the file.
-body = strip_noise(RAC) + "\n" + strip_noise(AUC)
+print("\nB. /!\\ THE CENSUS - every identifier each renderer reads is declared")
 
-declared = set()
-for m in re.finditer(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)", body):
-    declared.add(m.group(1))
-# destructuring + for-of/in bindings + catch params + arrow/function params
-for m in re.finditer(r"\b(?:const|let|var)\s*[\[{]([^\]}]*)[\]}]", body):
-    for part in re.split(r"[,:]", m.group(1)):
-        t = part.strip().strip(".")
+# /!\ PER FUNCTION, NOT POOLED. v12.27 concatenated two bodies into one
+# `declared` set and v12.35 would have made that four - so a local in ONE
+# renderer satisfied a read in ANOTHER, and the suite stayed green with a
+# declaration deleted. A function's locals are its own.
+def _params(txt):
+    """A parameter list, flattened. `([bundleId, comps]) => {` is two
+    perfectly good bindings; splitting the brackets in with them made both
+    read as orphans, and a false positive costs a census as much as a miss."""
+    out = []
+    for part in txt.replace("[", " ").replace("]", " ").replace("{", " ").replace("}", " ").split(","):
+        t = part.split("=")[0].split(":")[-1].strip().strip(".")
         if re.fullmatch(r"[A-Za-z_$][\w$]*", t or ""):
-            declared.add(t)
-for m in re.finditer(r"catch\s*\(\s*([A-Za-z_$][\w$]*)", body):
-    declared.add(m.group(1))
-for m in re.finditer(r"\(([^()]*)\)\s*=>", body):
-    for part in m.group(1).split(","):
-        t = part.strip()
-        if re.fullmatch(r"[A-Za-z_$][\w$]*", t or ""):
-            declared.add(t)
-for m in re.finditer(r"\b([A-Za-z_$][\w$]*)\s*=>", body):
-    declared.add(m.group(1))
-for m in re.finditer(r"function\s*\w*\s*\(([^()]*)\)", body):
-    for part in m.group(1).split(","):
-        t = part.strip()
-        if re.fullmatch(r"[A-Za-z_$][\w$]*", t or ""):
-            declared.add(t)
-# the function's own parameters
-for _fn, _src in (("renderAdsCampaigns", RAC), ("adsUpdateChart", AUC)):
-    sig = re.match(r"(?:async\s+)?function\s+" + _fn + r"\s*\(([^()]*)\)", _src)
-    for part in (sig.group(1) if sig else "").split(","):
-        t = part.strip()
-        if t:
-            declared.add(t)
+            out.append(t)
+    return out
 
-whole = js  # RAW: see the note above
-for m in re.finditer(r"(?m)^\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)", whole):
-    declared.add(m.group(1))
-for m in re.finditer(r"(?m)^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)", whole):
-    declared.add(m.group(1))
-# multi-declarator lines: `let _adsBreakEven = {}, _adsAttribDeflate = {};`
-for m in re.finditer(r"(?m)^\s*(?:const|let|var)\s+(.+)$", whole):
+
+def _locals_of(src, fname):
+    body = strip_noise(src)
+    d = set()
+    for m in re.finditer(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)", body):
+        d.add(m.group(1))
+    for m in re.finditer(r"\b(?:const|let|var)\s*[\[{]([^\]}]*)[\]}]", body):
+        for part in re.split(r"[,:]", m.group(1)):
+            t = part.strip().strip(".")
+            if re.fullmatch(r"[A-Za-z_$][\w$]*", t or ""):
+                d.add(t)
+    # multi-declarator: `let a = 1, b = 2;`
+    for m in re.finditer(r"\b(?:const|let|var)\s+([^;\n]+)", body):
+        for part in m.group(1).split(","):
+            t = part.split("=")[0].strip()
+            if re.fullmatch(r"[A-Za-z_$][\w$]*", t or ""):
+                d.add(t)
+    for m in re.finditer(r"catch\s*\(\s*([A-Za-z_$][\w$]*)", body):
+        d.add(m.group(1))
+    for m in re.finditer(r"\(([^()]*)\)\s*=>", body):
+        for t in _params(m.group(1)):
+            d.add(t)
+    for m in re.finditer(r"\b([A-Za-z_$][\w$]*)\s*=>", body):
+        d.add(m.group(1))
+    for m in re.finditer(r"function\s*\w*\s*\(([^()]*)\)", body):
+        for t in _params(m.group(1)):
+            d.add(t)
+    sig = re.match(r"(?:async\s+)?function\s+" + fname + r"\s*\(([^()]*)\)", src)
+    for t in _params(sig.group(1) if sig else ""):
+        d.add(t)
+    return d, body
+
+
+# Every top-level binding in the file. RAW source: stripping strings across
+# 4.7MB with regexes swallows real code (the v12.25 lesson).
+#
+# /!\ AND HERE IS WHAT THIS CENSUS DOES NOT DO, written down rather than left
+# to be discovered. `^\s*` matches an INDENTED declaration, so every LOCAL in
+# the file lands in this set too - which means the check is really "is this
+# name declared SOMEWHERE in 4.7MB". That catches a declaration deleted
+# OUTRIGHT, which is v12.25's actual defect, and does NOT catch one deleted
+# from a function where some other function declares the same name.
+#
+# Anchoring at column 0 fixes that and was tried: it reported SIX false
+# positives immediately - `g` off a regex flag, `$`, and `div` / `total` /
+# `range` leaking out of template literals the stripper does not fully
+# remove. A census that cries wolf is worse than one with a known hole,
+# because it teaches everyone to ignore a red suite. Closing it properly
+# needs real scope analysis, not a better regex.
+#
+# The targeted check lives beside the code that changes: a release that adds
+# locals to one of these renderers pins them by name, declared before first
+# read, the way section A does for spendForTip.
+GLOBALS = set()
+for m in re.finditer(r"(?m)^\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)", js):
+    GLOBALS.add(m.group(1))
+for m in re.finditer(r"(?m)^\s*(?:const|let|var)\s+(.+)$", js):
     for part in m.group(1).split(","):
         t = part.split("=")[0].strip()
         if re.fullmatch(r"[A-Za-z_$][\w$]*", t or ""):
-            declared.add(t)
+            GLOBALS.add(t)
 
 BUILTINS = {
     "window", "document", "console", "Math", "Object", "Array", "JSON", "Date",
@@ -137,17 +175,23 @@ BUILTINS = {
     "fetch", "getComputedStyle", "structuredClone", "globalThis", "Symbol",
 }
 
-used = set()
-for m in re.finditer(r"(?<![.\w$])([A-Za-z_$][\w$]*)\s*(?![\w$]*\s*:)", body):
-    used.add(m.group(1))
-# property names after a dot, and object-literal keys, are not references
-missing = sorted(t for t in used
-                 if t not in declared and t not in BUILTINS
-                 and not re.fullmatch(r"[A-Z][A-Z0-9_]*", t))
+orphans = {}
+for _fn in CENSUS_FNS:
+    _d, _body = _locals_of(SRCS[_fn], _fn)
+    _used = set()
+    for m in re.finditer(r"(?<![.\w$])([A-Za-z_$][\w$]*)\s*(?![\w$]*\s*:)", _body):
+        _used.add(m.group(1))
+    # property names after a dot, and object-literal keys, are not references
+    miss = sorted(t for t in _used
+                  if t not in _d and t not in GLOBALS and t not in BUILTINS
+                  and not re.fullmatch(r"[A-Z][A-Z0-9_]*", t))
+    if miss:
+        orphans[_fn] = miss
 
-ok(not missing,
-   "B1  /!\\ every identifier BOTH ads renderers read is declared somewhere",
-   ", ".join(missing[:12]))
+ok(not orphans,
+   "B1  /!\\ every identifier each of the %d renderers reads is declared"
+   % len(CENSUS_FNS),
+   "; ".join("%s: %s" % (k, ", ".join(v[:6])) for k, v in orphans.items()))
 
 print("\n" + "-" * 70)
 print("  %d passed, %d failed" % (passed, failed))

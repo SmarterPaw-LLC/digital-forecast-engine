@@ -55,7 +55,11 @@ ok('const topN = cfg.topN || pnlChartBands();' in js,
 
 # both charts must render the SAME control, not two lookalikes
 ok(js.count('function pnlBandsStepperHtml') == 1, 'one stepper renderer')
-ok(js.count("pnlBandsStepperHtml('updateSalesChart')") == 1,
+# v12.35 - the rerender ARGUMENT moved to refreshSalesChart, which runs BOTH
+# tabs (updateSalesChart is what builds salesRawWeekData). The guarantee is
+# that Units Sold renders the SHARED stepper exactly once, not which
+# function it names.
+ok(len(re.findall(r"pnlBandsStepperHtml\('(?:update|refresh)SalesChart'\)", js)) == 1,
    '  reused by Units Sold')
 inj = fn('pnlInjectChartModeToggle')
 # v11.42 - the stepper takes an optional noun, so a chart whose bands are

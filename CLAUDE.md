@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.34** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.35** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,158 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.35 - the Units Sold chart bands by CATEGORY, and measures OUR REVENUE
+
+- **Jason:** *"1. let me sort the graph by category and sub category (so i can
+  see category sales instead of specific product sales stacked). this is in
+  addition to what's there now. i should see the categories or sub-categories
+  stacked in the 'total' view when selected, or by channel as it exists today.
+  2. let me see dollar sales here as well in addition to unit sales (our
+  sales, not retailer sales). can this be done?"*
+
+Two independent questions, so **two controls** rather than one with four
+settings:
+
+| | |
+|---|---|
+| **ROLLUP** | what each band IS - Product / Category / Sub-cat |
+| **MEASURE** | what its height MEANS - Units / Our Revenue |
+
+### (1) ROLLUP
+`pnlGrowthState.portfolioRollup` has carried `brand | category | subcategory`
+since v8.66, so **that is the word** - coining a second name for the same
+decision is rule #3.
+
+- **A rollup is NEVER collapsed into one Total line.** That is precisely the
+  view he asked not to see. Six categories read fine as six lines;
+  thirty-three sub-categories do not, so the **BANDS count applies in every
+  chart type** when a rollup is on, not only the stacked ones.
+- **It applies under a selection too.** Tick six products, pick Category, and
+  you get the categories of those six.
+- /!\ **UNCATEGORISED IS A BAND.** 618 of 667 products carry a `category_id`;
+  the other **49 have sold nothing so far**, which is exactly why dropping
+  them would never have been noticed - until one of them sold.
+- /!\ **A sub-category name is not guaranteed unique.** All 33 happen to be
+  today, but the band is keyed on the (category, sub-category) **pair** and
+  labelled `Category · Sub-category` wherever the bare name is ambiguous,
+  so two could never silently merge.
+- **By Channel is untouched** - its bands ARE the channels, so the control
+  renders there **disabled with that sentence**, not hidden (v11.33).
+
+### (2) MEASURE - and "our sales, not retailer sales" is the whole design
+| channel | our revenue |
+|---|---|
+| Amazon US / CA | `sku_economics.net_sales` (CA is **CAD**, converted) |
+| Amazon EU | `sales_weekly.revenue`, native, converted |
+| Shopify | `shopify_sales_daily.net_sales` |
+| **Walmart** | units x `walmart_cost_per_each` |
+| **Chewy** | units x `chewyCatalogPricePerEach` |
+
+/!\ **The 1P half is the whole point.** Measured on the live database, Chewy's
+retail is **$1,940,100** and our revenue on the same rows is **$854,899** -
+the obvious column would have been **2.3x** wrong. Walmart: $54,693 retail
+against **$30,997**.
+
+- /!\ **IT IS NOT PROFIT**, and the tooltip says so. Amazon's fees come out of
+  net sales afterwards; the Amazon P&L is where that lives.
+- /!\ **The unpriced are NAMED, not swallowed** (the v12.08 rule). **37 Chewy
+  SKUs / 13,163 units** have no catalog row, and the sub-line and the
+  scorecard both say so. A row with no basis is `null`, **never 0** - a zero
+  would read as *sold for nothing* and quietly deflate its band.
+- /!\ **Chewy's per-each price is the EXISTING helper.** Re-spelling
+  `cost / case_qty` here is how the Cost to Chewy tab and this chart come to
+  disagree.
+- /!\ **FX is unconditional.** `pnlRowFx` is the P&L's spelling of the same
+  three rates and is gated on `pnlCurrencyMode`, a control on another page - a
+  total here that changed basis because somebody toggled the Amazon P&L would
+  be silent drift of the worst kind.
+
+### /!\ `revenue` MEANT TWO OPPOSITE THINGS ON ONE ROW
+Chewy stamped it from `merch_sales`, which is Chewy's **cash register** -
+retail dollars we never see, and the app's own word for it is *"a vanity"*.
+Shopify's and EU Amazon's are **our money**. One field name, two bases, is
+rule 3a on the single number this release adds. Chewy's is `retailSales` now.
+
+### /!\ BUNDLE ATTRIBUTION IS A UNITS IDEA
+It credits a component with `qty` units per bundle sold. Multiplying the
+**bundle's dollars** by that same qty would invent revenue nobody was paid,
+and the bundle's own dollars are already on the chart under its own row. Not
+applied to money - and the sub-line says so rather than leaving a ticked box
+silently doing nothing.
+
+Unit **goals** go the same way: the editor asks for units per channel per
+month, so against a dollar axis the control is **disabled with the reason**.
+
+### The whole page reads in one measure
+A dollar chart under a scorecard reading `Units Sold - 30d  454,997` is half
+a feature. The table, both scorecards, both column headers, the provenance
+chips and the **CSV** all follow - `sumUnits` grew an optional `measure`
+argument rather than gaining a `sumRevenue` twin, and every pre-v12.35 caller
+is byte-identical. The export's header names the measure, because `filtered`
+writes the visible rows straight out and dollars under `Units_30d` was one
+keystroke away. Category and Sub-category join it as columns.
+
+### /!\ ON DEMAND, AND PAGED DETERMINISTICALLY
+`sku_economics` is 41k rows and this page already loads ~43k. Paying for that
+on every refresh - to serve a reading nobody has asked for yet - would make
+*"it takes SO LONG whenever i refresh"* worse, so it is fetched when the
+measure is first switched and cached for the session. A reload that lands on
+a persisted Our Revenue fetches **before the first paint**.
+
+41k rows is 41 pages, and an unordered paged select can repeat or skip a row
+across a boundary - which here would double-count or lose a week's revenue.
+Ordered by `id`, the unique PK. (v12.11 left that open for the tables it
+already pages; this fetch starts correct.)
+
+### /!\ AND THE SHARED CONTROLS WERE REPAINTING THE WRONG TAB
+Found on the way. Every control in that strip passed `'updateSalesChart'`,
+which is what BUILDS `salesRawWeekData` - so changing GROUP, FILL, SCALE or
+COMPARE **on the By Channel tab** repainted the Total chart and left By
+Channel drawing the previous setting's buckets under a strip showing the
+previous setting. All of them pass `refreshSalesChart` now, which runs the
+Total build and then the channel repaint. `switchSalesChartTab` goes through
+it too.
+
+### Verification
+- `node --check` clean - **167 suites green** - new `tests/test_v1235.py` (95).
+- **The real `salesChartBands` driven** over six products in four categories
+  including a deliberately duplicated sub-category name and an uncategorised
+  product; **the real `salesEnsureRevenue` driven** end to end against a
+  stand-in pager, with the CAD conversion, the two-SKUs-one-master sum, the
+  case-pack division and the unpriced gap all asserted as numbers.
+- Every figure above read off the live database.
+
+### /!\ AND THE ORPHAN CENSUS HAD A HOLE THE WIDENING EXPOSED
+`test_v1225` joined its two ads renderers with the two Units Sold ones - and
+it was **pooling all the bodies into one `declared` set**, so a local in one
+renderer satisfied a read in another. Deleting
+`const measure = salesChartMeasure();` from `updateSalesChart` left it
+**green**, because `updateChannelChart` declares the same name. It runs per
+function now.
+
+Tightening the global scan to column 0 (so an indented local stops counting
+as a global) was tried and **reported six false positives at once** - `g` off
+a regex flag, `$`, and `div` / `total` / `range` leaking out of template
+literals. A census that cries wolf is worse than one with a known hole, so
+the limit is **written down in the suite** and the targeted check lives
+beside the code: `test_v1235` section F pins each new local in
+`updateSalesChart` by name, declared before its first read.
+
+Also fixed there: a destructured arrow parameter (`([bundleId, comps]) =>`)
+read as two orphans.
+
+### Still open
+- /!\ **37 CHEWY SKUs HAVE NO CATALOG ROW** - 13,163 units, $156,535 of
+  retail, excluded from every Our Revenue figure and named on screen. A
+  `chewy_catalog` upload is what closes it.
+- /!\ **AMAZON NET SALES IS PRE-FEE.** Our Revenue is the top line that
+  reaches us, not what we keep. A net-proceeds measure is a different
+  question and would need a third setting.
+- /!\ **13 `sku_economics` ROWS ARE STAMPED `CAD` IN REGION `US`.** The
+  stored currency is trusted (which is what `pnlRowFx` does), so those 13
+  convert. Almost certainly a data error, not worth a guard.
+- Everything on the v12.32 list.
 
 ## v12.34 - a shipment goes to ONE marketplace, so US+CA is not a group
 
