@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.30** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.31** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,44 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.31 - the saved note reaches the page
+
+- **Jason:** *"also i added a note, but i don't see where it applied"*
+
+### /!\ THE WRITE WORKED
+Read off the live table: **id 1, walmart, "Kitty Ka Zoom - Manual",
+2026-11-12, "Switched bidding strategy to Dynamic bid"**. The row existed and
+the page could not show it, which is the v12.24 shape: the data is there and
+an async chain between it and the screen does not complete.
+
+Three changes, all about removing that dependence rather than debugging it:
+
+1. **The save writes into the cache itself.** `insert(...).select()` returns
+   the stored row and it is pushed onto `_adsNotes[channel].rows` directly.
+   The re-fetch still runs behind it, but the note is on screen whether or
+   not it lands. **A note that is saved and invisible is worse than a save
+   that refuses.**
+2. **The panel always states what it knows** - `1 in view`, `not loaded yet`,
+   `reading...`, `could not read`, or `N on this channel, none in view`. A
+   silent empty panel cannot be told apart from a broken one, which is
+   exactly what cost a round trip here.
+3. **The TACoS gate comes off the row affordance.** Notes have nothing to do
+   with whether a channel has a sales feed; `TACOS_SRC[channel]` was a copied
+   condition and is the kind of accident that makes a feature silently absent
+   on a tab.
+
+### Still open
+- **/!\ NOTES ON AMAZON AND SHOPIFY.** Jason asked for both. Amazon and Chewy
+  are ads channels and the feature is keyed by channel, so they follow from
+  this release. **Shopify has no ads tab** - its notes belong on the Shopify
+  P&L chart, which is a different surface and a separate build.
+- **/!\ THE ORDER LIST TAB IS PARKED MID-BUILD** - Inventory Planning, by
+  brand and region, next Amazon shipment per product, rounded up to 5 under
+  100 units and 10 at 100+. The quantity is `inventoryNeedBreakdown`'s own
+  `amazon.meta.events[0]` and the filters are `inventoryVisibleRecords()`;
+  neither is re-spelled.
+- Everything on the v12.27 list.
 
 ## v12.30 - the note is written where the campaign is
 
