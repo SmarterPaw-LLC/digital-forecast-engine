@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.40** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.41** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,50 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.41 - All time was SAMPLING for its earliest row
+
+- **Jason:** *"the 'our revenue' amount here is not adding correctly..."* ...
+  *"or it is all time"* ... *"maybe it is fine"*
+
+### Reconciled channel by channel against the database
+| window | SQL | on screen | |
+|---|---|---|---|
+| Year to date | $1,931,632 | **$1,931,747** | -0.006% |
+| All time | $4,047,391 | **$4,044,983** | **+0.060%** |
+
+Both are right to within a rounding band, and the Year-to-date residual is
+rounding plus the fact that the SQL does not replicate v12.36's sku-first
+Chewy mapping. **The all-time gap was not rounding**, and the cause is mine,
+from v12.37.
+
+### /!\ `salesData[mid]` IS IN FETCH ORDER, NOT DATE ORDER
+`_salesAllTimeRows` took each product's **first and last array element** as
+its date bracket. That array is built by pushing rows as they arrive -
+`sales_weekly`'s pages (unordered), then Shopify, then Walmart, then Chewy -
+so element 0 is whatever came back first. The floor could land **after** rows
+that exist before it, and those rows then fell outside the window and
+vanished from a total labelled *All time*.
+
+**A window that clips its own data without saying so** is the worst shape
+this page can take, so the minimum is computed rather than guessed: one pass
+over rows already in memory, comparing ISO dates as strings, which is the
+same test `pnlAllTimeFrom` applies.
+
+### Verification
+- `node --check` clean - **173 suites green** - new `tests/test_v1241.py` (11).
+- **The pre-v12.41 sampler reproduced verbatim beside the shipped one**, over
+  an array whose earliest row sits in the MIDDLE - the old one answers
+  2025-01-06, the new one 2024-06-10.
+- Every figure in the table above read off the live database.
+
+### Still open
+- /!\ **THE YTD RESIDUAL IS UNEXPLAINED TO $115** on $1.93M. It is inside
+  the rounding band and the reconciliation SQL is the cruder of the two
+  models (it keys Chewy on `chewy_catalog.master_id` rather than v12.36's
+  sku-first rule), so there is nothing here that says the app is wrong. Worth
+  one pass if a bigger discrepancy ever shows up on this page.
+- Everything on the v12.40 list.
 
 ## v12.40 - the scorecard and the chart disagreed by one day
 
