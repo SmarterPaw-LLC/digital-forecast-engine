@@ -108,7 +108,7 @@ const seoTr = {
 let seoTrSel = { dim: '', keys: new Set(), pages: new Set() };
 const EL = { 'seo-tr-chan': { value: '' }, 'seo-tr-dev': { value: '' } };
 globalThis.document = { getElementById: (id) => EL[id] || null };
-""" + fn("seoTrPrevRows") + r"""
+""" + fn("seoTrScopeSel") + chr(10) + fn("seoTrPrevRows") + r"""
 const sum = rows => rows.reduce((a, r) => a + r.sessions, 0);
 const out = {};
 const snap = k => { out[k] = { n: seoTrPrevRows().length, total: sum(seoTrPrevRows()) }; };

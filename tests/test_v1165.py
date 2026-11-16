@@ -372,7 +372,7 @@ let CFG = null, seoTrChart = null;
 const pnlTrendRender = async (cfg) => { CFG = cfg; return { destroy() {} }; };
 const seoTrWindow = () => ({ from: '2026-10-01', to: '2026-10-02', label: 'x' });
 """ + fn("seoTrSelNew") + "\n" + fn("seoTrPageKey") + "\n" + fn("seoTrSelNoun") + "\n"
-   + fn("seoTrPrevRows") + "\n" + 'let seoTrSnap = null;' + chr(10) + fn('pnlBucketRange') + chr(10) + fn('pnlPriorYearShift') + chr(10) + fn('pnlBucketGrain') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + re.search(r"(?m)^const GA4_SETTLE_DAYS\s*=.*$", js).group(0) + chr(10) + fn('ga4SettledThrough') + chr(10) + fn('seoTrCoverage') + chr(10) + V1174 + fn("seoTrRenderChart") + r"""
+   + fn("seoTrScopeSel") + chr(10) + fn("seoTrPrevRows") + "\n" + 'let seoTrSnap = null;' + chr(10) + fn('pnlBucketRange') + chr(10) + fn('pnlPriorYearShift') + chr(10) + fn('pnlBucketGrain') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + re.search(r"(?m)^const GA4_SETTLE_DAYS\s*=.*$", js).group(0) + chr(10) + fn('ga4SettledThrough') + chr(10) + fn('seoTrCoverage') + chr(10) + V1174 + fn("seoTrRenderChart") + r"""
 let seoTrSel = seoTrSelNew();
 const shot = () => ({
   labels: CFG.datasets.map(d => d.label),
@@ -477,7 +477,12 @@ for f in ("seoTrPageKey", "seoTrSelNew", "seoTrRowsLocked", "seoTrSelApply"):
     eq("E1  %s defined once" % f, NC.count("function %s(" % f), 1)
 # /!\ The table, the chart and the CSV must key a landing page identically, or
 # a ticked row addresses a series filed under another name.
-eq("E2  seoTrPageKey has three readers", NC.count("seoTrPageKey"), 4)
+# v12.44 added a fourth reader: seoTrScopeRows, which resolves the SCORECARD
+# population. It keys a page the same way or a ticked row narrows the cards
+# to a page filed under another name.
+eq("E2  seoTrPageKey has four readers", NC.count("seoTrPageKey"), 5)
+ok("seoTrPageKey(r)" in fn("seoTrScopeRows"),
+   "E2a /!\\ including the one that narrows the cards")
 eq("E2b and no second spelling of the key survives",
    NC.count("r.landing_page || ''"), 1)
 ok("function seoTrPageKey(r) { return r.landing_page || ''; }" in NC,

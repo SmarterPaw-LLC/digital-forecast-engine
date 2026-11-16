@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.43** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.44** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,74 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.44 - a ticked row narrows the scorecards, not just the chart
+
+- **Jason:** *"on seo page, checking a box doesn't change the scorecards"*
+
+### \!\ AND THE HALF HE COULD NOT SEE WAS THE WORSE ONE
+`seoTrPrevRows` has narrowed the **prior year** to the ticked rows since
+v11.61. The cards read the two **dropdowns** and nothing else. So ticking
+Organic Search left Sessions on the whole site and compared it against last
+year's Organic Search alone:
+
+| card | read | should have read | chip |
+|---|---|---|---|
+| Sessions | **53,466** (sitewide) | 10,272 | **+227.1%** |
+| Revenue | **$26,754** (sitewide) | $1,866 | **+540.6%** |
+
+A missing filter is visible and someone reports it. **A delta between two
+different populations prints a number that looks like an answer** - which is
+the v10.19 defect, and it had been on screen since v11.61.
+
+### One decision, read by this year and last
+`seoTrScopeSel()` is the only place that answers *which population is
+selected*, and `seoTrPrevRows` now reads it instead of carrying its own copy.
+Two resolvers for one control is how they came to disagree (hard rule #1).
+
+\!\ **THE ORDER IS seoTrPrevRows' OWN, KEPT EXACTLY** - pages, then ticks,
+then a dropdown pair, then one dropdown, then the site. `test_v1244` section
+E drives the **pre-v12.44 resolver verbatim beside the shipped one over
+eleven states** and requires every answer to be identical: this release
+rewired it and may not have moved it.
+
+### \!\ NO CARD HAS TO REFUSE, AND THAT WAS MEASURED
+Read off `information_schema`: `ga4_by_date_channel`, `_device` AND
+`_landing_page` all carry **sessions, new_users, engaged_sessions, revenue
+and transactions**, which is every metric on the six cards. `total_users` and
+`purchasers` are missing from the landing-page feed and are on no card - and
+the suite pins that, because a card reading one would quietly show **0** under
+a page selection rather than saying it cannot answer (v11.16).
+
+### \!\ THREE POPULATIONS, AND THEY ARE NOT ONE QUESTION
+| | is |
+|---|---|
+| `cur` | the **selection** - what the scorecards describe |
+| `scopeCur` | the **dropdown scope** - what the breakdown tables' **Share** is a share OF |
+| the chart's `rows` | unchanged: its bands apply the ticks themselves |
+
+Narrowing Share to the selection would print **100%** beside every row the
+operator just ticked, and a share of a denominator that excludes the rest.
+Narrowing the chart's `rows` would drop a day with no rows out of the axis.
+**With nothing ticked, `cur` and `scopeCur` are the same rows** - which is
+what makes "no existing behaviour moved" checkable rather than claimed (B1).
+
+The sub-line follows the number: `Organic Search`, `2 channel groups`,
+`/a in Organic Search`. A narrowed figure under *"all channels and devices"*
+is the same defect written in words.
+
+### Verification
+- `node --check` clean - **176 suites green** - new `tests/test_v1244.py` (56).
+- **The pre-v12.44 card population reproduced verbatim**, printing 1,000
+  against a prior year of 160 where the shipped one prints 200.
+- The decision table driven over all eleven states, including a **null**
+  channel, a **blank** landing page, pages crossed with a channel pick, and a
+  dropdown pick beating a tick.
+
+### Still open
+- The **page** selection still has no prior year, so its cards carry no
+  comparison chips (v11.65, unchanged and deliberate).
+- Everything on the v12.43 list.
 
 ## v12.43 - when to re-pull: a week whose fees have not posted
 

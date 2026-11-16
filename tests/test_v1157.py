@@ -301,7 +301,7 @@ const seoTrWindow = () => ({ from: '2026-10-01', to: '2026-10-28', label: 'x' })
 const EL = {};
 globalThis.document = { getElementById: (id) => (EL[id] || (EL[id] = { id, textContent: '', innerHTML: '' })) };
 """ + fn("seoTrSelNoun") + "\n" + fn("seoTrPageKey") + "\n"
-   + fn("seoTrPrevRows") + "\n" + 'let seoTrSnap = null;' + chr(10) + fn('pnlBucketRange') + chr(10) + fn('pnlPriorYearShift') + chr(10) + fn('pnlBucketGrain') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + re.search(r"(?m)^const GA4_SETTLE_DAYS\s*=.*$", js).group(0) + chr(10) + fn('ga4SettledThrough') + chr(10) + fn('seoTrCoverage') + chr(10) + V1174 + fn("seoTrRenderChart") + r"""
+   + fn("seoTrScopeSel") + chr(10) + fn("seoTrPrevRows") + "\n" + 'let seoTrSnap = null;' + chr(10) + fn('pnlBucketRange') + chr(10) + fn('pnlPriorYearShift') + chr(10) + fn('pnlBucketGrain') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + re.search(r"(?m)^const GA4_SETTLE_DAYS\s*=.*$", js).group(0) + chr(10) + fn('ga4SettledThrough') + chr(10) + fn('seoTrCoverage') + chr(10) + V1174 + fn("seoTrRenderChart") + r"""
 const shot = () => ({ labels: CFG.datasets.map(d => d.label),
                       fills: CFG.datasets.map(d => !!d.fill),
                       widths: CFG.datasets.map(d => d.borderWidth),
@@ -410,7 +410,16 @@ ok("_seoTrRendered[dim] = list.map" in code,
 # v11.66 added a seventh: the prior-year line renames itself as the legend
 # narrows the bands, and it has to say "2 channel groups" in the same words
 # the subtitle would. Still ONE definition.
-eq("D4 the noun has one definition and seven readers", code.count("seoTrSelNoun("), 8)
+# v12.44 added an eighth: the SCORECARD sub-line, which now names the ticked
+# population and has to say "2 channel groups" in the same words the subtitle
+# and the prior-year line already do. Still ONE definition.
+eq("D4 the noun has one definition and eight readers", code.count("seoTrSelNoun("), 9)
+eq("D4a ...and the definition is still single",
+   code.count("function seoTrSelNoun("), 1)
+ok("seoTrSelNoun(sc.kind, n)" in code,
+   "D4b /!\\ the new reader is the card label - a selection described in one "
+   "noun on the chart and another on the card is the same defect as the "
+   "card not narrowing at all")
 eq("D5 version chip", len(re.findall(r">v\d+\.\d+ · [\d-]+<", s)), 1)
 for phrase in ("ONE SELECTION, ONE DIMENSION", "they are excluded",
                "a selection is a view of"):

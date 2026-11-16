@@ -397,7 +397,7 @@ const pnlTrendRender = async (cfg) => { CFG = cfg;
 const seoTrWindow = () => ({ from: '2026-10-01', to: '2026-10-02', label: 'x' });
 """ + fn("chartLegendIsOverlay") + "\n" + fn("seoTrSelNew") + "\n"
    + fn("seoTrPageKey") + "\n" + fn("seoTrSelNoun") + "\n"
-   + fn("seoTrPrevRows") + "\n" + fn("chartLegendVisibleBands") + chr(10) + fn("seoTrOverlaySync") + "\n"
+   + fn("seoTrScopeSel") + chr(10) + fn("seoTrPrevRows") + "\n" + fn("chartLegendVisibleBands") + chr(10) + fn("seoTrOverlaySync") + "\n"
    + 'let seoTrSnap = null;' + chr(10) + fn('pnlBucketRange') + chr(10) + fn('pnlPriorYearShift') + chr(10) + fn('pnlBucketGrain') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + re.search(r"(?m)^const GA4_SETTLE_DAYS\s*=.*$", js).group(0) + chr(10) + fn('ga4SettledThrough') + chr(10) + fn('seoTrCoverage') + chr(10) + V1174 + fn("seoTrRenderChart") + r"""
 let seoTrSel = seoTrSelNew();
 const out = {};
