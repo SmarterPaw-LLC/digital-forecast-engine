@@ -326,8 +326,14 @@ i_total = tot_fn.index('const periodTotal = datasets.map(')
 i_goal  = tot_fn.index("salesGoalDatasets(weeks, null, 'total')")
 ok(i_total < i_goal,
    'D1  Total tab: the goal joins `datasets` only AFTER periodTotal is summed')
-ok('_salesGoalNote' in tot_fn and '${_freshLine}${_salesGoalNote}' in tot_fn,
-   'D2  Total tab: the goal figure lands in the subtitle')
+# v12.47 moved the long notes off the visible LINE and onto the tooltip, so
+# the goal note now arrives as a detail sentence rather than concatenated
+# into the headline. The guarantee is unchanged: it still reaches the
+# subtitle, and it is still the same variable.
+ok('_salesGoalNote' in tot_fn
+   and '[_measNote, _attrNote, _freshLine, _salesGoalNote]' in tot_fn,
+   'D2  Total tab: the goal figure still reaches the subtitle, now as one of '
+   'its tooltip lines (v12.47)')
 ok('_salesGoalDs.length > 0' in tot_fn,
    'D3  Total tab: the legend appears for the goal line even with 0-1 products selected')
 

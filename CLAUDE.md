@@ -1,8 +1,14 @@
 # SmarterPaw Forecast Dashboard — Claude Code Handoff
 
+> **READ `RULES.md` FIRST.** It is the pre-flight checklist: the UI-text
+> budget, the consolidation rules, the verification steps and the escape
+> traps, in checkable form. This file is the reasoning; that one is the
+> list. Jason, 2026-11-16: *"please create a list of rules that you always
+> reference, bc you keep skipping this."*
+
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.46** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.47** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +43,57 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.47 - one short line, the rest on the tooltip
+
+- **Jason:** *"text bloat. this should be a tooltip. you have this rule
+  saved. please create a list of rules that you always reference, bc you keep
+  skipping this."*
+
+He is right on both counts. The Units Sold subtitle ran about **450
+characters over four wrapped rows**, and **v12.46 added to it** - I was
+editing that very line while breaking my own standing rule on it.
+
+### What shows, and what does not
+`salesSetSub(head, detail, cov, offer)`. `head` is the number, its unit, the
+window and **at most one warning in four words**. `detail` is a list of
+sentences, one per tooltip line.
+
+    6 weeks · $188,981 our revenue · Last 30 days · ⚠ excludes 12,958 units
+
+Everything else - the channel scope, the per-feed `data thru` list, the full
+excluded-SKU sentence, the unmapped-channel note, the goal note - is on the
+title, with `cursor:help` so it reads as having one.
+
+\!\ **THE LINK STAYS MARKUP.** `test_v1087` fails the build on a link label
+found inside a `title=`: collapsing prose must never swallow an AFFORDANCE
+(rule 1a). The incomplete-weeks chip and its one-click *compare without*
+fix are appended after the text exactly as before.
+
+\!\ **ONE DERIVATION, TWO LENGTHS.** `salesRevNoteBrief` and `salesRevNote`
+both read `_salesRev.gap`, so the line and the tooltip cannot disagree about
+how much was left out (rule 3a). A gap with no unit count behind it - an
+unreadable feed, a missing week - still says so rather than going quiet
+(v11.16).
+
+### And the list he asked for: `RULES.md`
+A pre-flight checklist at the repo root, 25 lines, pointed at from the top of
+this file. **A rule I have to remember to look up is a rule I skip**, so it
+is short, imperative and checkable: the UI-text budget in characters, the
+consolidation rules, the verification steps, and the escape traps that have
+each bitten more than once.
+
+### Verification
+- `node --check` clean - **179 suites green** - new `tests/test_v1247.py`.
+- **The real `salesSetSub` driven** against a stand-in element: the visible
+  text under budget, the detail on the title one line each, the link still
+  markup, and the tooltip removed when there is nothing to say.
+
+### Still open
+- The other subtitle builders on this page group were not swept. They are
+  shorter and nobody has complained, but the budget in `RULES.md` applies to
+  them too and the next one to grow should be collapsed rather than extended.
+- Everything on the v12.46 list.
 
 ## v12.46 - the Channels control belongs to the page, not to one tab
 
