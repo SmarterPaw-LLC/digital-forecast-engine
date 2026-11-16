@@ -268,13 +268,22 @@ ok("bucket: grain" in js, "D2c the prev rollup is bucketed")
 calls = re.findall(r"pnlInjectChartModeToggle\(((?:[^()]|\([^()]*\))*)\)", NC)
 calls = [c for c in calls if "hostId" not in c]
 eq("D3  seven chart surfaces inject the toggle", len(calls), 7)
-withcmp = [c for c in calls if "ok:" in c]
-eq("D3b and every one of them declares whether it can compare", len(withcmp), 7)
+withcmp = [c for c in calls if ("ok:" in c or "_seoCmp" in c or "_salesCmp" in c)]
+eq("D3b and every one of them declares whether it can compare - inline, or "
+   "through a cmp computed just above the call", len(withcmp), 7)
 
 # /!\ The one chart that already compares says what it compares against.
+# v12.48 - the SEO chart no longer REFUSES. It draws the prior year always and
+# the previous period on demand, so its cmp is computed into `_seoCmp` just
+# above the call rather than written inline as a refusal.
 seo = [c for c in calls if "seo-tr-mode" in c]
-ok(seo and "PRIOR YEAR" in seo[0],
-   "D4  /!\\ the SEO chart refuses with the comparison it DOES draw", seo)
+ok(seo and "_seoCmp" in seo[0],
+   "D4  /!\\ the SEO chart passes a computed cmp", seo)
+ok("const _seoCmp = (w.from && w.to && !w.allTime)" in NC,
+   "D4a ...which is ok except where there is nothing before the window")
+ok("The previous period is not fetched for GA4" not in NC,
+   "D4b /!\\ and the refusal it used to carry is GONE, not left on the "
+   "tooltip of a control that now works")
 # An All-time window has no previous period, which is already why the chips
 # suppress themselves there (v10.13).
 ok(NC.count("!_pnlSuppressDeltas") >= 4,

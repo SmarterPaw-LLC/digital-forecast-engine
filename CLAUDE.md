@@ -8,7 +8,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.47** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.48** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -43,6 +43,64 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.48 - the SEO chart draws the previous period too
+
+- **Jason, twice:** *"the previous period data points never show in the hover
+  window"* ... *"i still am not seeing the comparison period datapoint in the
+  hover over window"*
+
+### \!\ I FIXED THE WRONG LINE FIRST
+v12.42 put the date on the **prior-YEAR** overlay, and his second screenshot
+shows that working: `Sessions (prior year) - 4/28/25: 4,366`. He has been
+asking for the other one the whole time. The app's own control is labelled
+**vs prev period**, he used that phrase twice, and this chart had never
+fetched it - the button was greyed out with *"the previous period is not
+fetched for GA4"*.
+
+**Two comparisons, two sets of rows, two lines.** The prior year stays on
+always, because GA4 is seasonal. Compare adds the block immediately before
+this window, which is what the scorecard chips already measure against.
+
+### \!\ A CHART CAN CARRY TWO OVERLAYS NOW
+`chartLegendVisibleBands` found the FIRST overlay with `findIndex` and
+counted everything else as a band - so the second line would have made
+`narrowed` fire with nothing narrowed, and let a legend sync rewrite the
+wrong dataset. It collects all of them now; `overlayIndex` stays the first,
+so a chart with one is **byte-identical** to v12.47 and A1 requires it.
+
+The new line gets its **own stack group** (`_prevp`). Two datasets in one
+group stack on each other and the chart would read as last year PLUS the
+period before - the trap `_prev` and `_goal` already exist for.
+
+### \!\ THE THREE EXTRA READS ARE PAID FOR ONLY WHEN WANTED
+They are this page's heaviest feeds and *"it takes SO LONG whenever i
+refresh"* is a standing complaint, so the Compare toggle decides. Switching
+it on against a cache fetched without it **reloads once**, guarded, rather
+than drawing nothing and saying nothing (v10.19). The landing-page feed is
+deliberately not among them: a page selection draws no comparison line at
+all, for the same reason it has no prior year (v11.65).
+
+### \!\ AND ALL TIME IS A FLAG NOW, NOT A LABEL
+`seoTrWindow` reported all-time only by returning the string *"All time"*.
+The compare control has to know there is nothing before the window, and
+keying that on a display string is how a rename silently enables a broken
+comparison. It returns `allTime` and D3 fails the build on anyone reading
+the label instead.
+
+### Verification
+- `node --check` clean - **180 suites green** - new `tests/test_v1248.py` (38).
+- **The real `chartLegendVisibleBands` driven** at zero, one and two
+  overlays, with a band hidden and with only the overlays visible.
+- **The real `seoTrPrevPeriodRows` driven** over seven selection states,
+  including a null channel and a page selection.
+
+### Still open
+- The previous-period line is **not narrowed by the legend** the way the
+  prior-year one is (`$overlaySync` owns a single index). Ticking a band off
+  renames and re-sums the prior-year line and leaves this one alone. Worth
+  doing; it needs the sync to take a list.
+- Everything on the v12.47 list.
 
 ## v12.47 - one short line, the rest on the tooltip
 

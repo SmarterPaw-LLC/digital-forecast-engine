@@ -72,9 +72,14 @@ ld = js[js.index("async function loadSeoTraffic"):]
 ld = ld[:ld.index("\n}")]
 eq("A1  three prior-year fetches (total + channel + device)",
    ld.count("shift(w.from,364)"), 3)
-eq("A2  by_date_channel is fetched twice (this year + last)",
-   ld.count("'ga4_by_date_channel'"), 2)
-eq("A3  by_date_device likewise", ld.count("'ga4_by_date_device'"), 2)
+# v12.48 - a THIRD window: this year, the prior year, and (only when Compare
+# is on) the previous period. The count moved; the guarantee did not.
+eq("A2  by_date_channel is fetched for all three windows",
+   ld.count("'ga4_by_date_channel'"), 3)
+eq("A3  by_date_device likewise", ld.count("'ga4_by_date_device'"), 3)
+ok("ppFetch('ga4_by_date_landing_page'" not in ld,
+   "A3b /!\ and NOT the landing-page feed, which is the heaviest and draws "
+   "no comparison line at all (v11.65 / v12.48)")
 # /!\ v11.41's rule: 364 days, not 365. 52 whole weeks keeps a Monday on a
 # Monday; a one-day slip puts a weekend against a weekday.
 ok("365" not in nocomment(ld), "A4  no 365 anywhere in the loader")
@@ -85,7 +90,8 @@ ok("prevChan, prevDev" in ld, "A5  both land on seoTr")
 # of them, which is the risk this assertion was written for - so it now pins
 # the shape to ONE declaration and checks every reset goes through it, rather
 # than counting copies.
-SHAPE = "{ days: [], chan: [], dev: [], pages: [], prev: [], prevChan: [], prevDev: [] }"
+SHAPE = ("{ days: [], chan: [], dev: [], pages: [], prev: [], prevChan: [], "
+         "prevDev: [], pp: [], ppChan: [], ppDev: [], ppWin: null }")
 eq("A6  /!\\ the EMPTY shape is declared exactly ONCE",
    js.count("const SEO_TR_EMPTY = () => (" + SHAPE + ");"), 1)
 eq("A6b /!\\ ...and no site writes the literal out beside it",

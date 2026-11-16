@@ -234,8 +234,13 @@ ok("live === 1" not in code and "live = vis.reduce" not in code,
    "D3 the retired visible-count rule is gone, not merely unused")
 eq("D4 the overlay test is spelled once", code.count("charAt(0) === '_'"), 1)
 
-eq("D5 the app's only reference overlays are the two this relies on",
-   sorted(set(re.findall(r"stack:\s*'(_[a-z]+)'", code))), ["_goal", "_prev"])
+# v12.48 added `_prevp`: the SEO chart draws the prior YEAR and, with Compare
+# on, the previous PERIOD, and two datasets in one stack group stack on each
+# other. The guarantee is unchanged - every reference overlay is in a group of
+# its own, and the names are declared here rather than discovered later.
+eq("D5 the app's reference overlays, each in its own stack group",
+   sorted(set(re.findall(r"stack:\s*'(_[a-z]+)'", code))),
+   ["_goal", "_prev", "_prevp"])
 
 tg = code[code.index("function chartLegendToggle("):]
 tg = tg[:tg.index("\n}") + 2]
