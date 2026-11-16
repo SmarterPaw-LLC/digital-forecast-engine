@@ -137,11 +137,15 @@ print("\nB. /!\\ OUR REVENUE - the money that reaches us, never the retail")
 REV = fn_flat("salesRevFx") + "\n" + fn_flat("salesRowVal") + "\n" \
     + fn_flat("salesFmtVal") + "\n" + fn_flat("salesMeasureUnit") + "\n" \
     + fn_flat("chewyCatalogPricePerEach") + "\n" + fn_flat("chewyCatalogFor") + "\n" \
+    + fn_flat("salesRowsLoaded") + "\n" + fn_flat("salesRevFetch") + "\n" \
+    + fn_flat("salesRevAttach") + "\n" \
     + fn_flat("salesEnsureRevenue") + "\n" + fn_flat("salesRevNote")
 
 HARNESS = r"""
 let pnlFxRate = 1.40, pnlFxGbp = 1.25, pnlFxEur = 1.10;   // CAD per USD; USD per unit
-let _salesRev = null;
+// v12.45 split the pass in two: the fetch is cached on _salesRevSrc, the
+// attach re-runs whenever salesData is not the object it last ran over.
+let _salesRev = null, _salesRevSrc = null, _salesRevFor = null, _salesRevRows = -1;
 const console_warn = console.warn; console.warn = () => {};
 async function fetchFxRate() {}
 async function fetchEuFxRates() {}
@@ -393,10 +397,18 @@ ok("'master_id, week_start, units_ordered, channel, region, revenue'" in js,
 # ===========================================================================
 print("\nI. on demand, and paged deterministically")
 # ===========================================================================
-ENS = fn_flat("salesEnsureRevenue")
-ok("if (_salesRev && (_salesRev.pending || _salesRev.ok)) return _salesRev;" in ENS,
-   "I1  /!\\ fetched once per session - the page already loads ~43k rows and "
-   "'it takes SO LONG whenever i refresh' is a standing complaint")
+# v12.45 split this in two by COST, so the content checks below read the
+# whole pass rather than the entry point. The guarantee each protects is
+# unchanged; only which function holds the line moved.
+ENS = fn_flat("salesEnsureRevenue") + "\n" + fn_flat("salesRevFetch") \
+    + "\n" + fn_flat("salesRevAttach")
+ok("_salesRevSrc || (_salesRevSrc = await salesRevFetch())" in ENS,
+   "I1  /!\\ the FETCH is still once per session - the page already loads "
+   "~43k rows and 'it takes SO LONG whenever i refresh' is a standing "
+   "complaint. v12.45 only stopped the cheap ATTACH being cached with it")
+ok("_salesRevFor === salesData && _salesRevRows === rows" in ENS,
+   "I1a /!\\ ...and the attach follows the data, because `ourRevUsd` lives "
+   "on row objects a reload replaces (v12.45)")
 ok("order: { column: 'id', ascending: true }" in ENS,
    "I2  /!\\ 41k rows is 41 pages, and an unordered paged select can repeat "
    "or skip a row across a boundary - `id` is the unique PK")

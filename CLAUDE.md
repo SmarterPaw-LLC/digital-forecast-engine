@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.44** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.45** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,51 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.45 - Our Revenue read $0 after a refresh
+
+- **Jason:** *"on the units sold page, the 'our revenue' doesn't render"*
+
+Every cell $0, on a page that had rendered dollars before he refreshed it.
+
+### \!\ THE ATTACH WAS CACHED WITH THE FETCH, AND ONLY ONE OF THEM IS STABLE
+`ourRevUsd` is written onto the **row objects** inside `salesData`, and
+`loadSalesAnalytics` does `salesData = {}` and refills it with **new objects**
+on every reload. v12.35 cached the whole pass behind `_salesRev.ok`, so every
+row after a reload carried no `ourRevUsd` at all, and `salesRowVal` turns a
+null into **0**.
+
+\!\ **THE LOADER WAS ALREADY ASKING.** The re-attach call sits two lines after
+the loader's own fetch and has since v12.35 - the cache in front of it made it
+a no-op. **A guard that turns a correct call into nothing is worse than a
+missing call**, because the code reads as if the case is handled. The chart's
+caller carried the same guard inline and it is gone too.
+
+### Split by cost
+| | |
+|---|---|
+| `salesRevFetch` | 41k rows of `sku_economics`, the Walmart view, the Chewy catalog. Genuinely session-stable, **cached** |
+| `salesRevAttach` | one pass over rows already in memory. **Re-runs** whenever `salesData` is not the object it last ran over |
+
+\!\ **IDENTITY *AND* ROW COUNT.** The loader empties the object first and
+fills it asynchronously, so a cache keyed on object identity alone would let
+an attach against **zero rows** record itself as done - the same defect one
+tick earlier. `test_v1245` section C drives exactly that sequence.
+
+\!\ **AND THE GAP COUNTERS ARE RECOMPUTED, NOT REMEMBERED.** They describe
+the rows on screen; a remembered count would keep naming an unpriced SKU the
+page is no longer showing.
+
+### Verification
+- `node --check` clean - **177 suites green** - new `tests/test_v1245.py` (21).
+- **The defect reproduced**: attach, replace `salesData` the way the loader
+  does, and read the rows back - all null before the fix, all correct after,
+  with the 41k-row fetch still having run exactly **once**.
+- `test_v1235` re-pointed to the guarantee (the fetch is once per session; the
+  attach follows the data) rather than to the line that moved. 101 green.
+
+### Still open
+- Everything on the v12.44 list.
 
 ## v12.44 - a ticked row narrows the scorecards, not just the chart
 
