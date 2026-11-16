@@ -273,7 +273,10 @@ LOCALS = {'f', 'g', 'r', 'v', 'd', 'n', 'c', 'e', 'it', 'cfg', 'sb', 'main', 'li
           'sessions', 'lists', 'budget', 'used', 'shown', 'hidden', 'cnt', 'when',
           'ts', 'rcField', 'label', 'String', 'Number', 'Array', 'Promise', 'Map',
           'Set', 'Math', 'Date', 'Object', 'JSON', 'console', 'document', 'setTimeout',
-          'requestAnimationFrame', 'ResizeObserver', 'getComputedStyle'} | KEYWORDS | BUILTINS
+          'requestAnimationFrame', 'ResizeObserver', 'getComputedStyle',
+          # v12.43 - the rail now reaches a CSV export, which is the first
+          # function in its reach to use these three browser globals.
+          'Blob', 'alert', 'URL'} | KEYWORDS | BUILTINS
 # v10.90 - the rail builds its UI out of prose inside template literals, so
 # "...that session covered (not when you uploaded it)" and "upload
 # session(s) on record" both look like calls to a naive regex. Blank the

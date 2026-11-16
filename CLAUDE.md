@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.42** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.43** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,100 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.43 - when to re-pull: a week whose fees have not posted
+
+- **Jason:** *"i ALWAYS have pulled the reports Sunday through Saturday. and
+  the uploader takes it by weeks. I don't know how these date gaps even
+  happened"* ... *"yes, i need to know when to repull"*
+
+### /!\ THERE ARE NO DATE GAPS AND HIS PULLS ARE FINE
+Measured: every week is present, and the cadence is a steady **two days**
+after the week closes - on the good weeks and the bad ones alike. What
+differs is what Amazon had posted at that moment.
+
+### /!\ AND THE PROOF IT IS AMAZON'S FILE, NOT OUR PARSER, IS NET PROCEEDS
+
+| | net proceeds, % of net sales | FBA $/unit |
+|---|---|---|
+| settled weeks | **32-45%** | $3.44 - $3.78 |
+| 2026-06-22 | **59.6%** | $1.26 |
+| 2026-06-29 | **62.3%** | $0.79 |
+| 2026-08-03 | **61.8%** | $1.65 |
+
+Amazon computed proceeds **without charging the fee**. Had our parser dropped
+the column, proceeds would have read normal - so this test is what separates
+the two explanations, and it is the one I ran before telling him to re-pull.
+
+/!\ **IT IS A PROOF, NOT A GATE**, and that correction came from RUNNING
+the shipped query rather than reasoning about it. Ad spend and returns move
+proceeds too, so a short week can carry ordinary proceeds - one CA week
+posts **$0.00 of fee on 180 units** with proceeds at 19%. Gating on high
+proceeds would have thrown that away. It is shown; the operator judges.
+
+SKU Economics **settles after the fact**, and this app pulls a week once and
+never looks again, so whatever had posted at that moment is frozen for good.
+**30 brand-weeks across US and CA are short by $25,280.**
+
+### The test is the BRAND'S OWN median, not a constant
+Doggijuana US runs **$4.70** a unit and Meowijuana US **$3.48**, so one floor
+across the catalogue would flag a brand for being bulky. Measured over 45
+weeks: a settled week sits within **~8%** of its own median and a short one
+runs **12-57%** of it, so **80% is the gap between two populations** rather
+than a number picked to fit. A week under 25 units, or a brand with fewer
+than 8 loaded weeks, is not judged at all.
+
+### /!\ IT IS HANDED BACK SUN-SAT, BECAUSE THAT IS WHAT HE TYPES
+The parser maps Amazon's Sunday-start week forward to the Monday (v12.02) and
+the table stores the Monday. A re-pull list is read by an operator standing
+in front of a date picker, so the stored `2026-06-22` is printed
+**`2026-06-21 -> 2026-06-27`**. The stored Monday rides in the CSV beside it.
+
+### /!\ AND THE LIST IS WINDOWED TO 180 DAYS
+Also found by running it: unwindowed it reaches into 2025 and names **40+**
+weeks, most inside quarters that are closed and none worth a pull. The
+**median is still taken over every loaded week** - a median wants all the
+history it can get - and only the worklist is recent.
+
+### Where it lives
+On the **SKU Economics upload card**, under the coverage grid, through the
+**same repaint** - so a week that lands short is named by the upload that
+wrote it rather than needing a second surface. One line, orange, click to
+expand; `/!\ 30 weeks to re-pull`, or a quiet grey tick. The list carries the
+week, marketplace, brand, $/unit, that brand's normal, net proceeds and the
+shortfall, and exports as CSV (the standing rule).
+
+`FEE_SETTLE_SOURCES` is the registry, so the EU table - which spells
+**fulfilment with one L** - is declared rather than hardcoded, and a feed not
+in it gets no line at all rather than a check that cannot run.
+
+### /!\ AND I BROKE THE VERSION CHIP IN v12.42
+It is in **markup**, and my patch wrote `\u00b7` there as literal text, so it
+rendered as **`v12.42 \u00b7 2026-11-16`**. index.html holds REAL characters
+in markup and `\uXXXX` escapes only inside JS string literals - **the v12.09
+rule, broken by the release whose own notes cite the non-ASCII trap.**
+
+Worse: **my smoke-check read the chip as `(none)` and I accepted it.** The
+page had not painted, which is not the same as a chip that is correct. A
+blank read is not a pass, and the standing rule says load it and look.
+
+The character is built with `chr(0x00B7)` now, and the patch asserts the
+escape form does **not** survive in markup rather than trusting its own log.
+
+### Verification
+- `node --check` clean - **175 suites green** - new `tests/test_v1243.py`.
+- **The real `feeSettleSql` run against the live database**, and every figure
+  in the tables above read off the result rather than described.
+- **41 suites went red first**, all on one assertion - the chip and CLAUDE.md
+  naming the same release. The census is what caught the chip at all.
+
+### Still open
+- /!\ **THE 30 WEEKS ARE STILL SHORT UNTIL JASON RE-PULLS THEM.** The list on
+  the card is the worklist; nothing heals on its own.
+- /!\ **THE CHECK COSTS A SECOND AGGREGATE OVER `sku_economics`** (41k rows,
+  ~2s) on the SKU Economics card's repaint. Two of twenty-two cards, once per
+  repaint, and it is the card that card is for - but it is not free.
+- Everything on the v12.42 list.
 
 ## v12.42 - the comparison line says which period it is
 

@@ -398,7 +398,7 @@ const seoTrWindow = () => ({ from: '2026-10-01', to: '2026-10-02', label: 'x' })
 """ + fn("chartLegendIsOverlay") + "\n" + fn("seoTrSelNew") + "\n"
    + fn("seoTrPageKey") + "\n" + fn("seoTrSelNoun") + "\n"
    + fn("seoTrPrevRows") + "\n" + fn("chartLegendVisibleBands") + chr(10) + fn("seoTrOverlaySync") + "\n"
-   + 'let seoTrSnap = null;' + chr(10) + fn('pnlBucketRange') + chr(10) + fn('pnlBucketGrain') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + re.search(r"(?m)^const GA4_SETTLE_DAYS\s*=.*$", js).group(0) + chr(10) + fn('ga4SettledThrough') + chr(10) + fn('seoTrCoverage') + chr(10) + V1174 + fn("seoTrRenderChart") + r"""
+   + 'let seoTrSnap = null;' + chr(10) + fn('pnlBucketRange') + chr(10) + fn('pnlPriorYearShift') + chr(10) + fn('pnlBucketGrain') + chr(10) + fn('pnlProvisionalBuckets') + chr(10) + re.search(r"(?m)^const GA4_SETTLE_DAYS\s*=.*$", js).group(0) + chr(10) + fn('ga4SettledThrough') + chr(10) + fn('seoTrCoverage') + chr(10) + V1174 + fn("seoTrRenderChart") + r"""
 let seoTrSel = seoTrSelNew();
 const out = {};
 // Draw, then ISOLATE in the way the legend does and read the line back.
@@ -499,7 +499,15 @@ ok("chartLegendVisibleBands(chart)" in NC[NC.index("function seoTrOverlaySync(")
    "E3d which the SEO sync reads rather than spelling its own")
 # /!\ ONE rollup, read by the initial draw AND by the sync, so a narrowed line
 # cannot be built by different arithmetic from the one it replaces.
-eq("E4  /!\\ the 364-day shift is spelled once", NC.count("x.getDate() + 364"), 1)
+# v12.42 - the shift moved into pnlPriorYearShift and gained a direction (and
+# a MONTH grain, where 364 days was the wrong arithmetic entirely), so the
+# literal moved with it. The GUARANTEE is unchanged: ONE spelling of it.
+eq("E4  /!\\ the prior-year shift is spelled once",
+   NC.count("function pnlPriorYearShift("), 1)
+eq("E4a ...and the day arithmetic inside it, once",
+   NC.count("(back ? -364 : 364)"), 1)
+eq("E4a2 ...with the SEO chart reading it rather than re-spelling it",
+   NC.count("pnlPriorYearShift(k, grain)"), 1)
 eq("E4b and the prior-year rollup once", NC.count("shifted.set("), 1)
 eq("E4c with the initial draw reading it", NC.count("data: prevData(prevRows)"), 1)
 # The rebuild guard moved from the labels to the count, because the overlay's
