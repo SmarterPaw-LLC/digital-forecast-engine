@@ -2,7 +2,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.45** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.46** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -37,6 +37,57 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.46 - the Channels control belongs to the page, not to one tab
+
+- **Jason:** *"i also don't have a way to see the category break down by
+  channel"*
+
+### \!\ THE TWO CONTROLS HE NEEDED WERE ON DIFFERENT TABS
+ROLLUP (Product / Category / Sub-cat) lives on **Total**. The Channels
+checkboxes lived **inside** `salesChartPanelChannel`, and
+`getSelectedChannels()` returned `null` whenever that panel was closed. So on
+the one tab that can band by category, the channel filter was hidden **and**
+ignored, and there was no way to ask for *categories, Amazon US only*.
+
+The row moved above both chart panels. Tick one channel, set ROLLUP to
+Category, and the bands are that channel's categories. The table under the
+chart and its CSV follow for free, because both are built from what was drawn
+(v12.38).
+
+\!\ **IT MOVED RATHER THAN BEING READ FROM A HIDDEN PANEL.** A filter you
+cannot see while it applies is worse than one that does not apply.
+
+\!\ **CUT AND RE-EMITTED, NEVER RE-TYPED.** Five inputs are read BY ID and a
+dropped one is a filter that silently stops applying (the v12.09 rule). The
+patch asserts all five survive exactly once and that each sits outside the
+By Channel panel.
+
+### \!\ ONE PREDICATE, SEVEN SCANS
+`updateSalesChart` filtered rows on the date alone in **seven** places.
+Adding the channel test at six of seven is precisely how a chart and the
+table under it come to disagree about which rows they describe, so there is
+one `inScope(r)` and every scan goes through it. The previous-period overlay
+takes the channel too, or the comparison is against a different business.
+
+Two things followed that were not obvious:
+- **An unticked channel is no longer "relevant"**, so the red coverage
+  warning stops naming feeds the operator has filtered out.
+- **The empty-chart diagnostic narrows as well.** *"412 total rows, 47 in
+  date range"* under an empty chart sends you hunting a data gap when the
+  answer is a ticked checkbox. It counts `inScopeRows` and says *in view*.
+
+### Verification
+- `node --check` clean - **178 suites green** - new `tests/test_v1246.py` (34).
+- **The real `getSelectedChannels` driven** with the By Channel panel
+  reported HIDDEN, which is the state that used to force a null.
+- The scan census is a count, so a date-only filter added later fails it.
+
+### Still open
+- The product table has always read this control; it now agrees with the
+  chart beside it on both tabs. Worth a look on screen: that is a behaviour
+  change for anyone who had ticked a subset and then switched to Total.
+- Everything on the v12.45 list.
 
 ## v12.45 - Our Revenue read $0 after a refresh
 
