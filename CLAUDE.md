@@ -8,7 +8,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.48** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.49** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -43,6 +43,81 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.49 - a CASES column with no case qty is a GAP, not a row of dashes
+
+- **Jason:** *"what i really need is for the purrple passion sample tube to
+  appear on the inhouse production list, it is the component produced in
+  house, but it doesn't appear at all on the list"*
+
+### /!\ IT WAS ON THE LIST, AND IT WAS CARRYING REAL UNITS
+`CF107 Purrple Passion Sampler Tubes` is the ONLY one of the 33
+`in_house_production` SKUs with no ASIN, no Shopify SKU and no Chewy SKU. Two
+different things hid it, and only one of them is a bug:
+
+| | |
+|---|---|
+| **Planning tab** | STATUS BY was **Amazon FBA stock**, which drops every row without an ASIN (v5.53). Correct, and it is why his search found nothing |
+| **In-House Production tab** | the row IS there - and with `Columns: Cases` every week drew a **dash** |
+
+The Catnip Sampler Bundle `MTCM2609` sold **404 units in 60 days** and the BOM
+pulls one tube per bundle, so bundle attribution gave the row ~6.7/day. The
+schedule held **47 units a week** and rendered eight dashes.
+
+### /!\ TWO KINDS OF NOTHING, ONE GLYPH
+`cases = ceil(units / case_qty)` cannot be computed when `case_qty` is 0, and
+that branch drew the **same dash** `cell(0)` draws for genuinely zero demand.
+`case_qty` IS the denominator here, and **a bucket with no denominator is a
+GAP, never a zero** (v11.16) - the whole difference lived in a per-cell
+`title=` nobody hovers.
+
+v9.94 built the row chip for exactly this (*"a row of dashes is not an
+answer"*), and it fires on `_visTotal === 0` - the **units** total. So a row
+with real units and no case qty got every dash and **no chip at all**. The
+check was right; it was asking about the wrong column.
+
+### One chip slot, two reasons
+    /!\ no case qty     demand is real, the CASES conversion is impossible
+    /!\ no demand       nothing is driving production (v9.94, unchanged)
+
+- /!\ **THE ZERO REASON OUTRANKS IT.** Both can be true at once, and
+  *"nothing is driving production"* is the fact that decides what you do next.
+- /!\ **ONLY WHEN CASES ARE ON SCREEN.** In Units mode a missing case qty
+  costs nothing and a chip for it would be noise.
+- /!\ **THE SAME SLOT, NOT A SECOND AFFORDANCE** - `zeroChip` already exists
+  beside the product name and the row already opens the product card on click
+  (hard rule #1).
+
+### /!\ AND THE SENTENCE WAS SPELLED THREE WAYS
+Two week cells carried *"Set case_qty on this product to see cases."*, and the
+**Case Qty cell itself - the one that FIXES the gap - carried nothing at all.**
+`IP_NO_CASE_QTY_TIP` is the one declaration, read by all four surfaces, and it
+names both remedies: switch Columns to Units, or set Case qty on the card.
+
+### The CSV is the other surface of the same measure
+`wkCells.push(cq > 0 && u > 0 ? ... : '')` wrote a blank for **both** cases,
+so a cases-only export of such a row was a file of empty cells. A CSV cell
+cannot carry a tooltip, so it says `no case qty` in the cell. **A real zero
+still writes blank**, exactly as before (rule #5).
+
+### Verification
+- `node --check` clean - **181 suites green** - new `tests/test_v1249.py` (31).
+- **The real row renderer LIFTED verbatim and driven** over six states: cases
+  with no case qty, units with no case qty, both, zero demand with no case
+  qty, and a convertible product in each mode.
+- **The pre-v12.49 renderer reproduced beside it**, printing eight dashes and
+  no chip on the row that carries 47 units a week.
+- Every figure above read off the live database.
+
+### Still open
+- /!\ **CF107 HAS NO `case_qty`.** The chip names it; nothing heals on its
+  own. Set it on the product card and the Cases column starts answering.
+- /!\ **THE PLANNING TAB STILL HIDES IT UNDER AMAZON FBA STOCK**, silently.
+  Measured blast radius if that gate were widened: **+1 row** for in-house
+  components with no channel of their own (exactly CF107), **+53 rows** for
+  every no-ASIN component of an Amazon-selling bundle. Jason's call, not a
+  silent cleanup.
+- Everything on the v12.48 list.
 
 ## v12.48 - the SEO chart draws the previous period too
 
