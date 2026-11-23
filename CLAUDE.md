@@ -8,7 +8,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.59** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.60** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -43,6 +43,81 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.60 - a seasonality save that matched NOTHING looked exactly like one that saved
+
+- **Jason:** *"i changed pawty mix seasonality to mix, which changed the status
+  to plan to ship, but on reload, the seasonality had reverted. not sure why. i
+  did it again and it appears to have saved this time."*
+
+### /!\ 204 NO CONTENT IS THE ANSWER TO BOTH QUESTIONS
+PostgREST answers a no-match UPDATE with **204 No Content**, exactly as it
+answers one that changed a row, so supabase-js hands back
+`{ data: null, error: null }` either way. All **seven** seasonality writers read
+that as success: no alert, an audit entry written, the grid repainted off a
+re-fetch that could only agree with whatever was already stored.
+
+`seaUpdateChecked` is the one spelling now. It asks for the row **back** and
+refuses anything but exactly one carrying the value that was asked for.
+
+| state | before | now |
+|---|---|---|
+| one row changed | success | success |
+| **nothing matched** | **success** | refused: *the save matched 0 rows* |
+| **more than one row** | **success** | refused |
+| the row came back carrying something else | success | refused |
+
+- /!\ **THE VERIFY COLUMN IS A SCALAR, NEVER A CURVE.** `sea_curve_calculated`
+  is a 52-week JSON object and would never compare equal to the one sent.
+  `sea_method` and `seasonal_type` are what the seven calls verify.
+- /!\ **THE AUDIT ENTRY IS WRITTEN AFTER THE ROW IS CONFIRMED.** An audit log
+  that records saves which did not happen is worse than no audit log, and it is
+  what made this hard to read after the fact (below).
+- /!\ **KEY AND VERIFY COLUMN ONLY** in the `select`, never the whole row -
+  these rows carry the curve.
+- The three bulk writers count a refused row as an **error**, not as applied.
+
+### /!\ AND THE CAUSE OF HIS REVERT IS NOT MEASURED - THIS IS WHAT IS KNOWN
+Read off the live database, 2026-11-23:
+
+| | |
+|---|---|
+| `audit_log` `seasonality.set_method`, SP-0055, `mix` | **13:40:03 CT and 15:14:33 CT** |
+| `products.sea_method` now | `mix` |
+| `products.updated_at` | **15:14:33 CT** (trigger `products_updated_at` fires on every UPDATE) |
+| RLS on `products` | **`qual: true` on UPDATE** - wide open |
+| other `sea_method` writers that fired in between | **none** (every one is audited; none appears) |
+
+So the request at 13:40 returned 2xx and the `log_action` RPC after it
+succeeded. **Neither of those says a row changed.** RLS rules out a permission
+refusal, every code path that writes `sea_method` logs an audit entry and none
+did, and the row's update history is gone. **I cannot name what reverted it**,
+and the v11.80 rule says to say that rather than pick a cause that fits.
+
+What is fixed is the thing that made it invisible: the next time a save does
+not land, it refuses on screen instead of printing an audit entry and a
+repainted dropdown.
+
+### Verification
+- `node --check` clean - **190 suites green** - new `tests/test_v1260.py` (26).
+- **The pre-v12.60 writer reproduced verbatim beside the shipped helper**,
+  against a stub shaped the way supabase-js answers: on a no-match the old one
+  returns `saved` and the new one refuses.
+- The helper driven over seven states: a real save, no match, two rows, a row
+  carrying a different value, a payload with no verify column, and a genuine
+  Postgres error (which must still surface as itself).
+- Every figure in the table above read off the live database.
+
+### Still open
+- /!\ **THE SAME BLIND SPOT IS ON EVERY OTHER `products` WRITER.** 48 accesses,
+  ~20 of them writes - case qty, Top Products, walmart_item_id, sp_sku, the CSV
+  importers, the merge patch, the restore. All of them read a 204 as a save.
+  Only the seasonality ones are converted here, because they are the ones that
+  were reported; `test_v1260.py` section E pins the uncovered count so it is a
+  written-down hole rather than a quiet one (the v12.55 rule).
+- /!\ **THE AMAZON FBA STATUS TOOLTIP IS STILL FAR TOO LONG** (v12.59 /
+  RULES.md #1). Promised to Jason, not done.
+- Everything on the v12.59 list.
 
 ## v12.59 - the sparkline ended on an EMPTY bucket, and it is named Sparkline
 
