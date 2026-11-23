@@ -8,7 +8,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.49** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.50** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -43,6 +43,95 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.50 - the summary upload NAMES the shipments with no detail
+
+- **Jason:** *"when i upload a shipment summary, it would be helpful if the
+  success text told me which ones don't have shipment detail available."*
+
+### /!\ v5.49 ALREADY COUNTED THEM, AND THE COUNT COULD NOT FIRE
+`missingDetailCount` has been on that status line since v5.49 and his
+screenshot does not show it - because it was scoped to **the rows in the
+file**. Measured on the live database:
+
+| | |
+|---|---|
+| rows in his 11/23 upload | 25, **all of them already have detail** |
+| shipments with no detail, table-wide | **7 - 1,717 units, every one CA and Closed, created in 2023** |
+
+So the upload reported nothing while the real gap sat untouched. **A count
+scoped to the last file is not a worklist**, and re-uploading the same summary
+would keep answering zero. It is table-wide now, and that is the measure
+change this release makes.
+
+### /!\ AND THE TEST IS SOUND, WHICH WAS CHECKED FIRST
+216 distinct `shipment_id` in `fba_shipments`, 223 in
+`fba_shipment_summaries`, **0** detail rows with no summary, and **0**
+case-or-whitespace near-misses. 223 - 216 = the 7. Not an ID-format problem.
+
+### Two things the data made the rules
+- /!\ **A CANCELLED SHIPMENT IS NOT WORK.** There is no detail to pull for
+  one, so it is not named. The table carries **both spellings** - `Canceled`
+  and `Cancelled`, 8 rows - so the test is `lower(status) not like 'cancel%'`
+  rather than an equality on either. (Today every cancelled shipment happens
+  to have detail, so this changes no number; it stops a future one being
+  wrong.)
+- /!\ **IT IS NOT WINDOWED.** v12.43 windows its re-pull list to 180 days
+  because unwindowed it names 40+ closed-quarter weeks. Here the **entire gap
+  is older than that**, so the same window would draw a clean tick over the
+  only thing there is to report. Newest first, with the created date in the
+  list, and the operator judges whether Amazon still serves a 2023 shipment.
+
+### Where it lives: the v12.43 block, reused
+One orange line under the coverage grid, click to expand, CSV at the bottom -
+`feeSettleBlock`'s shape, through the **same `renderUploadCoverage` repaint**,
+so the gap is named by the card that loaded the summary and **survives a
+reload**. The list carries the shipment id, created date, marketplace, status,
+brand, SKU count and units.
+
+### /!\ AND THE STATUS LINE WAS 140 CHARACTERS BEFORE I ADDED TO IT
+RULES.md #1 - **on the very line this release had to edit**, which is the
+v12.47 lesson exactly. The visible line is the numbers and one four-word
+warning; everything else moved to the title with `cursor:help`:
+
+    before  140 chars, two wrapped rows
+    after   104 chars
+
+    - ID extracted from name on 25 rows          -> tooltip
+    - tagged Meowijuana on 25 rows               -> `· 🏷 Meowijuana`
+    - 📥 N need detail .tsv (Forecast → FBA
+      Shipments → filter "Missing detail")       -> `· 📥 7 need detail`
+
+- /!\ **THE IDs ARE ON THE TOOLTIP TOO**, capped at 40 with the remainder
+  counted, from the **same derivation** the block reads - two queries for this
+  would be two numbers on one card (rule #5).
+- /!\ **A CALL WITH NO TIP CLEARS THE LAST ONE.** A stale tooltip describing
+  the previous upload is worse than no tooltip.
+- /!\ **A FAILED CHECK NEVER READS AS A CLEAN ONE**, on the line or in the
+  block (v10.19).
+- The tooltip also names the one thing that makes the existing drill-in
+  useless here: **the FBA Shipments tab's window defaults to the last 365
+  days**, and every one of these is from 2023.
+
+### Verification
+- `node --check` clean - **182 suites green** - new `tests/test_v1250.py` (50).
+- **The shipped `fbaDetailGapSql` lifted and run against the live database**,
+  returning exactly the 7 rows above, newest first.
+- **The real `fbaDetailGapHtml` driven** over six states: nothing fetched, a
+  clean table, a failed read, seven rows closed, seven rows open, and one row
+  (which must not read `1 shipments`).
+- The budget asserted as a **number** on both the pre- and post-release line.
+
+### Still open
+- /!\ **THE 7 SHIPMENTS STILL HAVE NO DETAIL.** The card names them and
+  nothing heals on its own. Whether Amazon still serves a per-shipment .tsv
+  for a 2023 shipment is **not something this release checked** - the created
+  date is in the list so the operator can judge.
+- /!\ **ONLY THIS CARD'S `setSt` TAKES A TOOLTIP.** The other upload cards
+  each declare their own two-argument copy. They are shorter and nobody has
+  complained, but the budget applies to them too and the next one to grow
+  should collapse rather than extend.
+- Everything on the v12.49 list.
 
 ## v12.49 - a CASES column with no case qty is a GAP, not a row of dashes
 

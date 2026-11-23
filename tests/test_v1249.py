@@ -229,8 +229,16 @@ ok("showCases && cq <= 0" in js,
    "E2  the gap is gated on cases being on screen")
 ok(js.count("const rowChip = zr || cqGap;") == 1,
    "E3  one decision about which reason the chip carries")
-ok("v12.49" in s and "2026-11-18" in s,
-   "E4  the version chip names this release")
+# /!\ RE-POINTED IN v12.50. This asserted `v12.49` literally, which made it go
+# red on the NEXT release for a reason that was not a defect. The durable
+# guarantee is that the chip and CLAUDE.md cannot name different releases, not
+# that either names this one.
+_chip = re.search(r"(v\d+\.\d+)\s*·\s*(\d{4}-\d{2}-\d{2})", s)
+_decl = re.search(r"current version \*\*(v\d+\.\d+)\*\*",
+                  io.open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read())
+ok(_chip is not None and _decl is not None and _chip.group(1) == _decl.group(1),
+   "E4  the version chip and CLAUDE.md name the SAME release",
+   "%s vs %s" % (_chip.group(1) if _chip else None, _decl.group(1) if _decl else None))
 chip = re.search(r"v12\.49[^<]{0,18}", s)
 ok(chip is not None and "\\u" not in chip.group(0),
    "E5  /!\\ and it is REAL characters in markup, not the escape form "
