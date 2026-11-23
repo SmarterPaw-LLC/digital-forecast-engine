@@ -111,6 +111,10 @@ console.log(JSON.stringify({
   // His exact screen: 223 shipments, Missing detail, Last 365 days.
   his: text(drive({ total: 223, winDays: 365, detailFilter: 'missing',
                     region: '', brandFilter: '', q: '', winLabel: 'Last 365 days' })),
+  // ...and the same thing unstripped, because v12.54's link lives in an
+  // ATTRIBUTE and the text() view cannot see it.
+  hisRaw: drive({ total: 223, winDays: 365, detailFilter: 'missing',
+                  region: '', brandFilter: '', q: '', winLabel: 'Last 365 days' }),
   // Genuinely nothing loaded.
   empty: text(drive({ total: 0, winDays: 365, detailFilter: '',
                       region: '', brandFilter: '', q: '', winLabel: 'Last 365 days' })),
@@ -126,6 +130,20 @@ console.log(JSON.stringify({
 ok("None of 223 shipments match" in B["his"],
    "B1  /!\\ HIS SCREEN: it counts what exists instead of claiming nothing does",
    B["his"])
+ok("show all time" in B["his"],
+   "B1a /!\ v12.54: the window is a LINK. v12.52 named the control that was "
+   "hiding the rows and left him to find it - he read that message and said "
+   "'there is still nothing showing here'")
+ok("fbaShipSetWindow('0')" in B["hisRaw"],
+   "B1b ...wired to the one spelling of 'set this page's window'")
+ok("<a href" in B["hisRaw"] and "&lt;a href" not in B["hisRaw"],
+   "B1e /!\\ the link is MARKUP and the named filters are ESCAPED - they are "
+   "built apart, so esc2 cannot swallow the anchor (the v10.87 trap)")
+ok("show all time" not in B["bare"] and "show all time" not in B["empty"],
+   "B1c /!\ and NO link when the window is already All time, or when nothing "
+   "loaded - a control that would change nothing is worse than none (v10.19)")
+ok("show all time" not in B["all"].replace("show all time", "", 1),
+   "B1d exactly one link, never one per named filter")
 ok("window: Last 365 days" in B["his"],
    "B2  ...and names the window FIRST - the only filter with a non-empty "
    "default, so the one hiding rows nobody chose to hide")
