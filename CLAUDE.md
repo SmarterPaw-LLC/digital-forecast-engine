@@ -8,7 +8,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.52** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.53** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -43,6 +43,38 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.53 - the drill-in clears the search box the operator can SEE
+
+Found by checking v12.51's own work rather than by a report: every control
+`fbaDetailGapDrill` sets exists in markup exactly once, and one of them is not
+the control on screen.
+
+### /!\ `fba-ship-srch` IS NOT THE SEARCH BOX
+The page's search is the sticky **`globalSearch`** bar, which dispatches INTO
+`fba-ship-srch` through a per-page registry
+(`'forecast_fba-shipments': { id: 'fba-ship-srch' }`). Clearing only the
+target would have left the visible box **still showing the text** while the
+filter it names no longer applied.
+
+**That is the v12.46 rule inverted** - a filter you cannot see while it applies
+is bad, and a filter you CAN see that does not apply is the same lie the other
+way round. It would have produced exactly the complaint the drill-in exists to
+answer: *"the info doesn't match."*
+
+`globalSearchSyncFromTarget` already exists for this and has exactly one other
+caller; **`switchForecastView` does not call it**. So the order is: show the
+page, then sync the bar to the page. Syncing first resolves the target against
+whatever page was showing.
+
+### Verification
+- `node --check` clean - **184 suites green**; the guarantee folded into
+  `tests/test_v1251.py`, which owns the drill-in, rather than a 185th suite
+  for one function (the v12.07 precedent).
+- Both halves pinned: the sync is called, and it is called AFTER the switch.
+
+### Still open
+- Everything on the v12.52 list.
 
 ## v12.52 - an empty table says WHY it is empty
 

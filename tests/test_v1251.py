@@ -193,6 +193,14 @@ for ctl in ["'fba-ship-region', ''", "'fba-ship-brand', ''", "'fba-ship-srch', '
        "filter is the same mismatch one click later" % ctl.split(",")[0])
 ok("switchForecastView('fba-shipments')" in D,
    "D4  then opens the tab through the app's own navigator")
+# v12.53 - the page search is the sticky globalSearch bar, which dispatches
+# INTO fba-ship-srch. Clearing only the target left the visible box showing
+# text for a filter that no longer applied.
+ok("globalSearchSyncFromTarget" in D,
+   "D4a /!\\ and syncs the search bar the operator can SEE, not just the "
+   "input it dispatches into")
+ok(D.index("switchForecastView") < D.index("globalSearchSyncFromTarget"),
+   "D4b ...after the page is shown, or the sync resolves the wrong page")
 ok("fbaDetailGapDrill()" in fn_flat("fbaDetailGapHtml"),
    "D5  the link is in the block's footer, beside the CSV one")
 ok("open in FBA Shipments" in js,
