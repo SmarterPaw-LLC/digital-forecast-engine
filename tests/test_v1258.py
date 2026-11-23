@@ -69,13 +69,17 @@ print("=" * 70)
 print("\nA. it is the existing primitive, not a second one")
 # ===========================================================================
 SER = fn_flat("velSparkSeries")
-ok("ipVelWindow(r, VEL_SPARK_BUCKET_DAYS" in SER,
-   "A1  /!\\ the series goes through ipVelWindow - the SAME call the Vel Trend "
-   "columns are built on (hard rule #1)")
+# /!\ RE-POINTED IN v12.59. It summed through ipVelWindow; it now sums through
+# ipVelWindowOne per channel, because ipVelWindow re-adds the TOLERATED lag on
+# top of the sparkline's own anchor - the exact defect v12.59 fixes.
+ok("ipVelWindowOne(r, VEL_SPARK_BUCKET_DAYS" in SER,
+   "A1  /!\\ the series goes through the per-channel primitive ipVelWindow "
+   "itself sums - one implementation, two lag rules (hard rule #1)")
 ok("i * VEL_SPARK_BUCKET_DAYS" in SER,
    "A2  ...at consecutive offsets, which is all a sparkline is")
-ok("for (let i = VEL_SPARK_WEEKS - 1; i >= 0; i--)" in SER,
-   "A3  oldest bucket first, newest last - the direction the eye reads")
+ok("for (let i = n - 1; i >= 0; i--)" in SER,
+   "A3  oldest bucket first, newest last - the direction the eye reads "
+   "(the bound is the horizon now, v12.59)")
 ok("salesData" not in SER and "chewy_sales" not in SER,
    "A4  /!\\ and it never reaches for the rows itself, so the basis, the "
    "per-channel lag and bundle attribution cannot drift from Vel Now")
@@ -84,9 +88,9 @@ ok("salesData" not in SER and "chewy_sales" not in SER,
 print("\nB. the Need-by boxes drive it, per page")
 # ===========================================================================
 eq("B1  the column exists on BOTH sibling registries", js.count("key:'vel_spark'"), 2)
-ok("velSparkCell(r, ipVelTrendChans())" in js,
+ok("velSparkCell(r, ipVelTrendChans()" in js,
    "B2  Inventory Planning reads ITS Need-by boxes")
-ok("velSparkCell(r, fcVelTrendChans())" in js,
+ok("velSparkCell(r, fcVelTrendChans()" in js,
    "B3  /!\\ and the Forecast page reads ITS OWN - one reader each, or a column "
    "on one page silently answers for the other")
 ok("default:false" in js[js.index("key:'vel_spark'"):js.index("key:'vel_spark'") + 200],
@@ -98,10 +102,14 @@ ok("csv:     r => velSparkCsv(" in js,
 # ===========================================================================
 print("\nC. the real cell, driven")
 # ===========================================================================
-HARNESS = ("\n".join([const_line("VEL_SPARK_WEEKS"), const_line("VEL_SPARK_BUCKET_DAYS"),
+# v12.59 - VEL_SPARK_WEEKS is gone (the span follows the Horizon control) and
+# the series carries a per-channel anchor, so the harness carries both.
+HARNESS = ("\n".join([const_line("VEL_SPARK_BUCKET_DAYS"),
                       const_line("IP_VEL_DEFAULT_CHANS")])
+           + "\n" + fn_flat("velSparkWeeks") + "\n" + fn_flat("velSparkChanAnchor")
            + "\n" + fn_flat("velSparkSeries") + "\n" + fn_flat("velSparkCell") + "\n"
            + fn_flat("velSparkTip") + "\n" + fn_flat("velSparkCsv") + r"""
+function ipChannelLagRawDays() { return 0; }
 const TREND_CHANNELS = [
   { key:'amazon', label:'Amz' }, { key:'shopify', label:'Shop' },
   { key:'chewy', label:'Chwy' }, { key:'walmart', label:'Wmt' },
@@ -117,12 +125,12 @@ for (let wk = 0; wk < 14; wk++) {
   ROWS.push({ ageDays: wk * 7 + 1, channel: 'amazon', units: (wk < 12 ? (12 - wk) * 10 : 5) });
 }
 let CALLS = [];
-function ipVelWindow(r, windowDays, offsetDays, keys) {
-  CALLS.push([windowDays, offsetDays, keys.join('+')]);
+function ipVelWindowOne(r, windowDays, offsetDays, key) {
+  CALLS.push([windowDays, offsetDays, key]);
   if (!r.__rows) return 0;
   let u = 0;
   for (const row of r.__rows) {
-    if (!keys.includes(row.channel)) continue;
+    if (row.channel !== key) continue;
     if (row.ageDays >= offsetDays && row.ageDays < offsetDays + windowDays) u += row.units;
   }
   return u / windowDays;
@@ -132,13 +140,13 @@ const R = { master_id: 'SP-1', region: 'US', __rows: ROWS };
 const FLAT = { master_id: 'SP-2', region: 'US', __rows: [] };
 
 CALLS = [];
-const series = velSparkSeries(R, ['amazon']);
+const series = velSparkSeries(R, ['amazon'], 84);
 const offsets = CALLS.map(c => c[1]);
-const cell = velSparkCell(R, ['amazon']);
-const flatCell = velSparkCell(FLAT, ['amazon']);
-const csv = velSparkCsv(R, ['amazon']);
+const cell = velSparkCell(R, ['amazon'], 84);
+const flatCell = velSparkCell(FLAT, ['amazon'], 84);
+const csv = velSparkCsv(R, ['amazon'], 84);
 READY = false;
-const notReady = velSparkCell(R, ['amazon']);
+const notReady = velSparkCell(R, ['amazon'], 84);
 READY = true;
 
 console.log(JSON.stringify({
@@ -151,7 +159,7 @@ console.log(JSON.stringify({
   flatPoints: (flatCell.match(/points="([^"]+)"/) || [])[1] || '',
   notReady,
   csv,
-  csvNotReady: (function () { READY = false; const c = velSparkCsv(R, ['amazon']); READY = true; return c; })(),
+  csvNotReady: (function () { READY = false; const c = velSparkCsv(R, ['amazon'], 84); READY = true; return c; })(),
   tip: velSparkTip(R, ['amazon'], series),
 }));
 """)
@@ -195,6 +203,8 @@ ok("own peak" in C["tip"] and "height is not" in C["tip"].lower(),
    "each row is scaled to itself")
 ok("Units/day" in C["tip"] and "7 days to a bucket" in C["tip"],
    "D6  the tooltip says how the value is DERIVED (RULES.md #3)")
+ok("Horizon control" in C["tip"],
+   "D7  ...and that the span follows the Horizon (v12.59)")
 
 # ===========================================================================
 print("\nE. the release names itself")

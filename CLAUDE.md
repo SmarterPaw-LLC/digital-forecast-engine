@@ -8,7 +8,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.58** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.59** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -43,6 +43,90 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.59 - the sparkline ended on an EMPTY bucket, and it is named Sparkline
+
+- **Jason:** *"1. why is it named vel 12 w instead of sparkline? 2. this should
+  be set based on the horizon #. 3. why is the end of the sparkline a dip? ...
+  amazon should show increases in all of the products"*
+
+### /!\ (3) HE IS RIGHT, AND RIGHT ABOUT THE DIRECTION
+Measured on the live database, 2026-11-23:
+
+| Amazon week | units |
+|---|---|
+| 2026-10-19 | 2,843 |
+| 2026-10-26 | 2,828 |
+| 2026-11-02 | 3,366 |
+| 2026-11-09 | 3,813 |
+| **2026-11-16** | **4,927** |
+
+Strongly up, every week. And the newest row is **age 7** - **there is no
+Amazon row at all for ages 0-6**, because this week has not been uploaded yet.
+Bucket 0 spans age `[0,7)`, so for Amazon it caught **nothing** and divided
+zero units by seven days. **Every Amazon line ended on the floor.**
+
+Not a partial bucket. An empty one.
+
+### /!\ AND THE EXISTING ANCHOR COULD NOT CATCH IT
+`ipChannelLagDays` exists to measure a lagging channel against its own latest
+data, and it returns **0** here: the lag is 7 and the tolerance is
+`IP_VEL_FRESH_DAYS` = 14. **That tolerance is right for a 30- or 90-day
+velocity window**, where one missing week is noise, **and fatal at a 7-day
+grain, where one missing week IS the bucket.**
+
+So the sparkline reads a new `ipChannelLagRawDays` - the same scan, no
+tolerance - and anchors **each channel's buckets to its own newest row**,
+rounded to whole buckets so the grid stays on the data's weekly stamping.
+Amazon shifts back 7 days; Shopify, which is daily and current, does not shift
+at all. A blended line no longer dips just because one of its channels has not
+reported yet.
+
+- /!\ **PER CHANNEL, THROUGH `ipVelWindowOne`** - the primitive `ipVelWindow`
+  already sums. Going through `ipVelWindow` would re-add the TOLERATED lag on
+  top of the sparkline's own anchor. One implementation, two lag rules, rather
+  than two implementations.
+- /!\ **THE TOOLTIP NAMES A SHIFTED CHANNEL** (*"Amz is 7d behind, so its
+  buckets end 7 days back"*), or a line ending earlier than today reads as a
+  fall - which is the whole defect, one layer up.
+- /!\ **AND THE RAW CACHE IS CLEARED WITH ITS SIBLING.** `clearVelMemo` drops
+  `_ipChanLagCache` on any data change; a raw cache left behind would answer
+  with the age from before the upload that just landed.
+
+### (1) The name
+`Sparkline`. I coined `Vel 12w` to name the MEASURE rather than the chart type
+(rule #3), and he named it - rule #4 says the convention is whatever he names.
+It was also about to be wrong: the span is no longer twelve weeks.
+
+### (2) The span follows the Horizon control
+`velSparkWeeks(horizonDays)` = `round(h / 7)`, clamped 3..26.
+
+| horizon | weeks |
+|---|---|
+| 30-Day | 4 |
+| 60-Day | 9 |
+| 90-Day | **13** |
+| 120-Day | 17 |
+
+Two readers, `ipSparkHorizon()` and `fcSparkHorizon()`, because the two pages
+have two controls (`ip-horizon` / `fHorizon`) - one shared reader would let one
+page's horizon answer for the other, which is the v12.58 rule applied to the
+second input.
+
+### Verification
+- `node --check` clean - **189 suites green** - new `tests/test_v1259.py` (27).
+- **The dip reproduced**: the pre-v12.59 series over the live data shape
+  returns **0** for the newest Amazon bucket while the one before it is full.
+- **And the fix driven beside it**: the newest bucket now holds the real
+  4,927-unit week and the line RISES at the end, with a mixed Amazon+Shopify
+  line dipping before and not after.
+- Every figure above read off the live database.
+
+### Still open
+- /!\ **A SPAN LONGER THAN THE DATA STILL DRAWS ZEROS ON THE LEFT.** A product
+  with four weeks of history on a 120-day horizon gets thirteen empty buckets
+  then its real shape. Honest, but it compresses the part worth reading.
+- Everything on the v12.58 list.
 
 ## v12.58 - a sparkline, on the channels the Need-by boxes select
 
