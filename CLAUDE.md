@@ -8,7 +8,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.55** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.56** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -43,6 +43,68 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.56 - picking "Missing detail" widens the window, because the work is old
+
+- **Jason:** *"the summary shows '7 need detail' and when i go to the 'missing
+  detail' toggle under fba shipments, nothing appears. also, on the upload, why
+  is the brand not available? it's ALWAYS pulled through on the fba shipments
+  page."*
+
+### (1) Driven through the tab's OWN predicate, not reasoned about
+| Missing detail + | rows |
+|---|---|
+| **Last 365 days** (the default) | **0** |
+| All time | **the 7** |
+
+Nothing else is broken. But **a filter whose whole job is to find outstanding
+work cannot sit behind a default window that hides anything over a year old** -
+every one of the seven was created in **2023**, and a shipment still missing
+its .tsv has usually been missing it a long while.
+
+He hit this three times. v12.52 named the window, v12.54 made it a link, and
+he still landed on an empty table because he reached the tab through the nav
+rather than through either affordance. **So the filter now widens the window
+itself.**
+
+- /!\ **VISIBLY, NOT SILENTLY.** The window control moves to All time, so what
+  changed is on screen and he can set it back. Changing what a filter MEANS
+  while leaving its control reading something else is the v12.46 defect.
+- /!\ **ONLY ON `missing`.** Switching back to All shipments or With detail
+  leaves the window where he left it; undoing a deliberate choice is not this
+  handler's business.
+- /!\ **AND ONLY WHEN IT WOULD CHANGE SOMETHING** - no repaint that moves a
+  control for nothing.
+
+### (2) "why is the brand not available?"
+Because the brand comes from the **per-shipment items**, and these seven have
+none. Measured on the real `shipBrandCell`:
+
+| | brand cell |
+|---|---|
+| the seven, **on the FBA Shipments tab** | `+ Set` |
+| the seven, on the upload card | `+ Set` |
+| a shipment **with** detail | `Meowij` chip |
+
+**It is "always pulled through" for every shipment that has detail** - which,
+until now, is every shipment he could actually see on that page, because the
+window was hiding these. The card is consistent with the tab, not different
+from it: it is the same gap showing in a second place.
+
+`shipGroupBrand`'s second line is the whole story: `if (!g.items ||
+!g.items.length) return ''`. No detail, no items, no brand - which is why the
+one fix (upload the .tsv) closes both columns at once.
+
+### Verification
+- `node --check` clean - **186 suites green** - new `tests/test_v1256.py` (16).
+- **The tab's real filter predicate and real brand cell driven** over the seven
+  live shapes plus a with-detail control row: 0 at 365 days, 7 at All time,
+  `+ Set` on all seven, a chip on the one with items.
+
+### Still open
+- /!\ **THE 7 STILL NEED THEIR .tsv.** Both columns stay as they are until
+  then, and that one upload fills both.
+- Everything on the v12.55 list.
 
 ## v12.55 - ORDER BY date DESC is NULLS FIRST, so the probe read "never loaded"
 
