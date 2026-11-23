@@ -8,7 +8,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.57** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.58** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -43,6 +43,76 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.58 - a sparkline, on the channels the Need-by boxes select
+
+- **Jason:** *"i also need sparklines. it should be based on which channels
+  are selected in the need by checkboxes"*
+
+### /!\ IT IS NOT A NEW MEASURE
+`ipVelWindow(r, days, offset, keys)` already answers *units/day over this
+window, for these channels* - each channel anchored to its own latest data,
+bundle attribution folded in, memoized. The Vel Trend columns are built on it.
+**A sparkline is that primitive at twelve consecutive offsets**, so the
+picture and the ratio beside it cannot come to describe different things
+(hard rule #1).
+
+`velSparkSeries` never touches `salesData` itself. That is the point: the
+basis, the per-channel lag and the bundle rule are not re-spelled here, so
+they cannot drift from `Vel Now`.
+
+### /!\ AND THE BUCKETS PARTITION THE SPAN
+`ipVelWindow` is half-open on age - `offset <= age < offset + window` - so
+offsets of 77, 70, 63 ... 0 at a 7-day window are twelve buckets that
+**neither overlap nor leave a seam**. That is the property the deltas depend
+on, and the suite asserts the exact offset list rather than trusting it.
+
+| | |
+|---|---|
+| grain | **7 days**, twelve of them |
+| channels | the **Need by** checkboxes, through `ipVelTrendChans()` |
+| basis | the same as `Vel Now` |
+
+- /!\ **WEEKLY BUCKETS, NOT THE VELOCITY WINDOW.** The window is a SMOOTHING
+  length; a bucket is a grain. Most of these feeds are stamped weekly, so a
+  7-day bucket holds exactly one row of each and the line reads as the data
+  was recorded rather than as an artefact of the Velocity dropdown.
+- /!\ **NOT LOADED IS NOT NO SALES** (v9.93). While `salesData` is still
+  filling the cell shows an ellipsis and says so; drawing a flat line over an
+  empty cache would read as a product that stopped selling. The CSV is empty
+  in that state, never twelve zeros.
+- /!\ **A ROW THAT SOLD NOTHING GETS A BASELINE, NOT A DASH.** Zero across
+  twelve weeks is a fact about the product. A dash would claim there was
+  nothing to measure.
+- /!\ **HEIGHT IS NOT COMPARABLE DOWN THE COLUMN** - each row is scaled to its
+  own peak, so SHAPE is the comparable thing. The tooltip says so, because a
+  reader will otherwise compare two heights.
+
+### On BOTH sibling registries, each reading its own page
+`Vel 12w` is in the VELOCITY TREND group on Inventory Planning **and** Demand
+Forecast, passing `ipVelTrendChans()` and `fcVelTrendChans()` respectively.
+One page having it and the other not is the divergence hard rule #1 is about;
+one shared reader would have let one page's boxes answer for the other.
+
+**Opt-in** (`default:false`), like every other column in that group - twelve
+windowed scans a row is not a cost to levy on everyone. Inline SVG, no chart
+instance per row and no new dependency.
+
+### Verification
+- `node --check` clean - **188 suites green** - new `tests/test_v1258.py` (28).
+- **The real `velSparkCell`, `velSparkSeries`, `velSparkCsv` and `velSparkTip`
+  driven** against rows shaped the way `salesData` holds them, with the real
+  half-open age test standing in for `ipVelWindow`: twelve buckets, the exact
+  offset partition, a rising product rising left to right, the loading state,
+  the sold-nothing baseline and the empty CSV.
+
+### Still open
+- /!\ **THE COST IS TWELVE WINDOWED SCANS PER ROW PER RENDER**, memoized per
+  (product, region, window, offset, channel). Opt-in keeps it off the default
+  path, and `clearVelMemo` drops it when the window or comparison changes -
+  but on a wide grid with the column on, the first paint pays for it. Not
+  measured on a full catalogue; worth a look if it drags.
+- Everything on the v12.57 list.
 
 ## v12.57 - the Vel vs dropdown repaints the grid it is standing on
 
