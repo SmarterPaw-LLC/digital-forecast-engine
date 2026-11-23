@@ -200,6 +200,9 @@ ok("ID extracted from name on" not in H.split("detail.push")[0],
    "D6  ...and so is the ID-extraction provenance")
 ok("detail.push" in H and "detail.join" in H,
    "D7  every clause that is not a number is a tooltip line")
+ok("extractedLbl" not in js,
+   "D7a /!\ and the label it replaced is GONE, not left declared and read "
+   "nowhere - a dead const is the leftover hard rule #1 is about")
 ok("result.missingDetailIds.slice(0, 40)" in H,
    "D8  the IDs are named on the tooltip, capped, with the remainder counted")
 ok("could not be checked" in H,

@@ -11300,9 +11300,8 @@ function handleFbaShipmentSummaryUpload(input) {
       const missingLbl = result.missingDetailCount > 0
         ? ` · 📥 ${result.missingDetailCount} need detail`
         : '';
-      // v12.50 - off the visible line, onto the title. It was 34 characters of
-      // provenance on a line already two rows deep.
-      const extractedLbl = '';
+      // v12.50 - the ID-extraction provenance is off the visible line and onto
+      // the title below. It was 34 characters on a line already two rows deep.
       const detail = [];
       if (result.missingDetailCount > 0) {
         detail.push(`${result.missingDetailCount} shipment${result.missingDetailCount===1?'':'s'} have no per-shipment detail: `
