@@ -90,8 +90,14 @@ ok("limit" not in SQL.lower(),
 # ===========================================================================
 print("\nB. the real renderer, driven")
 # ===========================================================================
+# v12.51 widened what fbaDetailGapHtml depends on: the brand cell is the app's
+# own now, so the harness carries it. Slicing the REAL one rather than stubbing
+# it is the point - a stub would let the two drift.
 HARNESS = (fn_flat("fbaDetailGapHtml") + "\n" + fn_flat("fbaDetailGapTip") + "\n"
-           + fn_flat("fbaDetailGapBlock") + "\n" + fn_flat("fbaDetailGapToggle") + r"""
+           + fn_flat("fbaDetailGapBlock") + "\n" + fn_flat("fbaDetailGapToggle") + "\n"
+           + fn_flat("shipGroupBrand") + "\n" + fn_flat("shipBrandCell") + r"""
+const allProducts = [];
+function setShipmentBrand() {}
 function esc2(x) { return String(x == null ? '' : x)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 const FBA_DETAIL_GAP_SOURCES = { fba_shipment_summaries: true };
@@ -163,8 +169,14 @@ eq("B13 1,717 units named as the cost of the gap",
    "1,717 units with no item detail" in B["open"], True)
 ok("downloadFbaDetailGapCSV" in B["open"],
    "B14 and it is CSV-exportable before it ships (RULES.md #12)")
+# /!\ RE-POINTED IN v12.51. This required a null brand to render a DASH. Jason:
+# "it doesn't tell me which brand it's for" - so the dash became the app's own
+# clickable `+ Set`. The guarantee that survives is the one that mattered: a
+# brand is never INVENTED for a row that has none.
 ok(not B["openNullBrand"],
-   "B15 /!\\ a null brand is a DASH, never an invented one")
+   "B15 /!\\ a brand is never invented for a row that has none")
+ok(">+ Set</button>" in B["open"],
+   "B15a ...and v12.51 made that cell OFFER THE FIX instead of a dash")
 
 # the block gate
 ok(B["blockOn"].startswith('<div id="fdg-dz"'),

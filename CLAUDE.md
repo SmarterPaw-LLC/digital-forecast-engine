@@ -8,7 +8,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.50** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.51** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -43,6 +43,92 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.51 - the app's own brand cell, and a link that lands on the rows
+
+- **Jason**, twice on the v12.50 missing-detail list:
+  *"it doesn't tell me which brand it's for"*
+  *"also the info doesn't match"*
+
+### (1) /!\ I PRINTED THE COLUMN. THE APP HAS NEVER PRINTED THE COLUMN.
+Seven dashes, because the block rendered `esc2(r.brand)` straight off
+`fba_shipment_summaries`. The FBA Shipments tab resolves brand through
+`shipGroupBrand` - manual tag, else derived from the per-shipment items, else
+nothing - and renders a **clickable `+ Set`** when nothing can be derived,
+with a tooltip that already says why a summary-only row cannot auto-derive.
+
+**Both were `const` locals inside `renderFbaShipmentsTbl`.** That is why a
+second surface could not reach them, and it is hard rule #1 in its exact
+shape: the divergence IS the bug. They are `shipGroupBrand` and
+`shipBrandCell` at module scope now, **moved verbatim** (three branches of
+markup, two chip palettes, a tooltip that took a release to word), and the tab
+reads the same two.
+
+Measured, so the dash was not a bug in the data:
+
+| | summaries |
+|---|---|
+| has detail, brand set | 186 |
+| has detail, brand **blank** (the tab derives it from items) | 30 |
+| **no detail, brand blank** | **7** |
+
+For those 7 there are no items, so **nothing in the app can derive a brand**.
+The honest cell is the one that says so and offers the fix, which is exactly
+what `+ Set` is. Clicking it opens the same `promptForShipmentBrand` the
+uploader uses.
+
+- /!\ **THE ROW STAYS AFTER TAGGING.** It is listed for having no DETAIL, and
+  a brand tag does not close that gap. Dropping it would read as work that
+  was done when nothing was pulled.
+- /!\ **AND THE TAG HAS TO APPEAR WHERE IT WAS SET.** The block's rows come
+  from SQL, not from `fbaShipmentSummariesCache`, so `setShipmentBrand` patches
+  the one row and repaints every open host - in the one place that knows the
+  write succeeded, rather than re-querying (v12.45: two caches that drift are
+  worse than one that is kept).
+
+### (2) "the info doesn't match" - and the filter was right
+His screenshot of **FBA Shipments -> Missing detail** reads **0 shipments**
+against this block's 7. Driven through the tab's own lifted predicate:
+
+| Missing detail + | rows |
+|---|---|
+| **Last 365 days** (the default) | **0** |
+| All time | **7** |
+
+**Every one of the seven was created in 2023.** The filter works; its window
+was hiding them.
+
+### /!\ AND v12.50 PUT THAT IN A TOOLTIP, WHICH IS NOT A FIX
+The sentence *"set it to All time to see every one"* was already on the block.
+He still had to find it, and the thing he found instead was a table reading
+zero. **A tooltip that tells the operator to go and set two controls by hand
+is an instruction, not an affordance.**
+
+The footer carries `open in FBA Shipments` now, beside the CSV link. It sets
+Missing detail and All time, **and clears region, brand and search** - the
+block is table-wide, and landing on a tab still narrowed by a filter set three
+days ago is the same mismatch one click later.
+
+### Verification
+- `node --check` clean - **183 suites green** - new `tests/test_v1251.py` (42).
+- **His zero reproduced**: the real window+detail predicate lifted out of
+  `renderFbaShipmentsTbl` and driven over the seven stub groups the merge
+  builds, at 365 days (0 rows) and All time (7).
+- **The real `shipGroupBrand` and `shipBrandCell` driven** over an untagged
+  row, a tagged one, and a row whose items resolve - the untagged one must
+  render the clickable `+ Set` and the tagged one its abbreviated chip.
+- The brand-coverage table above read off the live database.
+
+### Still open
+- /!\ **THE 7 STILL HAVE NO DETAIL, AND NO BRAND.** The block names them and
+  now offers both fixes in place; nothing heals on its own.
+- /!\ **THE BLOCK AND THE TAB AGREE ONLY WITH THE TAB'S FILTERS OFF.** The
+  block is table-wide by design and the tab is a filtered view, so the link
+  is what reconciles them. The block also excludes cancelled shipments and the
+  tab's filter does not - today that is 0 rows either way, but it is a real
+  difference that would surface the moment a cancelled shipment arrives with
+  no detail.
+- Everything on the v12.50 list.
 
 ## v12.50 - the summary upload NAMES the shipments with no detail
 
