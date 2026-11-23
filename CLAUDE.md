@@ -8,7 +8,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.56** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.57** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -43,6 +43,50 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.57 - the Vel vs dropdown repaints the grid it is standing on
+
+- **Jason:** *"if i change the velocity vs drop down, it does not change the
+  vel trend"*
+
+### /!\ `#page-inventory` IS NEVER GIVEN A CLASS
+`setVelCmpMode` saved the mode, cleared the velocity memo, and then asked
+
+    document.getElementById('page-inventory')?.classList.contains('active')
+
+which page to repaint. `switchForecastView` shows that page with
+**`style.display`** - it has no `active` class and never has - so the test is
+**permanently false** and the function fell through to `renderAll()`, which
+repaints the Demand Forecast scorecards, table and chart and never touches the
+Inventory Planning grid the dropdown is sitting on.
+
+Everything else worked. The mode was written to localStorage, both dropdowns
+synced, the memo dropped. **Only the repaint went to the wrong page**, so the
+column kept the values from its last render.
+
+### THREE SPELLINGS OF ONE QUESTION, TWO OF THEM WRONG
+| site | test | |
+|---|---|---|
+| the GA4-pull re-render | `style.display !== 'none'` | right |
+| `setVelCmpMode` | `classList.contains('active')` | **dead** |
+| the case_qty re-render | `classList.contains('active')` | **dead** |
+
+`ipPageVisible()` is the one answer now, and all three go through it - the
+correct one included, or there would still be two spellings (hard rule #1).
+The case_qty one has the same consequence: typing a case qty while standing on
+Inventory Planning did not repaint the grid either.
+
+### Verification
+- `node --check` clean - **187 suites green** - new `tests/test_v1257.py` (16).
+- **The real `setVelCmpMode` driven** against a DOM shaped the way the page
+  really is - `style.display` set, no class - on the Inventory page and off
+  it: it now calls `renderInventoryTbl` on the first and `renderAll` on the
+  second.
+- **The pre-v12.57 decision reproduced beside it**, choosing `renderAll` even
+  while standing on the Inventory page, which is the defect.
+
+### Still open
+- Everything on the v12.56 list.
 
 ## v12.56 - picking "Missing detail" widens the window, because the work is old
 
