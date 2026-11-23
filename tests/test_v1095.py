@@ -162,8 +162,16 @@ ok("{ ascending: true }" in dcv, '...ascending, so it starts at the smallest val
 ldr = CODE[CODE.index('latestDateForRegion = async'):] if 'latestDateForRegion = async' in CODE else ''
 ldr = ldr[:ldr.index('latestUploadedAt')] if 'latestUploadedAt' in ldr else ldr
 ok(".eq('region', region)" in ldr, 'latestDateForRegion filters with .eq(region) (the v10.89 shape)')
-ok('.limit(1)' in ldr, '...and takes exactly one row')
-ok('{ ascending: false }' in ldr, '...ordered newest-first, so the one row IS the max')
+# /!\ RE-POINTED IN v12.55. `.limit(1)` and `{ ascending: false }` moved
+# into sbNewestNonNull, which also drops NULLs first - a DESC sort is NULLS
+# FIRST in Postgres and the probe was handing one back. Same guarantee, one
+# indirection later, so it is followed rather than relaxed.
+_HELPER = fn('sbNewestNonNull')
+ok('sbNewestNonNull(' in ldr, '...through the one newest-row probe')
+ok('.limit(1)' in _HELPER, '...and takes exactly one row')
+ok('{ ascending: false }' in _HELPER, '...ordered newest-first, so the one row IS the max')
+ok("not(col, 'is', null)" in _HELPER,
+   '...and never a NULL, which a DESC sort would hand back first')
 
 dvw = CODE[CODE.index('distinctValuesInWindow = async'):] if 'distinctValuesInWindow = async' in CODE else ''
 dvw = dvw[:dvw.index('distinctColumnValues')] if 'distinctColumnValues' in dvw else dvw
@@ -275,6 +283,9 @@ function builder(table) {
   b.gt  = (c, v) => { b._f.push(['gt', c, v]);  return b; };
   b.lt  = (c, v) => { b._f.push(['lt', c, v]);  return b; };
   b.gte = (c, v) => { b._f.push(['gte', c, v]); return b; };
+  // v12.55 - the real PostgREST builder has .not(); sbNewestNonNull uses it
+  // to drop NULLs before a DESC sort hands one back first.
+  b.not = (c, op, v) => { b._f.push(['not_' + op, c, v]); return b; };
   b.order = (c, o) => { b._order = c; b._asc = !!(o && o.ascending); return b; };
   b.limit = (n) => { b._from = 0; b._to = n - 1; return b; };
   b.range = (a, z) => { b._from = a; b._to = z; return b; };
@@ -288,6 +299,7 @@ function builder(table) {
       if (op === 'gt')  rows = rows.filter(r => r[c] >  v);
       if (op === 'lt')  rows = rows.filter(r => r[c] <  v);
       if (op === 'gte') rows = rows.filter(r => r[c] >= v);
+      if (op === 'not_is' && v === null) rows = rows.filter(r => r[c] != null);
     }
     if (b._order) {
       const c = b._order, sgn = b._asc ? 1 : -1;
@@ -603,7 +615,9 @@ harness = harness.replace(
     (chr(10) * 2).join(fn(n) for n in (
         'uploadGrain', 'uploadWeekEndOffset', 'uploadPeriodEnd',
         'uploadDataThru')) + chr(10) + REG)
-harness = harness.replace('__FN__', RUDR)
+# v12.55 - refreshUploadDataRanges calls sbNewestNonNull now, so the helper
+# rides into the harness with it. Sliced REAL rather than stubbed.
+harness = harness.replace('__FN__', fn('sbNewestNonNull') + '\n' + RUDR)
 hp = os.path.join(SP, 'test_v1095_probes.js')
 io.open(hp, 'w', encoding='utf-8', newline='').write(harness)
 r = subprocess.run(['node', hp], capture_output=True, text=True, encoding='utf-8')

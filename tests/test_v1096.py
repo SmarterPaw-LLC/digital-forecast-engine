@@ -168,6 +168,9 @@ function builder(table) {
   b.gt  = (c, v) => { b._f.push(['gt', c, v]);  return b; };
   b.lt  = (c, v) => { b._f.push(['lt', c, v]);  return b; };
   b.gte = (c, v) => { b._f.push(['gte', c, v]); return b; };
+  // v12.55 - the real PostgREST builder has .not(); sbNewestNonNull uses it
+  // to drop NULLs before a DESC sort hands one back first.
+  b.not = (c, op, v) => { b._f.push(['not_' + op, c, v]); return b; };
   b.order = (c, o) => { b._order = c; b._asc = !!(o && o.ascending); return b; };
   b.limit = (n) => { b._from = 0; b._to = n - 1; return b; };
   b.range = (a, z) => { b._from = a; b._to = z; return b; };
@@ -180,6 +183,7 @@ function builder(table) {
       if (op === 'gt')  rows = rows.filter(r => r[c] >  v);
       if (op === 'lt')  rows = rows.filter(r => r[c] <  v);
       if (op === 'gte') rows = rows.filter(r => r[c] >= v);
+      if (op === 'not_is' && v === null) rows = rows.filter(r => r[c] != null);
     }
     if (b._order) { const c = b._order, sg = b._asc ? 1 : -1; rows.sort((x, y) => (x[c] < y[c] ? -1 : x[c] > y[c] ? 1 : 0) * sg); }
     const to = (b._to == null) ? rows.length - 1 : b._to;
@@ -288,7 +292,9 @@ console.log(JSON.stringify(out));
 })();
 '''
 
-harness = harness.replace('__FN__', RUDR)
+# v12.55 - refreshUploadDataRanges calls sbNewestNonNull now, so the helper
+# rides into the harness with it. Sliced REAL rather than stubbed.
+harness = harness.replace('__FN__', fn('sbNewestNonNull') + '\n' + RUDR)
 hp = os.path.join(SP, 'test_v1096_fbaeu.js')
 io.open(hp, 'w', encoding='utf-8', newline='').write(harness)
 r = subprocess.run(['node', hp], capture_output=True, text=True, encoding='utf-8')

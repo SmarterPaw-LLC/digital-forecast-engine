@@ -380,8 +380,16 @@ for _ident in ['seRows', 'euRows', 'fiRows', 'allWm']:
 ok(".eq('region', region)" in RUDR, 'the per-region probe filters with .eq(region)')
 _probe = RUDR[RUDR.index('latestDateForRegion = async'):] if 'latestDateForRegion = async' in RUDR else ''
 _probe = _probe[:_probe.index('latestUploadedAt')] if 'latestUploadedAt' in _probe else _probe
-ok('.limit(1)' in _probe, '...and takes exactly ONE row per region')
-ok('{ ascending: false }' in _probe, '...newest-first, so that one row IS the max')
+# /!\ RE-POINTED IN v12.55. `.limit(1)` and `{ ascending: false }` moved
+# into sbNewestNonNull, which also drops NULLs first - a DESC sort is NULLS
+# FIRST in Postgres and the probe was handing one back. Same guarantee, one
+# indirection later, so it is followed rather than relaxed.
+_HELPER = fn('sbNewestNonNull')
+ok('sbNewestNonNull(' in _probe, '...through the one newest-row probe')
+ok('.limit(1)' in _HELPER, '...and takes exactly ONE row per region')
+ok('{ ascending: false }' in _HELPER, '...newest-first, so that one row IS the max')
+ok("not(col, 'is', null)" in _HELPER,
+   '...and never a NULL, which a DESC sort would hand back first')
 ok('.range(' in RUDR, 'the 26-week gap audit pages with .range() (Architecture Rule #4)')
 ok('distinctColumnValues' in RUDR,
    'the region list is read from the data, not hardcoded')

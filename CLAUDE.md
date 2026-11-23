@@ -8,7 +8,7 @@
 
 ## Project Overview
 Single-file HTML dashboard for SmarterPaw LLC (brands: Meowijuana, Doggijuana, Kitty Ka-Zoom).
-File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.54** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
+File: `index.html` (in this repo; was `SmarterPaw_Forecast_v4.html` in the old loose folder) — current version **v12.55** (v11.36's GA4 schema is RUN and 194,977 rows are loaded - Jason ran it; do not re-ask. v11.87's storage columns are RUN and 2,342 rows are loaded - Jason ran it; do not re-ask)
 
 > **Doc backlog:** v9.37 – v9.51 shipped without entries here (Pricing Scenarios OCR iteration, size-normalized market analysis, saved scenarios, Growth Model trend/DN fixes, SKU migration importer). Commit messages carry the summaries; backfill this file when there's a quiet moment.
 
@@ -43,6 +43,82 @@ Jason: *"why is it not part of your method to make sure you aren't adding confus
 **5. When you change a shared look, convert every consumer in the same commit** and add the assertion that keeps them converged. A consolidation with no test is a consolidation that drifts back.
 
 **Known remaining divergence, deliberately not converted:** Inventory Planning, Demand Forecast, Chewy Forecasts and Digital Sales use the banded `.scorecards` / `.sc-lbl` strip (edge-to-edge, 1px gaps, 28px values, plus Inventory's v4.188 three-row sizing). That is a different layout rather than a drifted copy, and Jason named the P&L. **Converting it is his call, not a silent cleanup.**
+
+## v12.55 - ORDER BY date DESC is NULLS FIRST, so the probe read "never loaded"
+
+- **Jason:** *"it looks like it's not loading"*
+
+The Uploads page, under **5 feeds need feeding**:
+
+    Shipment Summary - shipments list CSV     never loaded
+    Shipment Detail - per-shipment .tsv       never loaded
+
+### /!\ BOTH FEEDS ARE LOADED, AND ONE OF THEM HE UPLOADED THAT MORNING
+On the live database: **223** summaries and **812** detail rows, both running
+through **2026-11-16**.
+
+Every newest-row probe in this app has the same shape -
+`.select(col).order(col, {ascending:false}).limit(1)` - and **a DESC sort in
+Postgres is NULLS FIRST**. So the single row that comes back is a NULL the
+moment the column has any, and the caller reads a loaded feed as one that has
+never been loaded.
+
+| | rows | with no `created_date` |
+|---|---|---|
+| `fba_shipments` | 812 | **57** |
+| `fba_shipment_summaries` | 223 | **12** |
+
+Amazon's older shipment exports do not all carry a Created date, so those
+nulls are legitimate data. **The probe was wrong, not the rows.**
+
+### /!\ AND THE BLAST RADIUS WAS MEASURED, NOT ASSUMED
+Across ten dated feeds - `sku_economics`, `sales_weekly`, `chewy_sales_weekly`,
+`chewy_forecasts`, `shopify_sales_daily`, `walmart_sales_weekly`,
+`amazon_ad_spend`, `fba_inventory_snapshots` and the two above - **the two FBA
+shipment tables are the ONLY ones carrying nulls.** Which is exactly the two
+chips that were wrong, and why nothing else on that banner looked off.
+
+### The fix is the PROBE, not the verdict
+`upAttentionVerdict` is right to call a null "never"; it must simply never be
+handed one while real dates exist. `sbNewestNonNull(q, col)` is the one
+spelling, read by five probes: the attention banner, the coverage grid's
+per-region date, and the three `uploaded_at` lookups.
+
+- /!\ **IT FILTERS, IT DOES NOT REORDER.** `.not(col,'is',null)` rather than a
+  `nullsFirst` option - a client that silently ignores an unknown option would
+  look identical and do nothing.
+- /!\ **A FEED THAT GENUINELY HOLDS NOTHING STILL READS `never`**, and so does
+  one whose every row is null. The guard must not invent a date where there is
+  none (v11.16).
+- The three `uploaded_at` probes have **zero** nulls today, so they change no
+  number. They are converted anyway: leaving copies of the shape the helper
+  exists to replace is how it comes back (rule #5).
+
+### /!\ 25 MORE PROBES ARE NOT CONVERTED, AND THAT IS WRITTEN DOWN
+The file holds 30 of these; five are converted here. Every other dated feed
+has zero nulls so the rest are correct **today**, and sweeping 25 queries over
+tables this release did not measure would be a far bigger change than the
+report warrants. `tests/test_v1255.py` **pins the count at 27** (25 plus the
+helper and its own comment), so a new one is noticed - the v12.35 rule: a
+census with a known hole is written down rather than quietly widened.
+
+### Verification
+- `node --check` clean - **185 suites green** - new `tests/test_v1255.py` (19).
+- **The defect reproduced against a stand-in that implements Postgres' own
+  NULLS-FIRST ordering**, over 223 rows shaped like the live table: the old
+  probe returns `null` and the banner says `never`; the shipped one returns
+  `2026-11-16`.
+- **`upAttentionVerdict` sliced REAL, with its whole dependency chain**
+  (`uploadDataThru`, `uploadAgeDays`, `uploadGrain`, `uploadWeekEndOffset`,
+  `uploadPeriodEnd`) rather than stubbed - a stub would let the verdict drift
+  from what ships.
+- Every figure above read off the live database.
+
+### Still open
+- /!\ **12 SUMMARIES AND 57 DETAIL ROWS CARRY NO `created_date`.** Harmless to
+  the probe now, and they still sort oddly anywhere else that orders on it.
+- /!\ **THE OTHER 25 PROBES** (above).
+- Everything on the v12.54 list.
 
 ## v12.54 - the window that hid the rows is a link that un-hides them
 
